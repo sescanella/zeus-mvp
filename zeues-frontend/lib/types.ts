@@ -25,3 +25,18 @@ export interface ActionPayload {
   tag_spool: string;
   timestamp?: string;
 }
+
+// Response de API para iniciar/completar acción
+export interface ActionResponse {
+  success: boolean;
+  message: string;
+  data: {
+    tag_spool: string;
+    operacion: string;
+    trabajador: string;
+    fila_actualizada: number;
+    columna_actualizada: string;
+    valor_nuevo: number;
+    metadata_actualizada: Record<string, unknown>;
+  };
+}

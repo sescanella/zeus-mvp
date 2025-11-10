@@ -1,0 +1,220 @@
+"""
+Jerarquía de excepciones custom para ZEUES.
+
+Todas las excepciones del sistema heredan de ZEUSException.
+"""
+from typing import Optional, Any
+
+
+class ZEUSException(Exception):
+    """
+    Excepción base para todo el sistema ZEUES.
+
+    Todas las excepciones custom heredan de esta clase.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str,
+        data: Optional[dict[str, Any]] = None
+    ):
+        self.message = message
+        self.error_code = error_code
+        self.data = data or {}
+        super().__init__(self.message)
+
+
+# ==================== EXCEPCIONES 404 (NOT FOUND) ====================
+
+class SpoolNoEncontradoError(ZEUSException):
+    """Spool no existe en la hoja Operaciones (columna G)."""
+
+    def __init__(self, tag_spool: str):
+        super().__init__(
+            message=f"Spool '{tag_spool}' no encontrado en hoja Operaciones",
+            error_code="SPOOL_NO_ENCONTRADO",
+            data={"tag_spool": tag_spool}
+        )
+
+
+class WorkerNoEncontradoError(ZEUSException):
+    """Trabajador no existe o está inactivo en la hoja Trabajadores."""
+
+    def __init__(self, worker_nombre: str):
+        super().__init__(
+            message=f"Trabajador '{worker_nombre}' no encontrado o inactivo",
+            error_code="WORKER_NO_ENCONTRADO",
+            data={"worker_nombre": worker_nombre}
+        )
+
+
+# ==================== EXCEPCIONES 400 (BAD REQUEST) - REGLAS DE NEGOCIO ====================
+
+class OperacionYaIniciadaError(ZEUSException):
+    """Operación ya fue iniciada (V/W = 0.1)."""
+
+    def __init__(self, tag_spool: str, operacion: str, trabajador: Optional[str] = None):
+        mensaje = f"La operación {operacion} del spool '{tag_spool}' ya está iniciada"
+        if trabajador:
+            mensaje += f" por {trabajador}"
+
+        super().__init__(
+            message=mensaje,
+            error_code="OPERACION_YA_INICIADA",
+            data={
+                "tag_spool": tag_spool,
+                "operacion": operacion,
+                "trabajador": trabajador
+            }
+        )
+
+
+class OperacionYaCompletadaError(ZEUSException):
+    """Operación ya fue completada (V/W = 1.0)."""
+
+    def __init__(self, tag_spool: str, operacion: str):
+        super().__init__(
+            message=(
+                f"La operación {operacion} del spool '{tag_spool}' ya fue completada. "
+                "Contacta al administrador si necesitas hacer correcciones."
+            ),
+            error_code="OPERACION_YA_COMPLETADA",
+            data={
+                "tag_spool": tag_spool,
+                "operacion": operacion
+            }
+        )
+
+
+class DependenciasNoSatisfechasError(ZEUSException):
+    """Dependencias previas no están listas (BA/BB/BD vacías)."""
+
+    def __init__(
+        self,
+        tag_spool: str,
+        operacion: str,
+        dependencia_faltante: str,
+        detalle: Optional[str] = None
+    ):
+        mensaje = f"No se puede iniciar {operacion} en spool '{tag_spool}': falta {dependencia_faltante}"
+        if detalle:
+            mensaje += f" ({detalle})"
+
+        super().__init__(
+            message=mensaje,
+            error_code="DEPENDENCIAS_NO_SATISFECHAS",
+            data={
+                "tag_spool": tag_spool,
+                "operacion": operacion,
+                "dependencia_faltante": dependencia_faltante
+            }
+        )
+
+
+class OperacionNoPendienteError(ZEUSException):
+    """Operación no está en estado pendiente (V/W != 0)."""
+
+    def __init__(self, tag_spool: str, operacion: str, estado_actual: str):
+        super().__init__(
+            message=(
+                f"No se puede iniciar {operacion} en spool '{tag_spool}': "
+                f"la operación no está en estado pendiente (estado actual: {estado_actual})"
+            ),
+            error_code="OPERACION_NO_PENDIENTE",
+            data={
+                "tag_spool": tag_spool,
+                "operacion": operacion,
+                "estado_actual": estado_actual
+            }
+        )
+
+
+class OperacionNoIniciadaError(ZEUSException):
+    """Operación no está iniciada (V/W != 0.1), no se puede completar."""
+
+    def __init__(self, tag_spool: str, operacion: str):
+        super().__init__(
+            message=(
+                f"No se puede completar {operacion} en spool '{tag_spool}': "
+                "la operación no ha sido iniciada"
+            ),
+            error_code="OPERACION_NO_INICIADA",
+            data={
+                "tag_spool": tag_spool,
+                "operacion": operacion
+            }
+        )
+
+
+# ==================== EXCEPCIÓN 403 (FORBIDDEN) - CRÍTICA ====================
+
+class NoAutorizadoError(ZEUSException):
+    """
+    Solo el trabajador que inició la acción puede completarla.
+
+    CRÍTICA: Implementa la restricción de propiedad (BC/BE).
+    """
+
+    def __init__(
+        self,
+        tag_spool: str,
+        trabajador_esperado: str,
+        trabajador_solicitante: str,
+        operacion: str
+    ):
+        super().__init__(
+            message=(
+                f"Solo {trabajador_esperado} puede completar {operacion} en '{tag_spool}' "
+                f"(él/ella la inició). Tú eres {trabajador_solicitante}."
+            ),
+            error_code="NO_AUTORIZADO",
+            data={
+                "tag_spool": tag_spool,
+                "trabajador_esperado": trabajador_esperado,
+                "trabajador_solicitante": trabajador_solicitante,
+                "operacion": operacion
+            }
+        )
+
+
+# ==================== EXCEPCIONES 503 (SERVICE UNAVAILABLE) - SERVICIOS EXTERNOS ====================
+
+class SheetsConnectionError(ZEUSException):
+    """Error al conectar con Google Sheets API."""
+
+    def __init__(self, message: str, details: Optional[str] = None):
+        full_message = f"Error al conectar con Google Sheets: {message}"
+        if details:
+            full_message += f" | Detalles: {details}"
+
+        super().__init__(
+            message=full_message,
+            error_code="SHEETS_CONNECTION_ERROR",
+            data={"details": details} if details else {}
+        )
+
+
+class SheetsUpdateError(ZEUSException):
+    """Error al actualizar datos en Google Sheets."""
+
+    def __init__(self, message: str, updates: Optional[dict] = None):
+        super().__init__(
+            message=f"Error al actualizar Google Sheets: {message}",
+            error_code="SHEETS_UPDATE_ERROR",
+            data={"updates": updates} if updates else {}
+        )
+
+
+class SheetsRateLimitError(ZEUSException):
+    """Límite de rate de API de Google Sheets excedido."""
+
+    def __init__(self):
+        super().__init__(
+            message=(
+                "Límite de solicitudes a Google Sheets excedido. "
+                "Por favor, intenta nuevamente en 1 minuto."
+            ),
+            error_code="SHEETS_RATE_LIMIT",
+            data={"retry_after_seconds": 60}
+        )

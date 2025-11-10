@@ -1,0 +1,70 @@
+"""
+Enumeraciones para el sistema ZEUES.
+
+Define los tipos de operaciones y estados posibles de las acciones.
+"""
+from enum import Enum
+
+
+class ActionType(str, Enum):
+    """
+    Tipos de acción soportados en el MVP.
+
+    ARM: Armado de spool
+    SOLD: Soldado de spool
+    """
+    ARM = "ARM"
+    SOLD = "SOLD"
+
+
+class ActionStatus(str, Enum):
+    """
+    Estados posibles de una acción en Google Sheets.
+
+    PENDIENTE: 0 - Acción no iniciada
+    EN_PROGRESO: 0.1 - Acción iniciada pero no completada
+    COMPLETADO: 1.0 - Acción finalizada
+    """
+    PENDIENTE = "PENDIENTE"
+    EN_PROGRESO = "EN_PROGRESO"
+    COMPLETADO = "COMPLETADO"
+
+    @classmethod
+    def from_sheets_value(cls, value: float) -> "ActionStatus":
+        """
+        Convierte valor numérico de Google Sheets a enum ActionStatus.
+
+        Args:
+            value: Valor numérico de Sheets (0, 0.1, o 1.0)
+
+        Returns:
+            ActionStatus correspondiente
+
+        Raises:
+            ValueError: Si el valor no es 0, 0.1, o 1.0
+        """
+        if value == 0 or value == 0.0:
+            return cls.PENDIENTE
+        elif value == 0.1:
+            return cls.EN_PROGRESO
+        elif value == 1.0 or value == 1:
+            return cls.COMPLETADO
+        else:
+            raise ValueError(
+                f"Valor inválido de Sheets: {value}. "
+                f"Valores permitidos: 0 (PENDIENTE), 0.1 (EN_PROGRESO), 1.0 (COMPLETADO)"
+            )
+
+    def to_sheets_value(self) -> float:
+        """
+        Convierte enum ActionStatus a valor numérico para Google Sheets.
+
+        Returns:
+            float: 0, 0.1, o 1.0 según el estado
+        """
+        mapping = {
+            self.PENDIENTE: 0.0,
+            self.EN_PROGRESO: 0.1,
+            self.COMPLETADO: 1.0,
+        }
+        return mapping[self]
