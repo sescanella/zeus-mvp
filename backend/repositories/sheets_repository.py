@@ -86,9 +86,17 @@ class SheetsRepository:
             try:
                 self.logger.info("Autenticando con Service Account...")
 
-                # Crear credenciales desde archivo JSON
-                creds = Credentials.from_service_account_file(
-                    config.GOOGLE_SERVICE_ACCOUNT_JSON_PATH,
+                # Obtener credenciales (desde JSON env var o archivo)
+                creds_dict = config.get_credentials_dict()
+                if not creds_dict:
+                    raise SheetsConnectionError(
+                        "No se encontraron credenciales de Google Service Account",
+                        details="Verificar GOOGLE_APPLICATION_CREDENTIALS_JSON o archivo local"
+                    )
+
+                # Crear credenciales desde diccionario
+                creds = Credentials.from_service_account_info(
+                    creds_dict,
                     scopes=config.get_scopes()
                 )
 
@@ -97,11 +105,9 @@ class SheetsRepository:
 
                 self.logger.info("✅ Cliente gspread autenticado exitosamente")
 
-            except FileNotFoundError:
-                raise SheetsConnectionError(
-                    "Archivo de credenciales no encontrado",
-                    details=f"Path: {config.GOOGLE_SERVICE_ACCOUNT_JSON_PATH}"
-                )
+            except SheetsConnectionError:
+                # Re-raise nuestras excepciones custom
+                raise
             except Exception as e:
                 raise SheetsConnectionError(
                     "Error durante autenticación",

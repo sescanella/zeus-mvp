@@ -4,6 +4,7 @@ Configuración del backend ZEUES.
 Carga y valida variables de entorno necesarias para el funcionamiento del sistema.
 """
 import os
+import json
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -22,7 +23,10 @@ class Config:
     GOOGLE_SERVICE_ACCOUNT_EMAIL: str = os.getenv('GOOGLE_SERVICE_ACCOUNT_EMAIL', '')
     GOOGLE_PRIVATE_KEY: str = os.getenv('GOOGLE_PRIVATE_KEY', '').replace('\\n', '\n')
 
-    # Path a credenciales JSON del Service Account
+    # Credenciales desde variable de entorno JSON (Railway/producción)
+    GOOGLE_APPLICATION_CREDENTIALS_JSON: Optional[str] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+
+    # Path a credenciales JSON del Service Account (desarrollo local)
     GOOGLE_SERVICE_ACCOUNT_JSON_PATH: str = str(
         Path(__file__).parent.parent / 'credenciales' / 'zeus-mvp-81282fb07109.json'
     )
@@ -51,6 +55,33 @@ class Config:
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
 
     @classmethod
+    def get_credentials_dict(cls) -> Optional[dict]:
+        """
+        Obtiene las credenciales de Google Service Account como diccionario.
+
+        Prioridad:
+        1. Variable de entorno GOOGLE_APPLICATION_CREDENTIALS_JSON (Railway/prod)
+        2. Archivo JSON local (desarrollo)
+
+        Returns:
+            dict con credenciales o None si no se encuentran
+        """
+        # Opción 1: JSON desde variable de entorno (Railway)
+        if cls.GOOGLE_APPLICATION_CREDENTIALS_JSON:
+            try:
+                return json.loads(cls.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
+
+        # Opción 2: Archivo JSON local (desarrollo)
+        json_path = Path(cls.GOOGLE_SERVICE_ACCOUNT_JSON_PATH)
+        if json_path.exists():
+            with open(json_path, 'r') as f:
+                return json.load(f)
+
+        return None
+
+    @classmethod
     def validate(cls) -> None:
         """
         Valida que todas las variables de entorno críticas estén configuradas.
@@ -61,7 +92,6 @@ class Config:
         required_vars = {
             'GOOGLE_CLOUD_PROJECT_ID': cls.GOOGLE_CLOUD_PROJECT_ID,
             'GOOGLE_SHEET_ID': cls.GOOGLE_SHEET_ID,
-            'GOOGLE_SERVICE_ACCOUNT_EMAIL': cls.GOOGLE_SERVICE_ACCOUNT_EMAIL,
         }
 
         missing = [var for var, value in required_vars.items() if not value]
@@ -69,14 +99,15 @@ class Config:
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}. "
-                f"Please check your .env.local file."
+                f"Please check your .env.local file or Railway variables."
             )
 
-        # Validar que el archivo de credenciales existe
-        if not Path(cls.GOOGLE_SERVICE_ACCOUNT_JSON_PATH).exists():
+        # Validar que tenemos credenciales (JSON o archivo)
+        if not cls.get_credentials_dict():
             raise ValueError(
-                f"Google Service Account JSON file not found at: "
-                f"{cls.GOOGLE_SERVICE_ACCOUNT_JSON_PATH}"
+                f"Google Service Account credentials not found. "
+                f"Provide either GOOGLE_APPLICATION_CREDENTIALS_JSON env var "
+                f"or file at: {cls.GOOGLE_SERVICE_ACCOUNT_JSON_PATH}"
             )
 
     @classmethod
