@@ -3,8 +3,8 @@ nixPkgs = ["python39"]
 
 [phases.install]
 cmds = [
-  "pip install --upgrade pip setuptools wheel",
-  "pip install -e ."
+  "python -m pip install --upgrade pip setuptools wheel",
+  "python -m pip install -e ."
 ]
 
 [start]
