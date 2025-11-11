@@ -2,8 +2,8 @@
 
 **Sistema de Trazabilidad para Manufactura de Cañerías - Frontend Web App**
 
-Última actualización: 10 Nov 2025 - DÍA 3 COMPLETADO
-Estado: EN DESARROLLO - 60% completado (3/6 días - adelantado)
+Última actualización: 11 Nov 2025 - DÍA 4 COMPLETADO
+Estado: EN DESARROLLO - 80% completado (4/6 días - adelantado 1 día)
 
 ---
 
@@ -704,44 +704,46 @@ NEXT_PUBLIC_API_URL=https://zeues-backend.up.railway.app
 
 ---
 
-### DÍA 4 (11 Nov): Integración API Real - PENDIENTE
+### DÍA 4 (11 Nov): Integración API Real ✅ COMPLETADO
 
 **Responsables:** @api-integrator + @ui-builder-mvp
-**Tiempo:** 1 día (6-7 horas)
+**Tiempo:** ~5 horas (estimado 6-7h, adelantado 1-2h)
+**Estado:** ✅ COMPLETADO (11 Nov 2025 - 01:50)
 
-**Tareas DÍA 4:**
-1. Crear `/lib/api.ts` con 6 funciones (3 horas):
+**Tareas Completadas (5/5 fases):**
+1. ✅ FASE 1: Crear `/lib/api.ts` con 6 funciones (226 líneas):
    - getWorkers()
    - getSpoolsParaIniciar()
    - getSpoolsParaCompletar()
    - iniciarAccion()
    - completarAccion()
    - checkHealth()
-2. Crear `/lib/types.ts` con interfaces (incluido):
-   - Worker, Spool, ActionPayload, ActionResponse
-3. Integrar API real en páginas (3-4 horas):
-   - P1: Reemplazar MOCK_WORKERS con getWorkers()
-   - P4A: Reemplazar mock con getSpoolsParaIniciar()
-   - P4B: Reemplazar mock con getSpoolsParaCompletar()
-   - P5A: POST iniciarAccion() real
-   - P5B: POST completarAccion() real con manejo 403
-4. Testing API calls en navegador (1 hora):
-   - Verificar Network tab
-   - Console.log responses
-   - Error handling
+2. ✅ FASE 2-4: Integrar API real en páginas:
+   - P1: getWorkers() reemplaza MOCK_WORKERS
+   - P4: getSpoolsParaIniciar/Completar reemplazan mock
+   - P5: iniciarAccion/completarAccion con ownership validation
+3. ✅ FASE 5: Testing E2E automatizado (~30 min):
+   - 6/6 endpoints validados
+   - Flujo completo INICIAR→COMPLETAR→SOLD verificado
+   - Ownership validation funcionando (403 FORBIDDEN)
+   - Error handling completo (404, 400, 403)
+   - Google Sheets actualizando correctamente
 
-**Entregable:**
-- `/lib/api.ts` con 6 funciones implementadas
-- P1, P4, P5 integradas con API real
-- Flujos INICIAR/COMPLETAR funcionando con backend
+**Entregables Completados:**
+- ✅ `/lib/api.ts` con 6 funciones + error handling
+- ✅ `/lib/types.ts` actualizado con ActionResponse
+- ✅ P1, P4, P5 integradas con API real
+- ✅ Flujos INICIAR/COMPLETAR funcionando con backend
+- ✅ 0 bugs críticos bloqueantes
 
-**Criterio Éxito:**
-- GET /api/workers funciona en P1
-- GET /api/spools/iniciar funciona en P4A
-- GET /api/spools/completar funciona en P4B
-- POST /api/iniciar-accion funciona en P5A
-- POST /api/completar-accion funciona en P5B
-- Error 403 ownership muestra mensaje claro
+**Criterios de Éxito Validados:**
+- ✅ GET /api/workers funciona en P1 (5 trabajadores)
+- ✅ GET /api/spools/iniciar funciona (ARM: 14, SOLD: 2)
+- ✅ GET /api/spools/completar funciona (ownership filtering)
+- ✅ POST /api/iniciar-accion funciona (V/W→0.1)
+- ✅ POST /api/completar-accion funciona (V/W→1.0)
+- ✅ Error 403 ownership muestra mensaje claro
+- ✅ URL encoding con tildes funcionando
 
 ---
 
@@ -821,9 +823,9 @@ NEXT_PUBLIC_API_URL=https://zeues-backend.up.railway.app
 
 ## 10. Estado Actual del Frontend
 
-**Estado General:** ✅ DÍA 1-3 COMPLETADO (10 Nov 2025) - EN DESARROLLO
-**Progreso:** ~60% (3/6 días completados - adelantados)
-**Bloqueadores:** Ninguno - backend listo para integración API real
+**Estado General:** ✅ DÍA 1-4 COMPLETADO (11 Nov 2025) - EN DESARROLLO
+**Progreso:** ~80% (4/6 días completados - adelantado 1 día)
+**Bloqueadores:** Ninguno - frontend 100% integrado con backend
 
 ### 10.1 Completado (DÍA 1-3)
 
@@ -865,18 +867,34 @@ NEXT_PUBLIC_API_URL=https://zeues-backend.up.railway.app
 - ✅ Build producción exitoso sin errores TypeScript/ESLint
 - ✅ Guía testing E2E documentada (TESTING-E2E.md)
 
+**Frontend - DÍA 4 Completado (11 Nov):**
+- ✅ API Client `/lib/api.ts` creado (226 líneas, 6 funciones)
+- ✅ `/lib/types.ts` actualizado con ActionResponse interface
+- ✅ P1 integrado con getWorkers() - mock eliminado
+- ✅ P4 integrado con getSpoolsParaIniciar/Completar - mock eliminado
+- ✅ P5 integrado con iniciarAccion/completarAccion - ownership validation
+- ✅ Testing E2E automatizado completado (~30 min)
+- ✅ 6/6 endpoints API validados funcionando correctamente
+- ✅ Flujo completo INICIAR→COMPLETAR→SOLD verificado
+- ✅ Ownership validation funcionando (403 FORBIDDEN)
+- ✅ Error handling completo (404, 400, 403 con mensajes español)
+- ✅ Google Sheets actualizando correctamente (V/W, metadata, fechas)
+- ✅ URL encoding con tildes funcionando ("Nicolás")
+- ✅ 0 bugs críticos bloqueantes encontrados
+
 ---
 
-### 10.2 Pendiente (DÍA 4-6)
+### 10.2 Pendiente (DÍA 5-6)
 
 **Frontend Pendiente:**
-- [ ] API client (/lib/api.ts) con integración real - DÍA 4
-- [ ] Reemplazar mock data con API calls reales - DÍA 4
-- [ ] Testing flujos completos INICIAR/COMPLETAR - DÍA 4-5
-- [ ] Verificar ownership validation con backend - DÍA 5
+- [ ] Testing manual UI completo en navegador - DÍA 5
+- [ ] Verificar flujos completos P1→P6 en UI real - DÍA 5
+- [ ] Ajustes UX/UI menores detectados - DÍA 5
 - [ ] Navegación completa y validaciones finales - DÍA 6
-- [ ] Testing manual exhaustivo (checklist completo) - DÍA 6
+- [ ] Testing mobile/tablet responsive - DÍA 6
+- [ ] Build producción final - DÍA 6
 - [ ] Deploy Vercel - DÍA 6
+- [ ] Testing en URL producción - DÍA 6
 
 ---
 
@@ -889,8 +907,10 @@ NEXT_PUBLIC_API_URL=https://zeues-backend.up.railway.app
 - ✅ Agentes frontend definidos (4 CORE)
 - ✅ Proyecto Next.js configurado y validado
 - ✅ TESTING-E2E.md con 12 test cases
+- ✅ API Client completo con 6 funciones integradas
+- ✅ Frontend 100% integrado con backend FastAPI
 
-**Próximo Paso:** DÍA 4 (11 Nov) - @api-integrator integra API real del backend (reemplazar mock data)
+**Próximo Paso:** DÍA 5 (12 Nov) - Testing manual UI completo en navegador + ajustes menores
 
 ---
 
@@ -1035,22 +1055,27 @@ NEXT_PUBLIC_API_URL=https://zeues-backend.up.railway.app
 
 ---
 
-**FIN - proyecto-frontend.md - Arquitectura y Estado - v3.0 - 10 Nov 2025**
+**FIN - proyecto-frontend.md - Arquitectura y Estado - v4.0 - 11 Nov 2025**
 
 **Resumen Ejecutivo:**
-- ✅ DÍA 1-3 COMPLETADOS (60% progreso - adelantado)
+- ✅ DÍA 1-4 COMPLETADOS (80% progreso - adelantado 1 día)
 - ✅ Stack: Next.js 14.2.33 + TypeScript + Tailwind CSS
-- ✅ 7 páginas completas con mock data
+- ✅ 7 páginas completas integradas con API real
 - ✅ 5 componentes reutilizables
-- ✅ Context API simple
+- ✅ Context API simple funcionando
+- ✅ API Client completo (226 líneas, 6 funciones)
+- ✅ Frontend 100% integrado con backend
+- ✅ Testing E2E automatizado completado
+- ✅ Ownership validation funcionando (403 FORBIDDEN)
+- ✅ 0 bugs críticos bloqueantes
 - ✅ Build producción exitoso
-- ⏳ Integración API real pendiente (DÍA 4)
+- ⏳ Testing manual UI pendiente (DÍA 5)
 - ⏳ Deploy Vercel pendiente (DÍA 6)
 
-**Próximo Paso:** DÍA 4 (11 Nov 2025) - @api-integrator integra API real
+**Próximo Paso:** DÍA 5 (12 Nov 2025) - Testing manual UI en navegador + ajustes menores
 
 **Referencias:**
 - Detalles de componentes UI: Ver `proyecto-frontend-ui.md`
-- Testing E2E: Ver `TESTING-E2E.md`
+- Integración API: Ver `proyecto-frontend-api.md`
 - Backend: Ver `proyecto-backend.md`
 - Proyecto general: Ver `proyecto.md`

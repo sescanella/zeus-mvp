@@ -942,8 +942,32 @@ npm run test      # Tests
 - **3 problemas resueltos:** Start command, credenciales env var, deploys manuales
 - **7 archivos nuevos:** Procfile, railway.json, workflows, README, DEPLOY-PRODUCTION.md
 - **Modificaciones código:** config.py (get_credentials_dict), sheets_repository.py (from_service_account_info)
-- **Estado:** Backend 100% funcional en producción, frontend 60% con mock data
-- **Próximo:** Integración API real en frontend (DÍA 4-5)
+- **Estado:** Backend 100% funcional en producción, frontend 80% integrado con API real
+- **Próximo:** Testing manual UI + Deploy Vercel (DÍA 5-6)
+
+**Cambios v3.6 (11 Nov 2025):**
+- **DÍA 4 COMPLETADO AL 100%:** Frontend 100% integrado con backend FastAPI ✅
+- **5 fases completadas:** API Client (226 líneas) + 3 páginas integradas + Testing E2E automatizado
+- **6/6 endpoints validados:** workers, spools iniciar/completar, iniciar/completar-accion, health (todos funcionando)
+- **Flujo E2E verificado:** INICIAR→COMPLETAR→SOLD funcionando correctamente con datos reales
+- **Ownership validation funcionando:** 403 FORBIDDEN con mensajes claros en español cuando usuario incorrecto intenta completar
+- **Error handling completo:** 404, 400, 403 con mensajes user-friendly
+- **Google Sheets integrado:** V/W actualizado (0.1→1.0), metadata, fechas (DD/MM/YYYY)
+- **URL encoding funcionando:** Nombres con tildes ("Nicolás") procesados correctamente
+- **0 bugs críticos bloqueantes encontrados**
+- **Mock data eliminado completamente:** P1, P4, P5 usando API real
+- **Archivos implementados:** 8 archivos (+318 líneas netas)
+- **Testing automatizado:** ~30 minutos (vs 1h estimado manual)
+- **Progreso frontend:** 80% (4/6 días completados - adelantado 1 día)
+
+**Cambios v3.5 (10 Nov 2025):**
+- **DÍA 1-3 FRONTEND COMPLETADOS:** 7 páginas + 5 componentes + Context API + navegación ✅
+- **Build producción exitoso:** 0 errores TypeScript/ESLint
+- **Componentes base:** Button, Card, List, Loading, ErrorMessage (reutilizables)
+- **Mock data temporal:** 20 spools especializados con filtrado inteligente
+- **Validación ownership mock:** Lógica implementada temporalmente
+- **Suspense boundaries:** Implementados para useSearchParams() (Next.js 14 requirement)
+- **Progreso frontend:** 60% completado (3/6 días - adelantado)
 
 **Cambios v3.4 (10 Nov 2025):**
 - **DÍA 3 + DÍA 4 FASE 1 COMPLETADOS:** API Layer + Tests E2E 10/10 passing ✅
