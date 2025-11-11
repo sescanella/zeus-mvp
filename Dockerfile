@@ -19,8 +19,8 @@ COPY . /app
 # Set PYTHONPATH so Python can find the backend module
 ENV PYTHONPATH=/app
 
-# Expose port (Railway will override with $PORT)
+# Expose port (Railway will use $PORT env var)
 EXPOSE 8000
 
-# Start command
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start command - use shell form to allow $PORT expansion
+CMD python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
