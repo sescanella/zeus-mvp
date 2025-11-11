@@ -192,7 +192,7 @@ Python 3.9 en nixpacks NO incluye el módulo `pip` por defecto. `python -m pip` 
 
 ---
 
-### 🔄 Intento 6: Agregar pip a nixPkgs + PYTHONPATH (EN PROGRESO)
+### ❌ Intento 6: Agregar pip a nixPkgs + PYTHONPATH
 **Commit:** `e8eb586`
 
 **Acción:**
@@ -217,7 +217,98 @@ cmd = "cd /app && PYTHONPATH=/app python -m uvicorn backend.main:app --host 0.0.
 - ✅ Custom Start Command: (vacío - usa railway.json)
 - ✅ RAILWAY_START_COMMAND: (eliminada)
 
-**Estado:** Esperando resultado del deployment...
+**Resultado:**
+```
+This environment is externally managed
+This command has been disabled as it tries to modify the immutable /nix/store filesystem.
+
+To use Python with Nix and nixpkgs, have a look at the online documentation
+<https://nixos.org/manual/nixpkgs/stable/#python>.
+
+"pip install -r backend/requirements.txt" did not complete successfully: exit code 1
+```
+
+**Lección Aprendida:**
+El sistema de archivos en nixpacks es **inmutable**. No puedes usar `pip install` para modificar el ambiente porque intenta escribir en `/nix/store`, que es de solo lectura. Este es un diseño fundamental de Nix que no se puede evitar.
+
+---
+
+### ✅ Intento 7: Dockerfile
+**Commit:** `fa34604`
+
+**Acción:**
+Abandoné nixpacks completamente y creé un **Dockerfile estándar**:
+
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r backend/requirements.txt
+COPY . /app
+ENV PYTHONPATH=/app
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**Pruebas Locales:**
+✅ Build completado sin errores
+✅ Container starts y API responde correctamente
+
+**Resultado:**
+```
+Error: Invalid value for '--port': '$PORT' is not a valid integer.
+```
+
+**Problema Identificado:**
+Railway ejecutaba el `startCommand` de `railway.json` que tenía `$PORT` como string literal. La variable no se expandía porque estaba en contexto JSON.
+
+---
+
+### ✅ Intento 8: Corregir $PORT Variable (SOLUCIÓN FINAL)
+**Commit:** `f5f8050`
+
+**Acción:**
+Dos cambios clave para permitir expansión de variable `$PORT`:
+
+**1. Dockerfile - Cambiar a shell form:**
+```dockerfile
+# Antes (exec form - no expande variables)
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Después (shell form - expande variables)
+CMD python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+**2. railway.json - Eliminar startCommand:**
+```json
+{
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
+```
+
+**¿Por qué funciona?**
+- **Shell form** (`CMD command`) ejecuta en shell, permitiendo expansión de variables
+- **Exec form** (`CMD ["command"]`) ejecuta directo, no expande variables
+- **`${PORT:-8000}`** usa `$PORT` si existe, sino usa `8000` como default
+- Sin `startCommand` en railway.json, Railway usa el CMD del Dockerfile
+
+**Pruebas Locales:**
+```bash
+docker build -t zeues-backend-port-fix .
+docker run -d -p 9000:9000 -e PORT=9000 zeues-backend-port-fix
+curl http://localhost:9000/
+# ✅ {"message":"ZEUES API - Manufacturing Traceability System",...}
+```
+
+**Estado:** ✅ Deployado a Railway - esperando confirmación de producción
 
 ---
 
@@ -251,6 +342,30 @@ python: No module named pip
 ```
 **Solución:** Agregar `python39Packages.pip` a nixPkgs
 
+### 5. Nixpacks Filesystem Inmutable
+**Problema:** Nixpacks usa un sistema de archivos de solo lectura (`/nix/store`)
+**Síntoma:**
+```
+This environment is externally managed
+This command has been disabled as it tries to modify the immutable /nix/store filesystem
+```
+**Solución:** Usar Dockerfile en lugar de nixpacks. El filesystem inmutable es un diseño fundamental de Nix y no se puede evitar.
+
+### 6. Variable $PORT No Se Expande
+**Problema:** La variable de entorno `$PORT` no se expande en Docker exec form o en JSON
+**Síntoma:**
+```
+Error: Invalid value for '--port': '$PORT' is not a valid integer.
+```
+**Causas:**
+1. Usar exec form en Dockerfile: `CMD ["command", "$PORT"]` - no expande variables
+2. Tener `startCommand` en railway.json con `$PORT` - JSON no expande variables
+
+**Solución:**
+1. Usar shell form en Dockerfile: `CMD command --port ${PORT:-8000}`
+2. Eliminar `startCommand` de railway.json y dejar que Dockerfile maneje el comando
+3. Usar sintaxis `${PORT:-default}` para tener fallback en local
+
 ---
 
 ## Lecciones Aprendidas
@@ -271,7 +386,26 @@ python: No module named pip
 - En Railway/Docker, `/app` es el directorio de trabajo
 - Configurar `PYTHONPATH=/app` permite que Python encuentre `backend/` dentro de `/app/`
 
-### 4. Railway Configuration Priority
+### 4. Docker CMD: Shell Form vs Exec Form
+**Exec form** (`CMD ["executable", "param"]`):
+- No usa shell para ejecutar
+- NO expande variables de entorno
+- Ejemplo: `CMD ["python", "--port", "$PORT"]` → `$PORT` es literal
+- Más seguro para evitar shell injection
+- Mejor manejo de señales (SIGTERM)
+
+**Shell form** (`CMD executable param`):
+- Ejecuta comando en shell (`/bin/sh -c`)
+- SÍ expande variables de entorno
+- Ejemplo: `CMD python --port ${PORT}` → `${PORT}` se expande
+- Necesario cuando usas variables de entorno
+- Usa `${VAR:-default}` para valores por defecto
+
+**Cuándo usar cada uno:**
+- Shell form: Cuando necesitas expansión de variables (`$PORT`, `$ENV_VAR`)
+- Exec form: Para comandos fijos sin variables
+
+### 5. Railway Configuration Priority
 **Orden de prioridad (mayor a menor):**
 1. Custom Start Command en Settings UI
 2. Variable de entorno `RAILWAY_START_COMMAND`
@@ -325,26 +459,55 @@ Antes de hacer deploy a Railway, verificar:
 
 ## Estado Actual
 
-**Último Commit:** `e8eb586`
-**Estrategia Actual:** pip explícito en nixPkgs + PYTHONPATH en start command
-**Esperando:** Resultado del deployment en Railway
+**Último Commit:** `f5f8050`
+**Estrategia Final:** ✅ **Dockerfile con shell form CMD** (abandonamos nixpacks)
+**Estado:** Deployado a Railway - esperando confirmación de producción
 
-**Próximos Pasos si Falla:**
-1. Verificar logs de Railway para el error específico
-2. Considerar alternativas:
-   - Dockerfile custom en lugar de nixpacks
-   - requirements.txt en la raíz del proyecto
-   - Mover todo el código a la raíz (sin carpeta `backend/`)
+### Resumen de la Solución
+
+Después de **8 intentos** (6 con nixpacks, 2 con Dockerfile), la solución final fue:
+
+✅ **Intento 7:** Dockerfile con Python 3.9 (solucionó nixpacks filesystem inmutable)
+✅ **Intento 8:** Shell form CMD + eliminar startCommand (solucionó $PORT expansion)
+
+**Cambios Clave:**
+1. **Dockerfile con shell form:**
+   ```dockerfile
+   CMD python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+   ```
+2. **railway.json sin startCommand:**
+   ```json
+   {"build": {"builder": "DOCKERFILE"}, "deploy": {...}}
+   ```
+
+### ¿Por qué falló nixpacks?
+
+Nixpacks tiene un **filesystem inmutable** (`/nix/store`) que impide el uso normal de `pip install`. Esto es un diseño fundamental de Nix, no un bug. Para proyectos Python con dependencias, Dockerfile es la opción más simple y confiable.
+
+### ¿Por qué falló el primer Dockerfile?
+
+El `CMD` usaba **exec form** (`CMD ["python", ...]`) que no expande variables de entorno. Railway intentaba pasar `$PORT` pero se interpretaba como string literal `"$PORT"`, no como el valor numérico.
+
+**Solución:** Usar **shell form** (`CMD python ...`) que ejecuta en shell y expande variables correctamente.
+
+### Archivos Clave del Deploy Final
+
+1. **`Dockerfile`** - Define el container con shell form CMD
+2. **`railway.json`** - Configura builder como DOCKERFILE (sin startCommand)
+3. **`backend/requirements.txt`** - Dependencias de Python
+4. **Variables de entorno en Railway** - Credenciales de Google Sheets + PORT
 
 ---
 
 ## Referencias
 
+- [Railway Dockerfile Documentation](https://docs.railway.app/deploy/dockerfiles)
 - [Railway Nixpacks Documentation](https://nixpacks.com/docs)
 - [Python Import System](https://docs.python.org/3/reference/import.html)
 - [FastAPI Deployment](https://fastapi.tiangolo.com/deployment/)
 - [Uvicorn Server](https://www.uvicorn.org/)
+- [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
 
 ---
 
-**Última Actualización:** 11 Nov 2025 - Esperando resultado del Intento 6
+**Última Actualización:** 11 Nov 2025 - Solución PORT variable implementada (Intento 8 - FINAL)
