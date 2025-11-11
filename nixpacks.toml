@@ -1,11 +1,8 @@
 [phases.setup]
-nixPkgs = ["python39", "pip"]
+nixPkgs = ["python39"]
 
 [phases.install]
 cmds = ["pip install -r backend/requirements.txt"]
 
 [start]
-cmd = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
-
-[variables]
-PYTHONPATH = "/app"
+cmd = "python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
