@@ -139,3 +139,4 @@ zeues-frontend/.vercel
 # TypeScript cache
 zeues-frontend/*.tsbuildinfo
 zeues-frontend/next-env.d.ts
+zeues_backend.egg-info/
