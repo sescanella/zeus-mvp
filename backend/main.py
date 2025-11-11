@@ -28,15 +28,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 
-from backend.config import config
-from backend.exceptions import ZEUSException
-from backend.models.error import ErrorResponse
-from backend.utils.logger import setup_logger
+from .config import config
+from .exceptions import ZEUSException
+from .models.error import ErrorResponse
+from .utils.logger import setup_logger
 
 # FASE 2: Routers READ-ONLY implementados (health, workers, spools)
-from backend.routers import health, workers, spools
+from .routers import health, workers, spools
 # FASE 3: Router WRITE implementado (actions)
-from backend.routers import actions
+from .routers import actions
 
 
 # ============================================================================
