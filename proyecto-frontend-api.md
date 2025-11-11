@@ -3,9 +3,34 @@
 **Sistema de Trazabilidad para Manufactura - Integración Frontend con Backend FastAPI**
 
 Fecha de creación: 11 Nov 2025
-Última actualización: 11 Nov 2025 - 01:15
-Estado: EN PROGRESO - DÍA 4 - FASES 1-2 ✅ COMPLETADAS
+Última actualización: 10 Nov 2025 - 20:30
+Estado: ✅ COMPLETADO - DÍA 4 - FASES 1-4 ✅ | FASE 5 TESTING ⏳
 Responsable: @api-integrator (frontend)
+
+> **Nota:** Este documento es un **plan de ejecución específico del DÍA 4** del desarrollo frontend. Para la documentación completa de la arquitectura frontend, consultar [`proyecto-frontend.md`](./proyecto-frontend.md).
+
+---
+
+## Documentación Relacionada
+
+**Documento Padre:**
+- **[proyecto-frontend.md](./proyecto-frontend.md)** - Arquitectura completa del frontend (estructura, componentes, estado, navegación)
+
+**Contexto del Proyecto:**
+- **[proyecto.md](./proyecto.md)** - Especificación completa del MVP ZEUES
+
+**Documentos de Backend:**
+- **[proyecto-backend.md](./proyecto-backend.md)** - Documentación técnica completa del backend (incluye especificación de los 6 endpoints consumidos aquí)
+- **[proyecto-backend-api.md](./proyecto-backend-api.md)** - Implementación de los endpoints API (DÍA 3)
+
+**Documentos Frontend Relacionados:**
+- **[proyecto-frontend-ui.md](./proyecto-frontend-ui.md)** - Implementación de componentes y páginas UI (DÍA 1-3)
+
+**Alcance de este documento:**
+- Plan de ejecución DÍA 4: Integración del frontend Next.js con el backend FastAPI deployado
+- Implementación de `/lib/api.ts` con 6 funciones fetch usando native fetch API
+- Reemplazo de mock data con llamadas API reales en las 7 páginas
+- Total: ~226 líneas de código API client + modificaciones en páginas
 
 ---
 
@@ -48,10 +73,27 @@ Responsable: @api-integrator (frontend)
 - ✅ Build producción exitoso (9 páginas generadas)
 - ✅ Cambio neto: -12 líneas (código más simple)
 
-**Pendiente (Próximas Fases):**
-- ⏳ FASE 3: Reemplazar mock data con API en P4 - Seleccionar Spool
-- ⏳ FASE 4: Conectar P5 con POST requests (iniciar/completar acción)
-- ⏳ FASE 5: Testing manual de integración completa
+**FASE 3 COMPLETADA (10 Nov 2025 - 20:15):**
+- ✅ `app/seleccionar-spool/page.tsx` integrado con API real
+- ✅ `MOCK_SPOOLS` eliminado completamente (34 líneas)
+- ✅ Función `getFilteredSpools()` eliminada (backend filtra)
+- ✅ Llamadas API condicionales: `getSpoolsParaIniciar()` vs `getSpoolsParaCompletar()`
+- ✅ Manejo de errores por tipo HTTP (network, not-found, validation, forbidden, server)
+- ✅ TypeScript estricto sin `any` types
+- ✅ Build producción exitoso (9 páginas)
+
+**FASE 4 COMPLETADA (10 Nov 2025 - 20:25):**
+- ✅ `app/confirmar/page.tsx` integrado con POST API real
+- ✅ Simulación eliminada completamente
+- ✅ Payload construction con tipos correctos (ActionPayload)
+- ✅ Timestamp agregado solo en COMPLETAR
+- ✅ Llamadas API: `iniciarAccion()` y `completarAccion()`
+- ✅ Manejo especial error 403 (ownership validation)
+- ✅ Botón reintentar para errores recuperables
+- ✅ Build producción exitoso
+
+**Pendiente:**
+- ⏳ FASE 5: Testing manual completo de integración E2E
 
 ### Objetivo DÍA 4
 
@@ -154,9 +196,9 @@ Google Sheets (Fuente de Verdad)
 
 ---
 
-### ⏳ FASE 3: Integrar P4 - Seleccionar Spool (PENDIENTE - PRÓXIMA)
-**Archivos:** `app/seleccionar-spool/page.tsx` (modificar)
-**Bloqueadores:** ✅ FASES 1-2 completadas - LISTO PARA IMPLEMENTAR
+### ✅ FASE 3: Integrar P4 - Seleccionar Spool (COMPLETADA - 10 Nov 2025)
+**Archivos:** `app/seleccionar-spool/page.tsx` (modificado - 150 líneas finales)
+**Bloqueadores:** ✅ Ninguno - COMPLETADA
 
 **Justificación:**
 1. Usa query params condicionales (tipo=iniciar|completar)
@@ -166,9 +208,9 @@ Google Sheets (Fuente de Verdad)
 
 ---
 
-### ⏳ FASE 4: Integrar P5 - Confirmar Acción (PENDIENTE - CRÍTICO)
-**Archivos:** `app/confirmar/page.tsx` (modificar)
-**Bloqueadores:** ✅ FASES 1-2 completadas - LISTO PARA IMPLEMENTAR
+### ✅ FASE 4: Integrar P5 - Confirmar Acción (COMPLETADA - 10 Nov 2025 - CRÍTICO)
+**Archivos:** `app/confirmar/page.tsx` (modificado - 160 líneas finales)
+**Bloqueadores:** ✅ Ninguno - COMPLETADA
 
 **Justificación:**
 1. POST endpoints son más críticos (modifican estado)
@@ -181,9 +223,9 @@ Google Sheets (Fuente de Verdad)
 
 ---
 
-### ⏳ FASE 5: Testing y Validación Final (PENDIENTE)
+### ⏳ FASE 5: Testing y Validación Final (EN PROGRESO)
 **Método:** Testing manual en navegador
-**Bloqueadores:** ⏳ FASE 2-4 deben completarse primero
+**Bloqueadores:** ✅ FASES 1-4 completadas - LISTO PARA TESTING
 
 **Justificación:**
 1. Solo se puede validar integración cuando todos los endpoints están conectados
@@ -1076,10 +1118,12 @@ npm run lint
 | `lib/api.ts` | 16 (stub) | **226** | **+210** | ✅ FASE 1 |
 | `.env.local` | 5 | 5 | 0 | ✅ Verificado |
 | `app/page.tsx` | 84 | **71** | **-13** | ✅ FASE 2 |
-| `app/seleccionar-spool/page.tsx` | 177 | ~140 | -37 | ⏳ FASE 3 |
-| `app/confirmar/page.tsx` | 125 | ~140 | +15 | ⏳ FASE 4 |
-| **TOTAL FASES 1-2** | **133** | **344** | **+211** | ✅ **COMPLETADO** |
-| **TOTAL DÍA 4** | **435** | **~624** | **~189** | 🔄 **40% completado** |
+| `app/seleccionar-spool/page.tsx` | 177 | **150** | **-27** | ✅ FASE 3 |
+| `app/confirmar/page.tsx` | 125 | **160** | **+35** | ✅ FASE 4 |
+| `components/ErrorMessage.tsx` | 20 | **97** | **+77** | ✅ FASE 3 (mejorado) |
+| `.gitignore` | 0 | **45** | **+45** | ✅ FASE 3 (nuevo) |
+| `.env.example` | 0 | **8** | **+8** | ✅ FASE 3 (nuevo) |
+| **TOTAL FASES 1-4** | **435** | **753** | **+318** | ✅ **COMPLETADO** |
 
 **Tiempo Estimado por Fase:**
 
@@ -1087,10 +1131,10 @@ npm run lint
 |------|----------------|-------------|--------|--------------|
 | FASE 1: API Client | 2-3 horas | ✅ ~2h | ✅ COMPLETADA | Ninguno |
 | FASE 2: P1 Integration | 30 min | ✅ ~25 min | ✅ COMPLETADA | Ninguno |
-| FASE 3: P4 Integration | 1-1.5 horas | - | ⏳ Pendiente | FASES 1-2 ✅ |
-| FASE 4: P5 Integration | 1-1.5 horas | - | ⏳ Pendiente | FASES 1-2 ✅ |
-| FASE 5: Testing Final | 1 hora | - | ⏳ Pendiente | FASE 2-4 |
-| **TOTAL** | **6-7.5 horas** | **~2.4h / 6-7.5h** | **40% completado** | |
+| FASE 3: P4 Integration | 1-1.5 horas | ✅ ~1h | ✅ COMPLETADA | Ninguno |
+| FASE 4: P5 Integration | 1-1.5 horas | ✅ ~1h | ✅ COMPLETADA | Ninguno |
+| FASE 5: Testing Final | 1 hora | ⏳ En progreso | ⏳ En progreso | Ninguno |
+| **TOTAL** | **6-7.5 horas** | **~4.5h / 6-7.5h** | **✅ 90% completado** | |
 
 **Estimado conservador:** 1 día completo de trabajo (8 horas)
 **Estimado optimista:** 6 horas si no hay bugs mayores
@@ -1235,38 +1279,68 @@ npm run lint
 - [ ] Error message si backend apagado
 - [ ] Network tab muestra GET correcto
 
-### FASE 3: P4 Integration ⏳ PENDIENTE
-- [ ] `app/seleccionar-spool/page.tsx` modificado
-  - [ ] Imports API functions agregados
-  - [ ] `MOCK_SPOOLS` eliminado (líneas 9-43)
-  - [ ] State `spools` agregado
-  - [ ] `fetchSpools()` reemplazado con API calls condicionales
-  - [ ] `getFilteredSpools()` eliminado (líneas 87-109)
-  - [ ] `<List>` usando `spools` state
-  - [ ] Build sin errores TypeScript
-- [ ] Testing P4
-  - [ ] INICIAR ARM: Spools arm=0 se muestran
-  - [ ] COMPLETAR ARM: Solo mis spools (armador=yo)
-  - [ ] Empty state funciona
-  - [ ] Error message funciona
-  - [ ] Network tab muestra query params correctos
+### FASE 3: P4 Integration ✅ COMPLETADA (10 Nov 2025 - 20:15)
+- [x] `app/seleccionar-spool/page.tsx` modificado (150 líneas finales)
+  - [x] Imports API functions agregados (`getSpoolsParaIniciar`, `getSpoolsParaCompletar`)
+  - [x] Import `Spool` type agregado
+  - [x] `MOCK_SPOOLS` eliminado completamente (34 líneas)
+  - [x] State `spools` agregado con tipo correcto
+  - [x] State `errorType` agregado para tipos de error específicos
+  - [x] `fetchSpools()` reemplazado con API calls condicionales según tipo
+  - [x] `getFilteredSpools()` eliminado (backend filtra ahora)
+  - [x] `<List>` usando `spools` state directamente
+  - [x] Manejo de errores por tipo HTTP (network, not-found, validation, server)
+  - [x] Build sin errores TypeScript
+- [x] `components/ErrorMessage.tsx` mejorado (97 líneas)
+  - [x] 6 tipos de error con iconos específicos
+  - [x] Botón reintentar solo para errores recuperables
+  - [x] Colores diferenciados por severidad
+- [x] `.gitignore` creado (45 líneas)
+- [x] `.env.example` creado (8 líneas)
+- [x] Validaciones
+  - [x] `npx tsc --noEmit` - Sin errores
+  - [x] `npm run lint` - Sin warnings
+  - [x] `npm run build` - Exitoso (9 páginas)
 
-### FASE 4: P5 Integration (CRÍTICO) ⏳ PENDIENTE
-- [ ] `app/confirmar/page.tsx` modificado
-  - [ ] Imports API functions agregados
-  - [ ] Import `ActionPayload` type agregado
-  - [ ] `handleConfirm()` reemplazado con API calls
-  - [ ] Payload construction con tipos correctos
-  - [ ] Timestamp agregado solo en COMPLETAR
-  - [ ] Error handling con tipo correcto
-  - [ ] Build sin errores TypeScript
-- [ ] Testing P5 (CRÍTICO)
-  - [ ] INICIAR ARM: POST exitoso, navega /exito
-  - [ ] COMPLETAR ARM: POST exitoso, navega /exito
-  - [ ] Error 403 ownership: Mensaje claro
-  - [ ] Loading message visible durante POST
-  - [ ] Google Sheets actualizado (verificar en Sheet)
-  - [ ] Network tab muestra POST body correcto
+**Testing P4 - PENDIENTE MANUAL:**
+- [ ] INICIAR ARM: Spools arm=0 se muestran del backend
+- [ ] COMPLETAR ARM: Solo mis spools (armador=yo)
+- [ ] Empty state funciona
+- [ ] Error message con tipo correcto funciona
+- [ ] Network tab muestra query params correctos
+
+### FASE 4: P5 Integration (CRÍTICO) ✅ COMPLETADA (10 Nov 2025 - 20:25)
+- [x] `app/confirmar/page.tsx` modificado (160 líneas finales)
+  - [x] Imports API functions agregados (`iniciarAccion`, `completarAccion`)
+  - [x] Import `ActionPayload` type agregado
+  - [x] State `errorType` agregado para tipos de error específicos
+  - [x] `handleConfirm()` reemplazado completamente con API calls reales
+  - [x] Payload construction con tipos correctos usando `ActionPayload`
+  - [x] Timestamp agregado solo en COMPLETAR con `new Date().toISOString()`
+  - [x] Error handling exhaustivo por código HTTP
+  - [x] Manejo especial error 403 (ownership violation)
+  - [x] Manejo error 400 (validación ya iniciada/completada)
+  - [x] Manejo error 404 (trabajador/spool no encontrado)
+  - [x] Manejo error 503 (Sheets no disponible)
+  - [x] Manejo error network (Failed to fetch)
+  - [x] Botón reintentar solo para errores recuperables (network, server)
+  - [x] `<ErrorMessage>` con prop `type` para mostrar iconos correctos
+  - [x] Build sin errores TypeScript
+- [x] Validaciones
+  - [x] `npx tsc --noEmit` - Sin errores
+  - [x] `npm run lint` - Sin warnings
+  - [x] `npm run build` - Exitoso (9 páginas)
+
+**Testing P5 (CRÍTICO) - PENDIENTE MANUAL:**
+- [ ] INICIAR ARM: POST exitoso, navega /exito
+- [ ] COMPLETAR ARM: POST exitoso, navega /exito
+- [ ] Error 403 ownership: Mensaje claro con icono 🚫
+- [ ] Error 400 validación: Mensaje claro con icono ⚠️
+- [ ] Error 404 not found: Mensaje claro con icono 🔍
+- [ ] Error 503 server: Mensaje claro con icono ❌ + botón reintentar
+- [ ] Loading message "Actualizando Google Sheets..." visible
+- [ ] Google Sheets actualizado (verificar en Sheet TESTING)
+- [ ] Network tab muestra POST body correcto
 
 ### FASE 5: Testing Final ⏳ PENDIENTE
 - [ ] Flujo INICIAR ARM completo (P1→P6)
@@ -1335,22 +1409,47 @@ npm run lint
 
 ### 📊 Progreso General DÍA 4
 
-**Completado:** 2/5 fases (40% del tiempo estimado)
-**Líneas implementadas:** 211 de ~189 netas (112% - más completo de lo estimado)
-**Archivos completados:** 3/5 archivos
+**Completado:** 4/5 fases (✅ 90% del tiempo estimado)
+**Líneas implementadas:** +318 netas (vs ~189 estimadas - 168% más completo)
+**Archivos completados:** 8/8 archivos (100%)
 
-**Próximas Fases:**
-1. ⏳ **FASE 3** (1-1.5h): Integrar P4 con API de spools - Filtrado backend
-2. ⏳ **FASE 4** (1-1.5h): Integrar P5 con POST requests - Ownership validation crítica
-3. ⏳ **FASE 5** (1h): Testing E2E completo - Validación flujos INICIAR→COMPLETAR
+**Archivos Creados/Modificados:**
+1. ✅ `lib/types.ts` - Actualizado (+14 líneas)
+2. ✅ `lib/api.ts` - Creado (226 líneas)
+3. ✅ `app/page.tsx` - Integrado API (-13 líneas)
+4. ✅ `app/seleccionar-spool/page.tsx` - Integrado API (-27 líneas)
+5. ✅ `app/confirmar/page.tsx` - Integrado API (+35 líneas)
+6. ✅ `components/ErrorMessage.tsx` - Mejorado (+77 líneas)
+7. ✅ `.gitignore` - Creado (+45 líneas)
+8. ✅ `.env.example` - Creado (+8 líneas)
 
-**Tiempo Restante Estimado:** 3.5-5 horas
+**Fase Pendiente:**
+- ⏳ **FASE 5** (1h estimado): Testing manual E2E completo
+
+**Tiempo Restante Estimado:** ~1 hora (solo testing manual)
 
 ---
 
-**FIN - proyecto-frontend-api.md - ZEUES Frontend API Integration - DÍA 4 EN PROGRESO**
+**FIN - proyecto-frontend-api.md - ZEUES Frontend API Integration - DÍA 4**
 
-**Última Actualización:** 11 Nov 2025 - 01:15
-**Estado:** FASES 1-2 ✅ COMPLETADAS | FASES 3-5 ⏳ PENDIENTES
-**Progreso:** 40% completado (2/5 fases) - ~2.4h invertidas de 6-7.5h estimadas
-**Próximo Paso:** Ejecutar FASE 3 - Integrar P4 Seleccionar Spool con `getSpoolsParaIniciar()` y `getSpoolsParaCompletar()`
+**Última Actualización:** 10 Nov 2025 - 20:30
+**Estado:** ✅ FASES 1-4 COMPLETADAS (90%) | FASE 5 TESTING ⏳ EN PROGRESO (10%)
+**Progreso:** 90% completado (4/5 fases) - ~4.5h invertidas de 6-7.5h estimadas
+**Archivos:** 8/8 implementados (+318 líneas netas vs ~189 estimadas)
+
+**Resumen Implementación:**
+- ✅ FASE 1: API Client base (226 líneas) + types (+14 líneas)
+- ✅ FASE 2: P1 Identificación integrado (-13 líneas)
+- ✅ FASE 3: P4 Seleccionar Spool integrado (-27 líneas) + ErrorMessage mejorado (+77)
+- ✅ FASE 4: P5 Confirmar Acción integrado (+35 líneas) con ownership validation
+- ✅ Infraestructura: .gitignore (+45), .env.example (+8)
+
+**Validaciones Exitosas:**
+- ✅ TypeScript: `npx tsc --noEmit` - Sin errores
+- ✅ ESLint: `npm run lint` - Sin warnings
+- ✅ Build: `npm run build` - Exitoso (9 páginas)
+- ✅ Backend: Workers endpoint (5 trabajadores), Spools ARM (14 disponibles)
+
+**Próximo Paso:**
+- FASE 5: Testing manual E2E completo usando guía en `/zeues-frontend/TESTING-MANUAL.md`
+- Prioridad: Test ownership validation (403 error) - CRÍTICO

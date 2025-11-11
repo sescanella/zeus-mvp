@@ -16,14 +16,13 @@ test.describe('Flujo 1: INICIAR ARM (Armado)', () => {
     await test.step('P1 - Identificación', async () => {
       await page.goto('/');
 
-      // Verificar que aparecen los 4 trabajadores
-      await expect(page.getByText('Juan Pérez')).toBeVisible();
-      await expect(page.getByText('María López')).toBeVisible();
-      await expect(page.getByText('Carlos Díaz')).toBeVisible();
-      await expect(page.getByText('Ana García')).toBeVisible();
+      // Verificar que aparecen trabajadores del backend real
+      await expect(page.getByText('Mauricio Rodriguez')).toBeVisible();
+      await expect(page.getByText('Nicolás Rodriguez')).toBeVisible();
+      await expect(page.getByText('Carlos Pimiento')).toBeVisible();
 
-      // Seleccionar "Juan Pérez"
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      // Seleccionar "Mauricio Rodriguez"
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
 
       // Verificar navegación a /operacion
       await expect(page).toHaveURL('/operacion');
@@ -87,7 +86,7 @@ test.describe('Flujo 1: INICIAR ARM (Armado)', () => {
       await expect(page.getByText(/¿Confirmas INICIAR ARM\?/i)).toBeVisible();
 
       // Verificar resumen muestra los datos correctos
-      await expect(page.getByText(/Juan Pérez/i)).toBeVisible();
+      await expect(page.getByText(/Mauricio Rodriguez/i)).toBeVisible();
       await expect(page.getByText(/ARMADO \(ARM\)/i)).toBeVisible();
       await expect(page.getByText(/MK-1335-CW-25238-011/i)).toBeVisible();
 
@@ -136,7 +135,7 @@ test.describe('Flujo 1: INICIAR ARM (Armado)', () => {
     await page.goto('/');
 
     // P1 → P2
-    await page.getByRole('button', { name: /Juan Pérez/i }).click();
+    await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
     await expect(page).toHaveURL('/operacion');
 
     // P2: Verificar Volver → P1

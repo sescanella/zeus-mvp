@@ -16,8 +16,8 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
     await test.step('P1 - Identificación', async () => {
       await page.goto('/');
 
-      // Seleccionar "Juan Pérez" (quien tiene spools en progreso ARM)
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      // Seleccionar "Mauricio Rodriguez" (quien tiene spools en progreso ARM)
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
 
       await expect(page).toHaveURL('/operacion');
     });
@@ -52,7 +52,7 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
       // Verificar título con énfasis en "TU spool"
       await expect(page.getByText(/Selecciona TU spool para COMPLETAR ARM/i)).toBeVisible();
 
-      // Verificar que aparecen los 2 spools en progreso de Juan Pérez
+      // Verificar que aparecen los 2 spools en progreso de Mauricio Rodriguez
       await expect(page.getByText('MK-1337-CW-25250-031')).toBeVisible();
       await expect(page.getByText('MK-1337-CW-25250-032')).toBeVisible();
 
@@ -74,7 +74,7 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
       await expect(page.getByText(/¿Confirmas COMPLETAR ARM\?/i)).toBeVisible();
 
       // Verificar resumen muestra los datos correctos
-      await expect(page.getByText(/Juan Pérez/i)).toBeVisible();
+      await expect(page.getByText(/Mauricio Rodriguez/i)).toBeVisible();
       await expect(page.getByText(/ARMADO \(ARM\)/i)).toBeVisible();
       await expect(page.getByText(/MK-1337-CW-25250-031/i)).toBeVisible();
 
@@ -115,8 +115,8 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
   test('solo debe mostrar spools propios del trabajador', async ({ page }) => {
     await page.goto('/');
 
-    // Seleccionar María López
-    await page.getByRole('button', { name: /María López/i }).click();
+    // Seleccionar Nicolás Rodriguez
+    await page.getByRole('button', { name: /Nicolás Rodriguez/i }).click();
 
     // Seleccionar ARMADO (ARM)
     await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
@@ -124,11 +124,11 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
     // Seleccionar COMPLETAR ACCIÓN
     await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
 
-    // Verificar que solo aparecen los spools de María López
+    // Verificar que solo aparecen los spools de Nicolás Rodriguez
     await expect(page.getByText('MK-1338-CW-25260-041')).toBeVisible();
     await expect(page.getByText('MK-1338-CW-25260-042')).toBeVisible();
 
-    // Verificar que NO aparecen spools de Juan Pérez
+    // Verificar que NO aparecen spools de Mauricio Rodriguez
     await expect(page.getByText('MK-1337-CW-25250-031')).not.toBeVisible();
     await expect(page.getByText('MK-1337-CW-25250-032')).not.toBeVisible();
   });

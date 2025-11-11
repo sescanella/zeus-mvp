@@ -23,7 +23,7 @@ test.describe('Error Handling - Validación de API Errors', () => {
 
     await test.step('Navegar al flujo COMPLETAR ARM', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /María López/i }).click();
+      await page.getByRole('button', { name: /Nicolás Rodriguez/i }).click();
       await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
       await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
     });
@@ -35,7 +35,7 @@ test.describe('Error Handling - Validación de API Errors', () => {
           status: 403,
           contentType: 'application/json',
           body: JSON.stringify({
-            detail: 'Solo Juan Pérez puede completar esta acción. Esta acción pertenece a otro trabajador.',
+            detail: 'Solo Mauricio Rodriguez puede completar esta acción. Esta acción pertenece a otro trabajador.',
           }),
         });
       });
@@ -53,8 +53,8 @@ test.describe('Error Handling - Validación de API Errors', () => {
       // Verificar título "No Autorizado"
       await expect(page.getByText('No Autorizado')).toBeVisible();
 
-      // Verificar mensaje contiene "Solo Juan Pérez puede completar"
-      await expect(page.getByText(/Solo Juan Pérez puede completar/i)).toBeVisible();
+      // Verificar mensaje contiene "Solo Mauricio Rodriguez puede completar"
+      await expect(page.getByText(/Solo Mauricio Rodriguez puede completar/i)).toBeVisible();
 
       // Verificar que NO hay botón Reintentar (error forbidden no es recuperable)
       await expect(page.getByRole('button', { name: /Reintentar/i })).not.toBeVisible();
@@ -72,7 +72,7 @@ test.describe('Error Handling - Validación de API Errors', () => {
 
     await test.step('Navegar al flujo INICIAR ARM', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
       await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
       await page.getByRole('button', { name: /INICIAR ACCIÓN/i }).click();
     });
@@ -121,7 +121,7 @@ test.describe('Error Handling - Validación de API Errors', () => {
 
     await test.step('Navegar al flujo INICIAR ARM', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
       await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
       await page.getByRole('button', { name: /INICIAR ACCIÓN/i }).click();
     });
@@ -170,7 +170,7 @@ test.describe('Error Handling - Validación de API Errors', () => {
 
     await test.step('Navegar a selección de spools', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
       await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
       await page.getByRole('button', { name: /INICIAR ACCIÓN/i }).click();
     });
@@ -222,7 +222,7 @@ test.describe('Error Handling - Validación de API Errors', () => {
 
     await test.step('Navegar al flujo INICIAR ARM', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
       await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
       await page.getByRole('button', { name: /INICIAR ACCIÓN/i }).click();
     });

@@ -16,8 +16,8 @@ test.describe('Flujo 3: INICIAR SOLD (Soldado)', () => {
     await test.step('P1 - Identificación', async () => {
       await page.goto('/');
 
-      // Seleccionar "Carlos Díaz" (soldador)
-      await page.getByRole('button', { name: /Carlos Díaz/i }).click();
+      // Seleccionar "Carlos Pimiento" (soldador)
+      await page.getByRole('button', { name: /Carlos Pimiento/i }).click();
 
       await expect(page).toHaveURL('/operacion');
     });
@@ -75,7 +75,7 @@ test.describe('Flujo 3: INICIAR SOLD (Soldado)', () => {
       await expect(page.getByText(/¿Confirmas INICIAR SOLD\?/i)).toBeVisible();
 
       // Verificar resumen muestra "SOLDADO (SOLD)"
-      await expect(page.getByText(/Carlos Díaz/i)).toBeVisible();
+      await expect(page.getByText(/Carlos Pimiento/i)).toBeVisible();
       await expect(page.getByText(/SOLDADO \(SOLD\)/i)).toBeVisible();
       await expect(page.getByText(/MK-1336-CW-25240-021/i)).toBeVisible();
 
@@ -115,8 +115,8 @@ test.describe('Flujo 3: INICIAR SOLD (Soldado)', () => {
   test('solo debe mostrar spools con armado completado', async ({ page }) => {
     await page.goto('/');
 
-    // Seleccionar Carlos Díaz
-    await page.getByRole('button', { name: /Carlos Díaz/i }).click();
+    // Seleccionar Carlos Pimiento
+    await page.getByRole('button', { name: /Carlos Pimiento/i }).click();
 
     // Seleccionar SOLDADO (SOLD)
     await page.getByRole('button', { name: /SOLDADO \(SOLD\)/i }).click();

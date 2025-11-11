@@ -17,7 +17,7 @@ test.describe('Flujo de Cancelación', () => {
       await page.goto('/');
 
       // P1: Seleccionar trabajador
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
       await expect(page).toHaveURL('/operacion');
 
       // P2: Seleccionar operación ARMADO
@@ -59,15 +59,15 @@ test.describe('Flujo de Cancelación', () => {
 
     await test.step('Verificar estado está limpio', async () => {
       // Verificar que aparecen los trabajadores nuevamente
-      await expect(page.getByText('Juan Pérez')).toBeVisible();
-      await expect(page.getByText('María López')).toBeVisible();
-      await expect(page.getByText('Carlos Díaz')).toBeVisible();
-      await expect(page.getByText('Ana García')).toBeVisible();
+      await expect(page.getByText('Mauricio Rodriguez')).toBeVisible();
+      await expect(page.getByText('Nicolás Rodriguez')).toBeVisible();
+      await expect(page.getByText('Carlos Pimiento')).toBeVisible();
+      await expect(page.getByText('Fernando Figueroa')).toBeVisible();
     });
 
     await test.step('Verificar que puede iniciar nuevo flujo', async () => {
       // Seleccionar trabajador nuevamente para verificar que el estado se reseteó
-      await page.getByRole('button', { name: /María López/i }).click();
+      await page.getByRole('button', { name: /Nicolás Rodriguez/i }).click();
       await expect(page).toHaveURL('/operacion');
 
       // Verificar que puede seleccionar operación
@@ -83,7 +83,7 @@ test.describe('Flujo de Cancelación', () => {
 
     await test.step('Completar flujo COMPLETAR hasta confirmación', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /Juan Pérez/i }).click();
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
       await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
       await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
 
@@ -113,7 +113,7 @@ test.describe('Flujo de Cancelación', () => {
 
     await test.step('Llegar a página de confirmación', async () => {
       await page.goto('/');
-      await page.getByRole('button', { name: /Carlos Díaz/i }).click();
+      await page.getByRole('button', { name: /Carlos Pimiento/i }).click();
       await page.getByRole('button', { name: /SOLDADO \(SOLD\)/i }).click();
       await page.getByRole('button', { name: /INICIAR ACCIÓN/i }).click();
 
@@ -143,7 +143,7 @@ test.describe('Flujo de Cancelación', () => {
       await expect(page.getByRole('button', { name: /CONFIRMAR/i })).toBeVisible();
 
       // Verificar que sigue viendo los datos de confirmación
-      await expect(page.getByText(/Carlos Díaz/i)).toBeVisible();
+      await expect(page.getByText(/Carlos Pimiento/i)).toBeVisible();
       await expect(page.getByText(/SOLDADO \(SOLD\)/i)).toBeVisible();
     });
   });

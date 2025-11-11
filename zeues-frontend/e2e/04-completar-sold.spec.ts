@@ -16,8 +16,8 @@ test.describe('Flujo 4: COMPLETAR SOLD (Soldado)', () => {
     await test.step('P1 - Identificación', async () => {
       await page.goto('/');
 
-      // Seleccionar "Carlos Díaz" (soldador con spools en progreso)
-      await page.getByRole('button', { name: /Carlos Díaz/i }).click();
+      // Seleccionar "Carlos Pimiento" (soldador con spools en progreso)
+      await page.getByRole('button', { name: /Carlos Pimiento/i }).click();
 
       await expect(page).toHaveURL('/operacion');
     });
@@ -52,7 +52,7 @@ test.describe('Flujo 4: COMPLETAR SOLD (Soldado)', () => {
       // Verificar título con énfasis en "TU spool"
       await expect(page.getByText(/Selecciona TU spool para COMPLETAR SOLD/i)).toBeVisible();
 
-      // Verificar que aparecen los 2 spools en progreso de Carlos Díaz
+      // Verificar que aparecen los 2 spools en progreso de Carlos Pimiento
       await expect(page.getByText('MK-1339-CW-25270-051')).toBeVisible();
       await expect(page.getByText('MK-1339-CW-25270-052')).toBeVisible();
 
@@ -74,7 +74,7 @@ test.describe('Flujo 4: COMPLETAR SOLD (Soldado)', () => {
       await expect(page.getByText(/¿Confirmas COMPLETAR SOLD\?/i)).toBeVisible();
 
       // Verificar resumen muestra los datos correctos
-      await expect(page.getByText(/Carlos Díaz/i)).toBeVisible();
+      await expect(page.getByText(/Carlos Pimiento/i)).toBeVisible();
       await expect(page.getByText(/SOLDADO \(SOLD\)/i)).toBeVisible();
       await expect(page.getByText(/MK-1339-CW-25270-051/i)).toBeVisible();
 
@@ -111,8 +111,8 @@ test.describe('Flujo 4: COMPLETAR SOLD (Soldado)', () => {
   test('solo debe mostrar spools propios del soldador', async ({ page }) => {
     await page.goto('/');
 
-    // Seleccionar Ana García (soldadora con spools en progreso diferentes)
-    await page.getByRole('button', { name: /Ana García/i }).click();
+    // Seleccionar Fernando Figueroa (soldadora con spools en progreso diferentes)
+    await page.getByRole('button', { name: /Fernando Figueroa/i }).click();
 
     // Seleccionar SOLDADO (SOLD)
     await page.getByRole('button', { name: /SOLDADO \(SOLD\)/i }).click();
@@ -120,12 +120,12 @@ test.describe('Flujo 4: COMPLETAR SOLD (Soldado)', () => {
     // Seleccionar COMPLETAR ACCIÓN
     await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
 
-    // Verificar que solo aparecen los spools de Ana García
+    // Verificar que solo aparecen los spools de Fernando Figueroa
     // Según mock data: MK-1340-CW-25280-061 y MK-1340-CW-25280-062
     await expect(page.getByText('MK-1340-CW-25280-061')).toBeVisible();
     await expect(page.getByText('MK-1340-CW-25280-062')).toBeVisible();
 
-    // Verificar que NO aparecen spools de Carlos Díaz
+    // Verificar que NO aparecen spools de Carlos Pimiento
     await expect(page.getByText('MK-1339-CW-25270-051')).not.toBeVisible();
     await expect(page.getByText('MK-1339-CW-25270-052')).not.toBeVisible();
   });
@@ -136,7 +136,7 @@ test.describe('Flujo 4: COMPLETAR SOLD (Soldado)', () => {
   test('debe redirigir automáticamente después de 5 segundos', async ({ page }) => {
     // Completar un flujo rápido para llegar a página de éxito
     await page.goto('/');
-    await page.getByRole('button', { name: /Carlos Díaz/i }).click();
+    await page.getByRole('button', { name: /Carlos Pimiento/i }).click();
     await page.getByRole('button', { name: /SOLDADO \(SOLD\)/i }).click();
     await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
     await page.getByRole('button', { name: /MK-1339-CW-25270-051/ }).click();

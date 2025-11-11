@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { AppProvider } from '@/lib/context';
 
 export const metadata: Metadata = {
   title: 'ZEUES - Trazabilidad',
@@ -14,8 +15,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        {/* TODO DÍA 3: Agregar AppProvider wrapping children */}
-        {children}
+        <AppProvider>
+          {children}
+        </AppProvider>
       </body>
     </html>
   );

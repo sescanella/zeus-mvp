@@ -3,8 +3,33 @@
 **Sistema de Trazabilidad para Manufactura de Cañerías - Backend API**
 
 Última actualización: 11 Nov 2025 - Backend Deployado en Producción
-Estado: DÍA 1 ✅ | DÍA 2 ✅ | DÍA 3 ✅ | DÍA 4 ✅ COMPLETADO
+Estado: DÍA 1 ✅ | DÍA 2 ✅ | DÍA 3 ✅ | DÍA 4 ✅ COMPLETADO Y DEPLOYADO EN PRODUCCIÓN ✅
 **URL Producción:** https://zeues-backend-mvp-production.up.railway.app
+
+---
+
+## Documentación Relacionada
+
+Este documento forma parte del sistema de documentación del proyecto ZEUES:
+
+**Documentos Principales:**
+- **[proyecto.md](./proyecto.md)** - Especificación completa del MVP (visión producto, user stories, arquitectura general)
+- **[proyecto-frontend.md](./proyecto-frontend.md)** - Arquitectura frontend (estructura, componentes, navegación)
+
+**Documentos de Ejecución:**
+- **[proyecto-backend-api.md](./proyecto-backend-api.md)** - Plan ejecución DÍA 3: Implementación API Layer (routers, endpoints, exception handlers)
+- **[proyecto-frontend-ui.md](./proyecto-frontend-ui.md)** - Plan ejecución DÍA 1-3: Implementación componentes UI y páginas
+- **[proyecto-frontend-api.md](./proyecto-frontend-api.md)** - Plan ejecución DÍA 4: Integración frontend con backend API
+
+**Relación con este documento:**
+- Este documento (`proyecto-backend.md`) contiene la **documentación técnica completa del backend**
+- Cubre: arquitectura, modelos, servicios, API endpoints, testing, deployment
+- **Estado actual:** Backend 100% completado y deployado en producción (Railway)
+
+**Referencias rápidas:**
+- Para entender la **visión del producto** → `proyecto.md` (secciones 1-3)
+- Para implementar **integración frontend-backend** → `proyecto-frontend-api.md`
+- Para ver **detalles de implementación API** → `proyecto-backend-api.md`
 
 ---
 
@@ -1059,12 +1084,17 @@ $ curl "https://zeues-backend-mvp-production.up.railway.app/api/spools/iniciar?o
 - Backend funcionando en producción: https://zeues-backend-mvp-production.up.railway.app
 - Health check OK, 6 endpoints operativos
 
-**✅ BACKEND COMPLETADO AL 100%**
-**Próximo Paso:** Frontend - Integración API real (11-12 Nov 2025)
-- Crear /lib/api.ts con 6 funciones fetch
-- Reemplazar mock data con llamadas API reales
-- Configurar NEXT_PUBLIC_API_URL=https://zeues-backend-mvp-production.up.railway.app
-- Testing flujos completos con backend deployado
+**✅ BACKEND 100% COMPLETADO Y DEPLOYADO EN PRODUCCIÓN** (11 Nov 2025)
+
+Backend deployado exitosamente en Railway y operacional:
+- ✅ URL Producción: https://zeues-backend-mvp-production.up.railway.app
+- ✅ 6 endpoints API funcionando: health, workers, spools iniciar/completar, actions
+- ✅ Health check verificado: status=healthy, sheets_connection=ok
+- ✅ Tests E2E 10/10 passing con integración Google Sheets
+- ✅ OpenAPI docs disponible en /api/docs (producción)
+- ✅ Ownership validation implementada y testeada
+
+**Próximo Paso:** Frontend - Integración con backend deployado (ver `proyecto-frontend-api.md`)
 
 ---
 
