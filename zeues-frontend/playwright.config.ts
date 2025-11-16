@@ -29,8 +29,8 @@ export default defineConfig({
     /* Base URL del frontend */
     baseURL: 'http://localhost:3001',
 
-    /* Screenshots solo en fallas */
-    screenshot: 'only-on-failure',
+    /* Screenshots EN TODOS los tests para documentación */
+    screenshot: 'on',
 
     /* Videos solo en primera retry */
     video: 'retain-on-failure',

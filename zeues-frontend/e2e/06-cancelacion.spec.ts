@@ -29,7 +29,7 @@ test.describe('Flujo de Cancelación', () => {
       await expect(page).toHaveURL(/\/seleccionar-spool\?tipo=iniciar/);
 
       // P4: Seleccionar un spool
-      const firstSpool = page.getByRole('button').filter({ hasText: /MK-/ }).first();
+      const firstSpool = page.getByRole('button').filter({ hasText: /TEST-/ }).first();
       await firstSpool.click();
       await expect(page).toHaveURL(/\/confirmar\?tipo=iniciar/);
     });
@@ -88,7 +88,7 @@ test.describe('Flujo de Cancelación', () => {
       await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
 
       // Seleccionar spool en progreso
-      const firstSpool = page.getByRole('button').filter({ hasText: /MK-/ }).first();
+      const firstSpool = page.getByRole('button').filter({ hasText: /TEST-/ }).first();
       await firstSpool.click();
       await expect(page).toHaveURL(/\/confirmar\?tipo=completar/);
     });
@@ -117,7 +117,7 @@ test.describe('Flujo de Cancelación', () => {
       await page.getByRole('button', { name: /SOLDADO \(SOLD\)/i }).click();
       await page.getByRole('button', { name: /INICIAR ACCIÓN/i }).click();
 
-      const firstSpool = page.getByRole('button').filter({ hasText: /MK-/ }).first();
+      const firstSpool = page.getByRole('button').filter({ hasText: /TEST-/ }).first();
       await firstSpool.click();
       await expect(page).toHaveURL(/\/confirmar\?tipo=iniciar/);
     });

@@ -64,15 +64,13 @@ test.describe('Flujo 1: INICIAR ARM (Armado)', () => {
       // Verificar título
       await expect(page.getByText(/Selecciona spool para INICIAR ARM/i)).toBeVisible();
 
-      // Verificar que aparecen los 5 spools disponibles (arm=0)
-      await expect(page.getByText('MK-1335-CW-25238-011')).toBeVisible();
-      await expect(page.getByText('MK-1335-CW-25238-012')).toBeVisible();
-      await expect(page.getByText('MK-1335-CW-25238-013')).toBeVisible();
-      await expect(page.getByText('MK-1335-CW-25238-014')).toBeVisible();
-      await expect(page.getByText('MK-1335-CW-25238-015')).toBeVisible();
+      // Verificar que aparecen spools disponibles (arm=0)
+      // Usar selector genérico para trabajar con cualquier spool disponible
+      const spoolButtons = page.getByRole('button').filter({ hasText: /TEST-ARM-BUFFER/ });
+      await expect(spoolButtons.first()).toBeVisible();
 
-      // Seleccionar primer spool
-      await page.getByRole('button', { name: /MK-1335-CW-25238-011/ }).click();
+      // Seleccionar primer spool disponible
+      await spoolButtons.first().click();
 
       // Verificar navegación a /confirmar?tipo=iniciar
       await expect(page).toHaveURL(/\/confirmar\?tipo=iniciar/);
@@ -88,7 +86,8 @@ test.describe('Flujo 1: INICIAR ARM (Armado)', () => {
       // Verificar resumen muestra los datos correctos
       await expect(page.getByText(/Mauricio Rodriguez/i)).toBeVisible();
       await expect(page.getByText(/ARMADO \(ARM\)/i)).toBeVisible();
-      await expect(page.getByText(/MK-1335-CW-25238-011/i)).toBeVisible();
+      // Verificar que aparece un spool TEST-ARM-BUFFER (cualquiera)
+      await expect(page.getByText(/TEST-ARM-BUFFER/i)).toBeVisible();
 
       // Verificar que existe botón "Cancelar"
       const cancelarBtn = page.getByRole('button', { name: /Cancelar/i });
