@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -29,7 +29,10 @@ pip freeze > requirements.txt
 - ALWAYS activate venv before installing dependencies
 - ALL Python work must be done with venv activated
 
-Current dependencies: pandas, openpyxl
+**Production URLs:**
+- Frontend: https://zeues-frontend.vercel.app
+- Backend API: https://zeues-backend-mvp-production.up.railway.app
+- API Docs: https://zeues-backend-mvp-production.up.railway.app/docs
 
 ## Tech Stack
 
@@ -51,6 +54,181 @@ Current dependencies: pandas, openpyxl
 
 **User Flow:** Worker ID → Action → Spool → Confirm → Update Sheets (< 30 sec)
 
+## Development Commands
+
+### Backend (FastAPI + Python)
+
+**Always activate venv first:**
+```bash
+cd backend
+source venv/bin/activate  # macOS/Linux
+# venv\Scripts\activate   # Windows
+```
+
+**Run development server:**
+```bash
+# From project root (with venv activated)
+uvicorn main:app --reload --port 8000
+# API available at: http://localhost:8000
+# Docs at: http://localhost:8000/api/docs
+```
+
+**Testing:**
+```bash
+# Run all tests (from project root with venv active)
+PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest
+
+# Run with coverage
+PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest --cov=backend
+
+# Run specific test file
+PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest tests/test_validation_service.py
+
+# Run single test
+PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest tests/test_validation_service.py::test_validar_puede_iniciar_arm_success
+```
+
+**Package management:**
+```bash
+# Install new package (venv must be active)
+pip install <package-name>
+
+# ALWAYS update requirements after installing
+pip freeze > requirements.txt
+```
+
+### Frontend (Next.js + TypeScript)
+
+**Run development server:**
+```bash
+cd zeues-frontend
+npm run dev
+# App available at: http://localhost:3000
+```
+
+**Build and type checking:**
+```bash
+cd zeues-frontend
+
+# TypeScript compilation check (MUST pass)
+npx tsc --noEmit
+
+# ESLint (MUST pass - no warnings, no errors)
+npm run lint
+
+# Production build (MUST pass)
+npm run build
+
+# Run production build locally
+npm run start
+```
+
+**Testing (Playwright E2E):**
+```bash
+cd zeues-frontend
+
+# Run all E2E tests (headless)
+npx playwright test
+
+# Run with UI mode (interactive)
+npx playwright test --ui
+
+# Run in headed mode (see browser)
+npx playwright test --headed
+
+# Slow motion demo mode
+SLOW_MO=2000 npx playwright test --headed --workers=1 --max-failures=1
+
+# Show test report
+npx playwright show-report
+```
+
+## Architecture Overview
+
+### Backend Structure (Clean Architecture)
+
+**Layered Architecture:**
+```
+main.py                      # FastAPI app, CORS, exception handlers
+├── routers/                 # API endpoints (thin layer)
+│   ├── health.py           # GET /api/health
+│   ├── workers.py          # GET /api/workers
+│   ├── spools.py           # POST /api/spools/iniciar, /completar
+│   └── actions.py          # POST /api/iniciar-accion, /completar-accion (CRITICAL)
+├── services/                # Business logic (orchestration)
+│   ├── action_service.py   # Orchestrates validation + repository
+│   └── validation_service.py # Pure business rules (CRITICAL ownership)
+├── repositories/            # Data access layer
+│   └── sheets_repository.py # Google Sheets CRUD (gspread)
+├── models/                  # Pydantic schemas
+│   ├── worker.py
+│   ├── spool.py
+│   ├── action.py
+│   └── enums.py            # ActionType, ActionStatus
+├── exceptions.py            # 10+ custom exceptions (ZEUSException)
+└── config.py               # Environment variables
+```
+
+**Key Patterns:**
+- **Service Layer Pattern**: ActionService orchestrates ValidationService + SheetsRepository
+- **Repository Pattern**: SheetsRepository abstracts Google Sheets API (gspread)
+- **Custom Exceptions**: All business errors use ZEUSException subclasses → HTTP status in main.py
+- **Dependency Injection**: FastAPI Depends() for service instantiation
+
+**CRITICAL: Ownership Restriction**
+```python
+# backend/services/validation_service.py
+def validar_puede_completar_arm(self, spool: Spool, worker_nombre: str) -> None:
+    """
+    CRITICAL: Only worker who started can complete (spool.armador == worker_nombre).
+    Violation → NoAutorizadoError → 403 FORBIDDEN
+    """
+```
+
+### Frontend Structure (Next.js App Router)
+
+**7-Page Linear Flow:**
+```
+app/
+├── page.tsx                        # P1: Worker identification
+├── operacion/page.tsx             # P2: Operation selection (ARM/SOLD)
+├── tipo-interaccion/page.tsx      # P3: Action type (INICIAR/COMPLETAR)
+├── seleccionar-spool/page.tsx     # P4: Spool selection (filtered by API)
+├── confirmar/page.tsx             # P5: Confirmation summary
+└── exito/page.tsx                 # P6: Success (5sec timeout → P1)
+
+components/
+├── Button.tsx                      # Reusable button (Tailwind inline)
+├── Card.tsx                        # Worker/spool cards
+└── ...
+
+lib/
+├── api.ts                          # 6 API functions (native fetch, NO axios)
+├── types.ts                        # TypeScript interfaces
+└── context.tsx                     # React Context (shared state)
+```
+
+**State Management:**
+- **React Context API** (lib/context.tsx) for cross-page state
+- NO Redux/Zustand (keeping MVP simple)
+- State: worker, operacion, tipoInteraccion, selectedSpool
+
+**Navigation:**
+- Standard Next.js routing (`useRouter()`)
+- "Volver" button on each page (go back one step)
+- "Cancelar" button (red) resets to P1
+- Auto-redirect to P1 after 5 seconds on success page
+
+**API Integration:**
+- Native `fetch()` only (NO axios)
+- Simple try/catch error handling
+- API functions in `lib/api.ts`:
+  - `getWorkers()`
+  - `getSpoolsIniciar(operacion)`
+  - `getSpoolsCompletar(operacion, workerNombre)`
+  - `iniciarAccion(payload)`
+  - `completarAccion(payload)`
+
 ## Important Files
 
 **Project Documentation:**
@@ -68,7 +246,45 @@ Current dependencies: pandas, openpyxl
 **Data & Environment:**
 - `plantilla.xlsx` - Data structure template (reference copy)
 - `venv/` - Python virtual environment
-- `guia-environments.md` - Environment reference
+- `.env.local` - Environment variables (NEVER commit)
+- `backend/requirements.txt` - Python dependencies
+
+**Key Dependencies:**
+- Backend: `fastapi`, `gspread`, `pydantic`, `pytest`, `uvicorn`
+- Frontend: `next@14`, `react@18`, `typescript`, `tailwindcss`, `@playwright/test`
+
+## Google Sheets Integration
+
+**Data Source:** Google Sheets is the single source of truth (no database)
+
+**Sheets Structure:**
+- **Operaciones** sheet: Spools data (columns A-BE)
+  - Column A: TAG_SPOOL
+  - Column V (22): ARM status (0/0.1/1.0)
+  - Column W (23): SOLD status (0/0.1/1.0)
+  - Column BA (53): fecha_materiales (prerequisite)
+  - Column BB (54): fecha_armado
+  - Column BC (55): armador (worker name)
+  - Column BD (56): fecha_soldado
+  - Column BE (57): soldador (worker name)
+- **Trabajadores** sheet: Workers list (columns A-C)
+  - Column A: nombre
+  - Column B: apellido
+  - Column C: activo (TRUE/FALSE)
+
+**State Transitions:**
+- PENDIENTE: 0 → ready to start
+- EN_PROGRESO: 0.1 → worker assigned, in progress
+- COMPLETADO: 1.0 → action finished
+
+**Workflow:**
+1. **INICIAR**: status → 0.1, worker name → BC/BE
+2. **COMPLETAR**: status → 1.0, date → BB/BD
+
+**Environment Variables (see docs/GOOGLE-RESOURCES.md):**
+- `GOOGLE_SHEET_ID` - Testing: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` - zeus-mvp@zeus-mvp.iam.gserviceaccount.com
+- `GOOGLE_PRIVATE_KEY` - From Service Account JSON (keep secret)
 
 ## Key Constraints
 
@@ -270,3 +486,29 @@ function isValidWorker(obj: unknown): obj is Worker {
 - **Parallel execution:** Launch multiple agents simultaneously when possible for efficiency
 - **Stateless:** Each agent invocation is independent, provide complete context in prompt
 - **Results:** Agent returns one final message with results, no back-and-forth
+
+## Custom Commands
+
+### /actualizar-docs
+Updates project documentation after implementation work.
+
+**Updates:**
+- `proyecto.md` - General MVP documentation (max 850 lines)
+- `proyecto-backend.md` - Backend technical docs (max 1000 lines)
+
+**Usage:** Run after completing features, fixing bugs, or making architectural changes.
+
+**What it captures:**
+- Project state changes
+- Technical decisions
+- Blockers identified/resolved
+- Implementation progress
+- Roadmap updates
+
+**Example:**
+```bash
+# After implementing a new feature
+/actualizar-docs
+```
+
+The command uses the `project-architect` agent to extract relevant information from the conversation and update both documentation files while preserving critical information and compacting less important details if needed.
