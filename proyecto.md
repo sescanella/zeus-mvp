@@ -1100,6 +1100,178 @@ npm run test      # Tests
 - **Estado actualizado:** Frontend 80% (5/6 días), próximo deploy Vercel
 - **Documentación actualizada:** proyecto.md con sección E2E Testing completa
 
+---
+
+## 15. Versión 2.0 - Roadmap y Scope
+
+**Estado:** 🚧 **EN DESARROLLO** (Branch: `v2.0-dev`)
+**Inicio Desarrollo:** 10 Dic 2025
+**Objetivo:** Expandir funcionalidad MVP con sistema de roles, auditoría y nueva operación
+
+### Alcance v2.0
+
+#### 1. Sistema de Roles
+**Objetivo:** Implementar autenticación y autorización basada en roles
+
+**Roles:**
+- **Trabajador**: Iniciar/completar acciones ARM, SOLD, METROLOGÍA
+- **Supervisor**: Ver todas las acciones, reportes, cancelar acciones
+- **Administrador**: Acceso completo (CRUD, configuración)
+
+**Implementación:**
+- Nueva hoja "Roles" en Google Sheets (email, rol, activo)
+- Modelo Pydantic `User` con campo `role: RoleEnum`
+- Middleware FastAPI para validar permisos
+- Login page (P0) en frontend
+- AuthContext con estado `user` y `role`
+
+**Impacto:** ⚠️ BREAKING CHANGE - Login obligatorio
+
+---
+
+#### 2. Hoja Metadata - Sistema de Auditoría
+**Objetivo:** Registrar TODOS los movimientos de la app
+
+**Estructura Google Sheets - Hoja "Metadata":**
+- A: id (UUID)
+- B: timestamp (ISO 8601)
+- C: user_email
+- D: user_role
+- E: action_type (INICIAR_ARM, COMPLETAR_ARM, etc.)
+- F: tag_spool
+- G: operacion (ARM, SOLD, METROLOGIA)
+- H: status_before (0, 0.1, 1.0)
+- I: status_after
+- J: metadata_json
+- K: ip_address
+- L: user_agent
+
+**Casos de Uso:**
+- Auditoría: ¿Quién modificó spool X el día Y?
+- Trazabilidad: Historia completa de un spool
+- Debugging: Reproducir errores
+- Analytics: Reportes de productividad
+- Compliance: Registro inmutable
+
+**Implementación:**
+- `MetadataService.log_action()`
+- `MetadataRepository` para escribir a Sheet
+- Middleware que captura POST exitosos
+- Batch writes (buffer 10 registros)
+
+---
+
+#### 3. Nueva Operación: METROLOGÍA
+**Objetivo:** Tercera operación de manufactura
+
+**Workflow:** BA (Materiales) → ARM → SOLD → METROLOGÍA (Inspección)
+
+**Estructura Google Sheets:**
+- Columna X (24): estado_metrologia (0, 0.1, 1.0)
+- Columna BF (58): fecha_metrologia
+- Columna BG (59): metrologo
+
+**Validaciones:**
+- INICIAR: Requiere SOLD=1.0, BD llena
+- COMPLETAR: Ownership validation
+- Dependencias: BA → BB → BD → BF
+
+**Cambios:**
+- Backend: ActionType.METROLOGIA, validaciones, tests
+- Frontend: Botón METROLOGÍA 📏, color verde, filtros
+
+---
+
+#### 4. Multiselect de Spools
+**Objetivo:** Operaciones batch para múltiples spools
+
+**Beneficio:** 80% más rápido (~25 seg/spool → ~30 seg/5 spools)
+
+**UX:**
+- Checkboxes en cada Card
+- "Seleccionar Todos" / "Deseleccionar Todos"
+- Contador "X spools seleccionados"
+- Confirmación batch: "¿Iniciar ARM en 5 spools?"
+- Resumen éxito: "5 spools procesados"
+
+**Backend:**
+- Endpoint `POST /api/iniciar-accion-batch`
+- Payload: `{worker, operacion, tag_spools: [...] }`
+- Validación individual de cada spool
+- Batch update Google Sheets
+- Manejo errores parciales (3/5 success)
+- Máximo 50 spools/batch
+
+---
+
+#### 5. Migración a Google Sheets OFICIAL
+**Objetivo:** Cambiar de TESTING a PRODUCCIÓN
+
+**Sheets:**
+- TESTING: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM`
+- PRODUCCIÓN: `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ`
+
+**Preparación:**
+1. Agregar hojas "Metadata" y "Roles"
+2. Agregar columnas METROLOGÍA (X, BF, BG)
+3. Compartir con Service Account
+4. Backup completo
+
+**Variables:** `GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ`
+
+**Rollback:** Revertir GOOGLE_SHEET_ID a TESTING en < 5 min
+
+---
+
+### Roadmap v2.0 (16 días)
+
+**Backend (8 días):**
+- Días 1-3: Sistema de Roles
+- Días 4-6: Metadata + Metrología
+- Días 7-8: Multiselect batch
+
+**Frontend (5 días):**
+- Días 9-11: Auth + Roles
+- Días 12-14: Metrología + Multiselect
+
+**Deploy (3 días):**
+- Días 15-16: Migración + Testing producción
+
+---
+
+### Breaking Changes v1.0 → v2.0
+
+⚠️ **INCOMPATIBILIDADES:**
+1. Login obligatorio (flujo sin auth deja de funcionar)
+2. Nuevos endpoints: `/api/login`, `/api/iniciar-accion-batch`
+3. Schemas modificados: `ActionRequest` acepta array
+4. Sheet structure: 3 hojas nuevas
+
+**Migración:**
+- Mantener v1.0 en `main` (estable)
+- v2.0 en `v2.0-dev`
+- Deploy en URL separada
+- Testing paralelo con usuarios beta
+- Cut-over planificado
+
+---
+
+### Métricas de Éxito v2.0
+
+**Funcional:**
+- [ ] 3 roles implementados
+- [ ] 100% acciones en Metadata
+- [ ] METROLOGÍA integrada
+- [ ] Multiselect reduce tiempo 80%+
+- [ ] Sheet PRODUCCIÓN operativo
+
+**Técnico:**
+- [ ] 150+ tests passing
+- [ ] Coverage > 85%
+- [ ] Performance: < 3 seg batch de 10 spools
+
+---
+
 **Cambios v3.6 (11 Nov 2025):**
 - **BACKEND 100% COMPLETADO Y DEPLOYADO:** Railway deployment exitoso ✅
 - **URL producción:** https://zeues-backend-mvp-production.up.railway.app
