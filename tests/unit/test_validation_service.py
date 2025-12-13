@@ -12,6 +12,8 @@ from backend.models.spool import Spool
 from backend.models.enums import ActionStatus, ActionType
 from backend.exceptions import (
     OperacionNoPendienteError,
+    OperacionYaIniciadaError,
+    OperacionYaCompletadaError,
     DependenciasNoSatisfechasError,
     OperacionNoIniciadaError,
     NoAutorizadoError
@@ -21,9 +23,169 @@ from backend.exceptions import (
 # ==================== FIXTURES ====================
 
 @pytest.fixture
-def validation_service():
-    """Instancia del servicio de validación."""
-    return ValidationService()
+def mock_metadata_repository(mocker):
+    """
+    Mock de MetadataRepository para v2.0.
+
+    Genera eventos basados en el tag_spool para simular Event Sourcing:
+    - SP-002: ARM en progreso (Juan Pérez)
+    - SP-003: ARM completado (Juan Pérez)
+    - SP-005: ARM completado + SOLD en progreso (María González)
+    - Otros: Sin eventos (PENDIENTE)
+    """
+    from backend.models.metadata import MetadataEvent, EventoTipo, Accion
+    from datetime import datetime
+
+    def get_events_for_spool(tag_spool: str):
+        """Genera eventos según el tag del spool para simular estados."""
+        events = []
+
+        if tag_spool == "SP-002":
+            # ARM EN_PROGRESO: Solo evento INICIAR_ARM
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+        elif tag_spool == "SP-003":
+            # ARM COMPLETADO: INICIAR + COMPLETAR
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.COMPLETAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.COMPLETAR,
+                fecha_operacion="2025-11-08",
+                metadata_json=None
+            ))
+        elif tag_spool == "SP-005":
+            # ARM COMPLETADO + SOLD EN_PROGRESO
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.COMPLETAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.COMPLETAR,
+                fecha_operacion="2025-11-08",
+                metadata_json=None
+            ))
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_SOLD,
+                tag_spool=tag_spool,
+                worker_id=2,
+                worker_nombre="María González",
+                operacion="SOLD",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-09",
+                metadata_json=None
+            ))
+        elif tag_spool == "SP-020":
+            # ARM EN_PROGRESO (para test ownership sin armador)
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="DESCONOCIDO",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+        elif tag_spool == "SP-021":
+            # SOLD EN_PROGRESO (para test ownership sin soldador)
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.COMPLETAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="Juan Pérez",
+                operacion="ARM",
+                accion=Accion.COMPLETAR,
+                fecha_operacion="2025-11-08",
+                metadata_json=None
+            ))
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_SOLD,
+                tag_spool=tag_spool,
+                worker_id=2,
+                worker_nombre="DESCONOCIDO",
+                operacion="SOLD",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-09",
+                metadata_json=None
+            ))
+        elif tag_spool == "SP-030":
+            # ARM EN_PROGRESO con trailing spaces
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="  Juan Pérez  ",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+        elif tag_spool == "SP-031":
+            # ARM EN_PROGRESO uppercase
+            events.append(MetadataEvent(
+                evento_tipo=EventoTipo.INICIAR_ARM,
+                tag_spool=tag_spool,
+                worker_id=1,
+                worker_nombre="JUAN PÉREZ",
+                operacion="ARM",
+                accion=Accion.INICIAR,
+                fecha_operacion="2025-11-01",
+                metadata_json=None
+            ))
+
+        return events
+
+    mock_repo = mocker.Mock()
+    mock_repo.get_events_by_spool.side_effect = get_events_for_spool
+    return mock_repo
+
+
+@pytest.fixture
+def validation_service(mock_metadata_repository):
+    """Instancia del servicio de validación con MetadataRepository mockeado."""
+    return ValidationService(metadata_repository=mock_metadata_repository)
 
 
 @pytest.fixture
@@ -160,10 +322,10 @@ class TestStatusValidation:
         spool_arm_en_progreso
     ):
         """No se puede iniciar ARM si ya está EN_PROGRESO."""
-        with pytest.raises(OperacionNoPendienteError) as exc_info:
+        with pytest.raises(OperacionYaIniciadaError) as exc_info:
             validation_service.validar_puede_iniciar_arm(spool_arm_en_progreso)
 
-        assert exc_info.value.error_code == "OPERACION_NO_PENDIENTE"
+        assert exc_info.value.error_code == "OPERACION_YA_INICIADA"
         assert "SP-002" in exc_info.value.message
         assert "ARM" in exc_info.value.message
 
@@ -173,10 +335,10 @@ class TestStatusValidation:
         spool_arm_completado
     ):
         """No se puede iniciar ARM si ya está COMPLETADO."""
-        with pytest.raises(OperacionNoPendienteError) as exc_info:
+        with pytest.raises(OperacionYaCompletadaError) as exc_info:
             validation_service.validar_puede_iniciar_arm(spool_arm_completado)
 
-        assert exc_info.value.error_code == "OPERACION_NO_PENDIENTE"
+        assert exc_info.value.error_code == "OPERACION_YA_COMPLETADA"
         assert "SP-003" in exc_info.value.message
 
     def test_completar_arm_fails_if_not_started(
@@ -215,10 +377,10 @@ class TestStatusValidation:
         spool_sold_en_progreso
     ):
         """No se puede iniciar SOLD si ya está EN_PROGRESO."""
-        with pytest.raises(OperacionNoPendienteError) as exc_info:
+        with pytest.raises(OperacionYaIniciadaError) as exc_info:
             validation_service.validar_puede_iniciar_sold(spool_sold_en_progreso)
 
-        assert exc_info.value.error_code == "OPERACION_NO_PENDIENTE"
+        assert exc_info.value.error_code == "OPERACION_YA_INICIADA"
         assert "SP-005" in exc_info.value.message
         assert "SOLD" in exc_info.value.message
 
@@ -499,50 +661,7 @@ class TestEdgeCases:
         validation_service.validar_puede_completar_arm(spool, "Juan Pérez")
         validation_service.validar_puede_completar_arm(spool, "JUAN PÉREZ")
 
-    def test_completar_sold_with_empty_string_soldador(
-        self,
-        validation_service
-    ):
-        """Soldador como string vacío debe tratarse como None."""
-        spool = Spool(
-            tag_spool="SP-032",
-            arm=ActionStatus.COMPLETADO,
-            sold=ActionStatus.EN_PROGRESO,
-            fecha_materiales=date(2025, 11, 1),
-            fecha_armado=date(2025, 11, 8),
-            fecha_soldadura=None,
-            armador="Juan Pérez",
-            soldador=""  # String vacío
-        )
-
-        with pytest.raises(NoAutorizadoError) as exc_info:
-            validation_service.validar_puede_completar_sold(
-                spool,
-                "María González"
-            )
-
-        assert exc_info.value.error_code == "NO_AUTORIZADO"
-
-    def test_completar_arm_with_whitespace_only_armador(
-        self,
-        validation_service
-    ):
-        """Armador con solo espacios debe tratarse como vacío."""
-        spool = Spool(
-            tag_spool="SP-033",
-            arm=ActionStatus.EN_PROGRESO,
-            sold=ActionStatus.PENDIENTE,
-            fecha_materiales=date(2025, 11, 1),
-            fecha_armado=None,
-            fecha_soldadura=None,
-            armador="   ",  # Solo espacios
-            soldador=None
-        )
-
-        with pytest.raises(NoAutorizadoError) as exc_info:
-            validation_service.validar_puede_completar_arm(
-                spool,
-                "Juan Pérez"
-            )
-
-        assert exc_info.value.error_code == "NO_AUTORIZADO"
+    # NOTE v2.0: Los siguientes tests se removieron porque en Event Sourcing
+    # no es posible tener estados EN_PROGRESO con worker_nombre vacío/whitespace.
+    # MetadataEvent valida que worker_nombre tenga al menos 1 carácter (post-strip).
+    # Estos edge cases ya no pueden ocurrir en v2.0.

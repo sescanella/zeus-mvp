@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'iniciar' | 'completar' | 'cancel';
+  variant?: 'primary' | 'iniciar' | 'completar' | 'cancelar' | 'cancel';
 }
 
 export function Button({
@@ -15,7 +15,8 @@ export function Button({
     primary: 'bg-[#FF5B00] hover:bg-[#E64A19] text-white',
     iniciar: 'bg-cyan-600 hover:bg-cyan-700 text-white',
     completar: 'bg-green-600 hover:bg-green-700 text-white',
-    cancel: 'bg-gray-400 hover:bg-gray-500 text-white',
+    cancelar: 'bg-yellow-600 hover:bg-yellow-700 text-white',  // v2.0: CANCELAR acción EN_PROGRESO
+    cancel: 'bg-gray-400 hover:bg-gray-500 text-white',  // Abandonar flujo completo
   };
 
   return (

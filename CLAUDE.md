@@ -4,9 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ZEUES** - Manufacturing Traceability System for Pipe Spools
+**ZEUES v2.0** - Manufacturing Traceability System for Pipe Spools
 
-Mobile-first web app for tracking manufacturing actions (Assembly/Welding) on tablets, using Google Sheets as source of truth.
+Mobile-first web app for tracking manufacturing actions (Assembly/Welding/Metrology) on tablets with **JWT authentication**, **role-based access control**, **Event Sourcing auditing**, and **batch operations** using Google Sheets as source of truth.
+
+**Current Status:** v2.0 Development (Branch: `v2.0-dev`)
+- ✅ v1.0 MVP in Production (2 operations: ARM/SOLD)
+- 🚧 v2.0 In Development: Auth + Metadata Event Sourcing + METROLOGÍA + Batch
+- 📅 Target Launch: 27 Dic 2025
+- 📊 Progress: DÍA 4 (6%) - Metadata Repository implemented
 
 ## CRITICAL: Python Virtual Environment
 
@@ -43,16 +49,27 @@ pip freeze > requirements.txt
 
 ## Core Concepts
 
-**MVP Scope:** 2 actions only
-- Action 3: Armado (Assembly)
-- Action 4: Soldado (Welding)
+**v1.0 MVP Scope (Production):** 2 operations
+- ARM: Armado (Assembly)
+- SOLD: Soldado (Welding)
 
-**Data Model:**
-- Spools (Column A: Code, F: Assembly, G: Welding)
-- Actions are binary: 0 = pending, 1 = completed
-- Workers select from list (no complex auth)
+**v2.0 Scope (Development):** 3 operations + Auth + Auditing + Batch
+- ARM: Armado (Assembly)
+- SOLD: Soldado (Welding)
+- METROLOGIA: Metrología (Quality Inspection) 🆕
+- **Event Sourcing:** All actions logged to Metadata sheet (append-only, immutable) 🆕
+- **JWT Auth:** Email-based login with roles (Trabajador/Supervisor/Administrador) 🆕
+- **Batch Operations:** Multiselect up to 50 spools simultaneously 🆕
 
-**User Flow:** Worker ID → Action → Spool → Confirm → Update Sheets (< 30 sec)
+**Data Model v2.0:**
+- **Spools** - Operaciones sheet (READ-ONLY): TAG_SPOOL, ARM status, SOLD status, METROLOGÍA status
+- **Workers** - Trabajadores sheet (READ-ONLY): Id, Nombre, Apellido, Rol, Activo
+- **Metadata** - Event Sourcing log (WRITE-ONLY): 10 columns (id, timestamp, evento_tipo, tag_spool, worker_id, worker_nombre, operacion, accion, fecha_operacion, metadata_json)
+- **Roles** - Authentication (pending): email, nombre_completo, rol, activo
+- Actions: 0 = pending, 0.1 = in progress, 1 = completed
+
+**User Flow v2.0:**
+Login (email) → Worker Select → Operation → INICIAR/COMPLETAR → Spool(s) Multiselect → Confirm Batch → Success + Metadata Log (< 30 sec)
 
 ## Development Commands
 
@@ -231,8 +248,49 @@ lib/
 
 ## Important Files
 
-**Project Documentation:**
-- `proyecto.md` - **COMPLETE PROJECT SPECIFICATION** - Contains full project details, user stories, technical architecture, and current implementation status. This is the single source of truth for project scope and progress.
+**Project Documentation v2.0:** 🆕
+- `proyecto-v2.md` - **v2.0 ROADMAP** - Vision, 5 new features, 16-day timeline, breaking changes, metrics
+- `proyecto-v2-backend.md` - **v2.0 BACKEND DOCS (LLM-FIRST)** - Auth JWT, Event Sourcing, Metadata, Batch operations, 95 new tests
+- `proyecto-v2-frontend.md` - **v2.0 FRONTEND DOCS (LLM-FIRST)** - Login, AuthContext, Multiselect, Admin Panel, 8 new E2E tests
+
+**CRITICAL: Actualización de Documentos v2.0**
+
+**Archivos Activos (actualizar SIEMPRE en esta etapa):**
+- `proyecto-v2.md` - **SIEMPRE** después de avanzar en roadmap (completar días, features, cambios estado)
+- `proyecto-v2-backend.md` - **SIEMPRE** después de modificar backend (código, tests, arquitectura, endpoints)
+- `proyecto-v2-frontend.md` - **SIEMPRE** después de modificar frontend (componentes, páginas, API client, types)
+
+**Archivos Historial (NO actualizar - solo referencia v1.0):**
+- `proyecto.md`, `proyecto-backend.md`, `proyecto-frontend.md`, `proyecto-frontend-ui.md` - Base v1.0 completada
+
+**Cuándo actualizar cada archivo:**
+- `proyecto-v2.md` → Después de completar días del roadmap, cambiar estado progreso, añadir features, identificar blockers
+- `proyecto-v2-backend.md` → Después de implementar servicios, endpoints, modelos, tests, cambios arquitectura
+- `proyecto-v2-frontend.md` → Después de implementar componentes, páginas, hooks, API integration, tests E2E
+
+**Cómo actualizar:**
+1. **Comando directo:**
+   - `"actualiza proyecto-v2.md"` → Actualiza roadmap y estado general
+   - `"actualiza proyecto-v2-backend.md"` → Actualiza docs técnicas backend
+   - `"actualiza proyecto-v2-frontend.md"` → Actualiza docs técnicas frontend
+2. **Seguir guía interna:** Cada archivo técnico (backend/frontend) tiene sección "🔧 Guía de Mantenimiento LLM-First"
+3. **Formato obligatorio:**
+   - Actualizar Quick Reference/Estado PRIMERO (progreso, tests, archivos, deadline)
+   - Usar tablas > código (NO bloques > 20 líneas en archivos técnicos)
+   - Mantener límites: proyecto-v2.md (~780 líneas) / backend (~1,000) / frontend (~800)
+
+**Ejemplo workflow completo:**
+```bash
+# Después de completar DÍA 2 Backend Batch
+"actualiza proyecto-v2-backend.md"  # Añade métricas batch, tests, performance
+"actualiza proyecto-v2.md"           # Marca DÍA 2 Backend ✅, actualiza progreso 80%→90%
+```
+
+**Project Documentation v1.0 (Base):**
+- `proyecto.md` - **v1.0 MVP SPECIFICATION** - Complete v1.0 project details, user stories, technical architecture
+- `proyecto-backend.md` - v1.0 backend technical docs (architecture, models, services, API)
+- `proyecto-frontend.md` - v1.0 frontend architecture (structure, pages, components)
+- `proyecto-frontend-ui.md` - v1.0 UI implementation details (components, styles, validations)
 - `CLAUDE.md` - This file - Quick reference guide for Claude Code
 
 **Google Resources:**
@@ -257,34 +315,65 @@ lib/
 
 **Data Source:** Google Sheets is the single source of truth (no database)
 
-**Sheets Structure:**
-- **Operaciones** sheet: Spools data (columns A-BE)
-  - Column A: TAG_SPOOL
-  - Column V (22): ARM status (0/0.1/1.0)
-  - Column W (23): SOLD status (0/0.1/1.0)
-  - Column BA (53): fecha_materiales (prerequisite)
-  - Column BB (54): fecha_armado
-  - Column BC (55): armador (worker name)
-  - Column BD (56): fecha_soldado
-  - Column BE (57): soldador (worker name)
-- **Trabajadores** sheet: Workers list (columns A-C)
-  - Column A: nombre
-  - Column B: apellido
-  - Column C: activo (TRUE/FALSE)
+**v2.0 Architecture - Event Sourcing:** ✅
+- **Operaciones** sheet: **READ-ONLY** - Base data, never modified
+- **Metadata** sheet: **WRITE-ONLY** - All events logged here (append-only, immutable)
+- State is reconstructed from events, NOT read from Operaciones columns
+
+**Sheets Structure v2.0:**
+- **Operaciones** sheet (READ-ONLY): Spools base data (65 columns)
+  - Column G: TAG_SPOOL (código de barra)
+  - Column AK (37): Fecha_Armado (read-only reference)
+  - Column AL (38): Armador (read-only reference)
+  - Column AM (39): Fecha_Soldadura (read-only reference)
+  - Column AN (40): Soldador (read-only reference)
+  - Column AO (41): Fecha_Metrología (read-only reference) 🆕
+
+- **Trabajadores** sheet (READ-ONLY): Workers list (columns A-E) 🆕
+  - Column A: Id (numeric, e.g., 93, 94, 95)
+  - Column B: Nombre
+  - Column C: Apellido
+  - Column D: Rol (Armador, Soldador, Ayudante, Metrologia, Revestimiento, Pintura, Despacho)
+  - Column E: Activo (TRUE/FALSE)
+
+- **Metadata** sheet (WRITE-ONLY - Event Sourcing): 10 columns 🆕
+  - Column A: id (UUID v4)
+  - Column B: timestamp (ISO 8601: 2025-12-10T14:30:00Z)
+  - Column C: evento_tipo (INICIAR_ARM, COMPLETAR_ARM, INICIAR_SOLD, COMPLETAR_SOLD, INICIAR_METROLOGIA, COMPLETAR_METROLOGIA)
+  - Column D: tag_spool
+  - Column E: worker_id (numeric: 93, 94, 95...)
+  - Column F: worker_nombre
+  - Column G: operacion (ARM, SOLD, METROLOGIA)
+  - Column H: accion (INICIAR, COMPLETAR)
+  - Column I: fecha_operacion (YYYY-MM-DD)
+  - Column J: metadata_json (JSON string with additional data)
+
+- **Roles** sheet (pending): Authentication 🆕
+  - Column A: email
+  - Column B: nombre_completo
+  - Column C: rol (TRABAJADOR, SUPERVISOR, ADMINISTRADOR)
+  - Column D: activo
+  - Column E: fecha_creacion
+  - Column F: ultima_modificacion
 
 **State Transitions:**
 - PENDIENTE: 0 → ready to start
 - EN_PROGRESO: 0.1 → worker assigned, in progress
 - COMPLETADO: 1.0 → action finished
 
-**Workflow:**
-1. **INICIAR**: status → 0.1, worker name → BC/BE
-2. **COMPLETAR**: status → 1.0, date → BB/BD
+**Workflow v2.0 (Event Sourcing):**
+1. **INICIAR**: Write event to Metadata (INICIAR_ARM/INICIAR_SOLD/INICIAR_METROLOGIA)
+2. **COMPLETAR**: Write event to Metadata (COMPLETAR_ARM/COMPLETAR_SOLD/COMPLETAR_METROLOGIA)
+3. **State Query**: Read latest events from Metadata to reconstruct current state
 
 **Environment Variables (see docs/GOOGLE-RESOURCES.md):**
-- `GOOGLE_SHEET_ID` - Testing: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM`
+- `GOOGLE_SHEET_ID` - **PRODUCTION (ACTIVE):** `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ` ✅
+- `HOJA_METADATA_NOMBRE` - `Metadata` (Event Sourcing log) 🆕
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL` - zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 - `GOOGLE_PRIVATE_KEY` - From Service Account JSON (keep secret)
+
+**Sheet TESTING (deprecated):**
+- ID: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM` ⚠️ (v1.0 only - historical reference)
 
 ## Key Constraints
 

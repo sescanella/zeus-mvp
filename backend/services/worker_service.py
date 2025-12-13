@@ -135,3 +135,41 @@ class WorkerService:
 
         logger.debug(f"Worker '{nombre}' not found among active workers")
         return None
+
+    def find_worker_by_id(self, worker_id: int) -> Optional[Worker]:
+        """
+        Busca un trabajador por su ID (v2.0).
+
+        Solo busca entre trabajadores ACTIVOS.
+
+        Args:
+            worker_id: ID del trabajador a buscar (ej: 93, 94, 95)
+
+        Returns:
+            Objeto Worker si se encuentra y está activo
+            None si no existe o está inactivo
+
+        Logs:
+            INFO: Inicio de búsqueda con ID
+            DEBUG: Resultado de búsqueda (encontrado/no encontrado)
+
+        Examples:
+            >>> service.find_worker_by_id(93)
+            Worker(id=93, nombre="Mauricio", apellido="Rodriguez", activo=True)
+
+            >>> service.find_worker_by_id(999)  # No existe
+            None
+        """
+        logger.info(f"Searching for worker by ID: {worker_id}")
+
+        # Obtener trabajadores activos
+        active_workers = self.get_all_active_workers()
+
+        # Buscar por ID
+        for worker in active_workers:
+            if worker.id == worker_id:
+                logger.debug(f"Found worker: {worker.nombre_completo} (ID: {worker.id})")
+                return worker
+
+        logger.debug(f"Worker ID {worker_id} not found among active workers")
+        return None

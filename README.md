@@ -1,33 +1,46 @@
 # ZEUES - Sistema de Trazabilidad para Manufactura
 
+[![v2.0](https://img.shields.io/badge/version-2.0--dev-orange)](https://github.com)
 [![Production](https://img.shields.io/badge/status-production-green)](https://zeues-frontend.vercel.app)
 [![Backend](https://img.shields.io/badge/backend-railway-blue)](https://zeues-backend-mvp-production.up.railway.app)
 [![Frontend](https://img.shields.io/badge/frontend-vercel-black)](https://zeues-frontend.vercel.app)
 
-Sistema digital móvil-first para registro de acciones de manufactura (Armado y Soldado) en spools de cañerías, con sincronización automática a Google Sheets.
+Sistema digital móvil-first para registro de acciones de manufactura en spools de cañerías con autenticación, auditoría completa y sincronización automática a Google Sheets.
+
+**v2.0 EN DESARROLLO:** Autenticación JWT, Sistema de Roles, Auditoría (Event Sourcing), METROLOGÍA, Operaciones Batch
 
 ---
 
 ## 🚀 Producción
 
+### v1.0 (Producción Activa)
 **Aplicación Web:** https://zeues-frontend.vercel.app
 **API Backend:** https://zeues-backend-mvp-production.up.railway.app
 **API Docs:** https://zeues-backend-mvp-production.up.railway.app/docs
 
-**Estado:** MVP 100% funcional y desplegado en producción
+**Estado:** MVP v1.0 - 100% funcional y desplegado en producción
+
+### v2.0 (Desarrollo Activo)
+**Branch:** `v2.0-dev`
+**Estado:** 🚧 En desarrollo - Event Sourcing + Sheet PRODUCCIÓN migrado
+**Progress:** DÍA 4 (Metadata) - 6% completado
+**Target Launch:** 27 Dic 2025
 
 ---
 
 ## 📋 Descripción
 
-ZEUES digitaliza el registro de acciones de manufactura en piso de producción mediante tablets. Los trabajadores pueden:
+ZEUES digitaliza el registro de acciones de manufactura en piso de producción mediante tablets con autenticación por roles y auditoría completa. Los usuarios pueden:
 
+- **Autenticarse** con email (JWT + roles: Trabajador/Supervisor/Administrador)
 - **Iniciar acciones** para auto-asignarse spools antes de trabajar
 - **Completar acciones** al terminar su trabajo
+- **Operaciones batch** (multiselect) para aumentar productividad 80%+
+- **Auditoría completa** con Event Sourcing (hoja Metadata)
 - Actualización automática en Google Sheets (fuente de verdad)
 - Interfaz optimizada para uso con guantes en ambiente industrial
 
-### Características MVP
+### Características v1.0 (Producción)
 
 ✅ Registro de 2 operaciones: Armado (ARM) y Soldado (SOLD)
 ✅ Flujo INICIAR → COMPLETAR con asignación automática
@@ -36,6 +49,17 @@ ZEUES digitaliza el registro de acciones de manufactura en piso de producción m
 ✅ Actualización tiempo real en Google Sheets
 ✅ Interfaz mobile-first (botones grandes h-16, alto contraste)
 ✅ Tiempo de registro < 30 segundos
+
+### Características v2.0 (En Desarrollo)
+
+🚧 **Sistema de Roles** - Autenticación JWT con 3 roles (Trabajador/Supervisor/Admin)
+🚧 **Auditoría Event Sourcing** - Hoja Metadata con log completo inmutable (append-only)
+🚧 **METROLOGÍA** - Tercera operación (inspección calidad post-soldadura)
+🚧 **Operaciones Batch** - Multiselect con checkboxes (5+ spools simultáneos)
+🚧 **Admin Panel** - CRUD usuarios, reportes, metadata query
+✅ **Sheet PRODUCCIÓN** - Migrado a Sheet oficial (2,493 spools reales)
+✅ **Worker Model v2.0** - ID numérico + Rol (7 roles disponibles)
+✅ **MetadataRepository** - Event Sourcing implementado (5 métodos)
 
 ---
 
@@ -88,9 +112,12 @@ ZEUES-by-KM/
 │   ├── GOOGLE-RESOURCES.md   # Configuración Google
 │   └── ...
 │
-├── proyecto.md                # Especificación MVP
-├── proyecto-backend.md        # Docs técnicas backend
-├── proyecto-frontend.md       # Docs arquitectura frontend
+├── proyecto.md                # Especificación MVP v1.0
+├── proyecto-backend.md        # Docs técnicas backend v1.0
+├── proyecto-frontend.md       # Docs arquitectura frontend v1.0
+├── proyecto-v2.md             # 🆕 Roadmap y visión v2.0
+├── proyecto-v2-backend.md     # 🆕 Docs técnicas backend v2.0
+├── proyecto-v2-frontend.md    # 🆕 Docs técnicas frontend v2.0
 └── CLAUDE.md                  # Guía desarrollo
 ```
 
@@ -163,9 +190,12 @@ GOOGLE_CLOUD_PROJECT_ID=zeus-mvp
 GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
-# Google Sheets
-GOOGLE_SHEET_ID=11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM  # TESTING
-# GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ  # PRODUCCIÓN
+# Google Sheets v1.0
+# GOOGLE_SHEET_ID=11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM  # TESTING (deprecated)
+
+# Google Sheets v2.0 (PRODUCCIÓN - ACTIVO)
+GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
+HOJA_METADATA_NOMBRE=Metadata  # Event Sourcing log (append-only)
 ```
 
 ### Frontend (.env.local)
@@ -256,15 +286,27 @@ npm run start
 
 ### Documentos Principales
 
+#### v1.0 (Base Completada)
 | Documento | Descripción |
 |-----------|-------------|
-| `proyecto.md` | Especificación completa del MVP (visión, alcance, roadmap) |
-| `proyecto-backend.md` | Documentación técnica backend (arquitectura, modelos, servicios, API) |
-| `proyecto-frontend.md` | Arquitectura frontend (estructura, páginas, componentes) |
-| `proyecto-frontend-ui.md` | Detalles implementación UI (componentes, estilos, validaciones) |
+| `proyecto.md` | Especificación completa del MVP v1.0 (visión, alcance, roadmap) |
+| `proyecto-backend.md` | Documentación técnica backend v1.0 (arquitectura, modelos, servicios, API) |
+| `proyecto-frontend.md` | Arquitectura frontend v1.0 (estructura, páginas, componentes) |
+| `proyecto-frontend-ui.md` | Detalles implementación UI v1.0 (componentes, estilos, validaciones) |
+| `zeues-frontend/TESTING-E2E.md` | Guía testing manual E2E (12 casos) |
+
+#### v2.0 (Desarrollo Activo) 🆕
+| Documento | Descripción |
+|-----------|-------------|
+| `proyecto-v2.md` | **Visión general y roadmap v2.0** - 5 funcionalidades nuevas, 16 días timeline |
+| `proyecto-v2-backend.md` | **Docs técnicas backend v2.0** - Auth JWT, Metadata Event Sourcing, Batch operations |
+| `proyecto-v2-frontend.md` | **Docs técnicas frontend v2.0** - Login, Multiselect, Admin Panel, Protected Routes |
+
+#### Generales
+| Documento | Descripción |
+|-----------|-------------|
 | `CLAUDE.md` | Guía rápida para desarrollo |
 | `docs/GOOGLE-RESOURCES.md` | Configuración Google Cloud y Sheets |
-| `zeues-frontend/TESTING-E2E.md` | Guía testing manual E2E (12 casos) |
 
 ### API Documentation
 
@@ -309,18 +351,45 @@ P6: Éxito (mensaje + timeout 5seg → P1)
 
 ## 🎯 Roadmap
 
-### ✅ MVP (Completado - Nov 2025)
+### ✅ v1.0 MVP (Completado - Nov 2025)
 - Backend FastAPI + Google Sheets
 - Frontend Next.js mobile-first
 - 2 operaciones (ARM/SOLD)
 - Deploy Railway + Vercel
 - Testing E2E completo
+- 113 tests backend + 17 tests frontend passing
 
-### 🔄 Fase 2 (Futuro)
-- 10 operaciones completas
-- Panel de administración
-- Reportes de productividad
-- Modo offline
+### 🚧 v2.0 (En Desarrollo - Dic 2025)
+**Timeline:** 10 Dic - 27 Dic 2025 (16 días)
+**Progress:** DÍA 4 (6% completado)
+
+**Fase 1: Backend (8 días)**
+- [ ] DÍA 1-3: Sistema de Roles (JWT + UserRepository + AuthService)
+- [x] DÍA 4: **Metadata Event Sourcing** (60% completado)
+  - [x] MetadataEvent model (10 columnas)
+  - [x] MetadataRepository (5 métodos)
+  - [x] Worker model v2.0 (id + rol)
+  - [ ] Integración Services
+- [ ] DÍA 5-6: MetadataMiddleware + METROLOGÍA
+- [ ] DÍA 7-8: Multiselect Batch
+- **Target:** 208 tests passing (+95 nuevos)
+
+**Fase 2: Frontend (5 días)**
+- [ ] DÍA 9-11: Auth + Roles (Login, AuthContext, Protected Routes)
+- [ ] DÍA 12-14: METROLOGÍA + Multiselect UI
+- **Target:** 25 tests E2E (+8 nuevos)
+
+**Fase 3: Deploy (3 días)**
+- [x] DÍA 15: Sheet PRODUCCIÓN preparado (Metadata headers creados)
+- [ ] DÍA 16: Migración y Deploy Railway + Vercel
+- [ ] DÍA 17: Post-Migración + Monitoreo
+
+**Launch:** 27 Dic 2025
+
+### 🔮 Fase 3 (Futuro)
+- 10 operaciones completas (expandir desde 3)
+- Reportes avanzados de productividad
+- Modo offline con sincronización
 - Notificaciones push
 
 ---
@@ -370,14 +439,21 @@ npm run build     # Build producción
 
 ### Google Sheets
 
-**Sheet TESTING (desarrollo):**
+**Sheet TESTING (v1.0 - deprecated):**
 - ID: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM`
 - URL: https://docs.google.com/spreadsheets/d/11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM
+- Estado: ⚠️ Deprecated - Solo referencia histórica
 
-**Sheet PRODUCCIÓN:**
+**Sheet PRODUCCIÓN (v2.0 - ACTIVO):** ✅
 - ID: `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ`
 - URL: https://docs.google.com/spreadsheets/d/17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
-- ⚠️ Cambiar variable de entorno solo cuando MVP esté 100% validado
+- Título: `__Kronos_Registro_Piping R04`
+- Filas: 2,493 spools reales
+- Hojas:
+  - **Operaciones** (READ-ONLY) - 65 columnas, datos base
+  - **Trabajadores** (READ-ONLY) - 9 trabajadores con Id + Rol
+  - **Metadata** ✅ (WRITE-ONLY) - Event Sourcing log (10 columnas A-J)
+  - **Roles** (pendiente) - Para autenticación v2.0
 
 ---
 
@@ -405,5 +481,7 @@ Para dudas o problemas:
 
 ---
 
-**Última actualización:** Diciembre 2025
-**Versión:** 1.0.0 (MVP Producción)
+**Última actualización:** 10 Diciembre 2025
+**Versión:** 2.0.0-dev (En Desarrollo Activo)
+**Branch:** v2.0-dev
+**Progress:** DÍA 4 - Metadata Event Sourcing (60% completado)

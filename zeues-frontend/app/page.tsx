@@ -35,7 +35,7 @@ export default function IdentificacionPage() {
   }, []);
 
   const handleSelectWorker = (worker: Worker) => {
-    setState({ selectedWorker: worker.nombre_completo });
+    setState({ selectedWorker: worker });
     router.push('/operacion');
   };
 
@@ -56,7 +56,7 @@ export default function IdentificacionPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {workers.map((worker) => (
               <Button
-                key={worker.nombre}
+                key={worker.id}
                 onClick={() => handleSelectWorker(worker)}
               >
                 {worker.nombre_completo}
