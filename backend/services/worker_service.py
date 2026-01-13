@@ -5,12 +5,15 @@ Responsabilidades:
 - Obtener trabajadores activos
 - Buscar trabajadores por nombre
 - Filtrar trabajadores inactivos
+- Integrar roles desde hoja Roles (v2.0)
 """
 import logging
 from typing import Optional
 
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.repositories.role_repository import RoleRepository
 from backend.services.sheets_service import SheetsService
+from backend.services.role_service import RoleService
 from backend.models.worker import Worker
 from backend.config import config
 
@@ -22,29 +25,44 @@ class WorkerService:
     Servicio de negocio para operaciones con trabajadores.
 
     Combina:
-    - SheetsRepository: Acceso a datos
+    - SheetsRepository: Acceso a datos (hoja Trabajadores)
     - SheetsService: Parseo de filas
+    - RoleService: Integración de roles (hoja Roles) v2.0
     """
 
     def __init__(
         self,
-        sheets_repository: Optional[SheetsRepository] = None
+        sheets_repository: Optional[SheetsRepository] = None,
+        role_service: Optional[RoleService] = None
     ):
         """
         Inicializa el servicio con sus dependencias.
 
         Args:
             sheets_repository: Repositorio para acceso a Google Sheets (optional)
+            role_service: Servicio de roles para obtener roles de trabajadores (optional, v2.0)
         """
         self.sheets_repository = sheets_repository or SheetsRepository()
         self.sheets_service = SheetsService()  # Stateless parser
+
+        # v2.0: Integrar RoleService para obtener roles desde hoja Roles
+        if role_service is None:
+            # Obtener spreadsheet desde SheetsRepository
+            spreadsheet = self.sheets_repository._get_spreadsheet()
+            role_repo = RoleRepository(spreadsheet)
+            self.role_service = RoleService(role_repo)
+        else:
+            self.role_service = role_service
 
     def _get_all_workers(self) -> list[Worker]:
         """
         Obtiene todos los trabajadores desde Google Sheets.
 
+        v2.0: Integra roles desde hoja Roles para cada trabajador.
+        OPTIMIZACIÓN: Batch loading - lee TODOS los roles UNA VEZ.
+
         Returns:
-            Lista de objetos Worker parseados (activos e inactivos)
+            Lista de objetos Worker parseados (activos e inactivos) con roles array
 
         Raises:
             SheetsConnectionError: Si falla la conexión con Sheets
@@ -56,11 +74,38 @@ class WorkerService:
             config.HOJA_TRABAJADORES_NOMBRE
         )
 
+        # v2.0 OPTIMIZACIÓN: Leer TODOS los roles UNA SOLA VEZ (batch loading)
+        try:
+            all_worker_roles = self.role_service.role_repository.get_all_roles()
+            # Crear diccionario {worker_id: [roles]} para lookup O(1)
+            roles_by_worker = {}
+            for worker_role in all_worker_roles:
+                if worker_role.activo:  # Solo roles activos
+                    if worker_role.id not in roles_by_worker:
+                        roles_by_worker[worker_role.id] = []
+                    roles_by_worker[worker_role.id].append(worker_role.rol.value)
+            logger.info(f"Loaded roles for {len(roles_by_worker)} workers (batch)")
+        except Exception as e:
+            logger.warning(f"Could not load roles (batch): {str(e)}")
+            roles_by_worker = {}
+
         # Parsear filas a objetos Worker (skip header)
         workers = []
         for row_index, row in enumerate(all_rows[1:], start=2):  # Skip header
             try:
                 worker = self.sheets_service.parse_worker_row(row)
+
+                # v2.0: Obtener roles desde diccionario en memoria (O(1))
+                roles_str = roles_by_worker.get(worker.id, [])
+
+                # Crear nuevo Worker con roles array
+                worker = worker.model_copy(update={'roles': roles_str})
+
+                logger.debug(
+                    f"Worker {worker.id} ({worker.nombre_completo}): "
+                    f"{len(roles_str)} roles: {roles_str}"
+                )
+
                 workers.append(worker)
             except ValueError as e:
                 logger.warning(
@@ -68,7 +113,7 @@ class WorkerService:
                 )
                 continue
 
-        logger.info(f"Retrieved {len(workers)} workers from Sheets")
+        logger.info(f"Retrieved {len(workers)} workers from Sheets (v2.0 with roles)")
         return workers
 
     def get_all_active_workers(self) -> list[Worker]:

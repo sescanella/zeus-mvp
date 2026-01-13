@@ -1,6 +1,6 @@
 # ZEUES v2.0 - Backend Technical Documentation
 
-**Última actualización:** 12 Dic 2025 16:30 | **Versión:** 2.1 | **Branch:** `v2.0-dev`
+**Última actualización:** 16 Dic 2025 | **Versión:** 2.1 (READ-ONLY Architecture) | **Branch:** `v2.0-dev`
 
 ---
 
@@ -36,7 +36,9 @@
 | **API Request** | `worker_nombre: str` | `worker_id: int` ✅ |
 | **Sheet Trabajadores** | 5 columnas (con Rol) | 4 columnas (sin Rol) ✅ |
 | **Sheet Roles** | No existe | Multi-rol (3 columnas) ✅ |
-| **Arquitectura Data** | Operaciones R/W | Operaciones R/W + Metadata append-only ✅ |
+| **Arquitectura Data** | Operaciones R/W (estados 0/0.1/1.0) | Operaciones READ-ONLY + Metadata append-only ✅ |
+| **Validación Disponibilidad** | Estados numéricos (V=0, W=0) | Columnas trabajadores (AG, AI, AK) ✅ |
+| **Operaciones modificadas** | SÍ (backend escribe V/W/AL/AN) | NO (backend NUNCA escribe) ✅ |
 
 ---
 
@@ -284,13 +286,42 @@ ARMADOR, SOLDADOR, AYUDANTE, METROLOGIA, REVESTIMIENTO, PINTURA, DESPACHO
 
 **Implementación:** 211 líneas | 19 tests passing
 
-### 3.5. Integración ValidationService ✅
+### 3.5. Integración ValidationService ✅ (v2.0 READ-ONLY)
 
-**Cambios:**
+**Cambios arquitectónicos v2.0:**
 - Constructor recibe `role_service: RoleService`
-- `validar_puede_iniciar()` ahora valida rol antes de permitir operación
-- `validar_puede_completar()` valida rol + ownership
+- Validación basada en columnas Operaciones (AG, AI, AK) - NO estados numéricos
 - Nueva excepción: `RolNoAutorizadoError` → 403 FORBIDDEN
+
+**Reglas de Validación v2.0:**
+
+**`validar_puede_iniciar_arm(spool, worker_id)`:**
+1. ✅ Columna **"Fecha_Materiales"** != vacío → Materiales llegaron
+2. ✅ Columna **"Armador"** == vacío → Nadie asignado
+3. ✅ Worker tiene rol ARMADOR (via RoleService)
+4. ❌ Lanza `DependenciaNoCompletadaError` si "Fecha_Materiales" vacío
+5. ❌ Lanza `AccionYaIniciadaError` si "Armador" tiene valor
+
+**`validar_puede_iniciar_sold(spool, worker_id)`:**
+1. ✅ Columna **"Armador"** != vacío → ARM ya asignado
+2. ✅ Columna **"Soldador"** == vacío → Nadie asignado
+3. ✅ Worker tiene rol SOLDADOR (via RoleService)
+4. ❌ Lanza `DependenciaNoCompletadaError` si "Armador" vacío
+5. ❌ Lanza `AccionYaIniciadaError` si "Soldador" tiene valor
+
+**`validar_puede_completar_arm(spool, worker_id)`:**
+1. ✅ Columna **"Armador"** != vacío → ARM fue iniciado
+2. ✅ Worker_id == owner inicial (ownership via Metadata)
+3. ❌ Lanza `AccionNoIniciadaError` si "Armador" vacío
+4. ❌ Lanza `NoAutorizadoError` si worker_id != owner
+
+**`validar_puede_completar_sold(spool, worker_id)`:**
+1. ✅ Columna **"Soldador"** != vacío → SOLD fue iniciado
+2. ✅ Worker_id == owner inicial (ownership via Metadata)
+3. ❌ Lanza `AccionNoIniciadaError` si "Soldador" vacío
+4. ❌ Lanza `NoAutorizadoError` si worker_id != owner
+
+**⚠️ IMPORTANTE:** Spool model debe acceder columnas por nombre, NO por índice (usar property getters dinámicos)
 
 **Código modificado:** +170 líneas
 
@@ -377,18 +408,23 @@ def find_worker_by_id(worker_id: int) -> Worker:
 
 ## 4. Sistema de Auditoría (Metadata) - Event Sourcing ✅ COMPLETADO DÍA 4
 
-### 4.1. Arquitectura Event Sourcing
+### 4.1. Arquitectura Event Sourcing ⚠️ ACTUALIZADA
 
-**Principio:** Estado actual se reconstruye desde eventos inmutables
+**Principio:** Metadata es el único lugar donde backend escribe datos
 
 **Hojas:**
-- **Operaciones:** READ + WRITE controlado (UPDATE columnas AL/AN/AK/AM al INICIAR/COMPLETAR)
-- **Metadata:** APPEND-ONLY (log inmutable eventos para auditoría + ownership validation)
+- **Operaciones:** **READ-ONLY** (NUNCA se modifica desde backend - solo lectura para validaciones)
+- **Metadata:** APPEND-ONLY (único lugar donde backend escribe eventos)
 
-**Flujo:**
-1. INICIAR: Escribe evento → Metadata | Actualiza trabajador → Operaciones
-2. COMPLETAR: Escribe evento → Metadata | Actualiza fecha → Operaciones
-3. Query estado: Lee últimos eventos de Metadata para reconstruir ownership
+**Flujo v2.0:**
+1. INICIAR: Escribe evento → Metadata (con worker_id, tag_spool, timestamp)
+2. COMPLETAR: Escribe evento → Metadata (registra completado)
+3. Query estado: Lee columnas trabajadores de Operaciones (AG, AI, AK) + ownership desde Metadata
+4. Validación disponibilidad: Verifica columnas Operaciones (AG!=vacío, AI==vacío para ARM)
+
+**⚠️ CAMBIO CRÍTICO vs v1.0:**
+- v1.0: Backend modificaba columnas V/W (arm/sold) con estados 0/0.1/1.0
+- v2.0: Backend NUNCA modifica Operaciones, solo lee AG/AI/AK para validar
 
 ### 4.2. Hoja "Metadata" - Estructura
 
@@ -625,24 +661,57 @@ Validación: `len(tag_spools) <= 50` (Pydantic validator)
 
 | Hoja | Modo | Columnas | Filas | Descripción |
 |------|------|----------|-------|-------------|
-| **Operaciones** | R/W controlado | 65 | 2,493 | Datos base spools + UPDATE AL/AN/AK/AM |
+| **Operaciones** | **READ-ONLY** ⚠️ | 65 | 2,493 | Datos base spools - NUNCA se modifica desde backend |
 | **Trabajadores** | READ-ONLY | 4 (A-D) | 9 | Id, Nombre, Apellido, Activo (SIN Rol) |
 | **Roles** | READ-ONLY | 3 (A-C) | ~20 | Id, Rol, Activo (multi-rol) |
-| **Metadata** | APPEND-ONLY | 10 (A-J) | growing | Event Sourcing log |
+| **Metadata** | APPEND-ONLY | 10 (A-J) | growing | Event Sourcing log - ÚNICO lugar donde backend escribe |
 
-### Columnas Críticas Operaciones
+### Columnas Críticas Operaciones (⚠️ BUSCAR POR NOMBRE, NO POR ÍNDICE)
 
-| Código | Nombre | Descripción | Update |
-|--------|--------|-------------|--------|
-| G | TAG_SPOOL | ID único spool | Nunca |
-| V | arm | Estado ARM (0/0.1/1.0) | INICIAR/COMPLETAR |
-| W | sold | Estado SOLD (0/0.1/1.0) | INICIAR/COMPLETAR |
-| X | metrologia | Estado METROLOGÍA (0/0.1/1.0) | Futuro |
-| AK | Fecha_Armado | DD/MM/YYYY | COMPLETAR ARM |
-| AL | Armador | Nombre trabajador | INICIAR ARM |
-| AM | Fecha_Soldadura | DD/MM/YYYY | COMPLETAR SOLD |
-| AN | Soldador | Nombre trabajador | INICIAR SOLD |
-| AO | Fecha_Metrología | DD/MM/YYYY | Futuro |
+| Nombre Header | Uso v2.0 | Validación INICIAR ARM | Validación INICIAR SOLD |
+|---------------|----------|------------------------|-------------------------|
+| **"TAG_SPOOL"** | Identificador único | - | - |
+| **"Fecha_Materiales"** | Prerequisito ARM | **DEBE tener valor** ✅ | - |
+| **"Fecha_Armado"** | Confirmación ARM completado | - | (Info) |
+| **"Armador"** | Worker asignado ARM | **DEBE estar vacía** ✅ | **DEBE tener valor** ✅ |
+| **"Soldador"** | Worker asignado SOLD | - | **DEBE estar vacía** ✅ |
+
+**⚠️ CRÍTICO - Coordenadas Volátiles:**
+- Las coordenadas (G, AG, AH, AI, AK) son **temporales** y cambiarán cuando se agreguen/eliminen columnas
+- **NUNCA** usar índices fijos en código (ej: `worksheet.col_values(33)`)
+- **SIEMPRE** buscar por nombre: `find_column_by_header("Fecha_Materiales")`
+- SheetsRepository debe implementar mapeo dinámico de headers
+
+**Best Practice - Implementación Recomendada:**
+```python
+# ❌ MAL - Índices hardcoded (se romperá si agregan columnas)
+tag_spool = row[6]  # Columna G
+fecha_materiales = row[32]  # Columna AG
+
+# ✅ BIEN - Buscar por nombre de header
+class SheetsRepository:
+    def __init__(self):
+        self.header_map = None  # Cache de mapeo nombre → índice
+
+    def _get_header_map(self, worksheet):
+        """Construye mapeo dinámico: header_name → column_index"""
+        if not self.header_map:
+            headers = worksheet.row_values(1)  # Primera fila = headers
+            self.header_map = {h: i for i, h in enumerate(headers)}
+        return self.header_map
+
+    def get_spools(self):
+        headers = self._get_header_map(worksheet)
+        tag_idx = headers["TAG_SPOOL"]
+        fecha_mat_idx = headers["Fecha_Materiales"]
+        armador_idx = headers["Armador"]
+        # ... usar índices dinámicos
+```
+
+**⚠️ ELIMINADAS columnas v1.0:**
+- ❌ Columna "arm" - Estados 0/0.1/1.0 ya NO se usan
+- ❌ Columna "sold" - Estados 0/0.1/1.0 ya NO se usan
+- ❌ Columna "metrologia" - Nice-to-have futuro
 
 ### Variables de Entorno
 
@@ -857,7 +926,9 @@ GOOGLE_PRIVATE_KEY=<from-json>
 1. **API Request:** `worker_nombre: str` → `worker_id: int` ✅
 2. **Sheet Trabajadores:** Columna D (Rol) eliminada ✅
 3. **Sheet Roles:** Nueva hoja multi-rol (3 columnas) ✅
-4. **Metadata Event Sourcing:** Arquitectura dual-sheet ✅
+4. **Operaciones READ-ONLY:** Backend NUNCA modifica (solo lectura AG/AI/AK) ✅
+5. **Sistema estados 0/0.1/1.0 ELIMINADO:** Validación basada en columnas trabajadores ✅
+6. **Metadata Event Sourcing:** Único lugar donde backend escribe ✅
 
 ### Deadline
 
@@ -866,4 +937,56 @@ GOOGLE_PRIVATE_KEY=<from-json>
 
 ---
 
-**FIN - proyecto-v2-backend.md - ZEUES v2.0 Backend - Versión 2.0 LLM-Optimized**
+---
+
+## 📊 Resumen Visual: Cambio Arquitectónico v2.0
+
+```
+v1.0 (DEPRECATED)                          v2.0 (ACTUAL)
+══════════════════                         ═════════════
+
+Backend                                    Backend
+   ↓                                          ↓
+Hoja Operaciones                           Hoja Operaciones (READ-ONLY)
+- Escribe V/W (0→0.1→1.0)                  - Solo LECTURA (AG, AI, AK)
+- Escribe AL/AN (trabajador)               - NUNCA se modifica
+- Escribe AK/AM (fechas)
+                                           Hoja Metadata (APPEND-ONLY)
+                                           - Escribe TODOS los eventos
+                                           - UUID + timestamp + worker_id
+                                           - Inmutable (nunca UPDATE/DELETE)
+
+VALIDACIÓN DISPONIBILIDAD                  VALIDACIÓN DISPONIBILIDAD (por NOMBRE)
+-------------------------                  -----------------------------------------
+INICIAR ARM:                               INICIAR ARM:
+  spool.arm == 0                             columna "Fecha_Materiales" != vacío ✅
+                                             columna "Armador" == vacío ✅
+                                             worker tiene rol ARMADOR ✅
+
+INICIAR SOLD:                              INICIAR SOLD:
+  spool.sold == 0                            columna "Armador" != vacío ✅
+  spool.arm == 1.0                           columna "Soldador" == vacío ✅
+                                             worker tiene rol SOLDADOR ✅
+
+OWNERSHIP:                                 OWNERSHIP:
+  spool.armador == worker_nombre             Metadata: último INICIAR_ARM event
+                                             → worker_id debe coincidir ✅
+
+ACCESO COLUMNAS:                           ACCESO COLUMNAS:
+  row[6], row[32], row[35]                   headers["TAG_SPOOL"]
+  (índices hardcoded)                        headers["Fecha_Materiales"]
+                                             headers["Armador"]
+                                             (mapeo dinámico por nombre) ✅
+```
+
+**Impacto en Código Backend:**
+- ❌ SheetsRepository: Eliminar métodos `update_spool_estado()` (ya no se modifica Operaciones)
+- ✅ SheetsRepository: Implementar `_get_header_map()` para mapeo dinámico por nombre
+- ✅ ValidationService: Cambiar lógica a columnas "Fecha_Materiales", "Armador", "Soldador"
+- ✅ MetadataRepository: Validar ownership desde eventos
+- ✅ Modelo Spool: Propiedades dinámicas `fecha_materiales`, `armador`, `soldador` (acceso por nombre)
+- ⚠️ **CRÍTICO:** Nunca usar índices hardcoded (6, 32, 35) - siempre buscar por header name
+
+---
+
+**FIN - proyecto-v2-backend.md - ZEUES v2.0 Backend - Versión 2.1 LLM-Optimized - 16 Dic 2025**

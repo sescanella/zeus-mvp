@@ -2,40 +2,56 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components';
+import { Button, ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
+import type { Worker } from '@/lib/types';
 
-// Mapeo de roles a operaciones permitidas
-const ROLE_TO_OPERATIONS: Record<string, string[]> = {
-  'Armador': ['ARM'],
-  'Soldador': ['SOLD'],
-  'Metrologia': ['METROLOGIA'],
-  'Ayudante': ['ARM', 'SOLD'], // Ayudante puede hacer ARM y SOLD
+// Mapeo de operaciones a roles necesarios
+const OPERATION_TO_ROLES: Record<string, string[]> = {
+  'ARM': ['Armador', 'Ayudante'],
+  'SOLD': ['Soldador', 'Ayudante'],
+  'METROLOGIA': ['Metrologia'],
 };
 
-export default function OperacionPage() {
+// Títulos dinámicos por operación
+const OPERATION_TITLES: Record<string, string> = {
+  'ARM': '🔧 ¿Quién va a armar?',
+  'SOLD': '🔥 ¿Quién va a soldar?',
+  'METROLOGIA': '📐 ¿Quién va a medir?',
+};
+
+export default function TrabajadorSelectionPage() {
   const router = useRouter();
   const { state, setState } = useAppState();
-  const [allowedOperations, setAllowedOperations] = useState<string[]>([]);
+  const [filteredWorkers, setFilteredWorkers] = useState<Worker[]>([]);
 
   useEffect(() => {
-    if (!state.selectedWorker) {
+    // Validar que existe operación seleccionada
+    if (!state.selectedOperation) {
       router.push('/');
       return;
     }
 
-    // Usar el rol del worker directamente (no llamar API)
-    const workerRole = state.selectedWorker.rol;
-    const ops = ROLE_TO_OPERATIONS[workerRole] || [];
-    setAllowedOperations(ops);
-  }, [state.selectedWorker, router]);
+    // Filtrar trabajadores que tienen el rol necesario para esta operación
+    const requiredRoles = OPERATION_TO_ROLES[state.selectedOperation] || [];
 
-  const handleSelectOperation = (operacion: 'ARM' | 'SOLD') => {
-    setState({ selectedOperation: operacion });
+    const eligible = state.allWorkers.filter(worker => {
+      if (!worker.activo) return false;  // Solo trabajadores activos
+      if (!worker.roles || worker.roles.length === 0) return false;  // Debe tener roles
+
+      // Verificar si tiene alguno de los roles necesarios
+      return worker.roles.some(role => requiredRoles.includes(role));
+    });
+
+    setFilteredWorkers(eligible);
+  }, [state.selectedOperation, state.allWorkers, router]);
+
+  const handleSelectWorker = (worker: Worker) => {
+    setState({ selectedWorker: worker });
     router.push('/tipo-interaccion');
   };
 
-  if (!state.selectedWorker) return null;
+  if (!state.selectedOperation) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -47,34 +63,31 @@ export default function OperacionPage() {
       </button>
 
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold text-center mb-2">
-          Hola {state.selectedWorker.nombre_completo},
+        <h1 className="text-2xl font-semibold text-center mb-8">
+          {OPERATION_TITLES[state.selectedOperation]}
         </h1>
-        <h2 className="text-xl text-center text-gray-600 mb-8">
-          ¿Qué vas a hacer?
-        </h2>
 
-        {allowedOperations.length === 0 ? (
-          <div className="text-center p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-800 font-medium">
-              Tu rol ({state.selectedWorker.rol}) no tiene operaciones disponibles.
-            </p>
-            <p className="text-yellow-700 text-sm mt-2">
-              Contacta a tu supervisor si crees que esto es un error.
-            </p>
+        {filteredWorkers.length === 0 ? (
+          <div>
+            <ErrorMessage
+              message={`No hay trabajadores disponibles para ${state.selectedOperation}`}
+            />
+            <div className="mt-4 text-center">
+              <Button onClick={() => router.back()}>
+                Volver a seleccionar operación
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            {allowedOperations.includes('ARM') && (
-              <Button onClick={() => handleSelectOperation('ARM')}>
-                🔧 ARMADO (ARM)
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredWorkers.map((worker) => (
+              <Button
+                key={worker.id}
+                onClick={() => handleSelectWorker(worker)}
+              >
+                {worker.nombre_completo}
               </Button>
-            )}
-            {allowedOperations.includes('SOLD') && (
-              <Button onClick={() => handleSelectOperation('SOLD')}>
-                🔥 SOLDADO (SOLD)
-              </Button>
-            )}
+            ))}
           </div>
         )}
       </div>

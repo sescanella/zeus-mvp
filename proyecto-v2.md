@@ -111,13 +111,27 @@ Trabajador Id=95 "Carlos Pimiento"
 
 **Objetivo:** Registrar TODOS los movimientos para trazabilidad completa, debugging, auditoría y validación ownership.
 
-**Arquitectura de Datos:**
-- Hoja "Operaciones" se **MODIFICA** de forma controlada (UPDATE columnas específicas AL/AN/AK/AM)
+**⚠️ CAMBIO CRÍTICO v2.0 - Hoja Operaciones READ-ONLY:**
+- Hoja "Operaciones" es **READ-ONLY** (NUNCA se modifica desde el backend)
 - Hoja "Metadata" registra TODOS los eventos (append-only, inmutable) para auditoría
-- Estado actual se lee directamente de columnas Operaciones (AL/AN para worker, AK/AM para fechas)
-- Metadata se usa para: (1) auditoría, (2) ownership validation, (3) trazabilidad histórica
+- Estado actual se lee directamente de columnas específicas de Operaciones
+- Validación de disponibilidad se basa en columnas de trabajadores y fechas (NO estados 0/0.1/1.0)
+- Sistema v1.0 de estados numéricos (0 → 0.1 → 1.0) **ELIMINADO** en v2.0
 
-**Estructura Implementada:**
+**⚠️ IMPORTANTE - Coordenadas Volátiles:**
+La hoja "Operaciones" cambia constantemente (se agregan/remueven columnas). **SIEMPRE usar nombres de columna (headers), NUNCA índices fijos**. Las coordenadas (AG, AI, AK) son solo referencia temporal - el código debe buscar por nombre.
+
+**Condiciones de Disponibilidad v2.0 (por NOMBRE de columna):**
+
+**INICIAR ARM:**
+- Columna **"Fecha_Materiales"** **DEBE tener valor** (materiales llegaron)
+- Columna **"Armador"** **DEBE estar vacía** (nadie asignado)
+
+**INICIAR SOLD:**
+- Columna **"Armador"** **DEBE tener valor** (ARM ya asignado/completado)
+- Columna **"Soldador"** **DEBE estar vacía** (nadie asignado)
+
+**Estructura Hoja Metadata:**
 - Hoja "Metadata" en Google Sheets ✅ **(10 columnas A-J)**
 - Columnas:
   - A: `id` (UUID único del evento)
@@ -235,10 +249,19 @@ Trabajador Id=95 "Carlos Pimiento"
 - ⏳ Railway deployment pendiente (próximo paso)
 
 **Nueva Arquitectura v2.0:**
-- Hoja "Operaciones": **LECTURA + ESCRITURA controlada** (UPDATE columnas AL/AN=worker, AK/AM=fecha al INICIAR/COMPLETAR)
+- Hoja "Operaciones": **READ-ONLY** (NUNCA se modifica desde backend - solo lectura para validaciones)
 - Hoja "Metadata": **APPEND-ONLY** (log inmutable de todos los eventos para auditoría + ownership validation)
 - Hoja "Trabajadores": **READ-ONLY** (Id, Nombre, Apellido, Activo - SIN columna Rol)
 - Hoja "Roles": **READ-ONLY** (Id, Rol, Activo - permite múltiples roles por trabajador)
+
+**Columnas Operaciones v2.0 (Solo Lectura - por NOMBRE):**
+- **"TAG_SPOOL"**: Código único de identificación
+- **"Fecha_Materiales"**: Prerequisito para INICIAR ARM (debe tener valor)
+- **"Fecha_Armado"**: Escrita al completar ARM
+- **"Armador"**: Trabajador asignado a ARM (vacía = disponible)
+- **"Soldador"**: Trabajador asignado a SOLD (vacía = disponible)
+
+**⚠️ NUNCA usar coordenadas fijas (AG, AI, AK) en código - usar `find_column_by_header()`**
 
 ---
 
@@ -278,16 +301,27 @@ Trabajador Id=95 "Carlos Pimiento"
 ### Google Sheets Schema v2.0
 
 **Hojas:**
-1. **Operaciones** (ampliada): +3 columnas METROLOGÍA (AO, etc.) - READ-ONLY
+1. **Operaciones** (READ-ONLY): 65 columnas totales - NUNCA se modifica desde backend
 2. **Trabajadores** (simplificada): 4 columnas (Id, Nombre, Apellido, Activo) - **Columna Rol eliminada**
-3. **Metadata** (nueva): 10 columnas (Event Sourcing append-only)
+3. **Metadata** (nueva): 10 columnas (Event Sourcing append-only) - ÚNICO lugar donde backend escribe
 4. **Roles** (nueva): 3 columnas (Id, Rol, Activo) - **Multi-rol permitido**
+
+**Columnas Críticas Operaciones (Solo Lectura - ⚠️ BUSCAR POR NOMBRE):**
+| Nombre Columna (Header) | Uso v2.0 | Validación INICIAR ARM | Validación INICIAR SOLD |
+|-------------------------|----------|------------------------|-------------------------|
+| **"TAG_SPOOL"** | Identificador único | - | - |
+| **"Fecha_Materiales"** | Prerequisito ARM | **DEBE tener valor** ✅ | - |
+| **"Fecha_Armado"** | Confirmación ARM completado | - | (Info) |
+| **"Armador"** | Worker asignado ARM | **DEBE estar vacía** ✅ | **DEBE tener valor** ✅ |
+| **"Soldador"** | Worker asignado SOLD | - | **DEBE estar vacía** ✅ |
+
+**⚠️ CRÍTICO:** Las coordenadas (AG, AI, AK) son **VOLÁTILES** y cambiarán cuando se agreguen/eliminen columnas. El código **DEBE** buscar columnas por nombre usando `worksheet.find()` o mapeo de headers.
 
 **Relaciones:**
 - Trabajadores ← 1:N → Roles (un trabajador puede tener múltiples roles)
 - Metadata → Trabajadores (worker_id FK)
 
-**Total columnas críticas:** 17 (v1.0: 9 → +8 nuevas)
+**Total columnas críticas:** 5 ("TAG_SPOOL", "Fecha_Materiales", "Fecha_Armado", "Armador", "Soldador")
 
 ---
 
@@ -409,12 +443,13 @@ Trabajador Id=95 "Carlos Pimiento"
 
 ⚠️ **BREAKING CHANGES:**
 
-1. **Arquitectura Metadata + Operaciones** ✅ **IMPLEMENTADO**
-   - v1.0: Modificación directa de hoja "Operaciones" (columnas V, W, BA-BE)
-   - v2.0: Hoja "Operaciones" se MODIFICA (UPDATE AL/AN/AK/AM) + Eventos en "Metadata" (append-only)
-   - **Impacto:**
-     - Hoja "Operaciones" se ACTUALIZA al INICIAR (worker) y COMPLETAR (fecha)
-     - Estado se lee directamente de columnas AL/AN/AK/AM
+1. **Arquitectura READ-ONLY + Metadata Event Sourcing** ✅ **IMPLEMENTADO**
+   - v1.0: Modificación directa de hoja "Operaciones" (columnas V, W, BA-BE) con estados 0/0.1/1.0
+   - v2.0: Hoja "Operaciones" **READ-ONLY** + Eventos en "Metadata" (append-only)
+   - **Impacto CRÍTICO:**
+     - Hoja "Operaciones" **NUNCA se modifica** desde backend (solo lectura)
+     - Sistema v1.0 estados 0/0.1/1.0 **ELIMINADO**
+     - Validación disponibilidad basada en columnas de trabajadores (AG, AI, AK)
      - Metadata registra TODOS los eventos para auditoría + ownership validation
    - **Estado:** Backend implementado ✅, MetadataRepository ✅
 
@@ -624,10 +659,10 @@ BA (Materiales) → ARM (Armado) → SOLD (Soldado) → METROLOGÍA (Inspección
 
 ## 11. Estado Actual del Proyecto
 
-**Última Actualización:** 13 Dic 2025 - 01:00
+**Última Actualización:** 16 Dic 2025 - 19:00
 **Branch Desarrollo:** `v2.0-dev`
-**Estado:** 🔄 **DÍA 2 FRONTEND 50% COMPLETADO** - P2 Roles + P3 CANCELAR (breaking change worker_id)
-**Deadline:** 14 Dic 2025 (1 día restante)
+**Estado:** 🔄 **REORGANIZACIÓN UX COMPLETADA** - Nueva arquitectura flujo (Operación → Trabajador)
+**Deadline:** 14 Dic 2025 (EXTENDIDO - ajustes UX en progreso)
 
 ### Progreso v2.0
 
@@ -747,9 +782,85 @@ BA (Materiales) → ARM (Armado) → SOLD (Soldado) → METROLOGÍA (Inspección
 - Ver `proyecto-v2-backend.md` sección 3 para Sistema de Roles Operativos
 - Ver `proyecto-v2-backend.md` sección 7.2 para tests
 
-### 🔧 Cambios Técnicos Recientes (13 Dic 2025)
+### 🔧 Cambios Técnicos Recientes
 
-**P3 CANCELAR + Breaking Change ActionPayload (worker_id) - COMPLETADO ✅**
+**REORGANIZACIÓN UX - Operación Primero, Trabajador Después (16 Dic 2025) ✅**
+
+**Motivación:** Mejorar UX permitiendo que operaciones filtren trabajadores por rol (en vez de trabajadores filtrar operaciones).
+
+**Cambio Arquitectónico:**
+```
+v1.0/v2.0 (anterior):
+P1: Seleccionar TRABAJADOR → P2: Seleccionar OPERACIÓN (filtrada por roles)
+
+v2.0 (nuevo - 16 Dic):
+P1: Seleccionar OPERACIÓN → P2: Seleccionar TRABAJADOR (filtrado por rol)
+```
+
+**Archivos Modificados (4 total):**
+1. **app/page.tsx (P1)** - REEMPLAZADO:
+   - Antes: Grid trabajadores (4 cards)
+   - Después: 3 botones operación verticales (🛠️ ARM, 🔥 SOLD, 📐 METROLOGÍA)
+   - Fetch: getWorkers() → guarda en context.allWorkers
+   - Navegación: onClick → setSelectedOperation → /operacion
+
+2. **app/operacion/page.tsx (P2)** - REEMPLAZADO:
+   - Antes: 3 botones operación + filtrado por roles
+   - Después: Grid trabajadores filtrados por rol de operación seleccionada
+   - Título dinámico: "🔧 ¿Quién va a armar?" | "🔥 ¿Quién va a soldar?" | "📐 ¿Quién va a medir?"
+   - Filtrado: OPERATION_TO_ROLES mapping (ARM→Armador+Ayudante, SOLD→Soldador+Ayudante, METROLOGIA→Metrologia)
+   - Multi-rol: Trabajador con Armador+Soldador aparece en ambas operaciones
+   - Validación: Si filteredWorkers.length === 0 → ErrorMessage + botón Volver
+
+3. **lib/context.tsx** - Actualizado:
+   - +allWorkers: Worker[] (cache de todos los trabajadores)
+   - selectedOperation: 'ARM' | 'SOLD' | 'METROLOGIA' (ya incluía METROLOGIA)
+
+4. **lib/types.ts** - Actualizado:
+   - ActionPayload.operacion: +METROLOGIA (ya estaba desde sesión anterior)
+
+**Lógica de Filtrado P2:**
+```typescript
+const OPERATION_TO_ROLES: Record<string, string[]> = {
+  'ARM': ['Armador', 'Ayudante'],
+  'SOLD': ['Soldador', 'Ayudante'],
+  'METROLOGIA': ['Metrologia'],
+};
+
+const eligible = state.allWorkers.filter(worker => {
+  if (!worker.activo) return false;
+  if (!worker.roles || worker.roles.length === 0) return false;
+  return worker.roles.some(role => requiredRoles.includes(role));
+});
+```
+
+**Beneficios:**
+- ✅ UX más clara: Usuario decide QUÉ hacer antes de QUIÉN lo hace
+- ✅ Código más simple: Filtrado de trabajadores en P2 (eliminado filtrado de operaciones)
+- ✅ Arquitectura limpia: OPERATION_TO_ROLES mapping centralizado
+- ✅ Mobile-first: 3 botones grandes verticales en P1
+- ✅ Multi-rol support: Ayudante aparece en ARM y SOLD
+
+**Breaking Changes:**
+- ❌ Ninguno a nivel de API (solo cambios UI internos)
+
+**Validación:**
+- ✅ TypeScript: npx tsc --noEmit - 0 errores
+- ✅ ESLint: npm run lint - 0 errores, 0 warnings
+- ✅ Arquitectura: Código limpio, sin `any`, hooks correctos
+
+**Impacto Frontend:**
+- P1: Cambio completo (trabajadores → operaciones)
+- P2: Cambio completo (operaciones → trabajadores)
+- P3-P6: Sin cambios
+- Context: +allWorkers (nuevo campo)
+- Total líneas modificadas: ~200 líneas (2 páginas + context)
+
+**Estado:** ✅ Implementado y validado (16 Dic 19:00)
+
+---
+
+**P3 CANCELAR + Breaking Change ActionPayload (worker_id) - COMPLETADO ✅ (13 Dic)**
 
 **Breaking Change CRÍTICO - ActionPayload:**
 ```typescript
@@ -838,14 +949,15 @@ interface Worker {
 
 **FIN - proyecto-v2.md - ZEUES v2.0 - Versión 2.0 - 13 Dic 2025 01:00**
 
-**Resumen ACTUALIZADO (Clarificación Arquitectura):**
+**Resumen ACTUALIZADO (Clarificación Arquitectura v2.0):**
 
 **CAMBIOS CRÍTICOS vs versión anterior:**
 1. ❌ **ELIMINADA autenticación JWT/login** - Frontend igual que v1.0 (sin login)
-2. ✅ **Operaciones SÍ se modifica** - UPDATE controlado AL/AN/AK/AM (NO read-only)
-3. ✅ **Metadata para auditoría** - NO para reconstruir estado (se lee de Operaciones)
-4. ✅ **Deadline real: 3 días** - 14 Dic 2025 (no 16 días)
-5. ✅ **METROLOGÍA nice-to-have** - Solo si alcanza tiempo
+2. ✅ **Operaciones READ-ONLY** - NUNCA se modifica desde backend (solo lectura)
+3. ✅ **Sistema estados 0/0.1/1.0 ELIMINADO** - v2.0 usa columnas de trabajadores (AG/AI/AK)
+4. ✅ **Metadata para auditoría** - Event Sourcing append-only (única sheet donde backend escribe)
+5. ✅ **Deadline real: 3 días** - 14 Dic 2025 (no 16 días)
+6. ✅ **METROLOGÍA nice-to-have** - Solo si alcanza tiempo
 
 **Must-Have (para 14 Dic):**
 - Roles operativos múltiples validados (backend + frontend)
@@ -861,6 +973,28 @@ interface Worker {
 
 **Próximo paso crítico:**
 - DÍA 2 Frontend (13 Dic): P4 multiselect + búsqueda + P5/P6 batch UI
+
+**Reglas de Validación v2.0 (CRÍTICAS - por NOMBRE de columna):**
+
+**INICIAR ARM:**
+1. Columna **"Fecha_Materiales"** != vacío → Materiales llegaron ✅
+2. Columna **"Armador"** == vacío → Nadie asignado ✅
+3. Worker tiene rol ARMADOR ✅
+
+**INICIAR SOLD:**
+1. Columna **"Armador"** != vacío → ARM ya asignado/completado ✅
+2. Columna **"Soldador"** == vacío → Nadie asignado ✅
+3. Worker tiene rol SOLDADOR ✅
+
+**COMPLETAR ARM:**
+1. Columna **"Armador"** != vacío → ARM fue iniciado ✅
+2. Worker_id == owner inicial (ownership validation via Metadata) ✅
+
+**COMPLETAR SOLD:**
+1. Columna **"Soldador"** != vacío → SOLD fue iniciado ✅
+2. Worker_id == owner inicial (ownership validation via Metadata) ✅
+
+**⚠️ IMPORTANTE:** Código debe buscar columnas por nombre de header, NO por índice (AG/AI/AK son volátiles)
 
 **Para Desarrollo:**
 - Ver `proyecto-v2-backend.md` (arquitectura detallada backend)

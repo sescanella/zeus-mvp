@@ -4,13 +4,15 @@ export interface Worker {
   id: number;
   nombre: string;
   apellido?: string;
-  rol: string;
+  rol?: string;  // Legacy/deprecated - usar roles array
+  roles?: string[];  // v2.0: Array de roles desde hoja Roles
   activo: boolean;
   nombre_completo: string;
 }
 
 export interface Spool {
   tag_spool: string;
+  nv?: string;  // v2.0: Número de Nota de Venta (filtro multidimensional)
   arm: number;
   sold: number;
   proyecto?: string;
@@ -23,7 +25,7 @@ export interface Spool {
 
 export interface ActionPayload {
   worker_id: number;  // v2.0: Breaking change from worker_nombre (string) to worker_id (number)
-  operacion: 'ARM' | 'SOLD';
+  operacion: 'ARM' | 'SOLD' | 'METROLOGIA';  // v2.0: +METROLOGIA
   tag_spool: string;
   timestamp?: string;
 }

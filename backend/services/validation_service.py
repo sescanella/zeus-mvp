@@ -112,7 +112,7 @@ class ValidationService:
             'soldador': soldador or spool.soldador  # Usar legacy si no hay en eventos
         })
 
-    def validar_puede_iniciar_arm(self, spool: Spool, worker_id: int) -> None:
+    def validar_puede_iniciar_arm(self, spool: Spool, worker_id: Optional[int] = None) -> None:
         """
         Valida si la operación ARM puede iniciarse en el spool.
 
@@ -122,16 +122,16 @@ class ValidationService:
         - ARM debe estar en estado PENDIENTE
         - fecha_materiales (AJ) debe estar llena
         - No debe haber evento INICIAR_ARM previo
-        - Worker debe tener rol ARMADOR (v2.0)
+        - Worker debe tener rol ARMADOR (v2.0) - solo si worker_id se proporciona
 
         Args:
             spool: Objeto Spool a validar
-            worker_id: ID del trabajador que intenta iniciar (v2.0)
+            worker_id: ID del trabajador que intenta iniciar (v2.0). Opcional para filtrado general.
 
         Raises:
             OperacionNoPendienteError: Si ARM no está en estado PENDIENTE
             DependenciasNoSatisfechasError: Si fecha_materiales está vacía
-            RolNoAutorizadoError: Si worker no tiene rol ARMADOR (v2.0)
+            RolNoAutorizadoError: Si worker no tiene rol ARMADOR (v2.0) - solo si worker_id se proporciona
 
         Logs:
             INFO: Inicio de validación
@@ -313,7 +313,7 @@ class ValidationService:
             f"Worker: {worker_nombre}"
         )
 
-    def validar_puede_iniciar_sold(self, spool: Spool, worker_id: int) -> None:
+    def validar_puede_iniciar_sold(self, spool: Spool, worker_id: Optional[int] = None) -> None:
         """
         Valida si la operación SOLD puede iniciarse en el spool.
 

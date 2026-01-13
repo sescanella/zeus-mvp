@@ -29,6 +29,7 @@ class SheetsService:
     # Índices de columnas en Google Sheets (0-indexed)
     # Hoja "Operaciones" v2.0 - Event Sourcing (READ-ONLY)
     # Nota: Estados ARM/SOLD se reconstruyen desde Metadata, NO desde estas columnas
+    IDX_NV = 1                  # B  - NV (Número de Nota de Venta) - v2.0 filtrado multidimensional
     IDX_TAG_SPOOL = 6           # G  - TAG_SPOOL / CODIGO_BARRA
     IDX_FECHA_MATERIALES = 35   # AJ - Fecha_Materiales (prerequisito para ARM)
     IDX_FECHA_ARMADO = 36       # AK - Fecha_Armado (legacy - solo lectura)
@@ -318,6 +319,11 @@ class SheetsService:
         if not tag_spool:
             raise ValueError("TAG_SPOOL vacío en fila")
 
+        # 1.5. Parsear NV (v2.0 - opcional para filtrado multidimensional)
+        nv = row[cls.IDX_NV].strip() if cls.IDX_NV < len(row) and row[cls.IDX_NV] else None
+        if nv == '':
+            nv = None
+
         # 2. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
         # No leemos estados de Operaciones porque es READ-ONLY en v2.0
         arm_status = ActionStatus.PENDIENTE
@@ -341,6 +347,7 @@ class SheetsService:
         # NOTA: Los estados reales se reconstruyen en ValidationService desde MetadataRepository
         return Spool(
             tag_spool=tag_spool,
+            nv=nv,  # v2.0: Número de Nota de Venta para filtrado
             arm=arm_status,  # DEFAULT: Se reconstruye después
             sold=sold_status,  # DEFAULT: Se reconstruye después
             fecha_materiales=fecha_materiales,

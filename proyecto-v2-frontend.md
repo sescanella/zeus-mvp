@@ -1,6 +1,6 @@
 # ZEUES v2.0 - Frontend Technical Documentation
 
-**Última actualización:** 13 Dic 2025 01:00 | **Versión:** 2.0 | **Branch:** `v2.0-dev`
+**Última actualización:** 16 Dic 2025 19:00 | **Versión:** 2.0 | **Branch:** `v2.0-dev`
 
 ---
 
@@ -8,11 +8,11 @@
 
 | Aspecto | Estado | Detalles |
 |---------|--------|----------|
-| **Progreso Frontend** | 95% | DÍA 2 - Multiselect UI 100% COMPLETO (13 Dic 18:00) |
+| **Progreso Frontend** | 96% | REORGANIZACIÓN UX COMPLETADA (16 Dic 19:00) |
 | **Archivos** | 31 archivos | v1.0: 28 → +3 nuevos (Checkbox, SpoolSelector) |
-| **Archivos Modificados DÍA 2** | 23 archivos | P1-P6 + lib + components (3 sesiones acumuladas) |
+| **Archivos Modificados v2.0** | 27 archivos | P1-P6 + lib + components (4 sesiones totales) |
 | **Componentes** | 8 componentes | +2 nuevos vs v1.0 (Checkbox, SpoolSelector) ✅ |
-| **Páginas** | 7 páginas | 7 modificadas (P4-P6 con batch support) |
+| **Páginas** | 7 páginas | 7 modificadas (TODAS con breaking changes) |
 | **Tests E2E** | 17 tests | v1.0: 17 passing → +3 nuevos pendientes (20 target) |
 | **API Functions** | 12 funciones | v1.0: 6 → +6 nuevas (roles, cancelar, 3 batch) |
 | **Deployment** | Vercel | zeues-frontend.vercel.app (pendiente v2.0 deploy) |
@@ -20,23 +20,27 @@
 ### Estado Implementación
 
 ```
-✅ COMPLETADO (95% frontend):
+✅ COMPLETADO (96% frontend):
+  ✅ REORGANIZACIÓN UX - Operación primero, trabajador después (16 Dic 19:00) 🆕
+  ✅ P1 Nueva - 3 botones operación (ARM/SOLD/METROLOGÍA) + fetch allWorkers (16 Dic)
+  ✅ P2 Nueva - Grid trabajadores filtrados por rol + títulos dinámicos (16 Dic)
+  ✅ Context - +allWorkers cache + selectedOperation con METROLOGIA (16 Dic)
   ✅ P2 Filtrado por Roles - Worker interface breaking change + API integration (12 Dic)
-  ✅ P3 Botón CANCELAR - ActionPayload breaking change worker_id + flujo completo (13 Dic 01:00)
-  ✅ P4 Multiselect UI - Checkbox + SpoolSelector componentes con toggle mode (13 Dic 18:00)
-  ✅ P4 Búsqueda TAG_SPOOL - Filtrado en tiempo real case-insensitive (13 Dic 18:00)
-  ✅ P5/P6 Batch - Confirmación lista + resultados exitosos/fallidos (13 Dic 18:00)
+  ✅ P3 Botón CANCELAR - ActionPayload breaking change worker_id + flujo completo (13 Dic)
+  ✅ P4 Multiselect UI - Checkbox + SpoolSelector componentes con toggle mode (13 Dic)
+  ✅ P4 Búsqueda TAG_SPOOL - Filtrado en tiempo real case-insensitive (13 Dic)
+  ✅ P5/P6 Batch - Confirmación lista + resultados exitosos/fallidos (13 Dic)
   ✅ API Batch - 3 funciones (iniciarAccionBatch, completarAccionBatch, cancelarAccionBatch)
   ✅ Types - BatchActionRequest, BatchActionResponse, SpoolActionResult
-  ✅ Context - selectedSpools[], batchMode, batchResults
+  ✅ Context - selectedSpools[], batchMode, batchResults, allWorkers[]
 
-🔴 PENDIENTE (5% frontend):
+🔴 PENDIENTE (4% frontend):
   🔴 Tests E2E +3 nuevos (multiselect, cancelar, búsqueda)
   🔴 Deploy Vercel v2.0
 
 🟡 NICE-TO-HAVE (si alcanza tiempo):
   🟡 Admin Panel (CRUD usuarios, reportes)
-  🟡 METROLOGÍA UI (botón verde, filtros, colores)
+  🟡 METROLOGÍA backend completada (frontend ya listo)
 
 ✅ BASE v1.0 (producción estable):
   ✅ 7 páginas flujo completo ARM/SOLD
@@ -49,6 +53,9 @@
 
 | Feature | Descripción | Estado | Fecha |
 |---------|-------------|--------|-------|
+| **Reorganización UX** 🆕 | P1 operaciones → P2 trabajadores (en vez de P1 trabajadores → P2 operaciones) | ✅ COMPLETADO | 16 Dic 19:00 |
+| **P1 Nueva** 🆕 | 3 botones operación (🛠️ ARM, 🔥 SOLD, 📐 METROLOGÍA) + cache allWorkers | ✅ COMPLETADO | 16 Dic 19:00 |
+| **P2 Nueva** 🆕 | Grid trabajadores filtrados por OPERATION_TO_ROLES + títulos dinámicos | ✅ COMPLETADO | 16 Dic 19:00 |
 | **Filtrado Roles** | P2 muestra operaciones según roles worker (GET /workers/{id}/roles) | ✅ COMPLETADO | 12 Dic 21:00 |
 | **Botón CANCELAR** | P3 agrega opción CANCELAR para operaciones EN_PROGRESO + breaking change worker_id | ✅ COMPLETADO | 13 Dic 01:00 |
 | **Multiselect** | P4 checkboxes, select all, contador (hasta 50 spools) + toggle mode | ✅ COMPLETADO | 13 Dic 18:00 |
@@ -163,9 +170,9 @@
 - `components/ErrorMessage.tsx` - Error display (v1.0)
 - `components/Checkbox.tsx` 🆕 - Checkbox multiselect
 
-**Páginas (7 total, sin cambios estructura):**
-- `app/page.tsx` - P1: Worker ID (sin cambios)
-- `app/operacion/page.tsx` - P2: Operación (v2.0: +filtrado roles) 🔄
+**Páginas (7 total, TODAS modificadas v2.0):**
+- `app/page.tsx` - P1: Seleccionar OPERACIÓN (v2.0: REEMPLAZADO - antes trabajadores, ahora 3 botones operación) 🔄
+- `app/operacion/page.tsx` - P2: Seleccionar TRABAJADOR (v2.0: REEMPLAZADO - antes operaciones filtradas, ahora trabajadores filtrados) 🔄
 - `app/tipo-interaccion/page.tsx` - P3: INICIAR/COMPLETAR/CANCELAR (v2.0: +botón CANCELAR) 🔄
 - `app/seleccionar-spool/page.tsx` - P4: Spool selection (v2.0: +multiselect + búsqueda) 🔄
 - `app/confirmar/page.tsx` - P5: Confirmación (v2.0: +batch summary) 🔄
@@ -242,61 +249,122 @@ type ButtonVariant =
 
 ## 4. Páginas v2.0
 
-### 4.1. P2 - Operación con Filtrado por Roles ✅ IMPLEMENTADO (12 Dic 2025)
+### 4.1. P1 - Seleccionar OPERACIÓN ✅ IMPLEMENTADO (16 Dic 2025)
 
-**Objetivo:** Filtrar botones operación según roles del trabajador.
+**Objetivo:** Permitir seleccionar operación ANTES de trabajador (inversión flujo UX).
 
 **Implementación Completada:**
 
 **State Local:**
 | Variable | Tipo | Descripción |
 |----------|------|-------------|
-| allowedOperations | string[] | Operaciones permitidas según roles |
-| isLoading | boolean | Estado de carga durante fetch roles |
-| error | string \| null | Mensaje de error si fetch falla |
+| loading | boolean | Estado de carga durante fetch workers |
+| error | string | Mensaje de error si API falla |
 
-**Mapeo Roles → Operaciones (ROLE_TO_OPERATIONS):**
+**UI Nueva:**
+- Título: "¿Qué operación vas a realizar?"
+- 3 botones verticales grandes (h-20):
+  - 🛠️ Armado (bg-cyan-600)
+  - 🔥 Soldadura (bg-cyan-600)
+  - 📐 Metrología (bg-cyan-600)
+- Sin diferenciación de color entre botones (todos cyan)
+
+**Flujo Implementado:**
+1. **useEffect al montar:** Fetch `getWorkers()` (todos los trabajadores activos)
+2. **Cache context:** Guardar en `setState({ allWorkers: workersData })`
+3. **onClick botón:** `setSelectedOperation('ARM'|'SOLD'|'METROLOGIA')` → `router.push('/operacion')`
+4. **Error handling:** ErrorMessage component con retry
+
+**Hooks:**
+- `useAppState()` - setState para guardar allWorkers y selectedOperation
+- `useState(loading: boolean)` - loading state
+- `useState(error: string)` - error handling
+- `useEffect()` - fetch workers al montar
+- `useCallback(fetchWorkers)` - memoización para evitar re-renders
+
+**Cambios vs v1.0:**
+- ❌ ELIMINADO: Grid trabajadores (4 cards)
+- ✅ AGREGADO: 3 botones operación verticales
+- ✅ AGREGADO: Cache allWorkers en context
+- ✅ CAMBIO: Navegación → /operacion (antes era seleccionar worker)
+
+**TypeScript:**
+- ✅ Tipos explícitos para operacion: 'ARM' | 'SOLD' | 'METROLOGIA'
+- ✅ useCallback con dependency [setState]
+- ✅ Sin uso de `any`
+
+**Validación:**
+- ✅ npm run lint - 0 errores, 0 warnings
+- ✅ npx tsc --noEmit - 0 errores
+
+---
+
+### 4.2. P2 - Seleccionar TRABAJADOR (filtrado por rol) ✅ IMPLEMENTADO (16 Dic 2025)
+
+**Objetivo:** Mostrar grid trabajadores filtrados según rol de operación seleccionada.
+
+**Implementación Completada:**
+
+**State Local:**
+| Variable | Tipo | Descripción |
+|----------|------|-------------|
+| filteredWorkers | Worker[] | Trabajadores elegibles para operación seleccionada |
+
+**Mapeo Operaciones → Roles (OPERATION_TO_ROLES):**
 ```typescript
-const ROLE_TO_OPERATIONS: Record<string, string[]> = {
-  'Armador': ['ARM'],
-  'Soldador': ['SOLD'],
-  'Metrologia': ['METROLOGIA'],
-  'Ayudante': ['ARM', 'SOLD']  // Multi-operación
+const OPERATION_TO_ROLES: Record<string, string[]> = {
+  'ARM': ['Armador', 'Ayudante'],
+  'SOLD': ['Soldador', 'Ayudante'],
+  'METROLOGIA': ['Metrologia'],
+};
+```
+
+**Títulos Dinámicos:**
+```typescript
+const OPERATION_TITLES: Record<string, string> = {
+  'ARM': '🔧 ¿Quién va a armar?',
+  'SOLD': '🔥 ¿Quién va a soldar?',
+  'METROLOGIA': '📐 ¿Quién va a medir?',
 };
 ```
 
 **Flujo Implementado:**
-1. **useEffect al montar:** Fetch `GET /api/workers/{worker.id}/roles`
-2. **Mapeo roles:** Usar ROLE_TO_OPERATIONS para obtener operaciones permitidas
-3. **Deduplicación:** Set para eliminar duplicados (ej: Armador + Ayudante = ARM solo 1 vez)
-4. **Renderizado condicional:** Solo mostrar botones si operación en allowedOperations
-5. **Mensaje sin roles:** Si allowedOperations.length === 0, mostrar advertencia
+1. **Validación inicial:** `if (!state.selectedOperation) router.push('/')`
+2. **Filtrado trabajadores:**
+   - Solo trabajadores activos
+   - Solo con roles asignados
+   - Roles que incluyan alguno de los necesarios para la operación
+3. **Multi-rol support:** Trabajador con Armador+Ayudante aparece en ARM, con Soldador+Ayudante en SOLD
+4. **Empty state:** Si `filteredWorkers.length === 0` → ErrorMessage + botón Volver
+5. **onClick card:** `setSelectedWorker(worker)` → `router.push('/tipo-interaccion')`
 
 **Hooks:**
-- `useAppState()` - worker (Worker object), setOperacion
-- `useState(allowedOperations: string[])` - operaciones filtradas
-- `useState(isLoading: boolean)` - loading state
-- `useState(error: string | null)` - error handling
-- `useEffect()` - fetch roles al montar + cleanup
+- `useAppState()` - state.selectedOperation, state.allWorkers
+- `useState(filteredWorkers: Worker[])` - trabajadores filtrados
+- `useEffect()` - filtrar trabajadores cuando cambia operación
+- `useRouter()` - navegación
 
 **Cambios vs v1.0:**
-- ✅ +API call: `getWorkerRoles(worker.id)` (nueva función)
-- ✅ +Filtrado condicional de 3 botones (ARM/SOLD/METROLOGIA)
-- ✅ +Loading spinner durante fetch
-- ✅ +ErrorMessage component si API falla
-- ✅ +Mensaje advertencia si trabajador sin roles
-- ✅ +Multi-rol support (Set para deduplicar)
+- ❌ ELIMINADO: 3 botones operación (ARM/SOLD/METROLOGIA)
+- ❌ ELIMINADO: getWorkerRoles() API call
+- ❌ ELIMINADO: ROLE_TO_OPERATIONS mapping
+- ✅ AGREGADO: Grid trabajadores (movido desde P1)
+- ✅ AGREGADO: OPERATION_TO_ROLES mapping (inverso)
+- ✅ AGREGADO: Títulos dinámicos según operación
+- ✅ AGREGADO: Filtrado multi-rol en memoria
 
-**TypeScript Fix:**
-- Non-null assertion `worker!.id` para satisfacer type checking (worker validado antes de render)
+**TypeScript:**
+- ✅ Tipos explícitos Record<string, string[]>
+- ✅ Filter con type guards (activo, roles)
+- ✅ Sin uso de `any`
 
 **Validación:**
-- ✅ npm run lint - Sin errores
-- ✅ npx tsc --noEmit - Sin errores
+- ✅ npm run lint - 0 errores, 0 warnings
+- ✅ npx tsc --noEmit - 0 errores
 
 ---
 
-### 4.2. P3 - INICIAR/COMPLETAR/CANCELAR ✅ IMPLEMENTADO (13 Dic 2025)
+### 4.3. P3 - INICIAR/COMPLETAR/CANCELAR ✅ IMPLEMENTADO (13 Dic 2025)
 
 **Objetivo:** Añadir tercera opción "CANCELAR ACCIÓN".
 
@@ -775,7 +843,92 @@ function desactivarUsuario(email: string): Promise<void>
 
 ---
 
-## 11. Changelog Técnico - DÍA 2 Frontend
+## 11. Changelog Técnico - Frontend v2.0
+
+### REORGANIZACIÓN UX - Operación → Trabajador (16 Dic 2025) ✅
+
+**Motivación:**
+- Mejorar UX permitiendo que operación seleccionada filtre trabajadores por rol
+- Simplificar lógica: OPERATION_TO_ROLES más intuitivo que ROLE_TO_OPERATIONS
+- Reducir complejidad: eliminar fetch getWorkerRoles() en cada load de P2
+
+**Cambio Arquitectónico:**
+```
+ANTES (v1.0/v2.0 hasta 15 Dic):
+P1: Grid Trabajadores → P2: Botones Operación (filtrados por roles) → P3-P6
+
+DESPUÉS (v2.0 desde 16 Dic):
+P1: Botones Operación → P2: Grid Trabajadores (filtrados por rol) → P3-P6
+```
+
+**Archivos Modificados (4 total):**
+
+| Archivo | Cambios | Líneas | Breaking |
+|---------|---------|--------|----------|
+| app/page.tsx | REEMPLAZADO completo (grid → 3 botones) | ~70 | ❌ No |
+| app/operacion/page.tsx | REEMPLAZADO completo (botones → grid) | ~97 | ❌ No |
+| lib/context.tsx | +allWorkers: Worker[] | ~3 | ❌ No |
+| lib/types.ts | ActionPayload +METROLOGIA (ya estaba) | ~1 | ❌ No |
+
+**Total:** ~171 líneas modificadas, 0 breaking changes API
+
+**Lógica Nueva P1:**
+```typescript
+// Fetch workers y guardar en context
+const workersData = await getWorkers();
+setState({ allWorkers: workersData });
+
+// 3 botones verticales
+<Button onClick={() => handleSelectOperation('ARM')}>🛠️ Armado</Button>
+<Button onClick={() => handleSelectOperation('SOLD')}>🔥 Soldadura</Button>
+<Button onClick={() => handleSelectOperation('METROLOGIA')}>📐 Metrología</Button>
+```
+
+**Lógica Nueva P2:**
+```typescript
+// Mapeo operación → roles necesarios
+const OPERATION_TO_ROLES = {
+  'ARM': ['Armador', 'Ayudante'],
+  'SOLD': ['Soldador', 'Ayudante'],
+  'METROLOGIA': ['Metrologia']
+};
+
+// Filtrar trabajadores con rol necesario
+const eligible = state.allWorkers.filter(worker => {
+  if (!worker.activo || !worker.roles) return false;
+  return worker.roles.some(role => OPERATION_TO_ROLES[operation].includes(role));
+});
+
+// Grid trabajadores filtrados
+{eligible.map(worker => <Button>{worker.nombre_completo}</Button>)}
+```
+
+**Beneficios Implementados:**
+- ✅ UX mejorada: Usuario elige QUÉ hacer antes de QUIÉN
+- ✅ Código simplificado: 1 mapping vs fetch API + 2 mappings
+- ✅ Performance: 1 fetch inicial (P1) vs fetch por worker (P2 anterior)
+- ✅ Mobile-first: 3 botones grandes verticales
+- ✅ Multi-rol: Ayudante aparece en ARM y SOLD automáticamente
+
+**Breaking Changes:**
+- ❌ Ninguno (solo cambios UI, API sin cambios)
+
+**Validación:**
+- ✅ TypeScript: 0 errores (npx tsc --noEmit)
+- ✅ ESLint: 0 errores, 0 warnings (npm run lint)
+- ✅ Sin uso de `any`
+- ✅ Hooks correctos (useCallback con deps)
+
+**Impacto Tests E2E:**
+- 🔴 17 tests existentes requieren actualización (flujo cambiado)
+- 🔴 Orden steps cambiado: antes P1→worker, P2→operación | ahora P1→operación, P2→worker
+
+**Próximos Pasos:**
+1. Actualizar tests E2E (flujo P1-P2 invertido)
+2. Smoke test manual en desarrollo
+3. Deploy v2.0
+
+---
 
 ### P3 CANCELAR + Breaking Change worker_id - COMPLETADO ✅ (13 Dic 2025)
 
@@ -857,23 +1010,27 @@ P1 (Worker) → P2 (Operación según roles)
 
 ---
 
-**FIN - proyecto-v2-frontend.md - ZEUES v2.0 Frontend - Versión 2.0 - 13 Dic 2025 01:00**
+**FIN - proyecto-v2-frontend.md - ZEUES v2.0 Frontend - Versión 2.0 - 16 Dic 2025 19:00**
 
 **Resumen ACTUALIZADO:**
-- Frontend 50% completado (P2 roles ✅ + P3 CANCELAR ✅)
-- 6 componentes (+1 variant Button cancelar, Checkbox pendiente)
-- 7 páginas (7 modificadas - todas actualizadas)
-- 9 API functions (+3 nuevas: getWorkerRoles, getSpoolsParaCancelar, cancelarAccion)
+- Frontend 96% completado ✅
+  - ✅ REORGANIZACIÓN UX - Operación → Trabajador (16 Dic)
+  - ✅ P1 Nueva - 3 botones operación + cache allWorkers (16 Dic)
+  - ✅ P2 Nueva - Grid trabajadores filtrados OPERATION_TO_ROLES (16 Dic)
+  - ✅ P2 roles filtrado + P3 CANCELAR + P4 multiselect + P4 búsqueda + P5/P6 batch (13 Dic)
+- 8 componentes (+2 nuevos: Checkbox ✅, SpoolSelector ✅, +1 variant Button cancelar ✅)
+- 7 páginas (TODAS modificadas - 100% v2.0)
+- 12 API functions (+6 nuevas vs v1.0)
 - 17 tests E2E (+3 nuevos pendientes = 20 target)
 - TypeScript estricto mantenido (NO `any`)
 - Mobile-first preservado (botones h-16/h-20)
-- **Breaking change crítico:** ActionPayload worker_id (impacto P5)
+- **Breaking changes:**
+  - ActionPayload worker_id (impacto P5)
+  - Context +allWorkers (nuevo campo)
+  - Flujo P1-P2 invertido (operación → trabajador)
 
-**Próximo Crítico (13 Dic):**
-1. P4 Multiselect UI (checkboxes + select all) - 3-4h
-2. P4 Búsqueda TAG_SPOOL (filtrado tiempo real) - 1-2h
-3. P5/P6 Batch operations (confirmación + resultados) - 2-3h
-4. Tests E2E +3 nuevos - 2-3h
-5. Deploy Vercel v2.0 - 30min
+**Pendiente (4% frontend):**
+1. Tests E2E +3 nuevos (flujo P1-P2 actualizado) - 2-3h
+2. Deploy Vercel v2.0 - 30min
 
-**Total pendiente:** ~50% frontend (8-12h trabajo restante)
+**Total pendiente:** ~3-4h trabajo restante

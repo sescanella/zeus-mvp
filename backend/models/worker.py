@@ -47,6 +47,11 @@ class Worker(BaseModel):
         description="Rol del trabajador en la planta (DEPRECATED: usar hoja Roles en su lugar)",
         examples=[RolTrabajador.ARMADOR, RolTrabajador.SOLDADOR]
     )
+    roles: list[str] = Field(
+        default_factory=list,
+        description="Lista de roles del trabajador desde hoja Roles (v2.0 multi-role)",
+        examples=[["Armador"], ["Armador", "Soldador"], ["Soldador", "Metrologia"]]
+    )
     activo: bool = Field(
         True,
         description="Si el trabajador está activo para realizar acciones"

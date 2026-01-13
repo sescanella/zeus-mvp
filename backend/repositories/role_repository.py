@@ -43,21 +43,38 @@ class RoleRepository:
         """
         Inicializa repositorio con conexión a hoja "Roles".
 
+        IMPORTANT: Usa lazy loading para evitar llamadas API innecesarias.
+        El worksheet solo se obtiene cuando se usa por primera vez.
+
         Args:
             spreadsheet: Instancia de Google Spreadsheet autenticada
             hoja_nombre: Nombre de la hoja (default: "Roles")
+        """
+        self.spreadsheet = spreadsheet
+        self.hoja_nombre = hoja_nombre
+        self._worksheet = None  # Lazy loading
+        logger.info(f"✅ RoleRepository inicializado (lazy): hoja '{hoja_nombre}'")
+
+    def _get_worksheet(self) -> gspread.Worksheet:
+        """
+        Obtiene el worksheet usando lazy loading (solo la primera vez).
+
+        Returns:
+            gspread.Worksheet de la hoja "Roles"
 
         Raises:
             SheetsConnectionError: Si la hoja no existe
         """
-        try:
-            self.worksheet = spreadsheet.worksheet(hoja_nombre)
-            logger.info(f"✅ RoleRepository inicializado: hoja '{hoja_nombre}'")
-        except gspread.exceptions.WorksheetNotFound:
-            raise SheetsConnectionError(
-                f"Hoja '{hoja_nombre}' no encontrada en Google Sheets",
-                details="Verificar que la hoja 'Roles' existe en el spreadsheet"
-            )
+        if self._worksheet is None:
+            try:
+                self._worksheet = self.spreadsheet.worksheet(self.hoja_nombre)
+                logger.debug(f"Worksheet '{self.hoja_nombre}' cargado (lazy)")
+            except gspread.exceptions.WorksheetNotFound:
+                raise SheetsConnectionError(
+                    f"Hoja '{self.hoja_nombre}' no encontrada en Google Sheets",
+                    details="Verificar que la hoja 'Roles' existe en el spreadsheet"
+                )
+        return self._worksheet
 
     def get_roles_by_worker_id(self, worker_id: int) -> List[WorkerRole]:
         """
@@ -82,7 +99,7 @@ class RoleRepository:
         """
         try:
             # Obtener todas las filas (skip header row)
-            all_rows = self.worksheet.get_all_values()[1:]
+            all_rows = self._get_worksheet().get_all_values()[1:]
         except gspread.exceptions.APIError as e:
             logger.error(f"Error al leer hoja Roles: {str(e)}")
             raise SheetsConnectionError(
@@ -191,7 +208,7 @@ class RoleRepository:
             ]
         """
         try:
-            all_rows = self.worksheet.get_all_values()[1:]  # Skip header
+            all_rows = self._get_worksheet().get_all_values()[1:]  # Skip header
         except gspread.exceptions.APIError as e:
             logger.error(f"Error al leer hoja Roles: {str(e)}")
             raise SheetsConnectionError(

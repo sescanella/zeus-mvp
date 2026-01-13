@@ -21,6 +21,13 @@ class Spool(BaseModel):
         examples=["MK-1335-CW-25238-011"]
     )
 
+    # v2.0: Número de Nota de Venta para filtrado multidimensional
+    nv: Optional[str] = Field(
+        None,
+        description="Número de Nota de Venta (columna H en Sheets)",
+        examples=["001", "002", "NV-123"]
+    )
+
     # Estados de acciones (columnas V, W)
     arm: ActionStatus = Field(
         ActionStatus.PENDIENTE,

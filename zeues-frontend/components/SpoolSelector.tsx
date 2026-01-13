@@ -14,15 +14,24 @@ interface SpoolSelectorProps {
 }
 
 /**
- * SpoolSelector component para multiselect de spools (v2.0 batch operations).
+ * Filter interface para sistema multidimensional escalable
+ */
+interface Filter {
+  field: keyof Spool;
+  value: string;
+}
+
+/**
+ * SpoolSelector component con tabla + filtros multidimensionales (v2.0).
  *
  * Features:
- * - Búsqueda en tiempo real por TAG_SPOOL (case-insensitive)
- * - Checkboxes touch-friendly para tablet
- * - Select All / Deselect All masivos
- * - Contador de selección: "X de Y spools seleccionados"
- * - Límite máximo (default 50) con disabled cuando se alcanza
- * - Mobile-first design con Tailwind
+ * - Tabla responsive NV | TAG_SPOOL (mobile-first)
+ * - 2 barras búsqueda: NV y TAG_SPOOL (lógica AND)
+ * - Sistema filters[] genérico (escalable para más dimensiones)
+ * - Checkboxes integrados en filas (row clickeable)
+ * - Select All / Deselect All (solo visibles filtrados)
+ * - Botón "Limpiar Filtros" cuando filtros activos
+ * - Límite máximo (default 50)
  *
  * @example
  * <SpoolSelector
@@ -39,34 +48,74 @@ export function SpoolSelector({
   maxSelection = 50,
   className = '',
 }: SpoolSelectorProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+  // Sistema de filtros genérico escalable
+  const [filters, setFilters] = useState<Filter[]>([
+    { field: 'nv', value: '' },
+    { field: 'tag_spool', value: '' },
+  ]);
 
-  // Filtrar spools por búsqueda (case-insensitive)
+  /**
+   * Aplicar filtros multidimensionales (lógica AND)
+   * Filtros vacíos son ignorados automáticamente
+   */
   const filteredSpools = useMemo(() => {
-    if (!searchTerm.trim()) return spools;
+    // Si todos los filtros están vacíos, retornar todo
+    const activeFilters = filters.filter(f => f.value.trim() !== '');
+    if (activeFilters.length === 0) return spools;
 
-    const lowerSearch = searchTerm.toLowerCase();
-    return spools.filter(spool =>
-      spool.tag_spool.toLowerCase().includes(lowerSearch)
-    );
-  }, [spools, searchTerm]);
+    return spools.filter(spool => {
+      // Lógica AND: TODOS los filtros activos deben coincidir
+      return activeFilters.every(filter => {
+        const fieldValue = spool[filter.field];
+        if (fieldValue === undefined || fieldValue === null) return false;
+
+        // Búsqueda case-insensitive con includes
+        return String(fieldValue)
+          .toLowerCase()
+          .includes(filter.value.toLowerCase());
+      });
+    });
+  }, [spools, filters]);
 
   const isMaxReached = selectedTags.length >= maxSelection;
+  const hasActiveFilters = filters.some(f => f.value.trim() !== '');
 
-  // Toggle individual spool
-  const handleToggle = (tag: string, checked: boolean) => {
-    if (checked) {
-      // Solo agregar si no alcanzamos el límite
+  /**
+   * Actualizar un filtro específico
+   */
+  const updateFilter = (field: keyof Spool, value: string) => {
+    setFilters(prev =>
+      prev.map(f => (f.field === field ? { ...f, value } : f))
+    );
+  };
+
+  /**
+   * Limpiar todos los filtros
+   */
+  const clearFilters = () => {
+    setFilters(prev => prev.map(f => ({ ...f, value: '' })));
+  };
+
+  /**
+   * Toggle individual spool (click en fila)
+   */
+  const handleToggle = (tag: string) => {
+    const isSelected = selectedTags.includes(tag);
+
+    if (isSelected) {
+      // Deseleccionar
+      onSelectChange(selectedTags.filter(t => t !== tag));
+    } else {
+      // Seleccionar si no alcanzamos el límite
       if (!isMaxReached) {
         onSelectChange([...selectedTags, tag]);
       }
-    } else {
-      // Remover
-      onSelectChange(selectedTags.filter(t => t !== tag));
     }
   };
 
-  // Seleccionar todos los spools filtrados (hasta el límite)
+  /**
+   * Seleccionar todos los spools VISIBLES/FILTRADOS (hasta el límite)
+   */
   const handleSelectAll = () => {
     const tagsToAdd = filteredSpools
       .map(s => s.tag_spool)
@@ -78,7 +127,9 @@ export function SpoolSelector({
     onSelectChange([...selectedTags, ...newTags]);
   };
 
-  // Deseleccionar todos los spools filtrados
+  /**
+   * Deseleccionar todos los spools VISIBLES/FILTRADOS
+   */
   const handleDeselectAll = () => {
     const filteredTagSet = new Set(filteredSpools.map(s => s.tag_spool));
     onSelectChange(selectedTags.filter(tag => !filteredTagSet.has(tag)));
@@ -88,29 +139,56 @@ export function SpoolSelector({
   const totalCount = spools.length;
   const filteredCount = filteredSpools.length;
 
+  // Obtener valores actuales de filtros
+  const nvFilter = filters.find(f => f.field === 'nv')?.value || '';
+  const tagFilter = filters.find(f => f.field === 'tag_spool')?.value || '';
+
   return (
     <div className={`flex flex-col gap-4 ${className}`}>
-      {/* Search input */}
-      <div className="flex flex-col gap-2">
-        <label htmlFor="search-spool" className="text-sm font-medium text-gray-700">
-          Buscar por TAG_SPOOL
-        </label>
-        <input
-          id="search-spool"
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Ej: MK-1335-CW-25238-011"
-          className="
-            w-full h-12 px-4 text-lg
-            border-2 border-gray-300 rounded-lg
-            focus:border-cyan-600 focus:outline-none
-            placeholder:text-gray-400
-          "
-        />
+      {/* 2 Inputs de búsqueda horizontales */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Input NV */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="filter-nv" className="text-sm font-medium text-gray-700">
+            Buscar por NV (Nota de Venta)
+          </label>
+          <input
+            id="filter-nv"
+            type="text"
+            value={nvFilter}
+            onChange={(e) => updateFilter('nv', e.target.value)}
+            placeholder="Ej: 001, 002..."
+            className="
+              w-full h-12 px-4 text-lg
+              border-2 border-gray-300 rounded-lg
+              focus:border-cyan-600 focus:outline-none
+              placeholder:text-gray-400
+            "
+          />
+        </div>
+
+        {/* Input TAG_SPOOL */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="filter-tag" className="text-sm font-medium text-gray-700">
+            Buscar por TAG_SPOOL
+          </label>
+          <input
+            id="filter-tag"
+            type="text"
+            value={tagFilter}
+            onChange={(e) => updateFilter('tag_spool', e.target.value)}
+            placeholder="Ej: MK-1335-CW-25238-011"
+            className="
+              w-full h-12 px-4 text-lg
+              border-2 border-gray-300 rounded-lg
+              focus:border-cyan-600 focus:outline-none
+              placeholder:text-gray-400
+            "
+          />
+        </div>
       </div>
 
-      {/* Counter and action buttons */}
+      {/* Counter, action buttons y Limpiar Filtros */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="text-lg font-medium text-gray-900">
           {selectedCount} de {totalCount} spools seleccionados
@@ -121,80 +199,130 @@ export function SpoolSelector({
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-nowrap gap-2">
           <Button
             onClick={handleSelectAll}
             variant="primary"
             disabled={filteredSpools.length === 0 || isMaxReached}
-            className="text-sm h-12"
+            className="text-sm h-12 whitespace-nowrap"
           >
-            Seleccionar Todos
+            Seleccionar Visibles
           </Button>
           <Button
             onClick={handleDeselectAll}
             variant="cancel"
             disabled={selectedCount === 0}
-            className="text-sm h-12"
+            className="text-sm h-12 whitespace-nowrap"
           >
             Deseleccionar Todos
           </Button>
+          {hasActiveFilters && (
+            <Button
+              onClick={clearFilters}
+              variant="cancel"
+              className="text-sm h-12 whitespace-nowrap"
+            >
+              Limpiar Filtros
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Info message when filtered */}
-      {searchTerm && (
+      {/* Info message cuando hay filtros activos */}
+      {hasActiveFilters && (
         <div className="text-sm text-gray-600">
           {filteredCount === 0 ? (
-            <span className="text-red-600">No se encontraron spools que coincidan con &quot;{searchTerm}&quot;</span>
+            <div className="flex flex-col gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <span className="text-yellow-800 font-medium">
+                No se encontraron spools que coincidan con los filtros aplicados
+              </span>
+              <Button
+                onClick={clearFilters}
+                variant="cancel"
+                className="text-sm h-10 w-fit"
+              >
+                Limpiar Filtros
+              </Button>
+            </div>
           ) : (
-            <span>Mostrando {filteredCount} de {totalCount} spools</span>
+            <span>Mostrando {filteredCount} de {totalCount} spools (filtrado activo)</span>
           )}
         </div>
       )}
 
-      {/* Spools grid */}
+      {/* Tabla responsive de spools CON SCROLL */}
       {filteredSpools.length > 0 ? (
         <div className="
-          grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3
-          max-h-[60vh] overflow-y-auto
-          p-2 border-2 border-gray-200 rounded-lg
+          max-h-[500px]
+          overflow-y-auto
+          overflow-x-auto
+          border-2 border-gray-200 rounded-lg
         ">
-          {filteredSpools.map((spool) => {
-            const isSelected = selectedTags.includes(spool.tag_spool);
-            const isDisabled = !isSelected && isMaxReached;
+          <table className="w-full min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                  NV
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                  TAG_SPOOL
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredSpools.map((spool) => {
+                const isSelected = selectedTags.includes(spool.tag_spool);
+                const isDisabled = !isSelected && isMaxReached;
 
-            return (
-              <div
-                key={spool.tag_spool}
-                className={`
-                  p-3 rounded-lg border-2 transition-colors
-                  ${isSelected
-                    ? 'bg-cyan-50 border-cyan-600'
-                    : isDisabled
-                      ? 'bg-gray-50 border-gray-200'
-                      : 'bg-white border-gray-300 hover:border-cyan-400'
-                  }
-                `}
-              >
-                <Checkbox
-                  id={`spool-${spool.tag_spool}`}
-                  checked={isSelected}
-                  onChange={(checked) => handleToggle(spool.tag_spool, checked)}
-                  label={spool.tag_spool}
-                  disabled={isDisabled}
-                />
-                {spool.proyecto && (
-                  <div className="mt-1 ml-9 text-sm text-gray-500">
-                    {spool.proyecto}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                return (
+                  <tr
+                    key={spool.tag_spool}
+                    onClick={() => !isDisabled && handleToggle(spool.tag_spool)}
+                    className={`
+                      cursor-pointer transition-colors h-16
+                      ${isSelected
+                        ? 'bg-cyan-50 hover:bg-cyan-100'
+                        : isDisabled
+                          ? 'bg-gray-50 cursor-not-allowed opacity-50'
+                          : 'hover:bg-gray-50'
+                      }
+                    `}
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          id={`spool-checkbox-${spool.tag_spool}`}
+                          checked={isSelected}
+                          onChange={() => {}} // Handled by row click
+                          disabled={isDisabled}
+                          className="pointer-events-none"
+                        />
+                        <span className={`text-base font-medium ${isSelected ? 'text-cyan-900' : 'text-gray-900'}`}>
+                          {spool.nv || '-'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-base ${isSelected ? 'text-cyan-900 font-medium' : 'text-gray-700'}`}>
+                        {spool.tag_spool}
+                      </span>
+                      {spool.proyecto && (
+                        <div className="text-sm text-gray-500 mt-1">
+                          {spool.proyecto}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="p-8 text-center text-gray-500 border-2 border-gray-200 rounded-lg">
-          {searchTerm ? 'No hay spools que coincidan con tu búsqueda' : 'No hay spools disponibles'}
+          {hasActiveFilters
+            ? 'No hay spools que coincidan con los filtros aplicados'
+            : 'No hay spools disponibles'}
         </div>
       )}
     </div>
