@@ -15,7 +15,7 @@ export default function TipoInteraccionPage() {
     }
   }, [state, router]);
 
-  const handleSelectTipo = (tipo: 'iniciar' | 'completar') => {
+  const handleSelectTipo = (tipo: 'iniciar' | 'completar' | 'cancelar') => {
     setState({ selectedTipo: tipo });
     router.push(`/seleccionar-spool?tipo=${tipo}`);
   };
@@ -60,6 +60,18 @@ export default function TipoInteraccionPage() {
               <div className="text-xl font-bold mb-1">✅ COMPLETAR ACCIÓN</div>
               <div className="text-sm font-normal">
                 Registrar finalización del trabajo
+              </div>
+            </div>
+          </Button>
+
+          <Button
+            variant="cancelar"
+            onClick={() => handleSelectTipo('cancelar')}
+          >
+            <div className="text-left">
+              <div className="text-xl font-bold mb-1">⚠️ CANCELAR ACCIÓN</div>
+              <div className="text-sm font-normal">
+                Revertir acción en progreso
               </div>
             </div>
           </Button>

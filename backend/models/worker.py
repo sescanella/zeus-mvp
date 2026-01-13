@@ -3,24 +3,54 @@ Modelos Pydantic para Trabajadores.
 """
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from typing import Optional
+from enum import Enum
+
+
+class RolTrabajador(str, Enum):
+    """Roles disponibles para trabajadores en v2.0."""
+    ARMADOR = "Armador"
+    SOLDADOR = "Soldador"
+    AYUDANTE = "Ayudante"
+    METROLOGIA = "Metrologia"
+    REVESTIMIENTO = "Revestimiento"
+    PINTURA = "Pintura"
+    DESPACHO = "Despacho"
 
 
 class Worker(BaseModel):
     """
-    Modelo de un trabajador de planta.
+    Modelo de un trabajador de planta (v2.0).
 
-    Representa un trabajador que puede realizar operaciones (ARM/SOLD) en spools.
+    Representa un trabajador que puede realizar operaciones en spools.
+    v2.0 incluye Id numérico y Rol específico.
     """
+    id: int = Field(
+        ...,
+        description="ID único del trabajador (numérico)",
+        gt=0,
+        examples=[93, 94, 95]
+    )
     nombre: str = Field(
         ...,
         description="Nombre del trabajador",
         min_length=1,
-        examples=["Juan"]
+        examples=["Mauricio"]
     )
-    apellido: Optional[str] = Field(
+    apellido: str = Field(
+        ...,
+        description="Apellido del trabajador",
+        min_length=1,
+        examples=["Rodriguez"]
+    )
+    rol: Optional[RolTrabajador] = Field(
         None,
-        description="Apellido del trabajador (opcional)",
-        examples=["Pérez"]
+        description="Rol del trabajador en la planta (DEPRECATED: usar hoja Roles en su lugar)",
+        examples=[RolTrabajador.ARMADOR, RolTrabajador.SOLDADOR]
+    )
+    roles: list[str] = Field(
+        default_factory=list,
+        description="Lista de roles del trabajador desde hoja Roles (v2.0 multi-role)",
+        examples=[["Armador"], ["Armador", "Soldador"], ["Soldador", "Metrologia"]]
     )
     activo: bool = Field(
         True,
@@ -62,10 +92,11 @@ class WorkerListResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "workers": [
-                    {"nombre": "Juan", "apellido": "Pérez", "activo": True},
-                    {"nombre": "María", "apellido": "González", "activo": True}
+                    {"id": 93, "nombre": "Mauricio", "apellido": "Rodriguez", "rol": "Armador", "activo": True},
+                    {"id": 94, "nombre": "Nicolás", "apellido": "Rodriguez", "rol": "Armador", "activo": True},
+                    {"id": 95, "nombre": "Carlos", "apellido": "Pimiento", "rol": "Soldador", "activo": True}
                 ],
-                "total": 2
+                "total": 3
             }
         }
     )

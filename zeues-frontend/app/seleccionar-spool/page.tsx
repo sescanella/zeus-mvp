@@ -2,15 +2,16 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { List, Loading, ErrorMessage } from '@/components';
+import { Loading, ErrorMessage, Button } from '@/components';
+import { SpoolSelector } from '@/components/SpoolSelector';
 import { useAppState } from '@/lib/context';
-import { getSpoolsParaIniciar, getSpoolsParaCompletar } from '@/lib/api';
+import { getSpoolsParaIniciar, getSpoolsParaCompletar, getSpoolsParaCancelar } from '@/lib/api';
 import type { Spool } from '@/lib/types';
 
 function SeleccionarSpoolContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar';
+  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar';
   const { state, setState } = useAppState();
 
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ function SeleccionarSpoolContent() {
       if (tipo === 'iniciar') {
         // Llamar API para obtener spools disponibles para iniciar
         fetchedSpools = await getSpoolsParaIniciar(selectedOperation as 'ARM' | 'SOLD');
-      } else {
+      } else if (tipo === 'completar') {
         // Llamar API para obtener spools que el trabajador puede completar
         if (!selectedWorker) {
           setError('No se ha seleccionado un trabajador');
@@ -55,7 +56,16 @@ function SeleccionarSpoolContent() {
           setLoading(false);
           return;
         }
-        fetchedSpools = await getSpoolsParaCompletar(selectedOperation as 'ARM' | 'SOLD', selectedWorker);
+        fetchedSpools = await getSpoolsParaCompletar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.nombre_completo);
+      } else {
+        // tipo === 'cancelar' - Llamar API para obtener spools que el trabajador puede cancelar
+        if (!selectedWorker) {
+          setError('No se ha seleccionado un trabajador');
+          setErrorType('validation');
+          setLoading(false);
+          return;
+        }
+        fetchedSpools = await getSpoolsParaCancelar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.id);
       }
 
       setSpools(fetchedSpools);
@@ -85,22 +95,32 @@ function SeleccionarSpoolContent() {
     }
   };
 
-  const getEmptyMessage = () => {
-    const { selectedOperation } = state;
-
-    if (tipo === 'iniciar') {
-      return selectedOperation === 'ARM'
-        ? 'No hay spools disponibles para INICIAR ARMADO'
-        : 'No hay spools listos para INICIAR SOLDADO (requieren armado completo)';
-    } else {
-      return selectedOperation === 'ARM'
-        ? 'No tienes spools en progreso de ARMADO'
-        : 'No tienes spools en progreso de SOLDADO';
-    }
+  // v2.0: Handle batch selection changes
+  const handleBatchSelectionChange = (tags: string[]) => {
+    setState({ selectedSpools: tags });
   };
 
-  const handleSelectSpool = (tag: string) => {
-    setState({ selectedSpool: tag });
+  // v2.0: Navigate with selections (auto-detect single vs batch)
+  const handleContinueWithBatch = () => {
+    const selectedCount = state.selectedSpools.length;
+
+    if (selectedCount === 0) return; // No hacer nada si no hay selección
+
+    if (selectedCount === 1) {
+      // Single mode - compatibilidad con backend/API
+      setState({
+        selectedSpool: state.selectedSpools[0],
+        selectedSpools: [],
+        batchMode: false
+      });
+    } else {
+      // Batch mode - 2+ spools
+      setState({
+        selectedSpool: null,
+        batchMode: true
+      });
+    }
+
     router.push(`/confirmar?tipo=${tipo}`);
   };
 
@@ -108,7 +128,9 @@ function SeleccionarSpoolContent() {
 
   const title = tipo === 'iniciar'
     ? `Selecciona spool para INICIAR ${state.selectedOperation}`
-    : `Selecciona TU spool para COMPLETAR ${state.selectedOperation}`;
+    : tipo === 'completar'
+    ? `Selecciona TU spool para COMPLETAR ${state.selectedOperation}`
+    : `Selecciona TU spool para CANCELAR ${state.selectedOperation}`;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -119,7 +141,7 @@ function SeleccionarSpoolContent() {
         ← Volver
       </button>
 
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-semibold text-center mb-6">
           {title}
         </h1>
@@ -128,15 +150,24 @@ function SeleccionarSpoolContent() {
         {error && <ErrorMessage message={error} type={errorType} onRetry={fetchSpools} />}
 
         {!loading && !error && (
-          <List
-            items={spools.map((s) => ({
-              id: s.tag_spool,
-              label: s.tag_spool,
-              subtitle: s.tag_spool,
-            }))}
-            onItemClick={handleSelectSpool}
-            emptyMessage={getEmptyMessage()}
-          />
+          <div className="space-y-4">
+            <SpoolSelector
+              spools={spools}
+              selectedTags={state.selectedSpools}
+              onSelectChange={handleBatchSelectionChange}
+              maxSelection={50}
+            />
+            <div className="flex justify-center pt-4">
+              <Button
+                onClick={handleContinueWithBatch}
+                variant="primary"
+                disabled={state.selectedSpools.length === 0}
+                className="w-full max-w-md"
+              >
+                Continuar con {state.selectedSpools.length} spool{state.selectedSpools.length !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </div>

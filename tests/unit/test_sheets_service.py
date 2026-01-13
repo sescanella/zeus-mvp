@@ -94,130 +94,144 @@ class TestParseDate:
 
 
 class TestParseWorkerRow:
-    """Tests para el método parse_worker_row."""
+    """Tests para el método parse_worker_row (v2.0 estructura)."""
 
     def test_parse_worker_row_full_data(self):
-        """Test: Parsea trabajador con todos los datos."""
-        row = ["Juan", "Pérez", "Si"]
+        """Test: Parsea trabajador con todos los datos (v2.0: Id, Nombre, Apellido, Rol, Activo)."""
+        row = ["93", "Mauricio", "Rodriguez", "Armador", "TRUE"]
         worker = SheetsService.parse_worker_row(row)
 
         assert isinstance(worker, Worker)
-        assert worker.nombre == "Juan"
-        assert worker.apellido == "Pérez"
+        assert worker.id == 93
+        assert worker.nombre == "Mauricio"
+        assert worker.apellido == "Rodriguez"
+        assert worker.rol.value == "Armador"
         assert worker.activo is True
 
-    def test_parse_worker_row_without_apellido(self):
-        """Test: Parsea trabajador sin apellido."""
-        row = ["María", "", "Si"]
+    def test_parse_worker_row_soldador(self):
+        """Test: Parsea trabajador con rol Soldador."""
+        row = ["42", "Pedro", "López", "Soldador", "TRUE"]
         worker = SheetsService.parse_worker_row(row)
 
-        assert worker.nombre == "María"
-        assert worker.apellido is None
+        assert worker.id == 42
+        assert worker.nombre == "Pedro"
+        assert worker.rol.value == "Soldador"
         assert worker.activo is True
 
     def test_parse_worker_row_inactive_worker(self):
         """Test: Parsea trabajador inactivo."""
-        row = ["Pedro", "López", "No"]
+        row = ["10", "María", "González", "Armador", "FALSE"]
         worker = SheetsService.parse_worker_row(row)
 
-        assert worker.nombre == "Pedro"
+        assert worker.nombre == "María"
         assert worker.activo is False
 
-    def test_parse_worker_row_various_activo_formats(self):
-        """Test: Reconoce múltiples formatos de 'activo'."""
+    def test_parse_worker_row_case_insensitive_rol(self):
+        """Test: Rol es case-insensitive."""
+        # Lowercase
+        row = ["1", "Test", "User", "armador", "TRUE"]
+        worker = SheetsService.parse_worker_row(row)
+        assert worker.rol.value == "Armador"
+
+        # UPPERCASE
+        row = ["2", "Test", "User", "SOLDADOR", "TRUE"]
+        worker = SheetsService.parse_worker_row(row)
+        assert worker.rol.value == "Soldador"
+
+    def test_parse_worker_row_activo_formats(self):
+        """Test: Reconoce TRUE/FALSE como strings de Sheets."""
         # Activo
-        assert SheetsService.parse_worker_row(["Test", "", "si"]).activo is True
-        assert SheetsService.parse_worker_row(["Test", "", "sí"]).activo is True
-        assert SheetsService.parse_worker_row(["Test", "", "Si"]).activo is True
-        assert SheetsService.parse_worker_row(["Test", "", "yes"]).activo is True
-        assert SheetsService.parse_worker_row(["Test", "", "true"]).activo is True
-        assert SheetsService.parse_worker_row(["Test", "", "1"]).activo is True
+        row = ["1", "Test", "User", "Armador", "TRUE"]
+        assert SheetsService.parse_worker_row(row).activo is True
+
+        row = ["1", "Test", "User", "Armador", "true"]
+        assert SheetsService.parse_worker_row(row).activo is True
 
         # Inactivo
-        assert SheetsService.parse_worker_row(["Test", "", "no"]).activo is False
-        assert SheetsService.parse_worker_row(["Test", "", "false"]).activo is False
-        assert SheetsService.parse_worker_row(["Test", "", "0"]).activo is False
+        row = ["1", "Test", "User", "Armador", "FALSE"]
+        assert SheetsService.parse_worker_row(row).activo is False
 
-    def test_parse_worker_row_default_activo_true(self):
-        """Test: Si campo activo vacío, default es True."""
-        row = ["Juan", "Pérez"]  # Sin campo activo
-        worker = SheetsService.parse_worker_row(row)
+        row = ["1", "Test", "User", "Armador", "false"]
+        assert SheetsService.parse_worker_row(row).activo is False
 
-        assert worker.activo is True
+    def test_parse_worker_row_raises_on_invalid_id(self):
+        """Test: Lanza ValueError si Id no es numérico."""
+        with pytest.raises(ValueError, match="Id de trabajador inválido"):
+            SheetsService.parse_worker_row(["abc", "Juan", "Pérez", "Armador", "TRUE"])
 
     def test_parse_worker_row_raises_on_empty_nombre(self):
         """Test: Lanza ValueError si nombre está vacío."""
-        with pytest.raises(ValueError, match="vacío"):
-            SheetsService.parse_worker_row(["", "Pérez", "Si"])
+        with pytest.raises(ValueError, match="Nombre de trabajador vacío"):
+            SheetsService.parse_worker_row(["93", "", "Pérez", "Armador", "TRUE"])
 
-    def test_parse_worker_row_raises_on_empty_row(self):
-        """Test: Lanza ValueError si fila está vacía."""
-        with pytest.raises(ValueError, match="vacía"):
-            SheetsService.parse_worker_row([])
+    def test_parse_worker_row_raises_on_empty_apellido(self):
+        """Test: Lanza ValueError si apellido está vacío (obligatorio en v2.0)."""
+        with pytest.raises(ValueError, match="Apellido de trabajador vacío"):
+            SheetsService.parse_worker_row(["93", "Juan", "", "Armador", "TRUE"])
+
+    def test_parse_worker_row_raises_on_invalid_rol(self):
+        """Test: Lanza ValueError si rol no es válido."""
+        with pytest.raises(ValueError, match="Rol inválido"):
+            SheetsService.parse_worker_row(["93", "Juan", "Pérez", "INVALID_ROL", "TRUE"])
+
+    def test_parse_worker_row_raises_on_short_row(self):
+        """Test: Lanza ValueError si fila no tiene 5 columnas."""
+        with pytest.raises(ValueError, match="Fila de trabajador incompleta"):
+            SheetsService.parse_worker_row(["93", "Juan", "Pérez"])  # Solo 3 columnas
 
     def test_parse_worker_row_strips_whitespace(self):
-        """Test: Limpia espacios en nombre y apellido."""
-        row = ["  Juan  ", "  Pérez  ", "Si"]
+        """Test: Limpia espacios en todos los campos."""
+        row = ["  93  ", "  Juan  ", "  Pérez  ", "  Armador  ", "  TRUE  "]
         worker = SheetsService.parse_worker_row(row)
 
+        assert worker.id == 93
         assert worker.nombre == "Juan"
         assert worker.apellido == "Pérez"
+        assert worker.rol.value == "Armador"
 
 
 class TestParseSpoolRow:
-    """Tests para el método parse_spool_row."""
+    """Tests para el método parse_spool_row (v2.0 Event Sourcing)."""
 
     def test_parse_spool_row_full_data(self):
-        """Test: Parsea spool con todos los datos."""
-        row = [''] * 57
-        row[6] = "MK-123"               # TAG_SPOOL
-        row[21] = "0.1"                 # ARM (string)
-        row[22] = "0"                   # SOLD (string)
-        row[52] = "30/7/2025"           # Fecha_Materiales
-        row[53] = "08/11/2025"          # Fecha_Armado
-        row[54] = "Juan Pérez"          # Armador
-        row[55] = "10/11/2025"          # Fecha_Soldadura
-        row[56] = "María González"      # Soldador
+        """Test: Parsea spool con datos base (v2.0: estados siempre PENDIENTE)."""
+        row = [''] * 65  # v2.0: 65 columnas en producción
+        row[6] = "MK-1335-CW-25238-011"  # G - TAG_SPOOL
+        row[35] = "30/7/2025"            # AJ - Fecha_Materiales
+        row[36] = "08/11/2025"           # AK - Fecha_Armado (legacy)
+        row[37] = "Juan Pérez"           # AL - Armador (legacy)
+        row[38] = "10/11/2025"           # AM - Fecha_Soldadura (legacy)
+        row[39] = "María González"       # AN - Soldador (legacy)
 
         spool = SheetsService.parse_spool_row(row)
 
         assert isinstance(spool, Spool)
-        assert spool.tag_spool == "MK-123"
-        assert spool.arm == ActionStatus.EN_PROGRESO
+        assert spool.tag_spool == "MK-1335-CW-25238-011"
+        # v2.0: Estados siempre PENDIENTE (se reconstruyen desde Metadata)
+        assert spool.arm == ActionStatus.PENDIENTE
         assert spool.sold == ActionStatus.PENDIENTE
+        # Fechas y trabajadores legacy (solo lectura)
         assert spool.fecha_materiales == date(2025, 7, 30)
         assert spool.fecha_armado == date(2025, 11, 8)
         assert spool.armador == "Juan Pérez"
         assert spool.fecha_soldadura == date(2025, 11, 10)
         assert spool.soldador == "María González"
 
-    def test_parse_spool_row_converts_strings_to_action_status(self):
-        """Test: Convierte strings ARM/SOLD a ActionStatus correctamente."""
-        row = [''] * 57
+    def test_parse_spool_row_estados_siempre_pendiente(self):
+        """Test v2.0: ARM/SOLD siempre retornan PENDIENTE (Event Sourcing)."""
+        row = [''] * 65
         row[6] = "MK-TEST"
-        row[21] = "0.1"  # String "0.1"
-        row[22] = "1"    # String "1"
+        # En v2.0, no hay columnas ARM/SOLD numéricas - todo viene PENDIENTE
 
         spool = SheetsService.parse_spool_row(row)
 
-        assert spool.arm == ActionStatus.EN_PROGRESO
-        assert spool.sold == ActionStatus.COMPLETADO
-
-    def test_parse_spool_row_handles_empty_arm_sold(self):
-        """Test: Maneja ARM/SOLD vacíos (default PENDIENTE)."""
-        row = [''] * 57
-        row[6] = "MK-TEST"
-        row[21] = ""    # ARM vacío
-        row[22] = ""    # SOLD vacío
-
-        spool = SheetsService.parse_spool_row(row)
-
+        # CRÍTICO v2.0: Estados SIEMPRE son PENDIENTE (se reconstruyen después)
         assert spool.arm == ActionStatus.PENDIENTE
         assert spool.sold == ActionStatus.PENDIENTE
 
     def test_parse_spool_row_handles_short_row(self):
-        """Test: Rellena filas cortas con strings vacíos."""
-        row = [""] * 10  # Solo 10 columnas (necesita 57)
+        """Test: Rellena filas cortas con strings vacíos (mínimo 41 columnas)."""
+        row = [""] * 10  # Solo 10 columnas (necesita 41 mínimo)
         row[6] = "MK-SHORT"
 
         spool = SheetsService.parse_spool_row(row)
@@ -228,10 +242,10 @@ class TestParseSpoolRow:
 
     def test_parse_spool_row_handles_none_values(self):
         """Test: Maneja valores None en columnas opcionales."""
-        row = [''] * 57
+        row = [''] * 65
         row[6] = "MK-TEST"
-        row[52] = None  # Fecha_Materiales None
-        row[54] = None  # Armador None
+        row[35] = None  # Fecha_Materiales None
+        row[37] = None  # Armador None
 
         spool = SheetsService.parse_spool_row(row)
 
@@ -241,75 +255,69 @@ class TestParseSpoolRow:
 
     def test_parse_spool_row_raises_on_empty_tag_spool(self):
         """Test: Lanza ValueError si TAG_SPOOL está vacío."""
-        row = [''] * 57
+        row = [''] * 65
         row[6] = ""  # TAG_SPOOL vacío
 
         with pytest.raises(ValueError, match="TAG_SPOOL vacío"):
             SheetsService.parse_spool_row(row)
 
-    def test_parse_spool_row_logs_warning_for_inconsistency(self):
-        """Test: Logea warning si ARM=0.1 sin armador."""
-        row = [''] * 57
-        row[6] = "MK-INCONSISTENT"
-        row[21] = "0.1"  # ARM EN_PROGRESO
-        row[54] = ""     # Armador vacío (inconsistente)
-
-        # No debe lanzar error, solo warning
-        spool = SheetsService.parse_spool_row(row)
-
-        assert spool.tag_spool == "MK-INCONSISTENT"
-        assert spool.arm == ActionStatus.EN_PROGRESO
-        assert spool.armador is None
-
     def test_parse_spool_row_strips_whitespace_in_workers(self):
-        """Test: Limpia espacios en nombres de trabajadores."""
-        row = [''] * 57
+        """Test: Limpia espacios en nombres de trabajadores legacy."""
+        row = [''] * 65
         row[6] = "MK-TEST"
-        row[54] = "  Juan Pérez  "
-        row[56] = "  María González  "
+        row[37] = "  Juan Pérez  "    # Armador con espacios
+        row[39] = "  María González  " # Soldador con espacios
 
         spool = SheetsService.parse_spool_row(row)
 
         assert spool.armador == "Juan Pérez"
         assert spool.soldador == "María González"
 
-    def test_parse_spool_row_handles_various_arm_sold_values(self):
-        """Test: Maneja diferentes valores de ARM/SOLD (0, 0.1, 1, 1.0)."""
-        # ARM=0 (PENDIENTE)
-        row = [''] * 57
-        row[6] = "TEST1"
-        row[21] = "0"
-        assert SheetsService.parse_spool_row(row).arm == ActionStatus.PENDIENTE
+    def test_parse_spool_row_empty_strings_become_none(self):
+        """Test: Strings vacíos en trabajadores se convierten a None."""
+        row = [''] * 65
+        row[6] = "MK-TEST"
+        row[37] = ""  # Armador vacío
+        row[39] = ""  # Soldador vacío
 
-        # ARM=0.1 (EN_PROGRESO)
-        row[6] = "TEST2"
-        row[21] = "0.1"
-        assert SheetsService.parse_spool_row(row).arm == ActionStatus.EN_PROGRESO
+        spool = SheetsService.parse_spool_row(row)
 
-        # ARM=1 (COMPLETADO)
-        row[6] = "TEST3"
-        row[21] = "1"
-        assert SheetsService.parse_spool_row(row).arm == ActionStatus.COMPLETADO
+        assert spool.armador is None
+        assert spool.soldador is None
 
-        # ARM=1.0 (COMPLETADO)
-        row[6] = "TEST4"
-        row[21] = "1.0"
-        assert SheetsService.parse_spool_row(row).arm == ActionStatus.COMPLETADO
+    def test_parse_spool_row_prerequisito_fecha_materiales(self):
+        """Test: Fecha_Materiales es prerequisito para iniciar ARM."""
+        row = [''] * 65
+        row[6] = "MK-TEST"
+        row[35] = "30/7/2025"  # AJ - Prerequisito
+
+        spool = SheetsService.parse_spool_row(row)
+
+        assert spool.fecha_materiales == date(2025, 7, 30)
+        # Estados siempre PENDIENTE (validación de prerequisitos en ValidationService)
+        assert spool.arm == ActionStatus.PENDIENTE
 
 
 class TestColumnIndices:
-    """Tests para verificar que los índices de columnas son correctos."""
+    """Tests para verificar que los índices de columnas son correctos (v2.0)."""
 
-    def test_column_indices_are_correct(self):
-        """Test: Índices de columnas coinciden con la documentación."""
-        assert SheetsService.IDX_TAG_SPOOL == 6        # G
-        assert SheetsService.IDX_ARM == 21             # V
-        assert SheetsService.IDX_SOLD == 22            # W
-        assert SheetsService.IDX_FECHA_MATERIALES == 52  # BA
-        assert SheetsService.IDX_FECHA_ARMADO == 53      # BB
-        assert SheetsService.IDX_ARMADOR == 54           # BC
-        assert SheetsService.IDX_FECHA_SOLDADURA == 55   # BD
-        assert SheetsService.IDX_SOLDADOR == 56          # BE
+    def test_column_indices_workers(self):
+        """Test: Índices de columnas Workers v2.0."""
+        assert SheetsService.IDX_WORKER_ID == 0       # A - Id
+        assert SheetsService.IDX_WORKER_NOMBRE == 1   # B - Nombre
+        assert SheetsService.IDX_WORKER_APELLIDO == 2 # C - Apellido
+        assert SheetsService.IDX_WORKER_ROL == 3      # D - Rol
+        assert SheetsService.IDX_WORKER_ACTIVO == 4   # E - Activo
+
+    def test_column_indices_operaciones(self):
+        """Test: Índices de columnas Operaciones v2.0 (READ-ONLY)."""
+        assert SheetsService.IDX_TAG_SPOOL == 6           # G
+        assert SheetsService.IDX_FECHA_MATERIALES == 35   # AJ
+        assert SheetsService.IDX_FECHA_ARMADO == 36       # AK (legacy)
+        assert SheetsService.IDX_ARMADOR == 37            # AL (legacy)
+        assert SheetsService.IDX_FECHA_SOLDADURA == 38    # AM (legacy)
+        assert SheetsService.IDX_SOLDADOR == 39           # AN (legacy)
+        assert SheetsService.IDX_FECHA_METROLOGIA == 40   # AO (v2.0 nuevo)
 
 
 if __name__ == "__main__":

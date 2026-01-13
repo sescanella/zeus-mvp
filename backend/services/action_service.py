@@ -1,33 +1,36 @@
 """
-ActionService - Orquestador de acciones de manufactura.
+ActionService - Orquestador de acciones de manufactura (v2.0 Event Sourcing).
+
+v2.0 Cambios críticos:
+- Hoja Operaciones es READ-ONLY (no se modifica)
+- Todos los eventos se escriben en hoja Metadata (Event Sourcing)
+- Estados se reconstruyen desde Metadata, no desde columnas
 
 Responsabilidades:
 - Coordinar flujos INICIAR/COMPLETAR
 - Validar ownership (solo quien inició puede completar)
-- Actualizar Google Sheets en batch
-- Invalidar cache
+- Escribir eventos en Metadata (append-only)
 - Logging comprehensivo
 
 Dependencias:
-- SheetsRepository: Actualización batch de celdas
-- SheetsService: Re-fetch después de updates
-- ValidationService: Validación ownership + estados
+- MetadataRepository: Escritura de eventos (NEW v2.0)
+- ValidationService: Validación ownership + estados (reconstruye desde Metadata)
 - SpoolService: Búsqueda por TAG
 - WorkerService: Búsqueda por nombre
 """
 
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
-from backend.repositories.sheets_repository import SheetsRepository
-from backend.services.sheets_service import SheetsService
+from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
 from backend.services.worker_service import WorkerService
 
 from backend.models.enums import ActionType
 from backend.models.action import ActionRequest, ActionResponse, ActionData, ActionMetadata
+from backend.models.metadata import MetadataEvent, EventoTipo, Accion
 from backend.models.spool import Spool
 from backend.models.worker import Worker
 from backend.config import config
@@ -41,6 +44,7 @@ from backend.exceptions import (
     OperacionYaCompletadaError,
     DependenciasNoSatisfechasError,
     NoAutorizadoError,
+    RolNoAutorizadoError,  # v2.0: Role-based access control
     SheetsUpdateError
 )
 
@@ -48,26 +52,15 @@ logger = logging.getLogger(__name__)
 
 
 class ActionService:
-    """Servicio de orquestación de acciones de manufactura."""
+    """
+    Servicio de orquestación de acciones de manufactura (v2.0 Event Sourcing).
 
-    # Mapeo de columnas (constantes de clase)
-    COLUMN_MAPPING = {
-        ActionType.ARM: {
-            "estado": ("V", 21),
-            "trabajador": ("BC", 54),
-            "fecha": ("BB", 53)
-        },
-        ActionType.SOLD: {
-            "estado": ("W", 22),
-            "trabajador": ("BE", 56),
-            "fecha": ("BD", 55)
-        }
-    }
+    v2.0: Escribe eventos en Metadata, NO modifica hoja Operaciones.
+    """
 
     def __init__(
         self,
-        sheets_repo: Optional[SheetsRepository] = None,
-        sheets_service: Optional[SheetsService] = None,
+        metadata_repository: Optional[MetadataRepository] = None,
         validation_service: Optional[ValidationService] = None,
         spool_service: Optional[SpoolService] = None,
         worker_service: Optional[WorkerService] = None
@@ -76,82 +69,52 @@ class ActionService:
         Inicializar con dependencias inyectadas.
 
         Args:
-            sheets_repo: Repositorio para acceso a Google Sheets
-            sheets_service: Servicio de parseo de filas
-            validation_service: Servicio de validación de reglas de negocio
+            metadata_repository: Repositorio para escribir eventos (v2.0 NEW)
+            validation_service: Servicio de validación (reconstruye estado desde Metadata)
             spool_service: Servicio de operaciones con spools
             worker_service: Servicio de operaciones con trabajadores
         """
-        self.sheets_repo = sheets_repo or SheetsRepository()
-        self.sheets_service = sheets_service or SheetsService()
-        self.validation_service = validation_service or ValidationService()
+        self.metadata_repository = metadata_repository or MetadataRepository(sheets_repo=None)
+        self.validation_service = validation_service or ValidationService(
+            metadata_repository=self.metadata_repository
+        )
         self.spool_service = spool_service or SpoolService()
         self.worker_service = worker_service or WorkerService()
-        logger.info("ActionService inicializado con todas las dependencias")
+        logger.info("ActionService v2.0 inicializado con Event Sourcing")
 
-    def _get_column_names(self, operacion: ActionType) -> dict:
+    def _get_evento_tipo(self, operacion: ActionType, accion: Accion) -> EventoTipo:
         """
-        Obtener nombres de columnas para operación.
+        Obtener EventoTipo desde operación + acción.
 
         Args:
-            operacion: Tipo de operación (ARM/SOLD)
+            operacion: ARM o SOLD
+            accion: INICIAR o COMPLETAR
 
         Returns:
-            Dict con tuplas (letra, índice) para estado/trabajador/fecha
-
-        Raises:
-            ValueError: Si operación es inválida
+            EventoTipo correspondiente (INICIAR_ARM, COMPLETAR_SOLD, etc.)
         """
-        if operacion not in self.COLUMN_MAPPING:
-            raise ValueError(f"Operación inválida: {operacion}")
-        return self.COLUMN_MAPPING[operacion]
-
-    def _format_fecha(self, timestamp: Optional[datetime] = None) -> str:
-        """
-        Formatear fecha a DD/MM/YYYY.
-
-        Args:
-            timestamp: Fecha opcional (datetime object)
-
-        Returns:
-            Fecha formateada en formato DD/MM/YYYY
-        """
-        if timestamp:
-            return timestamp.strftime("%d/%m/%Y")
-
-        return datetime.now().strftime("%d/%m/%Y")
-
-    def _invalidate_cache(self):
-        """Invalidar cache del repository después de update."""
-        try:
-            # El cache se invalida automáticamente en SheetsRepository.batch_update
-            logger.debug("Cache invalidado automáticamente por SheetsRepository")
-        except Exception as e:
-            logger.warning(f"Error al invalidar cache: {e}")
+        event_type_str = f"{accion.value}_{operacion.value}"
+        return EventoTipo(event_type_str)
 
     def _build_success_response(
         self,
         tag_spool: str,
         operacion: ActionType,
         trabajador: str,
-        fila: int,
-        columna: str,
-        valor: float,
         metadata: ActionMetadata,
-        accion_tipo: str  # "iniciada" o "completada"
+        accion_tipo: str,  # "iniciada" o "completada"
+        evento_id: str  # UUID del evento escrito en Metadata
     ) -> ActionResponse:
         """
-        Construir ActionResponse exitoso.
+        Construir ActionResponse exitoso (v2.0 Event Sourcing).
 
         Args:
             tag_spool: TAG del spool procesado
             operacion: Tipo de operación (ARM/SOLD)
             trabajador: Nombre del trabajador
-            fila: Número de fila actualizada
-            columna: Letra de columna actualizada (V/W)
-            valor: Nuevo valor (0.1 o 1.0)
             metadata: Metadata actualizada (ActionMetadata object)
             accion_tipo: "iniciada" o "completada"
+            evento_id: UUID del evento escrito en Metadata
 
         Returns:
             ActionResponse con success=True y datos completos
@@ -159,63 +122,64 @@ class ActionService:
         return ActionResponse(
             success=True,
             message=f"Acción {operacion.value} {accion_tipo} exitosamente. "
-                   f"Spool {tag_spool} {'asignado a' if accion_tipo == 'iniciada' else 'completado por'} {trabajador}",
+                   f"Evento registrado en Metadata (ID: {evento_id[:8]}...)",
             data=ActionData(
                 tag_spool=tag_spool,
                 operacion=operacion.value,
                 trabajador=trabajador,
-                fila_actualizada=fila,
-                columna_actualizada=columna,
-                valor_nuevo=valor,
+                fila_actualizada=0,  # v2.0: No hay fila (Operaciones es READ-ONLY)
+                columna_actualizada="Metadata",  # v2.0: Se escribe en Metadata
+                valor_nuevo=0.0,  # v2.0: No hay valor numérico
                 metadata_actualizada=metadata
             )
         )
 
     def iniciar_accion(
         self,
-        worker_nombre: str,
+        worker_id: int,
         operacion: ActionType,
         tag_spool: str
     ) -> ActionResponse:
         """
-        Iniciar una acción de manufactura.
+        Iniciar una acción de manufactura (v2.0 Event Sourcing con roles).
 
-        Flujo:
-        1. Buscar trabajador activo
-        2. Buscar spool por TAG
-        3. Validar puede iniciar (según operación)
-        4. Actualizar Google Sheets (estado=0.1, trabajador=nombre)
-        5. Invalidar cache
-        6. Retornar respuesta con metadata
+        v2.0 Flujo:
+        1. Buscar trabajador activo por ID
+        2. Buscar spool por TAG (obtener datos base)
+        3. Validar puede iniciar + validar rol operativo (ValidationService reconstruye estado desde Metadata)
+        4. Crear evento INICIAR_ARM/INICIAR_SOLD
+        5. Escribir evento en hoja Metadata (append-only)
+        6. Retornar respuesta con evento_id
 
         Args:
-            worker_nombre: Nombre del trabajador (ej: "Juan Pérez")
+            worker_id: ID del trabajador (ej: 93, 94, 95)
             operacion: ActionType.ARM o ActionType.SOLD
-            tag_spool: Código del spool (ej: "MK-123")
+            tag_spool: Código del spool (ej: "MK-1335-CW-25238-011")
 
         Returns:
-            ActionResponse con success=True y metadata
+            ActionResponse con success=True y evento_id
 
         Raises:
             WorkerNoEncontradoError: Si trabajador no existe o está inactivo
             SpoolNoEncontradoError: Si spool no existe
             OperacionNoPendienteError: Si acción ya está iniciada/completada
-            DependenciasNoSatisfechasError: Si BA/BB no están completas
-            SheetsUpdateError: Si falla actualización de Sheets
+            DependenciasNoSatisfechasError: Si fecha_materiales no está completa
+            RolNoAutorizadoError: Si trabajador no tiene rol necesario (v2.0)
+            SheetsUpdateError: Si falla escritura en Metadata
         """
         logger.info(
-            f"Iniciando {operacion.value} para spool {tag_spool} "
-            f"por trabajador {worker_nombre}"
+            f"[v2.0] Iniciando {operacion.value} para spool {tag_spool} "
+            f"por trabajador ID {worker_id}"
         )
 
         try:
-            # PASO 1: Buscar trabajador
-            trabajador = self.worker_service.find_worker_by_nombre(worker_nombre)
+            # PASO 1: Buscar trabajador activo por ID
+            trabajador = self.worker_service.find_worker_by_id(worker_id)
             if trabajador is None:
                 raise WorkerNoEncontradoError(
-                    f"Trabajador '{worker_nombre}' no encontrado o está inactivo"
+                    f"Trabajador ID {worker_id} no encontrado o está inactivo"
                 )
-            logger.debug(f"Trabajador encontrado: {trabajador.nombre_completo}")
+            logger.debug(f"Trabajador encontrado: {trabajador.nombre_completo} (ID: {trabajador.id})")
 
             # PASO 2: Buscar spool
             spool = self.spool_service.find_spool_by_tag(tag_spool)
@@ -224,64 +188,47 @@ class ActionService:
                     f"Spool '{tag_spool}' no encontrado en la hoja de operaciones"
                 )
 
-            # PASO 2.5: Buscar número de fila del spool
-            fila = self.sheets_repo.find_row_by_column_value(
-                config.HOJA_OPERACIONES_NOMBRE,
-                "G",  # Columna TAG_SPOOL
-                spool.tag_spool
-            )
-            if fila is None:
-                raise SpoolNoEncontradoError(
-                    f"No se pudo encontrar fila para spool '{tag_spool}'"
-                )
-
             logger.debug(
-                f"Spool encontrado: {spool.tag_spool} (fila {fila}), "
-                f"ARM={spool.arm.value}, SOLD={spool.sold.value}"
+                f"Spool encontrado: {spool.tag_spool}, "
+                f"fecha_materiales={spool.fecha_materiales}"
             )
 
-            # PASO 3: Validar puede iniciar
+            # PASO 3: Validar puede iniciar + validar rol operativo (ValidationService reconstruye estado desde Metadata)
             if operacion == ActionType.ARM:
-                self.validation_service.validar_puede_iniciar_arm(spool)
+                self.validation_service.validar_puede_iniciar_arm(spool, worker_id=worker_id)
             elif operacion == ActionType.SOLD:
-                self.validation_service.validar_puede_iniciar_sold(spool)
+                self.validation_service.validar_puede_iniciar_sold(spool, worker_id=worker_id)
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
 
             logger.debug(f"Validación de inicio exitosa para {operacion.value}")
 
-            # PASO 4: Preparar batch update
-            columns = self._get_column_names(operacion)
-            estado_col, estado_idx = columns["estado"]
-            trabajador_col, trabajador_idx = columns["trabajador"]
+            # PASO 4: Crear evento INICIAR_ARM/INICIAR_SOLD
+            evento_tipo = self._get_evento_tipo(operacion, Accion.INICIAR)
+            fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
 
-            updates = [
-                {
-                    "row": fila,
-                    "column": estado_col,
-                    "value": 0.1
-                },
-                {
-                    "row": fila,
-                    "column": trabajador_col,
-                    "value": worker_nombre
-                }
-            ]
-
-            logger.debug(f"Preparando batch update: {updates}")
-
-            # PASO 5: Ejecutar batch update
-            self.sheets_repo.batch_update(config.HOJA_OPERACIONES_NOMBRE, updates)
-            logger.info(
-                f"Acción {operacion.value} iniciada exitosamente. "
-                f"Fila {fila} actualizada: {estado_col}→0.1, "
-                f"{trabajador_col}→{worker_nombre}"
+            evento = MetadataEvent(
+                evento_tipo=evento_tipo,
+                tag_spool=tag_spool,
+                worker_id=trabajador.id,
+                worker_nombre=trabajador.nombre_completo,
+                operacion=operacion.value,
+                accion=Accion.INICIAR,
+                fecha_operacion=fecha_hoy,
+                metadata_json=None  # Opcional: podríamos agregar IP, device, etc.
             )
 
-            # PASO 6: Invalidar cache
-            self._invalidate_cache()
+            logger.debug(f"Evento creado: {evento_tipo.value}, ID={evento.id}")
 
-            # PASO 7: Construir respuesta
+            # PASO 5: Escribir evento en Metadata (append-only)
+            self.metadata_repository.append_event(evento)
+            logger.info(
+                f"[v2.0] Acción {operacion.value} iniciada exitosamente. "
+                f"Evento escrito en Metadata: {evento.id}"
+            )
+
+            # PASO 6: Construir respuesta
+            worker_nombre = trabajador.nombre_completo
             if operacion == ActionType.ARM:
                 metadata = ActionMetadata(
                     armador=worker_nombre,
@@ -301,11 +248,9 @@ class ActionService:
                 tag_spool=tag_spool,
                 operacion=operacion,
                 trabajador=worker_nombre,
-                fila=fila,
-                columna=estado_col,
-                valor=0.1,
                 metadata=metadata,
-                accion_tipo="iniciada"
+                accion_tipo="iniciada",
+                evento_id=evento.id
             )
 
         except (
@@ -324,55 +269,55 @@ class ActionService:
 
     def completar_accion(
         self,
-        worker_nombre: str,
+        worker_id: int,
         operacion: ActionType,
         tag_spool: str,
         timestamp: Optional[datetime] = None
     ) -> ActionResponse:
         """
-        Completar una acción de manufactura.
+        Completar una acción de manufactura (v2.0 Event Sourcing con roles).
 
         CRÍTICO: Valida ownership - solo quien inició puede completar.
 
-        Flujo:
-        1. Buscar trabajador activo
+        v2.0 Flujo:
+        1. Buscar trabajador activo por ID
         2. Buscar spool por TAG
-        3. Validar puede completar + ownership (BC/BE = worker_nombre)
-        4. Formatear fecha (timestamp o actual)
-        5. Actualizar Google Sheets (estado=1.0, fecha=DD/MM/YYYY)
-        6. Invalidar cache
-        7. Retornar respuesta con metadata
+        3. Validar puede completar + ownership + rol operativo (ValidationService reconstruye desde Metadata)
+        4. Crear evento COMPLETAR_ARM/COMPLETAR_SOLD
+        5. Escribir evento en hoja Metadata (append-only)
+        6. Retornar respuesta con evento_id
 
         Args:
-            worker_nombre: Nombre del trabajador
+            worker_id: ID del trabajador (ej: 93, 94, 95)
             operacion: ActionType.ARM o ActionType.SOLD
             tag_spool: Código del spool
-            timestamp: Fecha opcional (datetime object)
+            timestamp: Fecha opcional (no usado en v2.0 - se usa date.today())
 
         Returns:
-            ActionResponse con success=True y metadata
+            ActionResponse con success=True y evento_id
 
         Raises:
             WorkerNoEncontradoError: Si trabajador no existe o está inactivo
             SpoolNoEncontradoError: Si spool no existe
-            OperacionNoIniciadaError: Si acción no está iniciada (estado != 0.1)
-            OperacionYaCompletadaError: Si acción ya está completa (estado = 1.0)
-            NoAutorizadoError: Si trabajador != quien inició (BC/BE mismatch)
-            SheetsUpdateError: Si falla actualización de Sheets
+            OperacionNoIniciadaError: Si acción no está iniciada
+            OperacionYaCompletadaError: Si acción ya está completa
+            NoAutorizadoError: Si trabajador != quien inició (ownership desde Metadata)
+            RolNoAutorizadoError: Si trabajador no tiene rol necesario (v2.0)
+            SheetsUpdateError: Si falla escritura en Metadata
         """
         logger.info(
-            f"Completando {operacion.value} para spool {tag_spool} "
-            f"por trabajador {worker_nombre}"
+            f"[v2.0] Completando {operacion.value} para spool {tag_spool} "
+            f"por trabajador ID {worker_id}"
         )
 
         try:
-            # PASO 1: Buscar trabajador
-            trabajador = self.worker_service.find_worker_by_nombre(worker_nombre)
+            # PASO 1: Buscar trabajador activo por ID
+            trabajador = self.worker_service.find_worker_by_id(worker_id)
             if trabajador is None:
                 raise WorkerNoEncontradoError(
-                    f"Trabajador '{worker_nombre}' no encontrado o está inactivo"
+                    f"Trabajador ID {worker_id} no encontrado o está inactivo"
                 )
-            logger.debug(f"Trabajador encontrado: {trabajador.nombre_completo}")
+            logger.debug(f"Trabajador encontrado: {trabajador.nombre_completo} (ID: {trabajador.id})")
 
             # PASO 2: Buscar spool
             spool = self.spool_service.find_spool_by_tag(tag_spool)
@@ -381,76 +326,52 @@ class ActionService:
                     f"Spool '{tag_spool}' no encontrado en la hoja de operaciones"
                 )
 
-            # PASO 2.5: Buscar número de fila del spool
-            fila = self.sheets_repo.find_row_by_column_value(
-                config.HOJA_OPERACIONES_NOMBRE,
-                "G",  # Columna TAG_SPOOL
-                spool.tag_spool
-            )
-            if fila is None:
-                raise SpoolNoEncontradoError(
-                    f"No se pudo encontrar fila para spool '{tag_spool}'"
-                )
+            logger.debug(f"Spool encontrado: {spool.tag_spool}")
 
-            logger.debug(
-                f"Spool encontrado: {spool.tag_spool} (fila {fila}), "
-                f"ARM={spool.arm.value}, SOLD={spool.sold.value}, "
-                f"BC={spool.armador}, BE={spool.soldador}"
-            )
-
-            # PASO 3: Validar puede completar + ownership (CRÍTICO)
+            # PASO 3: Validar puede completar + ownership + rol operativo (CRÍTICO)
+            # ValidationService reconstruye estado desde Metadata y valida ownership + rol
+            worker_nombre = trabajador.nombre_completo
             if operacion == ActionType.ARM:
-                self.validation_service.validar_puede_completar_arm(spool, worker_nombre)
-                logger.debug(f"Ownership validado: BC={spool.armador} == {worker_nombre}")
+                self.validation_service.validar_puede_completar_arm(spool, worker_nombre=worker_nombre, worker_id=worker_id)
+                logger.debug(f"Ownership y rol validados desde Metadata para ARM")
             elif operacion == ActionType.SOLD:
-                self.validation_service.validar_puede_completar_sold(spool, worker_nombre)
-                logger.debug(f"Ownership validado: BE={spool.soldador} == {worker_nombre}")
+                self.validation_service.validar_puede_completar_sold(spool, worker_nombre=worker_nombre, worker_id=worker_id)
+                logger.debug(f"Ownership y rol validados desde Metadata para SOLD")
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
 
             logger.debug(f"Validación de completado + ownership exitosa para {operacion.value}")
 
-            # PASO 4: Preparar fecha
-            fecha = self._format_fecha(timestamp)
-            logger.debug(f"Fecha de completado: {fecha}")
+            # PASO 4: Crear evento COMPLETAR_ARM/COMPLETAR_SOLD
+            evento_tipo = self._get_evento_tipo(operacion, Accion.COMPLETAR)
+            fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
 
-            # PASO 5: Preparar batch update
-            columns = self._get_column_names(operacion)
-            estado_col, estado_idx = columns["estado"]
-            fecha_col, fecha_idx = columns["fecha"]
-
-            updates = [
-                {
-                    "row": fila,
-                    "column": estado_col,
-                    "value": 1.0
-                },
-                {
-                    "row": fila,
-                    "column": fecha_col,
-                    "value": fecha
-                }
-            ]
-
-            logger.debug(f"Preparando batch update: {updates}")
-
-            # PASO 6: Ejecutar batch update
-            self.sheets_repo.batch_update(config.HOJA_OPERACIONES_NOMBRE, updates)
-            logger.info(
-                f"Acción {operacion.value} completada exitosamente. "
-                f"Fila {fila} actualizada: {estado_col}→1.0, "
-                f"{fecha_col}→{fecha}"
+            evento = MetadataEvent(
+                evento_tipo=evento_tipo,
+                tag_spool=tag_spool,
+                worker_id=trabajador.id,
+                worker_nombre=trabajador.nombre_completo,
+                operacion=operacion.value,
+                accion=Accion.COMPLETAR,
+                fecha_operacion=fecha_hoy,
+                metadata_json=None  # Opcional: podríamos agregar IP, device, etc.
             )
 
-            # PASO 7: Invalidar cache
-            self._invalidate_cache()
+            logger.debug(f"Evento creado: {evento_tipo.value}, ID={evento.id}")
 
-            # PASO 8: Construir respuesta
+            # PASO 5: Escribir evento en Metadata (append-only)
+            self.metadata_repository.append_event(evento)
+            logger.info(
+                f"[v2.0] Acción {operacion.value} completada exitosamente. "
+                f"Evento escrito en Metadata: {evento.id}"
+            )
+
+            # PASO 6: Construir respuesta
             if operacion == ActionType.ARM:
                 metadata = ActionMetadata(
                     armador=worker_nombre,
                     soldador=None,
-                    fecha_armado=fecha,
+                    fecha_armado=fecha_hoy,
                     fecha_soldadura=None
                 )
             else:  # SOLD
@@ -458,18 +379,16 @@ class ActionService:
                     armador=None,
                     soldador=worker_nombre,
                     fecha_armado=None,
-                    fecha_soldadura=fecha
+                    fecha_soldadura=fecha_hoy
                 )
 
             return self._build_success_response(
                 tag_spool=tag_spool,
                 operacion=operacion,
                 trabajador=worker_nombre,
-                fila=fila,
-                columna=estado_col,
-                valor=1.0,
                 metadata=metadata,
-                accion_tipo="completada"
+                accion_tipo="completada",
+                evento_id=evento.id
             )
 
         except (
@@ -484,3 +403,567 @@ class ActionService:
         except Exception as e:
             logger.error(f"Error inesperado al completar acción: {e}", exc_info=True)
             raise SheetsUpdateError(f"Error al actualizar Google Sheets: {str(e)}")
+
+    def cancelar_accion(
+        self,
+        worker_id: int,
+        operacion: ActionType,
+        tag_spool: str
+    ) -> ActionResponse:
+        """
+        Cancelar una acción EN_PROGRESO (v2.0 CANCELAR feature).
+
+        Revierte estado EN_PROGRESO → PENDIENTE mediante evento CANCELAR.
+        CRÍTICO: Solo quien inició puede cancelar (ownership validation).
+
+        v2.0 Flujo:
+        1. Buscar trabajador activo por ID
+        2. Buscar spool por TAG
+        3. Validar puede cancelar: EN_PROGRESO + ownership + rol (ValidationService)
+        4. Crear evento CANCELAR_ARM/CANCELAR_SOLD
+        5. Escribir evento en hoja Metadata (append-only)
+        6. Retornar respuesta con evento_id
+
+        Args:
+            worker_id: ID del trabajador que intenta cancelar (debe ser quien inició)
+            operacion: ActionType.ARM o ActionType.SOLD
+            tag_spool: Código del spool
+
+        Returns:
+            ActionResponse con success=True y evento_id
+
+        Raises:
+            WorkerNoEncontradoError: Si trabajador no existe o está inactivo
+            SpoolNoEncontradoError: Si spool no existe
+            OperacionNoIniciadaError: Si operación no está EN_PROGRESO
+            NoAutorizadoError: Si trabajador != quien inició (CRÍTICO)
+            RolNoAutorizadoError: Si trabajador no tiene rol necesario
+            SheetsUpdateError: Si falla escritura en Metadata
+
+        Examples:
+            >>> # Worker 93 inició ARM, ahora cancela
+            >>> service.cancelar_accion(93, ActionType.ARM, "MK-1335-CW-25238-011")
+            ActionResponse(success=True, ...)
+
+            >>> # Worker 94 intenta cancelar ARM iniciado por Worker 93
+            >>> service.cancelar_accion(94, ActionType.ARM, "MK-1335-CW-25238-011")
+            # Lanza NoAutorizadoError
+        """
+        logger.info(
+            f"[v2.0] Cancelando {operacion.value} para spool {tag_spool} "
+            f"por trabajador ID {worker_id}"
+        )
+
+        try:
+            # PASO 1: Buscar trabajador activo por ID
+            trabajador = self.worker_service.find_worker_by_id(worker_id)
+            if trabajador is None:
+                raise WorkerNoEncontradoError(
+                    f"Trabajador ID {worker_id} no encontrado o está inactivo"
+                )
+            logger.debug(f"Trabajador encontrado: {trabajador.nombre_completo} (ID: {trabajador.id})")
+
+            # PASO 2: Buscar spool
+            spool = self.spool_service.find_spool_by_tag(tag_spool)
+            if spool is None:
+                raise SpoolNoEncontradoError(
+                    f"Spool '{tag_spool}' no encontrado en la hoja de operaciones"
+                )
+
+            logger.debug(f"Spool encontrado: {spool.tag_spool}")
+
+            # PASO 3: Validar puede cancelar: EN_PROGRESO + ownership + rol (CRÍTICO)
+            worker_nombre = trabajador.nombre_completo
+            self.validation_service.validar_puede_cancelar(
+                spool=spool,
+                operacion=operacion.value,
+                worker_nombre=worker_nombre,
+                worker_id=worker_id
+            )
+            logger.debug(f"Validación de CANCELAR exitosa: EN_PROGRESO + ownership + rol")
+
+            # PASO 4: Crear evento CANCELAR_ARM/CANCELAR_SOLD
+            evento_tipo = self._get_evento_tipo(operacion, Accion.CANCELAR)
+            fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
+
+            evento = MetadataEvent(
+                evento_tipo=evento_tipo,
+                tag_spool=tag_spool,
+                worker_id=trabajador.id,
+                worker_nombre=trabajador.nombre_completo,
+                operacion=operacion.value,
+                accion=Accion.CANCELAR,
+                fecha_operacion=fecha_hoy,
+                metadata_json=None  # Opcional: podríamos agregar motivo de cancelación
+            )
+
+            logger.debug(f"Evento CANCELAR creado: {evento_tipo.value}, ID={evento.id}")
+
+            # PASO 5: Escribir evento en Metadata (append-only)
+            self.metadata_repository.append_event(evento)
+            logger.info(
+                f"[v2.0] Acción {operacion.value} cancelada exitosamente. "
+                f"Evento CANCELAR escrito en Metadata: {evento.id}"
+            )
+
+            # PASO 6: Construir respuesta
+            if operacion == ActionType.ARM:
+                metadata = ActionMetadata(
+                    armador=None,  # Revierte a PENDIENTE (sin trabajador)
+                    soldador=None,
+                    fecha_armado=None,
+                    fecha_soldadura=None
+                )
+            else:  # SOLD
+                metadata = ActionMetadata(
+                    armador=None,
+                    soldador=None,  # Revierte a PENDIENTE (sin trabajador)
+                    fecha_armado=None,
+                    fecha_soldadura=None
+                )
+
+            return self._build_success_response(
+                tag_spool=tag_spool,
+                operacion=operacion,
+                trabajador=worker_nombre,
+                metadata=metadata,
+                accion_tipo="cancelada",  # Nueva acción_tipo
+                evento_id=evento.id
+            )
+
+        except (
+            WorkerNoEncontradoError,
+            SpoolNoEncontradoError,
+            OperacionNoIniciadaError,
+            NoAutorizadoError
+        ) as e:
+            logger.error(f"Error de validación al cancelar acción: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error inesperado al cancelar acción: {e}", exc_info=True)
+            raise SheetsUpdateError(f"Error al actualizar Google Sheets: {str(e)}")
+
+    # ========================================================================
+    # BATCH OPERATIONS (v2.0 Multiselect)
+    # ========================================================================
+
+    def iniciar_accion_batch(
+        self,
+        worker_id: int,
+        operacion: ActionType,
+        tag_spools: list[str]
+    ) -> 'BatchActionResponse':
+        """
+        Iniciar múltiples acciones simultáneamente (v2.0 batch operations).
+
+        Procesa hasta 50 spools en una sola operación.
+        Continúa procesando aunque algunos spools fallen (manejo errores parciales).
+
+        v2.0 Flujo:
+        1. Validar límite batch (máx 50 spools)
+        2. Iterar sobre cada tag_spool
+        3. Llamar iniciar_accion() para cada uno (captura excepciones individuales)
+        4. Construir BatchActionResponse con resumen (exitosos/fallidos)
+
+        Args:
+            worker_id: ID del trabajador que realiza las acciones
+            operacion: ActionType.ARM o ActionType.SOLD
+            tag_spools: Lista de TAGs (máximo 50)
+
+        Returns:
+            BatchActionResponse con resumen y detalle por spool
+
+        Raises:
+            ValueError: Si tag_spools > 50 o está vacío
+
+        Examples:
+            >>> # Iniciar 3 spools ARM con worker 93
+            >>> tags = ["MK-1335-CW-25238-011", "MK-1335-CW-25238-012", "MK-1335-CW-25238-013"]
+            >>> response = service.iniciar_accion_batch(93, ActionType.ARM, tags)
+            >>> print(response.exitosos, response.fallidos)
+            3 0
+
+            >>> # Con errores parciales (1 ya iniciado)
+            >>> response = service.iniciar_accion_batch(93, ActionType.ARM, tags)
+            >>> print(response.exitosos, response.fallidos)
+            2 1
+        """
+        from backend.models.action import BatchActionResponse, BatchActionResult
+
+        logger.info(
+            f"[v2.0 BATCH] Iniciando {operacion.value} para {len(tag_spools)} spools "
+            f"por trabajador ID {worker_id}"
+        )
+
+        # Validación básica
+        if not tag_spools:
+            raise ValueError("tag_spools no puede estar vacío")
+        if len(tag_spools) > 50:
+            raise ValueError(f"Batch limitado a 50 spools (recibido: {len(tag_spools)})")
+
+        resultados: list[BatchActionResult] = []
+        exitosos = 0
+        fallidos = 0
+
+        # Procesar cada spool individualmente
+        for tag_spool in tag_spools:
+            try:
+                # Llamar al método individual
+                response = self.iniciar_accion(
+                    worker_id=worker_id,
+                    operacion=operacion,
+                    tag_spool=tag_spool
+                )
+
+                # Extraer evento_id del mensaje (formato: "Evento registrado en Metadata (ID: abc12345...)")
+                evento_id = None
+                if "ID:" in response.message:
+                    # Extraer UUID del mensaje
+                    start_idx = response.message.find("ID:") + 4
+                    end_idx = response.message.find("...", start_idx)
+                    if end_idx > start_idx:
+                        evento_id = response.message[start_idx:end_idx].strip()
+
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=True,
+                    message=f"Acción {operacion.value} iniciada exitosamente",
+                    evento_id=evento_id,
+                    error_type=None
+                ))
+                exitosos += 1
+                logger.debug(f"[BATCH] Spool {tag_spool}: éxito")
+
+            except (
+                WorkerNoEncontradoError,
+                SpoolNoEncontradoError,
+                OperacionNoPendienteError,
+                OperacionYaIniciadaError,
+                OperacionYaCompletadaError,
+                DependenciasNoSatisfechasError
+            ) as e:
+                # Error de validación - continuar con siguiente spool
+                error_type = type(e).__name__
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=False,
+                    message=str(e),
+                    evento_id=None,
+                    error_type=error_type
+                ))
+                fallidos += 1
+                logger.warning(f"[BATCH] Spool {tag_spool}: fallo ({error_type}): {e}")
+
+            except Exception as e:
+                # Error inesperado - continuar con siguiente spool
+                error_type = "UnexpectedError"
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=False,
+                    message=f"Error inesperado: {str(e)}",
+                    evento_id=None,
+                    error_type=error_type
+                ))
+                fallidos += 1
+                logger.error(f"[BATCH] Spool {tag_spool}: error inesperado: {e}", exc_info=True)
+
+        # Construir mensaje resumen
+        total = len(tag_spools)
+        if fallidos == 0:
+            mensaje = f"Batch {operacion.value} iniciado: {exitosos} de {total} spools exitosos"
+        else:
+            mensaje = f"Batch {operacion.value} iniciado: {exitosos} de {total} spools exitosos ({fallidos} fallos)"
+
+        logger.info(
+            f"[v2.0 BATCH] Iniciar {operacion.value} completado: "
+            f"{exitosos} exitosos, {fallidos} fallidos de {total} total"
+        )
+
+        return BatchActionResponse(
+            success=(exitosos > 0),  # Éxito si al menos uno se procesó
+            message=mensaje,
+            total=total,
+            exitosos=exitosos,
+            fallidos=fallidos,
+            resultados=resultados
+        )
+
+    def completar_accion_batch(
+        self,
+        worker_id: int,
+        operacion: ActionType,
+        tag_spools: list[str]
+    ) -> 'BatchActionResponse':
+        """
+        Completar múltiples acciones simultáneamente (v2.0 batch operations).
+
+        Procesa hasta 50 spools en una sola operación.
+        Continúa procesando aunque algunos spools fallen (manejo errores parciales).
+        CRÍTICO: Valida ownership individualmente (solo quien inició puede completar).
+
+        v2.0 Flujo:
+        1. Validar límite batch (máx 50 spools)
+        2. Iterar sobre cada tag_spool
+        3. Llamar completar_accion() para cada uno (captura excepciones individuales)
+        4. Construir BatchActionResponse con resumen (exitosos/fallidos)
+
+        Args:
+            worker_id: ID del trabajador que realiza las acciones
+            operacion: ActionType.ARM o ActionType.SOLD
+            tag_spools: Lista de TAGs (máximo 50)
+
+        Returns:
+            BatchActionResponse con resumen y detalle por spool
+
+        Raises:
+            ValueError: Si tag_spools > 50 o está vacío
+
+        Examples:
+            >>> # Completar 3 spools ARM con worker 93 (quien los inició)
+            >>> tags = ["MK-1335-CW-25238-011", "MK-1335-CW-25238-012", "MK-1335-CW-25238-013"]
+            >>> response = service.completar_accion_batch(93, ActionType.ARM, tags)
+            >>> print(response.exitosos, response.fallidos)
+            3 0
+
+            >>> # Con ownership error (worker 94 intenta completar iniciados por 93)
+            >>> response = service.completar_accion_batch(94, ActionType.ARM, tags)
+            >>> print(response.exitosos, response.fallidos)
+            0 3  # Todos fallan por NoAutorizadoError
+        """
+        from backend.models.action import BatchActionResponse, BatchActionResult
+
+        logger.info(
+            f"[v2.0 BATCH] Completando {operacion.value} para {len(tag_spools)} spools "
+            f"por trabajador ID {worker_id}"
+        )
+
+        # Validación básica
+        if not tag_spools:
+            raise ValueError("tag_spools no puede estar vacío")
+        if len(tag_spools) > 50:
+            raise ValueError(f"Batch limitado a 50 spools (recibido: {len(tag_spools)})")
+
+        resultados: list[BatchActionResult] = []
+        exitosos = 0
+        fallidos = 0
+
+        # Procesar cada spool individualmente
+        for tag_spool in tag_spools:
+            try:
+                # Llamar al método individual (incluye ownership validation)
+                response = self.completar_accion(
+                    worker_id=worker_id,
+                    operacion=operacion,
+                    tag_spool=tag_spool
+                )
+
+                # Extraer evento_id del mensaje
+                evento_id = None
+                if "ID:" in response.message:
+                    start_idx = response.message.find("ID:") + 4
+                    end_idx = response.message.find("...", start_idx)
+                    if end_idx > start_idx:
+                        evento_id = response.message[start_idx:end_idx].strip()
+
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=True,
+                    message=f"Acción {operacion.value} completada exitosamente",
+                    evento_id=evento_id,
+                    error_type=None
+                ))
+                exitosos += 1
+                logger.debug(f"[BATCH] Spool {tag_spool}: éxito")
+
+            except (
+                WorkerNoEncontradoError,
+                SpoolNoEncontradoError,
+                OperacionNoIniciadaError,
+                OperacionYaCompletadaError,
+                NoAutorizadoError  # CRÍTICO: ownership validation
+            ) as e:
+                # Error de validación - continuar con siguiente spool
+                error_type = type(e).__name__
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=False,
+                    message=str(e),
+                    evento_id=None,
+                    error_type=error_type
+                ))
+                fallidos += 1
+                logger.warning(f"[BATCH] Spool {tag_spool}: fallo ({error_type}): {e}")
+
+            except Exception as e:
+                # Error inesperado - continuar con siguiente spool
+                error_type = "UnexpectedError"
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=False,
+                    message=f"Error inesperado: {str(e)}",
+                    evento_id=None,
+                    error_type=error_type
+                ))
+                fallidos += 1
+                logger.error(f"[BATCH] Spool {tag_spool}: error inesperado: {e}", exc_info=True)
+
+        # Construir mensaje resumen
+        total = len(tag_spools)
+        if fallidos == 0:
+            mensaje = f"Batch {operacion.value} completado: {exitosos} de {total} spools exitosos"
+        else:
+            mensaje = f"Batch {operacion.value} completado: {exitosos} de {total} spools exitosos ({fallidos} fallos)"
+
+        logger.info(
+            f"[v2.0 BATCH] Completar {operacion.value} completado: "
+            f"{exitosos} exitosos, {fallidos} fallidos de {total} total"
+        )
+
+        return BatchActionResponse(
+            success=(exitosos > 0),  # Éxito si al menos uno se procesó
+            message=mensaje,
+            total=total,
+            exitosos=exitosos,
+            fallidos=fallidos,
+            resultados=resultados
+        )
+
+    def cancelar_accion_batch(
+        self,
+        worker_id: int,
+        operacion: ActionType,
+        tag_spools: list[str]
+    ) -> 'BatchActionResponse':
+        """
+        Cancelar múltiples acciones EN_PROGRESO simultáneamente (v2.0 batch operations).
+
+        Procesa hasta 50 spools en una sola operación.
+        Continúa procesando aunque algunos spools fallen (manejo errores parciales).
+        CRÍTICO: Valida ownership individualmente (solo quien inició puede cancelar).
+
+        v2.0 Flujo:
+        1. Validar límite batch (máx 50 spools)
+        2. Iterar sobre cada tag_spool
+        3. Llamar cancelar_accion() para cada uno (captura excepciones individuales)
+        4. Construir BatchActionResponse con resumen (exitosos/fallidos)
+
+        Args:
+            worker_id: ID del trabajador que realiza las cancelaciones
+            operacion: ActionType.ARM, ActionType.SOLD, o ActionType.METROLOGIA
+            tag_spools: Lista de TAGs (máximo 50)
+
+        Returns:
+            BatchActionResponse con resumen y detalle por spool
+
+        Raises:
+            ValueError: Si tag_spools > 50 o está vacío
+
+        Examples:
+            >>> # Cancelar 3 spools ARM con worker 93 (quien los inició)
+            >>> tags = ["MK-1335-CW-25238-011", "MK-1335-CW-25238-012", "MK-1335-CW-25238-013"]
+            >>> response = service.cancelar_accion_batch(93, ActionType.ARM, tags)
+            >>> print(response.exitosos, response.fallidos)
+            3 0
+
+            >>> # Con ownership error (worker 94 intenta cancelar iniciados por 93)
+            >>> response = service.cancelar_accion_batch(94, ActionType.ARM, tags)
+            >>> print(response.exitosos, response.fallidos)
+            0 3  # Todos fallan por NoAutorizadoError
+        """
+        from backend.models.action import BatchActionResponse, BatchActionResult
+
+        logger.info(
+            f"[v2.0 BATCH] Cancelando {operacion.value} para {len(tag_spools)} spools "
+            f"por trabajador ID {worker_id}"
+        )
+
+        # Validación básica
+        if not tag_spools:
+            raise ValueError("tag_spools no puede estar vacío")
+        if len(tag_spools) > 50:
+            raise ValueError(f"Batch limitado a 50 spools (recibido: {len(tag_spools)})")
+
+        resultados: list[BatchActionResult] = []
+        exitosos = 0
+        fallidos = 0
+
+        # Procesar cada spool individualmente
+        for tag_spool in tag_spools:
+            try:
+                # Llamar al método individual (incluye ownership validation)
+                response = self.cancelar_accion(
+                    worker_id=worker_id,
+                    operacion=operacion,
+                    tag_spool=tag_spool
+                )
+
+                # Extraer evento_id del mensaje
+                evento_id = None
+                if "ID:" in response.message:
+                    start_idx = response.message.find("ID:") + 4
+                    end_idx = response.message.find("...", start_idx)
+                    if end_idx > start_idx:
+                        evento_id = response.message[start_idx:end_idx].strip()
+
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=True,
+                    message=f"Acción {operacion.value} cancelada exitosamente",
+                    evento_id=evento_id,
+                    error_type=None
+                ))
+                exitosos += 1
+                logger.debug(f"[BATCH] Spool {tag_spool}: éxito (cancelado)")
+
+            except (
+                WorkerNoEncontradoError,
+                SpoolNoEncontradoError,
+                OperacionNoIniciadaError,
+                NoAutorizadoError,  # CRÍTICO: ownership validation
+                RolNoAutorizadoError
+            ) as e:
+                # Error de validación - continuar con siguiente spool
+                error_type = type(e).__name__
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=False,
+                    message=str(e),
+                    evento_id=None,
+                    error_type=error_type
+                ))
+                fallidos += 1
+                logger.warning(f"[BATCH] Spool {tag_spool}: fallo ({error_type}): {e}")
+
+            except Exception as e:
+                # Error inesperado - continuar con siguiente spool
+                error_type = "UnexpectedError"
+                resultados.append(BatchActionResult(
+                    tag_spool=tag_spool,
+                    success=False,
+                    message=f"Error inesperado: {str(e)}",
+                    evento_id=None,
+                    error_type=error_type
+                ))
+                fallidos += 1
+                logger.error(f"[BATCH] Spool {tag_spool}: error inesperado: {e}", exc_info=True)
+
+        # Construir mensaje resumen
+        total = len(tag_spools)
+        if fallidos == 0:
+            mensaje = f"Batch {operacion.value} cancelado: {exitosos} de {total} spools exitosos"
+        else:
+            mensaje = f"Batch {operacion.value} cancelado: {exitosos} de {total} spools exitosos ({fallidos} fallos)"
+
+        logger.info(
+            f"[v2.0 BATCH] Cancelar {operacion.value} completado: "
+            f"{exitosos} exitosos, {fallidos} fallidos de {total} total"
+        )
+
+        return BatchActionResponse(
+            success=(exitosos > 0),  # Éxito si al menos uno se procesó
+            message=mensaje,
+            total=total,
+            exitosos=exitosos,
+            fallidos=fallidos,
+            resultados=resultados
+        )

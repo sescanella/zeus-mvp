@@ -3,7 +3,7 @@ import './globals.css';
 import { AppProvider } from '@/lib/context';
 
 export const metadata: Metadata = {
-  title: 'ZEUES - Trazabilidad',
+  title: 'ZEUS by KM',
   description: 'Sistema de trazabilidad para manufactura de cañerías',
 };
 

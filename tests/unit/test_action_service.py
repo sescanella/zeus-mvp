@@ -36,14 +36,8 @@ from backend.exceptions import (
 # ==================== FIXTURES ====================
 
 @pytest.fixture
-def mock_sheets_repo(mocker):
-    """Mock de SheetsRepository."""
-    return mocker.Mock()
-
-
-@pytest.fixture
-def mock_sheets_service(mocker):
-    """Mock de SheetsService."""
+def mock_metadata_repository(mocker):
+    """Mock de MetadataRepository (v2.0 Event Sourcing)."""
     return mocker.Mock()
 
 
@@ -67,16 +61,14 @@ def mock_worker_service(mocker):
 
 @pytest.fixture
 def action_service(
-    mock_sheets_repo,
-    mock_sheets_service,
+    mock_metadata_repository,
     mock_validation_service,
     mock_spool_service,
     mock_worker_service
 ):
-    """Instancia de ActionService con mocks."""
+    """Instancia de ActionService con mocks (v2.0 Event Sourcing)."""
     return ActionService(
-        sheets_repo=mock_sheets_repo,
-        sheets_service=mock_sheets_service,
+        metadata_repository=mock_metadata_repository,
         validation_service=mock_validation_service,
         spool_service=mock_spool_service,
         worker_service=mock_worker_service
@@ -85,10 +77,12 @@ def action_service(
 
 @pytest.fixture
 def sample_worker():
-    """Worker de ejemplo."""
+    """Worker de ejemplo (v2.0)."""
     return Worker(
+        id=1,
         nombre="Juan",
         apellido="Pérez",
+        rol=None,  # v2.0: rol es opcional (viene de hoja Roles)
         activo=True
     )
 

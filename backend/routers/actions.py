@@ -16,7 +16,12 @@ Attempting to complete another worker's action → 403 FORBIDDEN.
 from fastapi import APIRouter, Depends, status
 from backend.core.dependency import get_action_service
 from backend.services.action_service import ActionService
-from backend.models.action import ActionRequest, ActionResponse
+from backend.models.action import (
+    ActionRequest,
+    ActionResponse,
+    BatchActionRequest,
+    BatchActionResponse
+)
 from backend.models.enums import ActionType
 import logging
 
@@ -90,22 +95,23 @@ async def iniciar_accion(
         ```
     """
     logger.info(
-        f"POST /api/iniciar-accion - worker={request.worker_nombre}, "
+        f"POST /api/iniciar-accion - worker_id={request.worker_id}, "
         f"operacion={request.operacion}, tag_spool={request.tag_spool}"
     )
 
     # Delegar a ActionService (orchestrator)
     # Todas las validaciones se realizan en ActionService
     # Excepciones se propagan automáticamente al exception handler
+    # v2.0: Usa worker_id en vez de worker_nombre
     response = action_service.iniciar_accion(
-        worker_nombre=request.worker_nombre,
+        worker_id=request.worker_id,
         operacion=request.operacion,
         tag_spool=request.tag_spool
     )
 
     logger.info(
         f"Action started successfully - {request.operacion} on {request.tag_spool} "
-        f"by {request.worker_nombre}"
+        f"by worker_id {request.worker_id}"
     )
 
     return response
@@ -193,15 +199,16 @@ async def completar_accion(
         ```
     """
     logger.info(
-        f"POST /api/completar-accion - worker={request.worker_nombre}, "
+        f"POST /api/completar-accion - worker_id={request.worker_id}, "
         f"operacion={request.operacion}, tag_spool={request.tag_spool}"
     )
 
     # Delegar a ActionService (orchestrator con ownership validation)
-    # CRÍTICO: ActionService.completar_accion valida BC/BE = worker_nombre
+    # CRÍTICO: ActionService.completar_accion valida ownership + rol
     # Si worker != owner → raise NoAutorizadoError → 403 FORBIDDEN
+    # v2.0: Usa worker_id en vez de worker_nombre
     response = action_service.completar_accion(
-        worker_nombre=request.worker_nombre,
+        worker_id=request.worker_id,
         operacion=request.operacion,
         tag_spool=request.tag_spool,
         timestamp=request.timestamp
@@ -209,7 +216,551 @@ async def completar_accion(
 
     logger.info(
         f"Action completed successfully - {request.operacion} on {request.tag_spool} "
-        f"by {request.worker_nombre}"
+        f"by worker_id {request.worker_id}"
+    )
+
+    return response
+
+
+@router.post("/cancelar-accion", response_model=ActionResponse, status_code=status.HTTP_200_OK)
+async def cancelar_accion(
+    request: ActionRequest,
+    action_service: ActionService = Depends(get_action_service)
+):
+    """
+    Cancela una acción EN_PROGRESO (v2.0 CANCELAR feature).
+
+    Revierte estado EN_PROGRESO → PENDIENTE mediante evento CANCELAR.
+    CRÍTICO: Solo quien inició puede cancelar (ownership + rol validation).
+
+    Validaciones:
+    - Trabajador existe y está activo
+    - Spool existe en hoja Operaciones
+    - Operación está en estado EN_PROGRESO
+    - **OWNERSHIP: Solo quien inició puede cancelar (desde evento INICIAR)**
+    - **ROLE: Worker debe tener el rol necesario para la operación**
+
+    Flujo v2.0:
+    1. Buscar trabajador por ID
+    2. Buscar spool por TAG
+    3. Validar puede cancelar (EN_PROGRESO + ownership + rol)
+    4. Crear evento CANCELAR_ARM/CANCELAR_SOLD
+    5. Escribir evento en Metadata (estado reconstruido en próxima lectura)
+
+    Args:
+        request: Datos de la acción a cancelar (worker_id, operacion, tag_spool)
+        action_service: Servicio de acciones (inyectado)
+
+    Returns:
+        ActionResponse con success=True y evento_id
+
+    Raises:
+        HTTPException 404: Si trabajador o spool no encontrado
+        HTTPException 400: Si operación no está EN_PROGRESO
+        HTTPException 403: Si trabajador != quien inició (CRÍTICO - ownership violation)
+        HTTPException 403: Si trabajador no tiene rol necesario (RolNoAutorizadoError)
+        HTTPException 503: Si falla escritura en Metadata
+
+    Example request:
+        ```json
+        {
+            "worker_id": 93,
+            "operacion": "ARM",
+            "tag_spool": "MK-1335-CW-25238-011"
+        }
+        ```
+
+    Example response (exitosa):
+        ```json
+        {
+            "success": true,
+            "message": "Acción ARM cancelada exitosamente. Spool MK-1335-CW-25238-011 revertido a PENDIENTE",
+            "data": {
+                "tag_spool": "MK-1335-CW-25238-011",
+                "operacion": "ARM",
+                "trabajador": "Mauricio Rodriguez",
+                "evento_id": "550e8400-e29b-41d4-a716-446655440000",
+                "metadata_actualizada": {
+                    "armador": null,
+                    "soldador": null,
+                    "fecha_armado": null,
+                    "fecha_soldadura": null
+                }
+            }
+        }
+        ```
+
+    Example response (403 - ownership violation):
+        ```json
+        {
+            "success": false,
+            "error": "NO_AUTORIZADO",
+            "message": "Solo Mauricio Rodriguez puede cancelar ARM en 'MK-1335-CW-25238-011' (él la inició). Tú eres Carlos Pimiento.",
+            "data": {
+                "tag_spool": "MK-1335-CW-25238-011",
+                "trabajador_esperado": "Mauricio Rodriguez",
+                "trabajador_solicitante": "Carlos Pimiento",
+                "operacion": "ARM"
+            }
+        }
+        ```
+
+    Example response (403 - rol no autorizado):
+        ```json
+        {
+            "success": false,
+            "error": "ROL_NO_AUTORIZADO",
+            "message": "Trabajador 94 no tiene el rol 'Armador' necesario para realizar la operación 'ARM'. Roles actuales: Soldador, Metrologia",
+            "data": {
+                "worker_id": 94,
+                "operacion": "ARM",
+                "rol_requerido": "Armador",
+                "roles_actuales": ["Soldador", "Metrologia"]
+            }
+        }
+        ```
+    """
+    logger.info(
+        f"POST /api/cancelar-accion - worker_id={request.worker_id}, "
+        f"operacion={request.operacion}, tag_spool={request.tag_spool}"
+    )
+
+    # Delegar a ActionService (orchestrator con ownership + rol validation)
+    # CRÍTICO: Valida que worker sea quien inició + tenga rol necesario
+    # v2.0: Usa worker_id en vez de worker_nombre
+    response = action_service.cancelar_accion(
+        worker_id=request.worker_id,
+        operacion=request.operacion,
+        tag_spool=request.tag_spool
+    )
+
+    logger.info(
+        f"Action cancelled successfully - {request.operacion} on {request.tag_spool} "
+        f"by worker_id {request.worker_id}"
+    )
+
+    return response
+
+
+# ============================================================================
+# BATCH OPERATIONS ENDPOINTS (v2.0 Multiselect)
+# ============================================================================
+
+@router.post("/iniciar-accion-batch", response_model=BatchActionResponse, status_code=status.HTTP_200_OK)
+async def iniciar_accion_batch(
+    request: BatchActionRequest,
+    action_service: ActionService = Depends(get_action_service)
+):
+    """
+    Inicia múltiples acciones de manufactura simultáneamente (v2.0 batch operations).
+
+    Procesa hasta 50 spools en una sola petición.
+    Continúa procesando aunque algunos spools fallen (manejo errores parciales).
+    Retorna resumen con exitosos/fallidos y detalle por spool.
+
+    Validaciones (por cada spool):
+    - Trabajador existe y está activo
+    - Spool existe en hoja Operaciones
+    - Operación está en estado PENDIENTE
+    - Dependencias satisfechas (BA llena para ARM, BB llena para SOLD)
+    - Trabajador tiene el rol necesario para la operación (v2.0)
+
+    Flujo v2.0:
+    1. Validar límite batch (máx 50 spools)
+    2. Iterar sobre cada tag_spool
+    3. Llamar iniciar_accion() para cada uno (captura excepciones individuales)
+    4. Crear eventos INICIAR_ARM/INICIAR_SOLD en Metadata
+    5. Construir BatchActionResponse con resumen
+
+    Args:
+        request: Datos batch (worker_id, operacion, tag_spools[])
+        action_service: Servicio de acciones (inyectado)
+
+    Returns:
+        BatchActionResponse con resumen (total, exitosos, fallidos) y detalle por spool
+
+    Raises:
+        HTTPException 400: Si tag_spools > 50 o está vacío
+
+    Example request:
+        ```json
+        {
+            "worker_id": 93,
+            "operacion": "ARM",
+            "tag_spools": [
+                "MK-1335-CW-25238-011",
+                "MK-1335-CW-25238-012",
+                "MK-1335-CW-25238-013"
+            ]
+        }
+        ```
+
+    Example response (todos exitosos):
+        ```json
+        {
+            "success": true,
+            "message": "Batch ARM iniciado: 3 de 3 spools exitosos",
+            "total": 3,
+            "exitosos": 3,
+            "fallidos": 0,
+            "resultados": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "success": true,
+                    "message": "Acción ARM iniciada exitosamente",
+                    "evento_id": "a1b2c3d4-e5f6-4a5b-8c9d-1e2f3a4b5c6d",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-012",
+                    "success": true,
+                    "message": "Acción ARM iniciada exitosamente",
+                    "evento_id": "b2c3d4e5-f6a7-5b6c-9d0e-2f3a4b5c6d7e",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-013",
+                    "success": true,
+                    "message": "Acción ARM iniciada exitosamente",
+                    "evento_id": "c3d4e5f6-a7b8-6c7d-0e1f-3a4b5c6d7e8f",
+                    "error_type": null
+                }
+            ]
+        }
+        ```
+
+    Example response (errores parciales):
+        ```json
+        {
+            "success": true,
+            "message": "Batch ARM iniciado: 2 de 3 spools exitosos (1 fallo)",
+            "total": 3,
+            "exitosos": 2,
+            "fallidos": 1,
+            "resultados": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "success": true,
+                    "message": "Acción ARM iniciada exitosamente",
+                    "evento_id": "a1b2c3d4-e5f6-4a5b-8c9d-1e2f3a4b5c6d",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-012",
+                    "success": false,
+                    "message": "Operación ya iniciada por otro trabajador",
+                    "evento_id": null,
+                    "error_type": "OperacionYaIniciadaError"
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-013",
+                    "success": true,
+                    "message": "Acción ARM iniciada exitosamente",
+                    "evento_id": "c3d4e5f6-a7b8-6c7d-0e1f-3a4b5c6d7e8f",
+                    "error_type": null
+                }
+            ]
+        }
+        ```
+    """
+    logger.info(
+        f"POST /api/iniciar-accion-batch - worker_id={request.worker_id}, "
+        f"operacion={request.operacion}, spools_count={len(request.tag_spools)}"
+    )
+
+    # Delegar a ActionService (batch orchestrator)
+    # Procesa cada spool individualmente, continúa si algunos fallan
+    # Retorna BatchActionResponse con resumen y detalle
+    response = action_service.iniciar_accion_batch(
+        worker_id=request.worker_id,
+        operacion=request.operacion,
+        tag_spools=request.tag_spools
+    )
+
+    logger.info(
+        f"Batch action started - {request.operacion}: {response.exitosos} exitosos, "
+        f"{response.fallidos} fallidos de {response.total} total"
+    )
+
+    return response
+
+
+@router.post("/completar-accion-batch", response_model=BatchActionResponse, status_code=status.HTTP_200_OK)
+async def completar_accion_batch(
+    request: BatchActionRequest,
+    action_service: ActionService = Depends(get_action_service)
+):
+    """
+    Completa múltiples acciones de manufactura simultáneamente (v2.0 batch operations).
+
+    Procesa hasta 50 spools en una sola petición.
+    Continúa procesando aunque algunos spools fallen (manejo errores parciales).
+    CRÍTICO: Valida ownership individualmente (solo quien inició puede completar).
+
+    Validaciones (por cada spool):
+    - Trabajador existe y está activo
+    - Spool existe en hoja Operaciones
+    - Operación está en estado EN_PROGRESO
+    - **OWNERSHIP: Worker debe ser quien inició (desde evento INICIAR)**
+    - **ROLE: Worker debe tener el rol necesario para la operación (v2.0)**
+
+    Flujo v2.0:
+    1. Validar límite batch (máx 50 spools)
+    2. Iterar sobre cada tag_spool
+    3. Llamar completar_accion() para cada uno (incluye ownership validation)
+    4. Crear eventos COMPLETAR_ARM/COMPLETAR_SOLD en Metadata
+    5. Construir BatchActionResponse con resumen
+
+    Args:
+        request: Datos batch (worker_id, operacion, tag_spools[], timestamp)
+        action_service: Servicio de acciones (inyectado)
+
+    Returns:
+        BatchActionResponse con resumen (total, exitosos, fallidos) y detalle por spool
+
+    Raises:
+        HTTPException 400: Si tag_spools > 50 o está vacío
+
+    Example request:
+        ```json
+        {
+            "worker_id": 93,
+            "operacion": "ARM",
+            "tag_spools": [
+                "MK-1335-CW-25238-011",
+                "MK-1335-CW-25238-012",
+                "MK-1335-CW-25238-013"
+            ],
+            "timestamp": "2025-12-12T14:30:00Z"
+        }
+        ```
+
+    Example response (todos exitosos):
+        ```json
+        {
+            "success": true,
+            "message": "Batch ARM completado: 3 de 3 spools exitosos",
+            "total": 3,
+            "exitosos": 3,
+            "fallidos": 0,
+            "resultados": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "success": true,
+                    "message": "Acción ARM completada exitosamente",
+                    "evento_id": "a1b2c3d4-e5f6-4a5b-8c9d-1e2f3a4b5c6d",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-012",
+                    "success": true,
+                    "message": "Acción ARM completada exitosamente",
+                    "evento_id": "b2c3d4e5-f6a7-5b6c-9d0e-2f3a4b5c6d7e",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-013",
+                    "success": true,
+                    "message": "Acción ARM completada exitosamente",
+                    "evento_id": "c3d4e5f6-a7b8-6c7d-0e1f-3a4b5c6d7e8f",
+                    "error_type": null
+                }
+            ]
+        }
+        ```
+
+    Example response (ownership errors - worker 94 intenta completar iniciados por 93):
+        ```json
+        {
+            "success": false,
+            "message": "Batch ARM completado: 0 de 3 spools exitosos (3 fallos)",
+            "total": 3,
+            "exitosos": 0,
+            "fallidos": 3,
+            "resultados": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "success": false,
+                    "message": "Solo Mauricio Rodriguez puede completar ARM en 'MK-1335-CW-25238-011' (él la inició)",
+                    "evento_id": null,
+                    "error_type": "NoAutorizadoError"
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-012",
+                    "success": false,
+                    "message": "Solo Mauricio Rodriguez puede completar ARM en 'MK-1335-CW-25238-012' (él la inició)",
+                    "evento_id": null,
+                    "error_type": "NoAutorizadoError"
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-013",
+                    "success": false,
+                    "message": "Solo Mauricio Rodriguez puede completar ARM en 'MK-1335-CW-25238-013' (él la inició)",
+                    "evento_id": null,
+                    "error_type": "NoAutorizadoError"
+                }
+            ]
+        }
+        ```
+    """
+    logger.info(
+        f"POST /api/completar-accion-batch - worker_id={request.worker_id}, "
+        f"operacion={request.operacion}, spools_count={len(request.tag_spools)}"
+    )
+
+    # Delegar a ActionService (batch orchestrator con ownership validation)
+    # CRÍTICO: Valida ownership individualmente para cada spool
+    # Procesa cada spool individualmente, continúa si algunos fallan
+    # Retorna BatchActionResponse con resumen y detalle
+    response = action_service.completar_accion_batch(
+        worker_id=request.worker_id,
+        operacion=request.operacion,
+        tag_spools=request.tag_spools
+    )
+
+    logger.info(
+        f"Batch action completed - {request.operacion}: {response.exitosos} exitosos, "
+        f"{response.fallidos} fallidos de {response.total} total"
+    )
+
+    return response
+
+
+@router.post("/cancelar-accion-batch", response_model=BatchActionResponse, status_code=status.HTTP_200_OK)
+async def cancelar_accion_batch(
+    request: BatchActionRequest,
+    action_service: ActionService = Depends(get_action_service)
+):
+    """
+    Cancela múltiples acciones EN_PROGRESO simultáneamente (v2.0 batch CANCELAR feature).
+
+    Procesa hasta 50 spools en una sola petición.
+    Continúa procesando aunque algunos spools fallen (manejo errores parciales).
+    CRÍTICO: Valida ownership individualmente (solo quien inició puede cancelar).
+
+    Validaciones (por cada spool):
+    - Trabajador existe y está activo
+    - Spool existe en hoja Operaciones
+    - Operación está en estado EN_PROGRESO
+    - **OWNERSHIP: Worker debe ser quien inició (desde evento INICIAR)**
+    - **ROLE: Worker debe tener el rol necesario para la operación (v2.0)**
+
+    Flujo v2.0:
+    1. Validar límite batch (máx 50 spools)
+    2. Iterar sobre cada tag_spool
+    3. Llamar cancelar_accion() para cada uno (incluye ownership validation)
+    4. Crear eventos CANCELAR_ARM/CANCELAR_SOLD/CANCELAR_METROLOGIA en Metadata
+    5. Construir BatchActionResponse con resumen
+
+    Args:
+        request: Datos batch (worker_id, operacion, tag_spools[])
+        action_service: Servicio de acciones (inyectado)
+
+    Returns:
+        BatchActionResponse con resumen (total, exitosos, fallidos) y detalle por spool
+
+    Raises:
+        HTTPException 400: Si tag_spools > 50 o está vacío
+
+    Example request:
+        ```json
+        {
+            "worker_id": 93,
+            "operacion": "ARM",
+            "tag_spools": [
+                "MK-1335-CW-25238-011",
+                "MK-1335-CW-25238-012",
+                "MK-1335-CW-25238-013"
+            ]
+        }
+        ```
+
+    Example response (todos exitosos):
+        ```json
+        {
+            "success": true,
+            "message": "Batch ARM cancelado: 3 de 3 spools exitosos",
+            "total": 3,
+            "exitosos": 3,
+            "fallidos": 0,
+            "resultados": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "success": true,
+                    "message": "Acción ARM cancelada exitosamente",
+                    "evento_id": "a1b2c3d4-e5f6-4a5b-8c9d-1e2f3a4b5c6d",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-012",
+                    "success": true,
+                    "message": "Acción ARM cancelada exitosamente",
+                    "evento_id": "b2c3d4e5-f6a7-5b6c-9d0e-2f3a4b5c6d7e",
+                    "error_type": null
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-013",
+                    "success": true,
+                    "message": "Acción ARM cancelada exitosamente",
+                    "evento_id": "c3d4e5f6-a7b8-6c7d-0e1f-3a4b5c6d7e8f",
+                    "error_type": null
+                }
+            ]
+        }
+        ```
+
+    Example response (ownership errors - worker 94 intenta cancelar iniciados por 93):
+        ```json
+        {
+            "success": false,
+            "message": "Batch ARM cancelado: 0 de 3 spools exitosos (3 fallos)",
+            "total": 3,
+            "exitosos": 0,
+            "fallidos": 3,
+            "resultados": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "success": false,
+                    "message": "Solo Mauricio Rodriguez puede cancelar ARM en 'MK-1335-CW-25238-011' (él la inició)",
+                    "evento_id": null,
+                    "error_type": "NoAutorizadoError"
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-012",
+                    "success": false,
+                    "message": "Solo Mauricio Rodriguez puede cancelar ARM en 'MK-1335-CW-25238-012' (él la inició)",
+                    "evento_id": null,
+                    "error_type": "NoAutorizadoError"
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-013",
+                    "success": false,
+                    "message": "Solo Mauricio Rodriguez puede cancelar ARM en 'MK-1335-CW-25238-013' (él la inició)",
+                    "evento_id": null,
+                    "error_type": "NoAutorizadoError"
+                }
+            ]
+        }
+        ```
+    """
+    logger.info(
+        f"POST /api/cancelar-accion-batch - worker_id={request.worker_id}, "
+        f"operacion={request.operacion}, spools_count={len(request.tag_spools)}"
+    )
+
+    # Delegar a ActionService (batch orchestrator con ownership validation)
+    # CRÍTICO: Valida ownership individualmente para cada spool
+    # Procesa cada spool individualmente, continúa si algunos fallan
+    # Retorna BatchActionResponse con resumen y detalle
+    response = action_service.cancelar_accion_batch(
+        worker_id=request.worker_id,
+        operacion=request.operacion,
+        tag_spools=request.tag_spools
+    )
+
+    logger.info(
+        f"Batch cancelar completed - {request.operacion}: {response.exitosos} exitosos, "
+        f"{response.fallidos} fallidos de {response.total} total"
     )
 
     return response

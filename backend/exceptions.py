@@ -147,7 +147,7 @@ class OperacionNoIniciadaError(ZEUSException):
         )
 
 
-# ==================== EXCEPCIÓN 403 (FORBIDDEN) - CRÍTICA ====================
+# ==================== EXCEPCIONES 403 (FORBIDDEN) - AUTORIZACIÓN ====================
 
 class NoAutorizadoError(ZEUSException):
     """
@@ -174,6 +174,45 @@ class NoAutorizadoError(ZEUSException):
                 "trabajador_esperado": trabajador_esperado,
                 "trabajador_solicitante": trabajador_solicitante,
                 "operacion": operacion
+            }
+        )
+
+
+class RolNoAutorizadoError(ZEUSException):
+    """
+    Trabajador no tiene el rol necesario para realizar la operación (v2.0).
+
+    Ejemplo: Worker con rol SOLDADOR intenta hacer ARM (requiere ARMADOR).
+    """
+
+    def __init__(
+        self,
+        worker_id: int,
+        operacion: str,
+        rol_requerido: str,
+        roles_actuales: Optional[list[str]] = None
+    ):
+        mensaje = (
+            f"Trabajador {worker_id} no tiene el rol '{rol_requerido}' "
+            f"necesario para realizar la operación '{operacion}'"
+        )
+        if roles_actuales:
+            mensaje += f". Roles actuales: {', '.join(roles_actuales)}"
+
+        # Store as instance attributes for easier access
+        self.worker_id = worker_id
+        self.operacion = operacion
+        self.rol_requerido = rol_requerido
+        self.roles_actuales = roles_actuales or []
+
+        super().__init__(
+            message=mensaje,
+            error_code="ROL_NO_AUTORIZADO",
+            data={
+                "worker_id": worker_id,
+                "operacion": operacion,
+                "rol_requerido": rol_requerido,
+                "roles_actuales": roles_actuales or []
             }
         )
 

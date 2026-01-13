@@ -34,6 +34,7 @@ class Config:
     # Nombres de hojas en Google Sheets
     HOJA_OPERACIONES_NOMBRE: str = os.getenv('HOJA_OPERACIONES_NOMBRE', 'Operaciones')
     HOJA_TRABAJADORES_NOMBRE: str = os.getenv('HOJA_TRABAJADORES_NOMBRE', 'Trabajadores')
+    HOJA_METADATA_NOMBRE: str = os.getenv('HOJA_METADATA_NOMBRE', 'Metadata')
 
     # Cache configuration
     CACHE_TTL_SECONDS: int = int(os.getenv('CACHE_TTL_SECONDS', '300'))  # 5 minutos default
