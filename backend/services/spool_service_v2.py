@@ -384,6 +384,47 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         logger.info(f"Found {len(spools_disponibles)} spools for COMPLETAR SOLD")
         return spools_disponibles
 
+    def find_spool_by_tag(self, tag_spool: str) -> Optional[Spool]:
+        """
+        Busca un spool específico por su TAG usando mapeo dinámico.
+
+        Búsqueda case-insensitive con normalización de espacios.
+
+        Args:
+            tag_spool: TAG del spool a buscar (ej: "MK-1335-CW-25238-011")
+
+        Returns:
+            Spool si se encuentra, None si no existe
+
+        Logs:
+            INFO: Inicio de búsqueda con TAG
+            DEBUG: Resultado de búsqueda (encontrado/no encontrado)
+        """
+        logger.info(f"[V2] Searching for spool with TAG: '{tag_spool}'")
+        self._ensure_column_map()
+
+        # Normalizar TAG para búsqueda case-insensitive
+        tag_normalized = tag_spool.strip().upper()
+
+        # Leer todas las filas (desde row 2, skip header)
+        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            try:
+                spool = self.parse_spool_row(row)
+
+                # Buscar por TAG normalizado
+                if spool.tag_spool.upper() == tag_normalized:
+                    logger.debug(f"[V2] Found spool: {spool.tag_spool} with fecha_materiales={spool.fecha_materiales}")
+                    return spool
+
+            except ValueError as e:
+                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
+                continue
+
+        logger.debug(f"[V2] Spool with TAG '{tag_spool}' not found")
+        return None
+
 
 if __name__ == "__main__":
     """

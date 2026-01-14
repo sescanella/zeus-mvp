@@ -245,17 +245,18 @@ def get_action_service(
     metadata_repository: MetadataRepository = Depends(get_metadata_repository),
     validation_service: ValidationService = Depends(get_validation_service),
     worker_service: WorkerService = Depends(get_worker_service),
-    spool_service: SpoolService = Depends(get_spool_service)
+    spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
 ) -> ActionService:
     """
     Factory para ActionService (nueva instancia por request) - CRÍTICO.
 
     Retorna una nueva instancia de ActionService con TODAS las dependencias
-    inyectadas. ActionService v2.0 usa Event Sourcing con Metadata.
+    inyectadas. ActionService v2.0 usa Event Sourcing con Metadata y
+    SpoolServiceV2 con mapeo dinámico de columnas.
 
     ActionService coordina:
     - Validación de trabajadores (WorkerService)
-    - Búsqueda de spools (SpoolService)
+    - Búsqueda de spools (SpoolServiceV2 - mapeo dinámico)
     - Validación de ownership (ValidationService)
     - Escritura de eventos en Metadata (MetadataRepository)
 
@@ -263,7 +264,7 @@ def get_action_service(
         metadata_repository: Repositorio Metadata para Event Sourcing (v2.0).
         validation_service: Servicio de validación (inyectado automáticamente).
         worker_service: Servicio de trabajadores (inyectado automáticamente).
-        spool_service: Servicio de spools (inyectado automáticamente).
+        spool_service_v2: SpoolServiceV2 con mapeo dinámico (inyectado automáticamente).
 
     Returns:
         Nueva instancia de ActionService con todas las dependencias configuradas.
@@ -274,12 +275,12 @@ def get_action_service(
     Note:
         Este es el service más importante del sistema. Coordina el workflow
         completo de INICIAR y COMPLETAR acciones de manufactura usando
-        Event Sourcing (v2.0).
+        Event Sourcing (v2.0) y mapeo dinámico de columnas (SpoolServiceV2).
     """
     return ActionService(
         metadata_repository=metadata_repository,
         validation_service=validation_service,
-        spool_service=spool_service,
+        spool_service=spool_service_v2,
         worker_service=worker_service
     )
 
