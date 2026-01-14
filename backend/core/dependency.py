@@ -32,6 +32,7 @@ from typing import Optional
 from fastapi import Depends
 
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.sheets_service import SheetsService
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
@@ -139,6 +140,29 @@ def get_validation_service() -> ValidationService:
 # ============================================================================
 
 
+def get_metadata_repository(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> MetadataRepository:
+    """
+    Factory para MetadataRepository (nueva instancia por request).
+
+    Retorna una nueva instancia de MetadataRepository para Event Sourcing.
+    MetadataRepository maneja:
+    - Escritura append-only de eventos en hoja "Metadata"
+    - Lectura de eventos para reconstrucción de estado
+
+    Args:
+        sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
+
+    Returns:
+        Nueva instancia de MetadataRepository.
+
+    Usage:
+        metadata_repo: MetadataRepository = Depends(get_metadata_repository)
+    """
+    return MetadataRepository(sheets_repo=sheets_repo)
+
+
 def get_worker_service(
     sheets_repo: SheetsRepository = Depends(get_sheets_repository)
 ) -> WorkerService:
@@ -218,7 +242,7 @@ def get_spool_service_v2(
 
 
 def get_action_service(
-    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
     validation_service: ValidationService = Depends(get_validation_service),
     worker_service: WorkerService = Depends(get_worker_service),
     spool_service: SpoolService = Depends(get_spool_service)
@@ -227,15 +251,16 @@ def get_action_service(
     Factory para ActionService (nueva instancia por request) - CRÍTICO.
 
     Retorna una nueva instancia de ActionService con TODAS las dependencias
-    inyectadas. ActionService es el orchestrator principal del sistema y
-    coordina:
+    inyectadas. ActionService v2.0 usa Event Sourcing con Metadata.
+
+    ActionService coordina:
     - Validación de trabajadores (WorkerService)
     - Búsqueda de spools (SpoolService)
     - Validación de ownership (ValidationService)
-    - Actualizaciones batch a Google Sheets (SheetsRepository)
+    - Escritura de eventos en Metadata (MetadataRepository)
 
     Args:
-        sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
+        metadata_repository: Repositorio Metadata para Event Sourcing (v2.0).
         validation_service: Servicio de validación (inyectado automáticamente).
         worker_service: Servicio de trabajadores (inyectado automáticamente).
         spool_service: Servicio de spools (inyectado automáticamente).
@@ -248,11 +273,11 @@ def get_action_service(
 
     Note:
         Este es el service más importante del sistema. Coordina el workflow
-        completo de INICIAR y COMPLETAR acciones de manufactura.
+        completo de INICIAR y COMPLETAR acciones de manufactura usando
+        Event Sourcing (v2.0).
     """
     return ActionService(
-        sheets_repo=sheets_repo,
-        sheets_service=get_sheets_service(),  # SheetsService también es singleton
+        metadata_repository=metadata_repository,
         validation_service=validation_service,
         spool_service=spool_service,
         worker_service=worker_service
