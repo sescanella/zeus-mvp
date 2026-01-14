@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, Button, Loading, ErrorMessage } from '@/components';
+import Image from 'next/image';
+import { Puzzle, Flame, SearchCheck, ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import {
   iniciarAccion,
@@ -137,95 +138,166 @@ function ConfirmarContent() {
     return null;
   }
 
-  const title = isBatchMode
-    ? tipo === 'iniciar'
-      ? `¿Confirmas INICIAR ${state.selectedOperation} en ${state.selectedSpools.length} spools?`
-      : tipo === 'completar'
-      ? `¿Confirmas COMPLETAR ${state.selectedOperation} en ${state.selectedSpools.length} spools?`
-      : `¿Confirmas CANCELAR ${state.selectedOperation} en ${state.selectedSpools.length} spools?`
-    : tipo === 'iniciar'
-    ? `¿Confirmas INICIAR ${state.selectedOperation}?`
-    : tipo === 'completar'
-    ? `¿Confirmas COMPLETAR ${state.selectedOperation}?`
-    : `¿Confirmas CANCELAR ${state.selectedOperation}?`;
+  const actionLabel = tipo === 'iniciar' ? 'INICIAR' : tipo === 'completar' ? 'COMPLETAR' : 'CANCELAR';
+  const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
+                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
 
-  const variant = tipo === 'iniciar' ? 'iniciar' : tipo === 'completar' ? 'completar' : 'cancelar';
+  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
+                        state.selectedOperation === 'SOLD' ? Flame : SearchCheck;
+
+  const spoolsList = isBatchMode ? state.selectedSpools : [state.selectedSpool];
+  const spoolCount = spoolsList.length;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <button
-        onClick={() => router.back()}
-        className="text-cyan-600 font-semibold mb-6 text-xl"
-      >
-        ← Volver
-      </button>
+    <div
+      className="min-h-screen bg-[#001F3F]"
+      style={{
+        backgroundImage: `
+          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+        `,
+        backgroundSize: '50px 50px'
+      }}
+    >
+      {/* Logo */}
+      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+        <Image
+          src="/logos/logo-grisclaro-F8F9FA.svg"
+          alt="Kronos Mining"
+          width={200}
+          height={80}
+          priority
+        />
+      </div>
 
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold text-center mb-6">
-          {title}
-        </h1>
+      {/* Header */}
+      <div className="px-10 py-6 border-b-4 border-white/30">
+        <div className="flex items-center justify-center gap-4">
+          <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
+          <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
+            {operationLabel} - {actionLabel}
+          </h2>
+        </div>
+      </div>
 
-        <Card>
-          <h2 className="text-xl font-bold mb-4">Resumen</h2>
-          <div className="space-y-2 text-lg">
-            <p>
-              <strong>Trabajador:</strong> {state.selectedWorker.nombre_completo}
-            </p>
-            <p>
-              <strong>Operación:</strong>{' '}
-              {state.selectedOperation === 'ARM' ? 'ARMADO (ARM)' : 'SOLDADO (SOLD)'}
-            </p>
+      {/* Content */}
+      <div className="p-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Info secundaria compacta */}
+          <div className="flex items-center justify-center gap-6 mb-6 text-center">
+            <span className="text-base font-black text-white/60 font-mono">
+              {state.selectedWorker.nombre_completo}
+            </span>
+            <div className="h-6 w-px bg-white/30"></div>
+            <span className="text-base font-black text-white/60 font-mono">{operationLabel}</span>
+          </div>
 
-            {isBatchMode ? (
-              <>
-                <p>
-                  <strong>Spools seleccionados:</strong> {state.selectedSpools.length}
-                </p>
-                <div className="mt-4 max-h-60 overflow-y-auto border-2 border-gray-200 rounded-lg p-3">
-                  <ul className="space-y-1">
-                    {state.selectedSpools.map((tag, index) => (
-                      <li key={tag} className="text-base text-gray-700 flex items-center gap-2">
-                        <span className="text-cyan-600 font-semibold">{index + 1}.</span>
-                        {tag}
-                      </li>
-                    ))}
-                  </ul>
+          {/* Error State */}
+          {error && !loading && (
+            <div className="border-4 border-red-500 p-8 mb-6 bg-red-500/10">
+              <div className="flex items-center gap-4 mb-4">
+                <AlertCircle size={48} className="text-red-500" strokeWidth={3} />
+                <h3 className="text-2xl font-black text-red-500 font-mono">ERROR</h3>
+              </div>
+              <p className="text-lg text-white font-mono mb-6">{error}</p>
+              {(errorType === 'server' || errorType === 'network') && (
+                <button
+                  onClick={handleConfirm}
+                  className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+                >
+                  REINTENTAR
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Loading State */}
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-20 mb-6">
+              <Loader2 size={64} className="text-zeues-orange animate-spin mb-4" strokeWidth={3} />
+              <span className="text-xl font-black text-white font-mono">PROCESANDO...</span>
+              <span className="text-base font-black text-white/60 font-mono mt-2">Actualizando Google Sheets</span>
+            </div>
+          )}
+
+          {/* Lista de spools */}
+          {!loading && (
+            <>
+              <div className="border-4 border-white mb-8">
+                {/* Header con count */}
+                <div className="border-b-4 border-white bg-white/5 p-5 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <Package size={40} strokeWidth={3} className="text-white" />
+                    <h3 className="text-2xl font-black text-white font-mono tracking-[0.2em]">
+                      {isBatchMode ? 'SPOOLS SELECCIONADOS' : 'SPOOL SELECCIONADO'}
+                    </h3>
+                  </div>
+                  <div className="w-16 h-16 bg-white/10 border-4 border-white flex items-center justify-center">
+                    <span className="text-3xl font-black text-white font-mono">{spoolCount}</span>
+                  </div>
                 </div>
-              </>
-            ) : (
-              <p>
-                <strong>Spool:</strong> {state.selectedSpool}
-              </p>
-            )}
 
-            {tipo === 'completar' && (
-              <p>
-                <strong>Fecha:</strong> {new Date().toLocaleDateString('es-ES')}
-              </p>
-            )}
-          </div>
-        </Card>
+                {/* Lista scrollable grande */}
+                <div className="max-h-96 overflow-y-auto">
+                  {spoolsList.map((tag, index) => (
+                    <div
+                      key={tag}
+                      className="h-16 border-b-2 border-white/30 last:border-b-0 flex items-center px-6 gap-5 hover:bg-white/5"
+                    >
+                      <div className="w-12 h-12 bg-white/10 border-2 border-white flex items-center justify-center">
+                        <span className="text-xl font-black text-white font-mono">{index + 1}</span>
+                      </div>
+                      <span className="text-2xl font-black text-white font-mono flex-1">{tag}</span>
+                      <CheckCircle size={28} strokeWidth={3} className="text-green-500" />
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-        {error && (
-          <div className="mt-4">
-            <ErrorMessage message={error} type={errorType} onRetry={errorType === 'server' || errorType === 'network' ? handleConfirm : undefined} />
-          </div>
-        )}
+              {/* Fecha si es completar */}
+              {tipo === 'completar' && (
+                <div className="border-2 border-white/30 p-4 mb-8 text-center">
+                  <span className="text-sm font-black text-white/50 font-mono">FECHA: </span>
+                  <span className="text-lg font-black text-white font-mono">{new Date().toLocaleDateString('es-ES')}</span>
+                </div>
+              )}
 
-        {loading ? (
-          <div className="mt-6">
-            <Loading message="Actualizando Google Sheets..." />
+              {/* Botón CONFIRMAR - único elemento naranja grande */}
+              <button
+                onClick={handleConfirm}
+                disabled={loading}
+                className="w-full h-24 mb-6 bg-zeues-orange border-4 border-zeues-orange flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange/80 transition-all disabled:opacity-50 group"
+              >
+                <CheckCircle size={48} strokeWidth={3} className="text-white" />
+                <span className="text-3xl font-black text-white font-mono tracking-[0.25em]">
+                  CONFIRMAR {spoolCount} SPOOL{spoolCount !== 1 ? 'S' : ''}
+                </span>
+              </button>
+            </>
+          )}
+
+          {/* Navigation */}
+          <div className="flex gap-4">
+            <button
+              onClick={() => router.back()}
+              className="flex-1 h-16 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
+            >
+              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                VOLVER
+              </span>
+            </button>
+            <button
+              onClick={handleCancel}
+              className="flex-1 h-16 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
+            >
+              <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
+              <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                INICIO
+              </span>
+            </button>
           </div>
-        ) : (
-          <div className="space-y-3 mt-6">
-            <Button variant={variant} onClick={handleConfirm}>
-              ✓ CONFIRMAR
-            </Button>
-            <Button variant="cancel" onClick={handleCancel}>
-              Cancelar
-            </Button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -233,7 +305,11 @@ function ConfirmarContent() {
 
 export default function ConfirmarPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center">
+        <Loader2 size={64} className="text-zeues-orange animate-spin" strokeWidth={3} />
+      </div>
+    }>
       <ConfirmarContent />
     </Suspense>
   );

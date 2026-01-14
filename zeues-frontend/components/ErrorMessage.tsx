@@ -1,3 +1,5 @@
+import { WifiOff, Search, CircleAlert, CircleX, type LucideIcon } from 'lucide-react';
+
 type ErrorType = 'network' | 'not-found' | 'validation' | 'forbidden' | 'server' | 'generic';
 
 interface ErrorMessageProps {
@@ -6,18 +8,27 @@ interface ErrorMessageProps {
   onRetry?: () => void;
 }
 
+interface ErrorConfig {
+  icon: LucideIcon;
+  title: string;
+  bgColor: string;
+  borderColor: string;
+  textColor: string;
+  showRetry: boolean;
+}
+
 /**
- * Componente de mensaje de error con iconos y estilos según tipo
+ * Componente de mensaje de error con iconos Lucide y estilos según tipo
  *
  * @param message - Mensaje de error a mostrar
  * @param type - Tipo de error (network, not-found, validation, forbidden, server, generic)
  * @param onRetry - Callback opcional para botón de reintentar (solo para errores recuperables)
  */
 export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessageProps) {
-  // Configuración de iconos y colores según tipo de error
-  const config = {
+  // Configuración de iconos Lucide y colores según tipo de error
+  const config: Record<ErrorType, ErrorConfig> = {
     network: {
-      icon: '🔌',
+      icon: WifiOff,
       title: 'Error de Conexión',
       bgColor: 'bg-orange-50',
       borderColor: 'border-orange-200',
@@ -25,7 +36,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
       showRetry: true,
     },
     'not-found': {
-      icon: '🔍',
+      icon: Search,
       title: 'No Encontrado',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200',
@@ -33,7 +44,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
       showRetry: false,
     },
     validation: {
-      icon: '⚠️',
+      icon: CircleAlert,
       title: 'Error de Validación',
       bgColor: 'bg-yellow-50',
       borderColor: 'border-yellow-200',
@@ -41,7 +52,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
       showRetry: false,
     },
     forbidden: {
-      icon: '🚫',
+      icon: CircleX,
       title: 'No Autorizado',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
@@ -49,7 +60,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
       showRetry: false,
     },
     server: {
-      icon: '❌',
+      icon: CircleX,
       title: 'Error del Servidor',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
@@ -57,7 +68,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
       showRetry: true,
     },
     generic: {
-      icon: '❌',
+      icon: CircleX,
       title: 'Error',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
@@ -68,13 +79,16 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
 
   const errorConfig = config[type];
   const shouldShowRetry = onRetry && errorConfig.showRetry;
+  const IconComponent = errorConfig.icon;
 
   return (
     <div className={`${errorConfig.bgColor} border ${errorConfig.borderColor} rounded-lg p-4`}>
       <div className="flex items-start gap-3">
-        <span className="text-2xl flex-shrink-0" role="img" aria-label={errorConfig.title}>
-          {errorConfig.icon}
-        </span>
+        <IconComponent
+          size={28}
+          className={`${errorConfig.textColor} flex-shrink-0`}
+          aria-label={errorConfig.title}
+        />
         <div className="flex-1">
           <h3 className={`${errorConfig.textColor} font-bold text-lg mb-1`}>
             {errorConfig.title}

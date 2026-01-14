@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, ErrorMessage } from '@/components';
+import Image from 'next/image';
+import { Puzzle, Flame, SearchCheck, ArrowLeft, X } from 'lucide-react';
+import { ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
 import type { Worker } from '@/lib/types';
 
@@ -13,11 +15,18 @@ const OPERATION_TO_ROLES: Record<string, string[]> = {
   'METROLOGIA': ['Metrologia'],
 };
 
+// Iconos por operación (Lucide)
+const OPERATION_ICONS = {
+  'ARM': Puzzle,
+  'SOLD': Flame,
+  'METROLOGIA': SearchCheck,
+};
+
 // Títulos dinámicos por operación
 const OPERATION_TITLES: Record<string, string> = {
-  'ARM': '🔧 ¿Quién va a armar?',
-  'SOLD': '🔥 ¿Quién va a soldar?',
-  'METROLOGIA': '📐 ¿Quién va a medir?',
+  'ARM': '¿Quién va a armar?',
+  'SOLD': '¿Quién va a soldar?',
+  'METROLOGIA': '¿Quién va a medir?',
 };
 
 export default function TrabajadorSelectionPage() {
@@ -53,42 +62,184 @@ export default function TrabajadorSelectionPage() {
 
   if (!state.selectedOperation) return null;
 
+  // Obtener icono y título dinámicos
+  const IconComponent = OPERATION_ICONS[state.selectedOperation];
+  const pageTitle = OPERATION_TITLES[state.selectedOperation];
+
+  // Mapeo de operaciones a nombres para display
+  const operationNames: Record<string, string> = {
+    'ARM': 'ARMADO',
+    'SOLD': 'SOLDADURA',
+    'METROLOGIA': 'METROLOGÍA'
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <button
-        onClick={() => router.back()}
-        className="text-cyan-600 font-semibold mb-6"
-      >
-        ← Volver
-      </button>
+    <div
+      className="min-h-screen bg-[#001F3F]"
+      style={{
+        backgroundImage: `
+          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+        `,
+        backgroundSize: '50px 50px'
+      }}
+    >
+      {/* Logo */}
+      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+        <Image
+          src="/logos/logo-grisclaro-F8F9FA.svg"
+          alt="Kronos Mining"
+          width={200}
+          height={80}
+          priority
+        />
+      </div>
 
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold text-center mb-8">
-          {OPERATION_TITLES[state.selectedOperation]}
-        </h1>
+      {/* Header con operación */}
+      <div className="px-10 py-6 border-b-4 border-white/30">
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <IconComponent size={48} strokeWidth={3} className="text-zeues-orange" />
+          <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
+            {operationNames[state.selectedOperation]}
+          </h2>
+        </div>
+        <p className="text-xl text-center text-white/70 font-mono tracking-[0.15em]">
+          {pageTitle.toUpperCase()}
+        </p>
+      </div>
 
+      {/* Content */}
+      <div className="p-8">
         {filteredWorkers.length === 0 ? (
           <div>
-            <ErrorMessage
-              message={`No hay trabajadores disponibles para ${state.selectedOperation}`}
-            />
-            <div className="mt-4 text-center">
-              <Button onClick={() => router.back()}>
-                Volver a seleccionar operación
-              </Button>
+            <div className="mb-8 text-center">
+              <ErrorMessage
+                message={`No hay trabajadores disponibles para ${state.selectedOperation}`}
+              />
             </div>
+            <button
+              onClick={() => router.back()}
+              className="
+                w-full h-16
+                bg-transparent
+                border-4 border-white
+                flex items-center justify-center gap-3
+                active:bg-white active:text-[#001F3F]
+                transition-all duration-200
+                group
+              "
+            >
+              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                VOLVER A SELECCIONAR OPERACIÓN
+              </span>
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredWorkers.map((worker) => (
-              <Button
-                key={worker.id}
-                onClick={() => handleSelectWorker(worker)}
+          <>
+            {/* Large touch buttons - VAR-5 */}
+            <div className="flex flex-col gap-4 mb-8">
+              {filteredWorkers.map((worker) => {
+                // Obtener todos los roles del trabajador (multirol)
+                const workerRoles = worker.roles && worker.roles.length > 0 ? worker.roles : ['Trabajador'];
+
+                return (
+                  <button
+                    key={worker.id}
+                    onClick={() => handleSelectWorker(worker)}
+                    aria-label={`${worker.nombre} ${worker.apellido}`}
+                    className="
+                      h-24
+                      bg-transparent
+                      border-4 border-white
+                      flex items-center justify-between px-8
+                      cursor-pointer
+                      active:bg-zeues-orange active:border-zeues-orange
+                      transition-all duration-200
+                      group
+                      relative
+                      overflow-hidden
+                    "
+                  >
+                    {/* Highlight effect on active */}
+                    <div className="absolute inset-0 border-l-8 border-zeues-orange opacity-0 group-active:opacity-100 transition-opacity duration-200"></div>
+
+                    <div className="flex items-center gap-6 relative z-10">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-black text-white/50 font-mono group-active:text-white/80">
+                          ID
+                        </span>
+                        <span className="text-3xl font-black text-white font-mono group-active:text-white">
+                          {worker.id}
+                        </span>
+                      </div>
+
+                      <div className="h-16 w-1 bg-white/30 group-active:bg-white"></div>
+
+                      <div className="text-left">
+                        <h3 className="text-3xl font-black text-white tracking-[0.15em] font-mono group-active:text-white leading-tight">
+                          {worker.nombre}
+                        </h3>
+                        <h3 className="text-3xl font-black text-white tracking-[0.15em] font-mono group-active:text-white leading-tight">
+                          {worker.apellido}
+                        </h3>
+                      </div>
+                    </div>
+
+                    {/* Multi-rol badges */}
+                    <div className="relative z-10 flex flex-wrap gap-2 justify-end">
+                      {workerRoles.map((rol, index) => (
+                        <div key={index} className="px-3 py-1 border-2 border-white/50 group-active:border-white">
+                          <span className="text-xs font-black text-white/70 font-mono tracking-[0.15em] group-active:text-white">
+                            {rol.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Botones de navegación */}
+            <div className="flex gap-4">
+              <button
+                onClick={() => router.back()}
+                className="
+                  flex-1 h-16
+                  bg-transparent
+                  border-4 border-white
+                  flex items-center justify-center gap-3
+                  active:bg-white active:text-[#001F3F]
+                  transition-all duration-200
+                  group
+                "
               >
-                {worker.nombre_completo}
-              </Button>
-            ))}
-          </div>
+                <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+                <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                  VOLVER
+                </span>
+              </button>
+
+              <button
+                onClick={() => router.push('/')}
+                className="
+                  flex-1 h-16
+                  bg-transparent
+                  border-4 border-red-500
+                  flex items-center justify-center gap-3
+                  active:bg-red-500 active:border-red-500
+                  transition-all duration-200
+                  group
+                "
+              >
+                <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
+                <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                  CANCELAR
+                </span>
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -12,10 +12,10 @@ export function Button({
   ...props
 }: ButtonProps) {
   const variants = {
-    primary: 'bg-[#FF5B00] hover:bg-[#E64A19] text-white',
-    iniciar: 'bg-cyan-600 hover:bg-cyan-700 text-white',
-    completar: 'bg-green-600 hover:bg-green-700 text-white',
-    cancelar: 'bg-yellow-600 hover:bg-yellow-700 text-white',  // v2.0: CANCELAR acción EN_PROGRESO
+    primary: 'bg-zeues-orange hover:bg-zeues-orange-dark text-white',
+    iniciar: 'bg-zeues-cyan hover:bg-zeues-blue text-white',
+    completar: 'bg-zeues-green hover:bg-green-700 text-white',
+    cancelar: 'bg-zeues-warning hover:bg-zeues-red text-white',  // v2.0: CANCELAR acción EN_PROGRESO
     cancel: 'bg-gray-400 hover:bg-gray-500 text-white',  // Abandonar flujo completo
   };
 

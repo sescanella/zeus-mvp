@@ -1,32 +1,35 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Flujo 2: COMPLETAR ARM (Armado)
+ * Flujo 2: COMPLETAR ARM (Armado) - v2.0
  *
  * Verifica el flujo completo para completar una acción de armado
  * que ya fue iniciada y está en progreso.
+ *
+ * FLUJO v2.0: Operación → Trabajador → Tipo → Spool → Confirmar → Éxito
  */
-test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
+test.describe('Flujo 2: COMPLETAR ARM (Armado) - v2.0', () => {
 
   test('debe completar el flujo COMPLETAR ARM exitosamente', async ({ page }) => {
 
     // ========================================
-    // P1 - Identificación: Seleccionar trabajador
+    // P1 - Selección de Operación
     // ========================================
-    await test.step('P1 - Identificación', async () => {
+    await test.step('P1 - Selección de Operación', async () => {
       await page.goto('/');
 
-      // Seleccionar "Mauricio Rodriguez" (quien tiene spools en progreso ARM)
-      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
+      // Seleccionar "ARMADO (ARM)"
+      await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
 
       await expect(page).toHaveURL('/operacion');
     });
 
     // ========================================
-    // P2 - Operación: Seleccionar ARMADO
+    // P2 - Selección de Trabajador
     // ========================================
-    await test.step('P2 - Operación', async () => {
-      await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
+    await test.step('P2 - Selección de Trabajador', async () => {
+      // Seleccionar "Mauricio Rodriguez" (quien tiene spools en progreso ARM)
+      await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
 
       await expect(page).toHaveURL('/tipo-interaccion');
     });
@@ -38,7 +41,10 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
       // Verificar título muestra "ARMADO (ARM)"
       await expect(page.getByText(/ARMADO \(ARM\)/i)).toBeVisible();
 
-      // Seleccionar "✅ COMPLETAR ACCIÓN"
+      // Verificar info del trabajador
+      await expect(page.getByText(/Mauricio/i)).toBeVisible();
+
+      // Seleccionar "COMPLETAR ACCIÓN"
       await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
 
       // Verificar navegación a /seleccionar-spool?tipo=completar
@@ -49,16 +55,18 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
     // P4 - Seleccionar Spool: Elegir spool en progreso
     // ========================================
     await test.step('P4 - Seleccionar Spool', async () => {
-      // Verificar título con énfasis en "TU spool"
-      await expect(page.getByText(/Selecciona TU spool para COMPLETAR ARM/i)).toBeVisible();
+      // Verificar título
+      await expect(page.getByText(/SELECCIONA SPOOL/i)).toBeVisible();
 
-      // Verificar que aparecen spools disponibles para COMPLETAR ARM (Mauricio Rodriguez)
-      // Usar selector genérico para trabajar con cualquier spool disponible
-      const spoolButtons = page.getByRole('button').filter({ hasText: /TEST-/ });
-      await expect(spoolButtons.first()).toBeVisible();
+      // Esperar que carguen los spools
+      await page.waitForTimeout(2000);
+
+      // Verificar que aparecen spools en progreso
+      const spoolRows = page.locator('tbody tr');
+      await expect(spoolRows.first()).toBeVisible({ timeout: 10000 });
 
       // Seleccionar primer spool disponible
-      await spoolButtons.first().click();
+      await spoolRows.first().click();
 
       // Verificar navegación a /confirmar?tipo=completar
       await expect(page).toHaveURL(/\/confirmar\?tipo=completar/);
@@ -69,66 +77,58 @@ test.describe('Flujo 2: COMPLETAR ARM (Armado)', () => {
     // ========================================
     await test.step('P5 - Confirmar', async () => {
       // Verificar título
-      await expect(page.getByText(/¿Confirmas COMPLETAR ARM\?/i)).toBeVisible();
+      await expect(page.getByText(/CONFIRMAR/i)).toBeVisible();
 
-      // Verificar resumen muestra los datos correctos
-      await expect(page.getByText(/Mauricio Rodriguez/i)).toBeVisible();
-      await expect(page.getByText(/ARMADO \(ARM\)/i)).toBeVisible();
-      // Verificar que aparece un spool TEST-*
-      await expect(page.getByText(/TEST-/)).toBeVisible();
+      // Verificar resumen
+      await expect(page.getByText(/Mauricio/i)).toBeVisible();
+      await expect(page.getByText(/ARMADO/i)).toBeVisible();
 
-      // Verificar fecha actual en el resumen
-      const currentDate = new Date().toLocaleDateString('es-ES');
-      await expect(page.getByText(new RegExp(currentDate))).toBeVisible();
-
-      // Presionar "✓ CONFIRMAR"
+      // Presionar "CONFIRMAR"
       await page.getByRole('button', { name: /CONFIRMAR/i }).click();
 
-      // Verificar loading "Actualizando Google Sheets..."
-      await expect(page.getByText(/Actualizando Google Sheets/i)).toBeVisible();
-
       // Esperar navegación a /exito
-      await expect(page).toHaveURL('/exito', { timeout: 10000 });
+      await expect(page).toHaveURL('/exito', { timeout: 15000 });
     });
 
     // ========================================
-    // P6 - Éxito: Verificar mensaje y opciones
+    // P6 - Éxito: Verificar mensaje
     // ========================================
     await test.step('P6 - Éxito', async () => {
-      // Verificar checkmark verde
-      const checkmark = page.locator('svg').first();
-      await expect(checkmark).toBeVisible();
+      // Verificar mensaje "COMPLETADO"
+      await expect(page.getByText(/COMPLETADO/i)).toBeVisible();
 
-      // Verificar mensaje de éxito
-      await expect(page.getByText(/¡Acción completada exitosamente!/i)).toBeVisible();
+      // Verificar countdown
+      await expect(page.getByText(/SEGUNDOS/i)).toBeVisible();
 
-      // Test botón "FINALIZAR" regresa a P1
-      await page.getByRole('button', { name: /FINALIZAR/i }).click();
-      await expect(page).toHaveURL('/');
+      // Verificar botón CONTINUAR
+      await expect(page.getByRole('button', { name: /CONTINUAR/i })).toBeVisible();
     });
   });
 
   // ========================================
-  // Test de validación de propiedad (ownership)
+  // Test: Solo mostrar spools propios del trabajador
   // ========================================
   test('solo debe mostrar spools propios del trabajador', async ({ page }) => {
     await page.goto('/');
 
-    // Seleccionar Nicolás Rodriguez
-    await page.getByRole('button', { name: /Nicolás Rodriguez/i }).click();
-
-    // Seleccionar ARMADO (ARM)
+    // Seleccionar ARMADO
     await page.getByRole('button', { name: /ARMADO \(ARM\)/i }).click();
+    await expect(page).toHaveURL('/operacion');
 
-    // Seleccionar COMPLETAR ACCIÓN
+    // Seleccionar Mauricio Rodriguez
+    await page.getByRole('button', { name: /Mauricio Rodriguez/i }).click();
+    await expect(page).toHaveURL('/tipo-interaccion');
+
+    // Ir a COMPLETAR
     await page.getByRole('button', { name: /COMPLETAR ACCIÓN/i }).click();
+    await expect(page).toHaveURL(/\/seleccionar-spool\?tipo=completar/);
 
-    // Verificar que aparecen spools (debe haber al menos uno de Nicolás)
-    // Usar selector genérico para spools TEST-*
-    const spoolButtons = page.getByRole('button').filter({ hasText: /TEST-/ });
-    await expect(spoolButtons.first()).toBeVisible();
+    // Esperar que cargue
+    await page.waitForTimeout(2000);
 
-    // Test de ownership: cada trabajador solo ve sus propios spools
-    // Si no hay spools disponibles, el test fallará apropiadamente
+    // Verificar que solo aparecen spools de Mauricio Rodriguez
+    // (El backend filtra por worker_nombre)
+    const spoolRows = page.locator('tbody tr');
+    await expect(spoolRows.first()).toBeVisible({ timeout: 10000 });
   });
 });

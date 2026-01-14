@@ -9,16 +9,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Paleta ZEUES custom
+        // Paleta ZEUES Soft Brutalism v2.0
         zeues: {
-          orange: '#FF5B00',        // Principal (marca)
-          'orange-dark': '#E64A19', // Hover principal
-          blue: '#0A7EA4',          // Secundario
-          cyan: '#0891B2',          // INICIAR acción
-          green: '#16A34A',         // COMPLETAR acción
-          red: '#DC2626',           // Error
+          // KM Brand Colors (Base)
+          orange: '#FF5B00',        // Primary CTA (KM)
+          'orange-dark': '#E64A19', // Hover primary
+          blue: '#0A4C95',          // Secondary (KM)
+          'blue-dark': '#083A75',   // Hover secondary
+
+          // Terrosos Desaturados (Soft Brutalism)
+          stone: '#D4D2CE',         // Cards/contenedores background
+          beige: '#F5F1E8',         // Page background
+          sage: '#9CAF88',          // Success state
+          taupe: '#8B7F73',         // Secondary text
+
+          // States
+          red: '#DC2626',           // Danger/Cancel
           warning: '#EA580C',       // Warning
         },
+        // Alias para compatibilidad con código existente
+        'km-orange': '#FF5B00',
+        'km-blue': '#0A4C95',
       },
     },
   },
