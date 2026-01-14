@@ -46,10 +46,16 @@ export default function TrabajadorSelectionPage() {
 
     const eligible = state.allWorkers.filter(worker => {
       if (!worker.activo) return false;  // Solo trabajadores activos
-      if (!worker.roles || worker.roles.length === 0) return false;  // Debe tener roles
+
+      // Obtener roles del trabajador (usar array roles o fallback a rol singular)
+      const workerRoles = worker.roles && worker.roles.length > 0
+        ? worker.roles
+        : (worker.rol ? [worker.rol] : []);
+
+      if (workerRoles.length === 0) return false;  // Debe tener al menos un rol
 
       // Verificar si tiene alguno de los roles necesarios
-      return worker.roles.some(role => requiredRoles.includes(role));
+      return workerRoles.some(role => requiredRoles.includes(role));
     });
 
     setFilteredWorkers(eligible);
