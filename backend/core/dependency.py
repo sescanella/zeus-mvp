@@ -35,6 +35,7 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.services.sheets_service import SheetsService
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
+from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
 from backend.services.action_service import ActionService
 
@@ -186,6 +187,34 @@ def get_spool_service(
         sheets_repository=sheets_repo,
         validation_service=validation_service
     )
+
+
+def get_spool_service_v2(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> SpoolServiceV2:
+    """
+    Factory para SpoolServiceV2 (nueva instancia por request).
+
+    Retorna una nueva instancia de SpoolServiceV2 con mapeo dinámico de columnas.
+    SpoolServiceV2 implementa:
+    - Mapeo dinámico de columnas (lee header row 1)
+    - Resistente a cambios de estructura en spreadsheet
+    - Reglas de negocio correctas para las 4 operaciones:
+      * INICIAR ARM: Fecha_Materiales llena Y Armador vacío
+      * COMPLETAR ARM: Armador lleno Y Fecha_Armado vacía
+      * INICIAR SOLD: Fecha_Armado llena Y Soldador vacío
+      * COMPLETAR SOLD: Soldador lleno Y Fecha_Soldadura vacía
+
+    Args:
+        sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
+
+    Returns:
+        Nueva instancia de SpoolServiceV2 con dependencias configuradas.
+
+    Usage:
+        spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
+    """
+    return SpoolServiceV2(sheets_repository=sheets_repo)
 
 
 def get_action_service(

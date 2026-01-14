@@ -23,22 +23,100 @@ class SheetsService:
     """
     Servicio para parsear filas de Google Sheets a modelos Pydantic.
 
-    Todos los métodos son estáticos/classmethod ya que no mantienen estado.
+    v2.1 (Dynamic Column Mapping):
+    - Lee headers (row 1) para construir mapeo dinámico
+    - Busca columnas por NOMBRE en lugar de índice hardcodeado
+    - Resistente a cambios en estructura del spreadsheet
     """
 
-    # Índices de columnas en Google Sheets (0-indexed)
-    # Hoja "Operaciones" v2.0 - Event Sourcing (READ-ONLY)
-    # Nota: Estados ARM/SOLD se reconstruyen desde Metadata, NO desde estas columnas
-    IDX_NV = 1                  # B  - NV (Número de Nota de Venta) - v2.0 filtrado multidimensional
-    IDX_TAG_SPOOL = 6           # G  - TAG_SPOOL / CODIGO_BARRA
-    IDX_FECHA_MATERIALES = 35   # AJ - Fecha_Materiales (prerequisito para ARM)
-    IDX_FECHA_ARMADO = 36       # AK - Fecha_Armado (legacy - solo lectura)
-    IDX_ARMADOR = 37            # AL - Armador (legacy - solo lectura)
-    IDX_FECHA_SOLDADURA = 38    # AM - Fecha_Soldadura (legacy - solo lectura)
-    IDX_SOLDADOR = 39           # AN - Soldador (legacy - solo lectura)
-    IDX_FECHA_METROLOGIA = 40   # AO - Fecha_Metrología (v2.0 nuevo)
+    def __init__(self, column_map: Optional[dict[str, int]] = None):
+        """
+        Inicializa el servicio con un mapeo opcional de columnas.
 
-    # Hoja "Trabajadores" - Estructura v2.0: Id | Nombre | Apellido | Rol | Activo
+        Args:
+            column_map: Diccionario {nombre_columna: índice}. Si None, usa índices legacy.
+        """
+        self._column_map = column_map or {}
+
+    @staticmethod
+    def build_column_map(header_row: list[str]) -> dict[str, int]:
+        """
+        Construye un mapeo dinámico: nombre_columna → índice.
+
+        Busca nombres de columnas en el header (case-insensitive, ignora espacios).
+
+        Args:
+            header_row: Lista con nombres de columnas del header (row 1)
+
+        Returns:
+            Dict con mapeo {nombre_normalizado: índice}
+
+        Examples:
+            >>> header = ["NV", "TAG_SPOOL", "Fecha_Armado", "Armador"]
+            >>> column_map = SheetsService.build_column_map(header)
+            >>> column_map["Fecha_Armado"]  # Returns: 2
+        """
+        column_map = {}
+
+        # Normalizar nombres: lowercase, sin espacios, sin underscores
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "")
+
+        for idx, col_name in enumerate(header_row):
+            if not col_name:
+                continue
+
+            # Almacenar nombre normalizado
+            normalized = normalize(col_name)
+            column_map[normalized] = idx
+
+            # También almacenar nombres parciales comunes para búsqueda
+            # Ejemplo: "TAG_SPOOL / CODIGO_BARRA" → también buscar por "tagspool"
+            if "/" in col_name:
+                first_part = col_name.split("/")[0].strip()
+                column_map[normalize(first_part)] = idx
+
+        logger.debug(f"Built column map with {len(column_map)} entries")
+        return column_map
+
+    def _get_col_idx(self, column_name: str, fallback_idx: Optional[int] = None) -> Optional[int]:
+        """
+        Obtiene el índice de una columna por su nombre.
+
+        Args:
+            column_name: Nombre de la columna (ej: "Fecha_Armado")
+            fallback_idx: Índice legacy a usar si no hay mapeo
+
+        Returns:
+            Índice de la columna, o fallback_idx si no se encuentra
+        """
+        normalized = column_name.lower().replace(" ", "").replace("_", "")
+
+        if normalized in self._column_map:
+            return self._column_map[normalized]
+
+        if fallback_idx is not None:
+            logger.warning(
+                f"Column '{column_name}' not found in map, using fallback index {fallback_idx}"
+            )
+            return fallback_idx
+
+        logger.error(f"Column '{column_name}' not found and no fallback provided")
+        return None
+
+    # ==================== LEGACY CONSTANTS (DEPRECATED) ====================
+    # Mantenidos temporalmente para compatibilidad, pero se debe usar column_map
+    # TODO: Eliminar después de migrar todos los usos a mapeo dinámico
+    IDX_NV = 1                  # B  - NV (Número de Nota de Venta)
+    IDX_TAG_SPOOL = 6           # G  - TAG_SPOOL / CODIGO_BARRA
+    IDX_FECHA_MATERIALES = 35   # AJ - OBSOLETO: ahora es AG (32)
+    IDX_FECHA_ARMADO = 36       # AK - OBSOLETO: ahora es AH (33)
+    IDX_ARMADOR = 37            # AL - OBSOLETO: ahora es AI (34)
+    IDX_FECHA_SOLDADURA = 38    # AM - OBSOLETO: ahora es AJ (35)
+    IDX_SOLDADOR = 39           # AN - OBSOLETO: ahora es AK (36)
+    IDX_FECHA_METROLOGIA = 40   # AO - OBSOLETO
+
+    # Hoja "Trabajadores" - Estructura estable
     IDX_WORKER_ID = 0           # A - Id (numérico)
     IDX_WORKER_NOMBRE = 1       # B - Nombre
     IDX_WORKER_APELLIDO = 2     # C - Apellido
