@@ -1,11 +1,26 @@
 """
-Servicio de Spools v2.1 con mapeo dinámico de columnas.
+Servicio de Spools v2.2 con mapeo dinámico y validación de estructura.
 
 Diferencias vs v1.0:
 - Lee header (row 1) para construir mapeo: nombre_columna → índice
 - Resistente a cambios en estructura del spreadsheet
-- Reglas de negocio actualizadas según especificación real:
-  - INICIAR ARM: Fecha_Armado (AH) llena Y Armador (AI) vacía
+- Reglas de negocio correctas para 4 operaciones:
+  * INICIAR ARM: Fecha_Materiales llena Y Armador vacía
+  * COMPLETAR ARM: Armador lleno Y Fecha_Armado vacía
+  * INICIAR SOLD: Fecha_Armado llena Y Soldador vacío
+  * COMPLETAR SOLD: Soldador lleno Y Fecha_Soldadura vacía
+
+v2.2 PROTECCIONES:
+- Validación de columnas críticas al inicio
+- Detecta eliminación accidental de columnas
+- Busca nombres alternativos (ej: "TAG_SPOOL" o "tag" o "codigobarra")
+- Error descriptivo con soluciones si falta alguna columna
+- Logging detallado de mapeo de columnas
+
+CASO LÍMITE MANEJADO:
+Si se elimina una columna no crítica → Sistema continúa funcionando ✅
+Si se elimina una columna crítica → Sistema falla FAST con error claro ❌
+Si se renombra columna → Sistema busca nombres alternativos ✅
 
 Autor: ZEUES Team
 Fecha: 2026-01-14
@@ -48,6 +63,9 @@ class SpoolServiceV2:
 
         Lee el header (row 1) de la hoja Operaciones y crea el mapeo
         nombre_columna → índice.
+
+        VALIDACIÓN: Verifica que todas las columnas críticas existen.
+        Si falta alguna columna crítica, lanza error detallado.
         """
         if self.column_map is not None:
             return  # Ya inicializado
@@ -72,6 +90,83 @@ class SpoolServiceV2:
         self.sheets_service = SheetsService(column_map=self.column_map)
 
         logger.info(f"Column map built with {len(self.column_map)} entries")
+
+        # VALIDACIÓN CRÍTICA: Verificar que columnas obligatorias existen
+        self._validate_critical_columns()
+
+    def _validate_critical_columns(self):
+        """
+        Valida que todas las columnas críticas existen en el spreadsheet.
+
+        COLUMNAS CRÍTICAS (obligatorias para funcionamiento):
+        - TAG_SPOOL: Identificador único del spool
+        - Fecha_Materiales: Prerequisito para iniciar ARM
+        - Fecha_Armado: Estado de completitud ARM
+        - Armador: Worker asignado a ARM
+        - Fecha_Soldadura: Estado de completitud SOLD
+        - Soldador: Worker asignado a SOLD
+
+        Raises:
+            ValueError: Si falta alguna columna crítica, con detalles de:
+                       - Columnas faltantes
+                       - Columnas encontradas
+                       - Posibles soluciones
+        """
+        # Definir columnas críticas con nombres alternativos posibles
+        critical_columns = {
+            "TAG_SPOOL": ["tagspool", "tag", "codigobarra"],
+            "Fecha_Materiales": ["fechamateriales", "materialesdate"],
+            "Fecha_Armado": ["fechaarmado", "armadodate"],
+            "Armador": ["armador", "worker_arm"],
+            "Fecha_Soldadura": ["fechasoldadura", "soldaduradate"],
+            "Soldador": ["soldador", "worker_sold"]
+        }
+
+        missing_columns = []
+        found_columns = {}
+
+        for col_name, alternatives in critical_columns.items():
+            # Intentar encontrar la columna (normalizada)
+            normalized_name = col_name.lower().replace("_", "").replace(" ", "")
+
+            # Buscar en column_map (ya normalizado)
+            found = False
+            for alt in [normalized_name] + alternatives:
+                if alt in self.column_map:
+                    found_columns[col_name] = self.column_map[alt]
+                    found = True
+                    break
+
+            if not found:
+                missing_columns.append(col_name)
+
+        # Si faltan columnas críticas, lanzar error detallado
+        if missing_columns:
+            error_msg = f"""
+❌ ESTRUCTURA DE SPREADSHEET INVÁLIDA
+
+Columnas CRÍTICAS faltantes: {', '.join(missing_columns)}
+
+Esto puede ocurrir si:
+1. Se eliminó una columna del spreadsheet
+2. Se cambió el nombre de una columna en el header (row 1)
+3. El header (row 1) está vacío para esa columna
+
+SOLUCIÓN:
+1. Verifica que el header (row 1) de la hoja "Operaciones" contenga:
+   {', '.join(critical_columns.keys())}
+
+2. Si eliminaste una columna por error, restáurala desde el historial
+
+3. Si cambiaste el nombre, usa el nombre original o actualiza el código
+
+Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
+{chr(10).join(f'  ✅ {name} → columna {idx}' for name, idx in found_columns.items())}
+"""
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        logger.info(f"✅ All {len(critical_columns)} critical columns validated successfully")
 
     def parse_spool_row(self, row: list) -> Spool:
         """
