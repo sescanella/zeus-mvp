@@ -28,11 +28,14 @@ Fecha: 2026-01-14
 import logging
 from typing import Optional
 from datetime import date
+from dataclasses import replace
 
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.sheets_service import SheetsService
 from backend.models.spool import Spool
 from backend.models.enums import ActionStatus
+from backend.models.metadata import Accion
 from backend.config import config
 
 logger = logging.getLogger(__name__)
@@ -46,14 +49,20 @@ class SpoolServiceV2:
     obsoletos cuando cambia la estructura del spreadsheet.
     """
 
-    def __init__(self, sheets_repository: Optional[SheetsRepository] = None):
+    def __init__(
+        self,
+        sheets_repository: Optional[SheetsRepository] = None,
+        metadata_repository: Optional[MetadataRepository] = None
+    ):
         """
-        Inicializa el servicio con repositorio de Sheets.
+        Inicializa el servicio con repositorio de Sheets y Metadata.
 
         Args:
             sheets_repository: Repositorio para acceso a Google Sheets
+            metadata_repository: Repositorio para Event Sourcing (v2.0)
         """
         self.sheets_repository = sheets_repository or SheetsRepository()
+        self.metadata_repository = metadata_repository
         self.column_map: Optional[dict[str, int]] = None
         self.sheets_service: Optional[SheetsService] = None
 
@@ -168,6 +177,72 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
         logger.info(f"✅ All {len(critical_columns)} critical columns validated successfully")
 
+    def _reconstruir_estado_spool(self, spool: Spool) -> Spool:
+        """
+        Reconstruye el estado real de ARM/SOLD desde eventos en Metadata.
+
+        v2.0: La hoja Operaciones es READ-ONLY, los estados vienen como PENDIENTE.
+        Este método consulta Metadata y reconstruye el estado real.
+
+        Args:
+            spool: Spool con estados por defecto (PENDIENTE)
+
+        Returns:
+            Spool con estados reconstruidos (PENDIENTE/EN_PROGRESO/COMPLETADO)
+        """
+        if not self.metadata_repository:
+            # Si no hay MetadataRepository, retornar spool sin modificar
+            logger.warning(f"[V2] MetadataRepository not configured, using default states for {spool.tag_spool}")
+            return spool
+
+        tag_spool = spool.tag_spool
+
+        # Consultar eventos del spool
+        events = self.metadata_repository.get_events_by_spool(tag_spool)
+
+        if not events:
+            # No hay eventos, retornar estado original
+            return spool
+
+        # Reconstruir estado ARM
+        arm_status = ActionStatus.PENDIENTE
+        armador = None
+        for event in events:
+            if event.operacion == "ARM":
+                if event.accion == Accion.INICIAR:
+                    arm_status = ActionStatus.EN_PROGRESO
+                    armador = event.worker_nombre
+                elif event.accion == Accion.COMPLETAR:
+                    arm_status = ActionStatus.COMPLETADO
+
+        # Reconstruir estado SOLD
+        sold_status = ActionStatus.PENDIENTE
+        soldador = None
+        for event in events:
+            if event.operacion == "SOLD":
+                if event.accion == Accion.INICIAR:
+                    sold_status = ActionStatus.EN_PROGRESO
+                    soldador = event.worker_nombre
+                elif event.accion == Accion.COMPLETAR:
+                    sold_status = ActionStatus.COMPLETADO
+
+        # Crear nuevo spool con estados reconstruidos
+        spool_reconstruido = replace(
+            spool,
+            arm=arm_status,
+            armador=armador,
+            sold=sold_status,
+            soldador=soldador
+        )
+
+        logger.debug(
+            f"[V2] Rebuilt state for {tag_spool}: "
+            f"ARM={arm_status.value}, armador={armador}, "
+            f"SOLD={sold_status.value}, soldador={soldador}"
+        )
+
+        return spool_reconstruido
+
     def parse_spool_row(self, row: list) -> Spool:
         """
         Parsea una fila de Operaciones a objeto Spool usando mapeo dinámico.
@@ -246,16 +321,16 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
     def get_spools_disponibles_para_iniciar_arm(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR ARM.
+        Obtiene spools disponibles para INICIAR ARM con Event Sourcing.
 
-        REGLA DE NEGOCIO (CORRECTA - 2026-01-14):
+        REGLA DE NEGOCIO v2.0 (Event Sourcing - 2026-01-14):
         - Fecha_Materiales (col AG): CON DATO (prerequisito cumplido)
-        - Armador (col AI): VACÍO (nadie asignado aún)
+        - ARM estado: PENDIENTE (reconstruido desde Metadata)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("Retrieving spools available for INICIAR ARM")
+        logger.info("[V2] Retrieving spools available for INICIAR ARM with Event Sourcing")
         self._ensure_column_map()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -264,11 +339,14 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA: Fecha_Materiales llena Y Armador vacío
-                if spool.fecha_materiales is not None and spool.armador is None:
+                # v2.0: Reconstruir estado desde Metadata
+                spool = self._reconstruir_estado_spool(spool)
+
+                # REGLA v2.0: Fecha_Materiales llena Y ARM PENDIENTE (estado reconstruido)
+                if spool.fecha_materiales is not None and spool.arm == ActionStatus.PENDIENTE:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"Spool {spool.tag_spool} disponible INICIAR ARM: "
+                        f"[V2] Spool {spool.tag_spool} disponible INICIAR ARM: "
                         f"fecha_materiales={spool.fecha_materiales}, armador={spool.armador}"
                     )
 
@@ -281,16 +359,15 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
     def get_spools_disponibles_para_completar_arm(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para COMPLETAR o CANCELAR ARM.
+        Obtiene spools disponibles para COMPLETAR o CANCELAR ARM con Event Sourcing.
 
-        REGLA DE NEGOCIO:
-        - Armador (col AI): CON DATO (alguien lo inició)
-        - Fecha_Armado (col AH): VACÍO (no completado aún)
+        REGLA DE NEGOCIO v2.0 (Event Sourcing - 2026-01-14):
+        - ARM estado: EN_PROGRESO (reconstruido desde Metadata)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("Retrieving spools available for COMPLETAR ARM")
+        logger.info("[V2] Retrieving spools available for COMPLETAR ARM with Event Sourcing")
         self._ensure_column_map()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -299,12 +376,15 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA: Armador lleno Y Fecha_Armado vacía
-                if spool.armador is not None and spool.fecha_armado is None:
+                # v2.0: Reconstruir estado desde Metadata
+                spool = self._reconstruir_estado_spool(spool)
+
+                # REGLA v2.0: ARM EN_PROGRESO (estado reconstruido)
+                if spool.arm == ActionStatus.EN_PROGRESO:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"Spool {spool.tag_spool} disponible COMPLETAR ARM: "
-                        f"armador={spool.armador}, fecha_armado={spool.fecha_armado}"
+                        f"[V2] Spool {spool.tag_spool} disponible COMPLETAR ARM: "
+                        f"arm={spool.arm.value}, armador={spool.armador}"
                     )
 
             except ValueError as e:
@@ -316,16 +396,16 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
     def get_spools_disponibles_para_iniciar_sold(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR SOLD.
+        Obtiene spools disponibles para INICIAR SOLD con Event Sourcing.
 
-        REGLA DE NEGOCIO:
-        - Fecha_Armado (col AH): CON DATO (prerequisito ARM completado)
-        - Soldador (col AK): VACÍO (nadie asignado aún)
+        REGLA DE NEGOCIO v2.0 (Event Sourcing - 2026-01-14):
+        - ARM estado: COMPLETADO (prerequisito cumplido)
+        - SOLD estado: PENDIENTE (reconstruido desde Metadata)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("Retrieving spools available for INICIAR SOLD")
+        logger.info("[V2] Retrieving spools available for INICIAR SOLD with Event Sourcing")
         self._ensure_column_map()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -334,12 +414,15 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA: Fecha_Armado llena Y Soldador vacío
-                if spool.fecha_armado is not None and spool.soldador is None:
+                # v2.0: Reconstruir estado desde Metadata
+                spool = self._reconstruir_estado_spool(spool)
+
+                # REGLA v2.0: ARM COMPLETADO Y SOLD PENDIENTE (estados reconstruidos)
+                if spool.arm == ActionStatus.COMPLETADO and spool.sold == ActionStatus.PENDIENTE:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"Spool {spool.tag_spool} disponible INICIAR SOLD: "
-                        f"fecha_armado={spool.fecha_armado}, soldador={spool.soldador}"
+                        f"[V2] Spool {spool.tag_spool} disponible INICIAR SOLD: "
+                        f"arm={spool.arm.value}, sold={spool.sold.value}"
                     )
 
             except ValueError as e:
@@ -353,14 +436,13 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         """
         Obtiene spools disponibles para COMPLETAR o CANCELAR SOLD.
 
-        REGLA DE NEGOCIO:
-        - Soldador (col AK): CON DATO (alguien lo inició)
-        - Fecha_Soldadura (col AJ): VACÍO (no completado aún)
+        REGLA v2.0 (Event Sourcing):
+        - SOLD estado: EN_PROGRESO (reconstruido desde Metadata)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("Retrieving spools available for COMPLETAR SOLD")
+        logger.info("[V2] Retrieving spools available for COMPLETAR SOLD with Event Sourcing")
         self._ensure_column_map()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -369,19 +451,22 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA: Soldador lleno Y Fecha_Soldadura vacía
-                if spool.soldador is not None and spool.fecha_soldadura is None:
+                # v2.0: Reconstruir estado desde Metadata
+                spool = self._reconstruir_estado_spool(spool)
+
+                # REGLA v2.0: SOLD EN_PROGRESO
+                if spool.sold == ActionStatus.EN_PROGRESO:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"Spool {spool.tag_spool} disponible COMPLETAR SOLD: "
-                        f"soldador={spool.soldador}, fecha_soldadura={spool.fecha_soldadura}"
+                        f"[V2] Spool {spool.tag_spool} disponible COMPLETAR SOLD: "
+                        f"sold={spool.sold}, soldador={spool.soldador}"
                     )
 
             except ValueError as e:
                 logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
                 continue
 
-        logger.info(f"Found {len(spools_disponibles)} spools for COMPLETAR SOLD")
+        logger.info(f"[V2] Found {len(spools_disponibles)} spools for COMPLETAR SOLD")
         return spools_disponibles
 
     def find_spool_by_tag(self, tag_spool: str) -> Optional[Spool]:

@@ -47,7 +47,6 @@ from backend.services.action_service import ActionService
 
 _sheets_repo_singleton: Optional[SheetsRepository] = None
 _sheets_service_singleton: Optional[SheetsService] = None
-_validation_service_singleton: Optional[ValidationService] = None
 
 
 # ============================================================================
@@ -108,31 +107,25 @@ def get_sheets_service() -> SheetsService:
     return _sheets_service_singleton
 
 
-def get_validation_service() -> ValidationService:
+def get_validation_service(
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+) -> ValidationService:
     """
-    Factory para ValidationService (singleton).
+    Factory para ValidationService (nueva instancia por request).
 
-    Retorna la misma instancia de ValidationService en todos los requests.
-    ValidationService es stateless (solo valida reglas de negocio), por lo
-    que es seguro compartir una instancia.
+    v2.0: ValidationService necesita MetadataRepository para reconstruir
+    estados de spools desde eventos antes de aplicar validaciones.
 
-    Razón del singleton:
-    - Stateless validator (no tiene estado interno)
-    - Solo contiene lógica de validación determinística
-    - Reduce overhead de creación de objetos
+    Ya NO es singleton porque necesita acceso a MetadataRepository que
+    contiene estado dinámico por request.
 
     Returns:
-        Instancia singleton de ValidationService.
+        Nueva instancia de ValidationService con MetadataRepository inyectado.
 
     Usage:
         validation_service: ValidationService = Depends(get_validation_service)
     """
-    global _validation_service_singleton
-
-    if _validation_service_singleton is None:
-        _validation_service_singleton = ValidationService()
-
-    return _validation_service_singleton
+    return ValidationService(metadata_repository=metadata_repository)
 
 
 # ============================================================================
@@ -214,23 +207,28 @@ def get_spool_service(
 
 
 def get_spool_service_v2(
-    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
 ) -> SpoolServiceV2:
     """
     Factory para SpoolServiceV2 (nueva instancia por request).
 
-    Retorna una nueva instancia de SpoolServiceV2 con mapeo dinámico de columnas.
+    Retorna una nueva instancia de SpoolServiceV2 con mapeo dinámico de columnas
+    y Event Sourcing v2.0 integrado.
+
     SpoolServiceV2 implementa:
     - Mapeo dinámico de columnas (lee header row 1)
     - Resistente a cambios de estructura en spreadsheet
+    - Event Sourcing v2.0: Reconstruye estado ARM/SOLD desde Metadata
     - Reglas de negocio correctas para las 4 operaciones:
-      * INICIAR ARM: Fecha_Materiales llena Y Armador vacío
-      * COMPLETAR ARM: Armador lleno Y Fecha_Armado vacía
-      * INICIAR SOLD: Fecha_Armado llena Y Soldador vacío
-      * COMPLETAR SOLD: Soldador lleno Y Fecha_Soldadura vacía
+      * INICIAR ARM: Fecha_Materiales llena Y ARM PENDIENTE (desde Metadata)
+      * COMPLETAR ARM: ARM EN_PROGRESO (desde Metadata)
+      * INICIAR SOLD: ARM COMPLETADO Y SOLD PENDIENTE (desde Metadata)
+      * COMPLETAR SOLD: SOLD EN_PROGRESO (desde Metadata)
 
     Args:
         sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
+        metadata_repository: Repositorio Metadata para Event Sourcing (inyectado automáticamente).
 
     Returns:
         Nueva instancia de SpoolServiceV2 con dependencias configuradas.
@@ -238,7 +236,10 @@ def get_spool_service_v2(
     Usage:
         spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
     """
-    return SpoolServiceV2(sheets_repository=sheets_repo)
+    return SpoolServiceV2(
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repository
+    )
 
 
 def get_action_service(
