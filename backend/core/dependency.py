@@ -107,27 +107,6 @@ def get_sheets_service() -> SheetsService:
     return _sheets_service_singleton
 
 
-def get_validation_service(
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
-) -> ValidationService:
-    """
-    Factory para ValidationService (nueva instancia por request).
-
-    v2.0: ValidationService necesita MetadataRepository para reconstruir
-    estados de spools desde eventos antes de aplicar validaciones.
-
-    Ya NO es singleton porque necesita acceso a MetadataRepository que
-    contiene estado dinámico por request.
-
-    Returns:
-        Nueva instancia de ValidationService con MetadataRepository inyectado.
-
-    Usage:
-        validation_service: ValidationService = Depends(get_validation_service)
-    """
-    return ValidationService(metadata_repository=metadata_repository)
-
-
 # ============================================================================
 # FACTORY FUNCTIONS - Nuevas Instancias con Dependencias Inyectadas
 # ============================================================================
@@ -154,6 +133,27 @@ def get_metadata_repository(
         metadata_repo: MetadataRepository = Depends(get_metadata_repository)
     """
     return MetadataRepository(sheets_repo=sheets_repo)
+
+
+def get_validation_service(
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+) -> ValidationService:
+    """
+    Factory para ValidationService (nueva instancia por request).
+
+    v2.0: ValidationService necesita MetadataRepository para reconstruir
+    estados de spools desde eventos antes de aplicar validaciones.
+
+    Ya NO es singleton porque necesita acceso a MetadataRepository que
+    contiene estado dinámico por request.
+
+    Returns:
+        Nueva instancia de ValidationService con MetadataRepository inyectado.
+
+    Usage:
+        validation_service: ValidationService = Depends(get_validation_service)
+    """
+    return ValidationService(metadata_repository=metadata_repository)
 
 
 def get_worker_service(
