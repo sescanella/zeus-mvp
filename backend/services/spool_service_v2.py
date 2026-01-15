@@ -65,6 +65,7 @@ class SpoolServiceV2:
         self.metadata_repository = metadata_repository
         self.column_map: Optional[dict[str, int]] = None
         self.sheets_service: Optional[SheetsService] = None
+        self._events_cache: Optional[dict[str, list]] = None  # Cache for batch queries
 
     def _ensure_column_map(self):
         """
@@ -177,12 +178,53 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
         logger.info(f"✅ All {len(critical_columns)} critical columns validated successfully")
 
+    def _load_all_events_batch(self):
+        """
+        Carga TODOS los eventos de Metadata UNA VEZ y los cachea agrupados por tag_spool.
+
+        PERFORMANCE CRITICAL: Este método reduce de N API calls (uno por spool) a 1 API call total.
+
+        Antes: 73 spools → 73 lecturas de Metadata → 73 API calls → QUOTA EXCEEDED ❌
+        Después: 73 spools → 1 lectura de Metadata → 1 API call → ✅
+
+        El caché se invalida en cada request (nueva instancia de SpoolServiceV2 por request).
+        """
+        if self._events_cache is not None:
+            # Ya cargado
+            return
+
+        if not self.metadata_repository:
+            logger.warning("[V2 BATCH] MetadataRepository not configured, skipping batch load")
+            self._events_cache = {}
+            return
+
+        logger.info("[V2 BATCH] Loading ALL events from Metadata (batch query)...")
+
+        # Leer TODOS los eventos de Metadata en una sola llamada
+        try:
+            all_events = self.metadata_repository.get_all_events()
+
+            # Agrupar eventos por tag_spool en memoria
+            events_by_spool = {}
+            for event in all_events:
+                tag = event.tag_spool
+                if tag not in events_by_spool:
+                    events_by_spool[tag] = []
+                events_by_spool[tag].append(event)
+
+            self._events_cache = events_by_spool
+            logger.info(f"[V2 BATCH] Loaded {len(all_events)} events for {len(events_by_spool)} spools")
+
+        except Exception as e:
+            logger.error(f"[V2 BATCH] Failed to load events: {e}")
+            self._events_cache = {}  # Empty cache to prevent repeated calls
+
     def _reconstruir_estado_spool(self, spool: Spool) -> Spool:
         """
-        Reconstruye el estado real de ARM/SOLD desde eventos en Metadata.
+        Reconstruye el estado real de ARM/SOLD desde eventos en Metadata usando caché.
 
-        v2.0: La hoja Operaciones es READ-ONLY, los estados vienen como PENDIENTE.
-        Este método consulta Metadata y reconstruye el estado real.
+        v2.0 BATCH: Usa self._events_cache en lugar de llamar al repository por cada spool.
+        Esto reduce de N API calls a 1 API call total.
 
         Args:
             spool: Spool con estados por defecto (PENDIENTE)
@@ -190,18 +232,18 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         Returns:
             Spool con estados reconstruidos (PENDIENTE/EN_PROGRESO/COMPLETADO)
         """
-        if not self.metadata_repository:
-            # Si no hay MetadataRepository, retornar spool sin modificar
-            logger.warning(f"[V2] MetadataRepository not configured, using default states for {spool.tag_spool}")
+        if self._events_cache is None:
+            # Cache not loaded, retornar spool sin modificar
+            logger.warning(f"[V2] Events cache not loaded, using default states for {spool.tag_spool}")
             return spool
 
         tag_spool = spool.tag_spool
 
-        # Consultar eventos del spool
-        events = self.metadata_repository.get_events_by_spool(tag_spool)
+        # Obtener eventos del caché (evita N llamadas a Metadata)
+        events = self._events_cache.get(tag_spool, [])
 
         if not events:
-            # No hay eventos, retornar estado original
+            # No hay eventos para este spool, retornar estado original
             return spool
 
         # Reconstruir estado ARM
@@ -330,8 +372,12 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2] Retrieving spools available for INICIAR ARM with Event Sourcing")
+        logger.info("[V2 BATCH] Retrieving spools available for INICIAR ARM with Event Sourcing")
         self._ensure_column_map()
+
+        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
+        self._load_all_events_batch()
+
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -369,6 +415,9 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         """
         logger.info("[V2] Retrieving spools available for COMPLETAR ARM with Event Sourcing")
         self._ensure_column_map()
+        
+        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
+        self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -407,6 +456,9 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         """
         logger.info("[V2] Retrieving spools available for INICIAR SOLD with Event Sourcing")
         self._ensure_column_map()
+        
+        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
+        self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -444,6 +496,9 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         """
         logger.info("[V2] Retrieving spools available for COMPLETAR SOLD with Event Sourcing")
         self._ensure_column_map()
+        
+        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
+        self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 

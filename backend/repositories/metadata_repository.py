@@ -172,6 +172,46 @@ class MetadataRepository:
                 details=str(e)
             )
 
+    def get_all_events(self) -> list[MetadataEvent]:
+        """
+        Obtiene TODOS los eventos de la hoja Metadata.
+
+        PERFORMANCE CRITICAL: Este método lee toda la hoja UNA VEZ para batch queries.
+        Usado por SpoolServiceV2 para evitar N lecturas individuales.
+
+        Returns:
+            list[MetadataEvent]: Lista de todos los eventos ordenados por timestamp (asc)
+
+        Raises:
+            SheetsConnectionError: Si falla la lectura
+        """
+        try:
+            worksheet = self._get_worksheet()
+            all_values = worksheet.get_all_values()
+
+            # Parsear TODOS los eventos (saltar header row 0)
+            events = []
+            for row_idx, row in enumerate(all_values[1:], start=2):  # Desde fila 2
+                if len(row) >= 9:  # Validar que tenga todas las columnas
+                    try:
+                        event = MetadataEvent.from_sheets_row(row)
+                        events.append(event)
+                    except Exception as e:
+                        self.logger.warning(f"Error al parsear evento fila {row_idx}: {e}")
+                        continue
+
+            # Ordenar por timestamp (ascendente)
+            events.sort(key=lambda e: e.timestamp)
+
+            self.logger.info(f"[BATCH] Loaded {len(events)} total events from Metadata")
+            return events
+
+        except gspread.exceptions.APIError as e:
+            raise SheetsConnectionError(
+                "Error al leer todos los eventos de Metadata",
+                details=str(e)
+            )
+
     @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def get_latest_event(self, tag_spool: str, evento_tipo: Optional[EventoTipo] = None) -> Optional[MetadataEvent]:
         """
