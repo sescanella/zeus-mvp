@@ -211,6 +211,12 @@ class MetadataRepository:
                 "Error al leer todos los eventos de Metadata",
                 details=str(e)
             )
+        except Exception as e:
+            # Catch all other exceptions (WorksheetNotFound, parsing errors, etc.)
+            raise SheetsConnectionError(
+                "Error inesperado al leer eventos de Metadata",
+                details=f"{type(e).__name__}: {str(e)}"
+            )
 
     @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def get_latest_event(self, tag_spool: str, evento_tipo: Optional[EventoTipo] = None) -> Optional[MetadataEvent]:
