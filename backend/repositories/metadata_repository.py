@@ -185,34 +185,55 @@ class MetadataRepository:
         Raises:
             SheetsConnectionError: Si falla la lectura
         """
+        self.logger.info("[METADATA DEBUG] === ENTERING get_all_events ===")
         try:
+            self.logger.info("[METADATA DEBUG] Getting worksheet...")
             worksheet = self._get_worksheet()
+            self.logger.info(f"[METADATA DEBUG] ✅ Got worksheet: {config.HOJA_METADATA_NOMBRE}")
+
+            self.logger.info("[METADATA DEBUG] Reading all values from sheet...")
             all_values = worksheet.get_all_values()
+            self.logger.info(f"[METADATA DEBUG] ✅ Read {len(all_values)} rows from sheet (including header)")
 
             # Parsear TODOS los eventos (saltar header row 0)
+            self.logger.info("[METADATA DEBUG] Parsing events from rows...")
             events = []
+            parse_errors = 0
             for row_idx, row in enumerate(all_values[1:], start=2):  # Desde fila 2
                 if len(row) >= 9:  # Validar que tenga todas las columnas
                     try:
                         event = MetadataEvent.from_sheets_row(row)
                         events.append(event)
                     except Exception as e:
-                        self.logger.warning(f"Error al parsear evento fila {row_idx}: {e}")
+                        parse_errors += 1
+                        self.logger.warning(f"[METADATA DEBUG] Error parsing row {row_idx}: {e}")
                         continue
+                else:
+                    self.logger.warning(f"[METADATA DEBUG] Row {row_idx} has only {len(row)} columns (expected >= 9)")
+
+            self.logger.info(f"[METADATA DEBUG] Parsed {len(events)} events ({parse_errors} parse errors)")
 
             # Ordenar por timestamp (ascendente)
+            self.logger.info("[METADATA DEBUG] Sorting events by timestamp...")
             events.sort(key=lambda e: e.timestamp)
+            self.logger.info("[METADATA DEBUG] ✅ Events sorted")
 
             self.logger.info(f"[BATCH] Loaded {len(events)} total events from Metadata")
+            self.logger.info("[METADATA DEBUG] === EXITING get_all_events SUCCESS ===")
             return events
 
         except gspread.exceptions.APIError as e:
+            self.logger.error(f"[METADATA DEBUG] ❌ APIError: {e}")
             raise SheetsConnectionError(
                 "Error al leer todos los eventos de Metadata",
                 details=str(e)
             )
         except Exception as e:
             # Catch all other exceptions (WorksheetNotFound, parsing errors, etc.)
+            import traceback
+            error_details = traceback.format_exc()
+            self.logger.error(f"[METADATA DEBUG] ❌ Unexpected error: {type(e).__name__}: {e}")
+            self.logger.error(f"[METADATA DEBUG] Full traceback:\n{error_details}")
             raise SheetsConnectionError(
                 "Error inesperado al leer eventos de Metadata",
                 details=f"{type(e).__name__}: {str(e)}"

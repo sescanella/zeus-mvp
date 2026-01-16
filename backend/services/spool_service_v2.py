@@ -189,8 +189,11 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
         El caché se invalida en cada request (nueva instancia de SpoolServiceV2 por request).
         """
+        logger.info("[V2 BATCH DEBUG] === ENTERING _load_all_events_batch ===")
+
         if self._events_cache is not None:
             # Ya cargado
+            logger.info("[V2 BATCH DEBUG] Cache already loaded, skipping")
             return
 
         if not self.metadata_repository:
@@ -202,22 +205,36 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
 
         # Leer TODOS los eventos de Metadata en una sola llamada
         try:
+            logger.info("[V2 BATCH DEBUG] Calling metadata_repository.get_all_events()...")
             all_events = self.metadata_repository.get_all_events()
+            logger.info(f"[V2 BATCH DEBUG] ✅ Successfully loaded {len(all_events)} events from Metadata")
 
             # Agrupar eventos por tag_spool en memoria
+            logger.info("[V2 BATCH DEBUG] Grouping events by tag_spool...")
             events_by_spool = {}
-            for event in all_events:
+            for idx, event in enumerate(all_events):
                 tag = event.tag_spool
                 if tag not in events_by_spool:
                     events_by_spool[tag] = []
                 events_by_spool[tag].append(event)
 
+                # Log every 100 events to monitor progress
+                if (idx + 1) % 100 == 0:
+                    logger.info(f"[V2 BATCH DEBUG] Processed {idx + 1}/{len(all_events)} events...")
+
             self._events_cache = events_by_spool
-            logger.info(f"[V2 BATCH] Loaded {len(all_events)} events for {len(events_by_spool)} spools")
+            logger.info(f"[V2 BATCH] ✅ Loaded {len(all_events)} events for {len(events_by_spool)} spools")
+            logger.info("[V2 BATCH DEBUG] === EXITING _load_all_events_batch SUCCESS ===")
 
         except Exception as e:
-            logger.error(f"[V2 BATCH] Failed to load events: {e}")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"[V2 BATCH] ❌ Failed to load events: {type(e).__name__}: {e}")
+            logger.error(f"[V2 BATCH DEBUG] Full traceback:\n{error_details}")
             self._events_cache = {}  # Empty cache to prevent repeated calls
+            logger.info("[V2 BATCH DEBUG] === EXITING _load_all_events_batch FAILURE ===")
+            # Re-raise para que el error se propague y se pueda debuggear
+            raise
 
     def _reconstruir_estado_spool(self, spool: Spool) -> Spool:
         """
