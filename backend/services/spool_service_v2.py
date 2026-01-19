@@ -393,7 +393,8 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         self._ensure_column_map()
 
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        self._load_all_events_batch()
+        # WORKAROUND: Temporarily disabled due to Railway 500 error - investigating root cause
+        # self._load_all_events_batch()
 
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -434,7 +435,8 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         self._ensure_column_map()
         
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        self._load_all_events_batch()
+        # WORKAROUND: Temporarily disabled due to Railway 500 error
+        # self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -475,7 +477,8 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         self._ensure_column_map()
         
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        self._load_all_events_batch()
+        # WORKAROUND: Temporarily disabled due to Railway 500 error
+        # self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -515,7 +518,8 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         self._ensure_column_map()
         
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        self._load_all_events_batch()
+        # WORKAROUND: Temporarily disabled due to Railway 500 error
+        # self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
