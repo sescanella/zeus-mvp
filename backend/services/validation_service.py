@@ -38,15 +38,7 @@ class ValidationService:
         """Valida INICIAR ARM (v2.1 Direct Read)."""
         logger.info(f"[V2.1] Validating ARM start | Spool: {spool.tag_spool}")
 
-        # Validar ARM PENDIENTE (armador vacío)
-        if spool.armador is not None:
-            raise OperacionYaIniciadaError(tag_spool=spool.tag_spool, operacion="ARM", trabajador=spool.armador)
-
-        # Validar no COMPLETADO (fecha_armado vacía)
-        if spool.fecha_armado is not None:
-            raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="ARM")
-
-        # Validar prerequisito (fecha_materiales llena)
+        # 1. Validar prerequisito positivo (fecha_materiales llena)
         if spool.fecha_materiales is None:
             raise DependenciasNoSatisfechasError(
                 tag_spool=spool.tag_spool,
@@ -54,6 +46,24 @@ class ValidationService:
                 dependencia_faltante="fecha_materiales",
                 detalle="Los materiales deben estar registrados"
             )
+
+        # 2. Validar estado: si fecha_armado está llena, distinguir entre completado y corrupción
+        if spool.fecha_armado is not None:
+            if spool.armador is not None:
+                # Caso A: Propiamente completado (armador Y fecha_armado llenos)
+                raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="ARM")
+            else:
+                # Caso B: Data inconsistency (fecha llena pero armador vacío)
+                raise DependenciasNoSatisfechasError(
+                    tag_spool=spool.tag_spool,
+                    operacion="ARM",
+                    dependencia_faltante="fecha_armado debe estar vacía",
+                    detalle="No se puede iniciar ARM si ya hay fecha de armado registrada"
+                )
+
+        # 3. Validar ARM PENDIENTE (armador vacío)
+        if spool.armador is not None:
+            raise OperacionYaIniciadaError(tag_spool=spool.tag_spool, operacion="ARM", trabajador=spool.armador)
 
         # Validar rol
         if self.role_service and worker_id is not None:
@@ -65,14 +75,16 @@ class ValidationService:
         """Valida COMPLETAR ARM con ownership (v2.1 Direct Read)."""
         logger.info(f"[V2.1] Validating ARM completion | Spool: {spool.tag_spool} | Worker: {worker_nombre}")
 
-        # Validar ARM EN_PROGRESO (armador lleno, fecha_armado vacía)
-        if spool.armador is None:
+        # 1. Validar NO completado primero (si ya completado, no está EN_PROGRESO)
+        if spool.fecha_armado is not None:
             raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="ARM")
 
-        if spool.fecha_armado is not None:
-            raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="ARM")
+        # 2. Validar que la operación fue iniciada (armador debe existir)
+        if spool.armador is None:
+            # v2.1: Si armador=None, la operación NO FUE INICIADA
+            raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="ARM")
 
-        # CRÍTICO: Ownership validation
+        # 3. CRÍTICO: Ownership validation (armador debe coincidir con worker)
         if spool.armador.strip().lower() != worker_nombre.strip().lower():
             raise NoAutorizadoError(
                 tag_spool=spool.tag_spool,
@@ -91,15 +103,7 @@ class ValidationService:
         """Valida INICIAR SOLD (v2.1 Direct Read)."""
         logger.info(f"[V2.1] Validating SOLD start | Spool: {spool.tag_spool}")
 
-        # Validar SOLD PENDIENTE (soldador vacío)
-        if spool.soldador is not None:
-            raise OperacionYaIniciadaError(tag_spool=spool.tag_spool, operacion="SOLD", trabajador=spool.soldador)
-
-        # Validar no COMPLETADO (fecha_soldadura vacía)
-        if spool.fecha_soldadura is not None:
-            raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="SOLD")
-
-        # Validar prerequisito ARM COMPLETADO (fecha_armado llena)
+        # 1. Validar prerequisito positivo ARM COMPLETADO (fecha_armado llena)
         if spool.fecha_armado is None:
             raise DependenciasNoSatisfechasError(
                 tag_spool=spool.tag_spool,
@@ -107,6 +111,24 @@ class ValidationService:
                 dependencia_faltante="fecha_armado (ARM debe completarse primero)",
                 detalle="ARM debe estar completado antes de iniciar SOLD"
             )
+
+        # 2. Validar estado: si fecha_soldadura está llena, distinguir entre completado y corrupción
+        if spool.fecha_soldadura is not None:
+            if spool.soldador is not None:
+                # Caso A: Propiamente completado (soldador Y fecha_soldadura llenos)
+                raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="SOLD")
+            else:
+                # Caso B: Data inconsistency (fecha llena pero soldador vacío)
+                raise DependenciasNoSatisfechasError(
+                    tag_spool=spool.tag_spool,
+                    operacion="SOLD",
+                    dependencia_faltante="fecha_soldadura debe estar vacía",
+                    detalle="No se puede iniciar SOLD si ya hay fecha de soldadura registrada"
+                )
+
+        # 3. Validar SOLD PENDIENTE (soldador vacío)
+        if spool.soldador is not None:
+            raise OperacionYaIniciadaError(tag_spool=spool.tag_spool, operacion="SOLD", trabajador=spool.soldador)
 
         # Validar rol
         if self.role_service and worker_id is not None:
@@ -118,14 +140,16 @@ class ValidationService:
         """Valida COMPLETAR SOLD con ownership (v2.1 Direct Read)."""
         logger.info(f"[V2.1] Validating SOLD completion | Spool: {spool.tag_spool} | Worker: {worker_nombre}")
 
-        # Validar SOLD EN_PROGRESO (soldador lleno, fecha_soldadura vacía)
-        if spool.soldador is None:
+        # 1. Validar NO completado primero (si ya completado, no está EN_PROGRESO)
+        if spool.fecha_soldadura is not None:
             raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="SOLD")
 
-        if spool.fecha_soldadura is not None:
-            raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="SOLD")
+        # 2. Validar que la operación fue iniciada (soldador debe existir)
+        if spool.soldador is None:
+            # v2.1: Si soldador=None, la operación NO FUE INICIADA
+            raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="SOLD")
 
-        # CRÍTICO: Ownership validation
+        # 3. CRÍTICO: Ownership validation (soldador debe coincidir con worker)
         if spool.soldador.strip().lower() != worker_nombre.strip().lower():
             raise NoAutorizadoError(
                 tag_spool=spool.tag_spool,

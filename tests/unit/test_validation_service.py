@@ -183,9 +183,9 @@ def mock_metadata_repository(mocker):
 
 
 @pytest.fixture
-def validation_service(mock_metadata_repository):
-    """Instancia del servicio de validación con MetadataRepository mockeado."""
-    return ValidationService(metadata_repository=mock_metadata_repository)
+def validation_service():
+    """Instancia del servicio de validación v2.1 Direct Read (sin dependencias)."""
+    return ValidationService()
 
 
 @pytest.fixture
@@ -501,23 +501,23 @@ class TestOwnership:
         assert "SP-002" in exc_info.value.message
 
     def test_completar_arm_fails_if_bc_empty(self, validation_service):
-        """No se puede completar ARM si BC (armador) está vacío."""
+        """No se puede completar ARM si BC (armador) está vacío (v2.1: NOT STARTED)."""
         spool = Spool(
             tag_spool="SP-020",
-            arm=ActionStatus.EN_PROGRESO,
+            arm=ActionStatus.EN_PROGRESO,  # v2.0 metadata state (ignored in v2.1)
             sold=ActionStatus.PENDIENTE,
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=None,
             fecha_soldadura=None,
-            armador=None,  # BC vacío (error de datos)
+            armador=None,  # v2.1: armador=None means NOT STARTED
             soldador=None
         )
 
-        with pytest.raises(NoAutorizadoError) as exc_info:
+        # v2.1: armador=None → OperacionNoIniciadaError (operation never started)
+        with pytest.raises(OperacionNoIniciadaError) as exc_info:
             validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
 
-        assert exc_info.value.error_code == "NO_AUTORIZADO"
-        assert "DESCONOCIDO" in exc_info.value.message or "vacío" in exc_info.value.message.lower()
+        assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
 
     def test_completar_arm_case_insensitive_match(
         self,
@@ -563,23 +563,23 @@ class TestOwnership:
         assert "SP-005" in exc_info.value.message
 
     def test_completar_sold_fails_if_be_empty(self, validation_service):
-        """No se puede completar SOLD si BE (soldador) está vacío."""
+        """No se puede completar SOLD si BE (soldador) está vacío (v2.1: NOT STARTED)."""
         spool = Spool(
             tag_spool="SP-021",
             arm=ActionStatus.COMPLETADO,
-            sold=ActionStatus.EN_PROGRESO,
+            sold=ActionStatus.EN_PROGRESO,  # v2.0 metadata state (ignored in v2.1)
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=date(2025, 11, 8),
             fecha_soldadura=None,
             armador="Juan Pérez",
-            soldador=None  # BE vacío (error de datos)
+            soldador=None  # v2.1: soldador=None means NOT STARTED
         )
 
-        with pytest.raises(NoAutorizadoError) as exc_info:
+        # v2.1: soldador=None → OperacionNoIniciadaError (operation never started)
+        with pytest.raises(OperacionNoIniciadaError) as exc_info:
             validation_service.validar_puede_completar_sold(spool, "María González", worker_id=94)
 
-        assert exc_info.value.error_code == "NO_AUTORIZADO"
-        assert "DESCONOCIDO" in exc_info.value.message or "vacío" in exc_info.value.message.lower()
+        assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
 
     def test_completar_sold_with_whitespace_normalization(
         self,
