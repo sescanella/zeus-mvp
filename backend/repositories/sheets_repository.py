@@ -331,6 +331,184 @@ class SheetsRepository:
                 updates={"count": len(updates), "updates": updates, "error": str(e)}
             )
 
+    def update_cell_by_column_name(
+        self,
+        sheet_name: str,
+        row: int,
+        column_name: str,
+        value: any
+    ) -> None:
+        """
+        Actualiza una celda usando NOMBRE de columna en lugar de letra (v2.1).
+
+        Usa ColumnMapCache para obtener índice dinámicamente.
+        Resistente a cambios en estructura del spreadsheet.
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+            column_name: Nombre de columna (ej: "Armador", "Fecha_Armado")
+            value: Nuevo valor
+
+        Raises:
+            ValueError: Si la columna no existe en el mapeo
+            SheetsUpdateError: Si falla la actualización
+
+        Example:
+            >>> repo.update_cell_by_column_name("Operaciones", 10, "Armador", "Juan Pérez")
+            # Actualiza columna Armador en fila 10
+        """
+        try:
+            # Obtener column_map para esta hoja
+            from backend.core.column_map_cache import ColumnMapCache
+            column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+            # Normalizar nombre de columna
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "")
+
+            normalized_name = normalize(column_name)
+
+            # Buscar índice de columna
+            if normalized_name not in column_map:
+                raise ValueError(
+                    f"Columna '{column_name}' no encontrada en hoja '{sheet_name}'. "
+                    f"Columnas disponibles: {list(column_map.keys())[:10]}..."
+                )
+
+            column_index = column_map[normalized_name]
+
+            # Obtener spreadsheet y worksheet
+            spreadsheet = self._get_spreadsheet()
+            worksheet = spreadsheet.worksheet(sheet_name)
+
+            # Actualizar celda (gspread usa 1-indexed para columnas)
+            worksheet.update_cell(row, column_index + 1, value)
+
+            self.logger.info(
+                f"✅ Actualizada celda '{column_name}' (idx={column_index}) fila {row} = {value} en '{sheet_name}'"
+            )
+
+        except ValueError:
+            raise
+        except Exception as e:
+            raise SheetsUpdateError(
+                f"Error actualizando celda por nombre '{column_name}' fila {row}",
+                updates={"row": row, "column_name": column_name, "value": value, "error": str(e)}
+            )
+
+    @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+    def batch_update_by_column_name(
+        self,
+        sheet_name: str,
+        updates: list[dict]
+    ) -> None:
+        """
+        Actualiza múltiples celdas usando NOMBRES de columnas (v2.1).
+
+        Usa ColumnMapCache para resolver nombres dinámicamente.
+        Más eficiente que múltiples llamadas individuales.
+
+        Args:
+            sheet_name: Nombre de la hoja
+            updates: Lista de dicts con formato:
+                     [{"row": 10, "column_name": "Armador", "value": "Juan"}, ...]
+
+        Raises:
+            ValueError: Si alguna columna no existe
+            SheetsUpdateError: Si falla la actualización
+
+        Example:
+            >>> updates = [
+            ...     {"row": 10, "column_name": "Armador", "value": "Juan"},
+            ...     {"row": 10, "column_name": "Fecha_Armado", "value": "2026-01-20"}
+            ... ]
+            >>> repo.batch_update_by_column_name("Operaciones", updates)
+        """
+        try:
+            # Obtener column_map para esta hoja
+            from backend.core.column_map_cache import ColumnMapCache
+            column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+            # Normalizar nombre de columna
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "")
+
+            spreadsheet = self._get_spreadsheet()
+            worksheet = spreadsheet.worksheet(sheet_name)
+
+            # Preparar batch updates (convertir nombres a índices)
+            batch_data = []
+            for update in updates:
+                row = update["row"]
+                column_name = update["column_name"]
+                value = update["value"]
+
+                # Buscar índice de columna
+                normalized_name = normalize(column_name)
+                if normalized_name not in column_map:
+                    raise ValueError(
+                        f"Columna '{column_name}' no encontrada en hoja '{sheet_name}'. "
+                        f"Columnas disponibles: {list(column_map.keys())[:10]}..."
+                    )
+
+                column_index = column_map[normalized_name]
+
+                # Convertir a letra de columna para A1 notation
+                column_letter = self._index_to_column_letter(column_index)
+                cell_address = f"{column_letter}{row}"
+
+                batch_data.append({
+                    'range': cell_address,
+                    'values': [[value]]
+                })
+
+            # Ejecutar batch update
+            worksheet.batch_update(batch_data)
+
+            self.logger.info(
+                f"✅ Batch update by column name: {len(updates)} celdas actualizadas en '{sheet_name}'"
+            )
+
+            # Invalidar cache para forzar re-lectura
+            cache_key = f"worksheet:{sheet_name}"
+            self._cache.invalidate(cache_key)
+
+        except ValueError:
+            raise
+        except Exception as e:
+            raise SheetsUpdateError(
+                "Error en batch update by column name",
+                updates={"count": len(updates), "updates": updates, "error": str(e)}
+            )
+
+    @staticmethod
+    def _index_to_column_letter(index: int) -> str:
+        """
+        Convierte índice (0-indexed) a letra de columna.
+
+        Args:
+            index: Índice 0-indexed (0=A, 1=B, 25=Z, 26=AA, 54=BC)
+
+        Returns:
+            str: Letra(s) de columna
+
+        Example:
+            >>> SheetsRepository._index_to_column_letter(0)
+            'A'
+            >>> SheetsRepository._index_to_column_letter(25)
+            'Z'
+            >>> SheetsRepository._index_to_column_letter(26)
+            'AA'
+        """
+        index += 1  # Convertir a 1-indexed
+        letter = ""
+        while index > 0:
+            index -= 1
+            letter = chr(index % 26 + ord('A')) + letter
+            index //= 26
+        return letter
+
     @staticmethod
     def _column_letter_to_index(column: str) -> int:
         """

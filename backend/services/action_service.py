@@ -1,20 +1,22 @@
 """
-ActionService - Orquestador de acciones de manufactura (v2.0 Event Sourcing).
+ActionService - Orquestador de acciones de manufactura (v2.1 Direct Write).
 
-v2.0 Cambios críticos:
-- Hoja Operaciones es READ-ONLY (no se modifica)
-- Todos los eventos se escriben en hoja Metadata (Event Sourcing)
-- Estados se reconstruyen desde Metadata, no desde columnas
+v2.1 Cambios críticos:
+- Hoja Operaciones es READ-WRITE (estados se escriben directamente)
+- Metadata se mantiene como auditoría paralela (best effort)
+- Estados se leen directamente desde columnas de Operaciones
 
 Responsabilidades:
-- Coordinar flujos INICIAR/COMPLETAR
+- Coordinar flujos INICIAR/COMPLETAR/CANCELAR
 - Validar ownership (solo quien inició puede completar)
-- Escribir eventos en Metadata (append-only)
+- Escribir en Operaciones (columnas: Armador, Fecha_Armado, Soldador, Fecha_Soldadura)
+- Escribir en Metadata (auditoría paralela, no crítico)
 - Logging comprehensivo
 
 Dependencias:
-- MetadataRepository: Escritura de eventos (NEW v2.0)
-- ValidationService: Validación ownership + estados (reconstruye desde Metadata)
+- SheetsRepository: Escritura en Operaciones (v2.1 NEW)
+- MetadataRepository: Auditoría paralela (v2.1 OPTIONAL)
+- ValidationService: Validación ownership + estados (lee desde Operaciones)
 - SpoolService: Búsqueda por TAG
 - WorkerService: Búsqueda por nombre
 """
@@ -23,6 +25,7 @@ import logging
 from typing import Optional
 from datetime import datetime, date
 
+from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
@@ -44,7 +47,7 @@ from backend.exceptions import (
     OperacionYaCompletadaError,
     DependenciasNoSatisfechasError,
     NoAutorizadoError,
-    RolNoAutorizadoError,  # v2.0: Role-based access control
+    RolNoAutorizadoError,
     SheetsUpdateError
 )
 
@@ -53,34 +56,35 @@ logger = logging.getLogger(__name__)
 
 class ActionService:
     """
-    Servicio de orquestación de acciones de manufactura (v2.0 Event Sourcing).
+    Servicio de orquestación de acciones de manufactura (v2.1 Direct Write).
 
-    v2.0: Escribe eventos en Metadata, NO modifica hoja Operaciones.
+    v2.1: Escribe directamente en hoja Operaciones + auditoría en Metadata.
     """
 
     def __init__(
         self,
+        sheets_repository: Optional[SheetsRepository] = None,
         metadata_repository: Optional[MetadataRepository] = None,
         validation_service: Optional[ValidationService] = None,
         spool_service: Optional[SpoolService] = None,
         worker_service: Optional[WorkerService] = None
     ):
         """
-        Inicializar con dependencias inyectadas.
+        Inicializar con dependencias inyectadas (v2.1 Direct Write).
 
         Args:
-            metadata_repository: Repositorio para escribir eventos (v2.0 NEW)
-            validation_service: Servicio de validación (reconstruye estado desde Metadata)
+            sheets_repository: Repositorio para escribir en Operaciones (v2.1 CRÍTICO)
+            metadata_repository: Repositorio para auditoría (v2.1 OPCIONAL)
+            validation_service: Servicio de validación (lee desde Operaciones)
             spool_service: Servicio de operaciones con spools
             worker_service: Servicio de operaciones con trabajadores
         """
-        self.metadata_repository = metadata_repository or MetadataRepository(sheets_repo=None)
-        self.validation_service = validation_service or ValidationService(
-            metadata_repository=self.metadata_repository
-        )
+        self.sheets_repository = sheets_repository or SheetsRepository()
+        self.metadata_repository = metadata_repository or MetadataRepository(sheets_repo=self.sheets_repository)
+        self.validation_service = validation_service or ValidationService()
         self.spool_service = spool_service or SpoolService()
         self.worker_service = worker_service or WorkerService()
-        logger.info("ActionService v2.0 inicializado con Event Sourcing")
+        logger.info("ActionService v2.1 inicializado con Direct Write + Metadata audit")
 
     def _get_evento_tipo(self, operacion: ActionType, accion: Accion) -> EventoTipo:
         """
@@ -203,32 +207,59 @@ class ActionService:
 
             logger.debug(f"Validación de inicio exitosa para {operacion.value}")
 
-            # PASO 4: Crear evento INICIAR_ARM/INICIAR_SOLD
-            evento_tipo = self._get_evento_tipo(operacion, Accion.INICIAR)
+            # PASO 4: Buscar fila del spool en Operaciones por TAG_SPOOL
+            row_num = self.sheets_repository.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL
+                value=tag_spool
+            )
+
+            if row_num is None:
+                raise SpoolNoEncontradoError(f"Spool {tag_spool} no encontrado en Operaciones")
+
+            logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
+
+            # PASO 5: Actualizar columna Armador/Soldador en Operaciones (CRÍTICO - v2.1)
+            worker_nombre = trabajador.nombre_completo
             fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
 
-            evento = MetadataEvent(
-                evento_tipo=evento_tipo,
-                tag_spool=tag_spool,
-                worker_id=trabajador.id,
-                worker_nombre=trabajador.nombre_completo,
-                operacion=operacion.value,
-                accion=Accion.INICIAR,
-                fecha_operacion=fecha_hoy,
-                metadata_json=None  # Opcional: podríamos agregar IP, device, etc.
-            )
+            if operacion == ActionType.ARM:
+                column_name = "Armador"
+            elif operacion == ActionType.SOLD:
+                column_name = "Soldador"
+            else:
+                raise ValueError(f"Operación no soportada: {operacion}")
 
-            logger.debug(f"Evento creado: {evento_tipo.value}, ID={evento.id}")
+            updates = [
+                {"row": row_num, "column_name": column_name, "value": worker_nombre}
+            ]
 
-            # PASO 5: Escribir evento en Metadata (append-only)
-            self.metadata_repository.append_event(evento)
+            self.sheets_repository.batch_update_by_column_name(config.HOJA_OPERACIONES_NOMBRE, updates)
+
             logger.info(
-                f"[v2.0] Acción {operacion.value} iniciada exitosamente. "
-                f"Evento escrito en Metadata: {evento.id}"
+                f"[v2.1] ✅ Acción {operacion.value} iniciada exitosamente. "
+                f"Actualizada columna '{column_name}' en fila {row_num}: {worker_nombre}"
             )
 
-            # PASO 6: Construir respuesta
-            worker_nombre = trabajador.nombre_completo
+            # PASO 6: Auditoría en Metadata (OPCIONAL - best effort)
+            try:
+                evento_tipo = self._get_evento_tipo(operacion, Accion.INICIAR)
+                evento = MetadataEvent(
+                    evento_tipo=evento_tipo,
+                    tag_spool=tag_spool,
+                    worker_id=trabajador.id,
+                    worker_nombre=worker_nombre,
+                    operacion=operacion.value,
+                    accion=Accion.INICIAR,
+                    fecha_operacion=fecha_hoy,
+                    metadata_json=None
+                )
+                self.metadata_repository.append_event(evento)
+                logger.info(f"[v2.1] Evento de auditoría escrito en Metadata: {evento.id}")
+            except Exception as e:
+                logger.warning(f"[v2.1] No se pudo escribir evento de auditoría en Metadata: {e}")
+
+            # PASO 7: Construir respuesta
             if operacion == ActionType.ARM:
                 metadata = ActionMetadata(
                     armador=worker_nombre,
@@ -250,7 +281,7 @@ class ActionService:
                 trabajador=worker_nombre,
                 metadata=metadata,
                 accion_tipo="iniciada",
-                evento_id=evento.id
+                evento_id="v2.1-direct-write"
             )
 
         except (
@@ -342,31 +373,59 @@ class ActionService:
 
             logger.debug(f"Validación de completado + ownership exitosa para {operacion.value}")
 
-            # PASO 4: Crear evento COMPLETAR_ARM/COMPLETAR_SOLD
-            evento_tipo = self._get_evento_tipo(operacion, Accion.COMPLETAR)
+            # PASO 4: Buscar fila del spool en Operaciones por TAG_SPOOL
+            row_num = self.sheets_repository.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL (hardcoded fallback, pero ColumnMapCache lo maneja)
+                value=tag_spool
+            )
+
+            if row_num is None:
+                raise SpoolNoEncontradoError(f"Spool {tag_spool} no encontrado en Operaciones")
+
+            logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
+
+            # PASO 5: Actualizar columna Fecha_Armado/Fecha_Soldadura en Operaciones (CRÍTICO - v2.1)
             fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
 
-            evento = MetadataEvent(
-                evento_tipo=evento_tipo,
-                tag_spool=tag_spool,
-                worker_id=trabajador.id,
-                worker_nombre=trabajador.nombre_completo,
-                operacion=operacion.value,
-                accion=Accion.COMPLETAR,
-                fecha_operacion=fecha_hoy,
-                metadata_json=None  # Opcional: podríamos agregar IP, device, etc.
-            )
+            if operacion == ActionType.ARM:
+                column_name = "Fecha_Armado"
+            elif operacion == ActionType.SOLD:
+                column_name = "Fecha_Soldadura"
+            else:
+                raise ValueError(f"Operación no soportada: {operacion}")
 
-            logger.debug(f"Evento creado: {evento_tipo.value}, ID={evento.id}")
+            updates = [
+                {"row": row_num, "column_name": column_name, "value": fecha_hoy}
+            ]
 
-            # PASO 5: Escribir evento en Metadata (append-only)
-            self.metadata_repository.append_event(evento)
+            self.sheets_repository.batch_update_by_column_name(config.HOJA_OPERACIONES_NOMBRE, updates)
+
             logger.info(
-                f"[v2.0] Acción {operacion.value} completada exitosamente. "
-                f"Evento escrito en Metadata: {evento.id}"
+                f"[v2.1] ✅ Acción {operacion.value} completada exitosamente. "
+                f"Actualizada columna '{column_name}' en fila {row_num}: {fecha_hoy}"
             )
 
-            # PASO 6: Construir respuesta
+            # PASO 6: Auditoría en Metadata (OPCIONAL - best effort)
+            try:
+                evento_tipo = self._get_evento_tipo(operacion, Accion.COMPLETAR)
+                evento = MetadataEvent(
+                    evento_tipo=evento_tipo,
+                    tag_spool=tag_spool,
+                    worker_id=trabajador.id,
+                    worker_nombre=trabajador.nombre_completo,
+                    operacion=operacion.value,
+                    accion=Accion.COMPLETAR,
+                    fecha_operacion=fecha_hoy,
+                    metadata_json=None
+                )
+                self.metadata_repository.append_event(evento)
+                logger.info(f"[v2.1] Evento de auditoría escrito en Metadata: {evento.id}")
+            except Exception as e:
+                # NO fallar si Metadata falla - solo log warning
+                logger.warning(f"[v2.1] No se pudo escribir evento de auditoría en Metadata: {e}")
+
+            # PASO 7: Construir respuesta
             if operacion == ActionType.ARM:
                 metadata = ActionMetadata(
                     armador=worker_nombre,
@@ -388,7 +447,7 @@ class ActionService:
                 trabajador=worker_nombre,
                 metadata=metadata,
                 accion_tipo="completada",
-                evento_id=evento.id
+                evento_id="v2.1-direct-write"  # No crítico, Metadata es auditoría
             )
 
         except (
@@ -482,34 +541,61 @@ class ActionService:
             )
             logger.debug(f"Validación de CANCELAR exitosa: EN_PROGRESO + ownership + rol")
 
-            # PASO 4: Crear evento CANCELAR_ARM/CANCELAR_SOLD
-            evento_tipo = self._get_evento_tipo(operacion, Accion.CANCELAR)
-            fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
-
-            evento = MetadataEvent(
-                evento_tipo=evento_tipo,
-                tag_spool=tag_spool,
-                worker_id=trabajador.id,
-                worker_nombre=trabajador.nombre_completo,
-                operacion=operacion.value,
-                accion=Accion.CANCELAR,
-                fecha_operacion=fecha_hoy,
-                metadata_json=None  # Opcional: podríamos agregar motivo de cancelación
+            # PASO 4: Buscar fila del spool en Operaciones por TAG_SPOOL
+            row_num = self.sheets_repository.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL
+                value=tag_spool
             )
 
-            logger.debug(f"Evento CANCELAR creado: {evento_tipo.value}, ID={evento.id}")
+            if row_num is None:
+                raise SpoolNoEncontradoError(f"Spool {tag_spool} no encontrado en Operaciones")
 
-            # PASO 5: Escribir evento en Metadata (append-only)
-            self.metadata_repository.append_event(evento)
+            logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
+
+            # PASO 5: Limpiar columna Armador/Soldador en Operaciones (CRÍTICO - v2.1)
+            fecha_hoy = date.today().isoformat()
+
+            if operacion == ActionType.ARM:
+                column_name = "Armador"
+            elif operacion == ActionType.SOLD:
+                column_name = "Soldador"
+            else:
+                raise ValueError(f"Operación no soportada: {operacion}")
+
+            updates = [
+                {"row": row_num, "column_name": column_name, "value": ""}  # Limpiar campo
+            ]
+
+            self.sheets_repository.batch_update_by_column_name(config.HOJA_OPERACIONES_NOMBRE, updates)
+
             logger.info(
-                f"[v2.0] Acción {operacion.value} cancelada exitosamente. "
-                f"Evento CANCELAR escrito en Metadata: {evento.id}"
+                f"[v2.1] ✅ Acción {operacion.value} cancelada exitosamente. "
+                f"Limpiada columna '{column_name}' en fila {row_num}"
             )
 
-            # PASO 6: Construir respuesta
+            # PASO 6: Auditoría en Metadata (OPCIONAL - best effort)
+            try:
+                evento_tipo = self._get_evento_tipo(operacion, Accion.CANCELAR)
+                evento = MetadataEvent(
+                    evento_tipo=evento_tipo,
+                    tag_spool=tag_spool,
+                    worker_id=trabajador.id,
+                    worker_nombre=trabajador.nombre_completo,
+                    operacion=operacion.value,
+                    accion=Accion.CANCELAR,
+                    fecha_operacion=fecha_hoy,
+                    metadata_json=None
+                )
+                self.metadata_repository.append_event(evento)
+                logger.info(f"[v2.1] Evento de auditoría escrito en Metadata: {evento.id}")
+            except Exception as e:
+                logger.warning(f"[v2.1] No se pudo escribir evento de auditoría en Metadata: {e}")
+
+            # PASO 7: Construir respuesta
             if operacion == ActionType.ARM:
                 metadata = ActionMetadata(
-                    armador=None,  # Revierte a PENDIENTE (sin trabajador)
+                    armador=None,
                     soldador=None,
                     fecha_armado=None,
                     fecha_soldadura=None
@@ -517,7 +603,7 @@ class ActionService:
             else:  # SOLD
                 metadata = ActionMetadata(
                     armador=None,
-                    soldador=None,  # Revierte a PENDIENTE (sin trabajador)
+                    soldador=None,
                     fecha_armado=None,
                     fecha_soldadura=None
                 )
@@ -527,8 +613,8 @@ class ActionService:
                 operacion=operacion,
                 trabajador=worker_nombre,
                 metadata=metadata,
-                accion_tipo="cancelada",  # Nueva acción_tipo
-                evento_id=evento.id
+                accion_tipo="cancelada",
+                evento_id="v2.1-direct-write"
             )
 
         except (

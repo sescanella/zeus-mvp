@@ -1,42 +1,31 @@
 """
-Servicio de Spools v2.2 con mapeo dinámico y validación de estructura.
+Servicio de Spools v2.1 con Direct Read (sin Event Sourcing).
 
-Diferencias vs v1.0:
-- Lee header (row 1) para construir mapeo: nombre_columna → índice
-- Resistente a cambios en estructura del spreadsheet
-- Reglas de negocio correctas para 4 operaciones:
+Diferencias vs v2.0:
+- Lee estados directamente desde columnas de Operaciones (NO reconstruye desde Metadata)
+- Más simple, más rápido, más confiable
+- Reglas de negocio basadas en presencia de datos en columnas:
   * INICIAR ARM: Fecha_Materiales llena Y Armador vacía
   * COMPLETAR ARM: Armador lleno Y Fecha_Armado vacía
   * INICIAR SOLD: Fecha_Armado llena Y Soldador vacío
   * COMPLETAR SOLD: Soldador lleno Y Fecha_Soldadura vacía
 
-v2.2 PROTECCIONES:
+v2.2 Features (preserved):
+- Mapeo dinámico de columnas (ColumnMapCache)
 - Validación de columnas críticas al inicio
-- Detecta eliminación accidental de columnas
-- Busca nombres alternativos (ej: "TAG_SPOOL" o "tag" o "codigobarra")
-- Error descriptivo con soluciones si falta alguna columna
-- Logging detallado de mapeo de columnas
-
-CASO LÍMITE MANEJADO:
-Si se elimina una columna no crítica → Sistema continúa funcionando ✅
-Si se elimina una columna crítica → Sistema falla FAST con error claro ❌
-Si se renombra columna → Sistema busca nombres alternativos ✅
+- Resistente a cambios en estructura del spreadsheet
+- Logging detallado
 
 Autor: ZEUES Team
-Fecha: 2026-01-14
+Fecha: 2026-01-20 (v2.1 Direct Read)
 """
 import logging
 from typing import Optional
-from datetime import date
-from dataclasses import replace
 
 from backend.repositories.sheets_repository import SheetsRepository
-from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.sheets_service import SheetsService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.models.spool import Spool
-from backend.models.enums import ActionStatus
-from backend.models.metadata import Accion
 from backend.config import config
 
 logger = logging.getLogger(__name__)
@@ -52,21 +41,18 @@ class SpoolServiceV2:
 
     def __init__(
         self,
-        sheets_repository: Optional[SheetsRepository] = None,
-        metadata_repository: Optional[MetadataRepository] = None
+        sheets_repository: Optional[SheetsRepository] = None
     ):
         """
-        Inicializa el servicio con repositorio de Sheets y Metadata (v2.2).
+        Inicializa el servicio con repositorio de Sheets (v2.1 Direct Read).
 
+        v2.1: Lee estados directamente desde columnas de Operaciones.
         v2.2: Usa ColumnMapCache para mapeo dinámico (lazy loading).
 
         Args:
             sheets_repository: Repositorio para acceso a Google Sheets
-            metadata_repository: Repositorio para Event Sourcing (v2.0)
         """
         self.sheets_repository = sheets_repository or SheetsRepository()
-        self.metadata_repository = metadata_repository
-        self._events_cache: Optional[dict[str, list]] = None  # Cache for batch queries
 
         # v2.2: Obtener column_map desde cache (lazy load)
         self.column_map = ColumnMapCache.get_or_build(
@@ -98,131 +84,7 @@ class SpoolServiceV2:
                 f"Check Google Sheets structure."
             )
 
-        logger.info(f"SpoolServiceV2 initialized with {len(self.column_map)} columns")
-
-    def _load_all_events_batch(self):
-        """
-        Carga TODOS los eventos de Metadata UNA VEZ y los cachea agrupados por tag_spool.
-
-        PERFORMANCE CRITICAL: Este método reduce de N API calls (uno por spool) a 1 API call total.
-
-        Antes: 73 spools → 73 lecturas de Metadata → 73 API calls → QUOTA EXCEEDED ❌
-        Después: 73 spools → 1 lectura de Metadata → 1 API call → ✅
-
-        El caché se invalida en cada request (nueva instancia de SpoolServiceV2 por request).
-        """
-        logger.info("[V2 BATCH DEBUG] === ENTERING _load_all_events_batch ===")
-
-        if self._events_cache is not None:
-            # Ya cargado
-            logger.info("[V2 BATCH DEBUG] Cache already loaded, skipping")
-            return
-
-        if not self.metadata_repository:
-            logger.warning("[V2 BATCH] MetadataRepository not configured, skipping batch load")
-            self._events_cache = {}
-            return
-
-        logger.info("[V2 BATCH] Loading ALL events from Metadata (batch query)...")
-
-        # Leer TODOS los eventos de Metadata en una sola llamada
-        try:
-            logger.info("[V2 BATCH DEBUG] Calling metadata_repository.get_all_events()...")
-            all_events = self.metadata_repository.get_all_events()
-            logger.info(f"[V2 BATCH DEBUG] ✅ Successfully loaded {len(all_events)} events from Metadata")
-
-            # Agrupar eventos por tag_spool en memoria
-            logger.info("[V2 BATCH DEBUG] Grouping events by tag_spool...")
-            events_by_spool = {}
-            for idx, event in enumerate(all_events):
-                tag = event.tag_spool
-                if tag not in events_by_spool:
-                    events_by_spool[tag] = []
-                events_by_spool[tag].append(event)
-
-                # Log every 100 events to monitor progress
-                if (idx + 1) % 100 == 0:
-                    logger.info(f"[V2 BATCH DEBUG] Processed {idx + 1}/{len(all_events)} events...")
-
-            self._events_cache = events_by_spool
-            logger.info(f"[V2 BATCH] ✅ Loaded {len(all_events)} events for {len(events_by_spool)} spools")
-            logger.info("[V2 BATCH DEBUG] === EXITING _load_all_events_batch SUCCESS ===")
-
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            logger.error(f"[V2 BATCH] ❌ Failed to load events: {type(e).__name__}: {e}")
-            logger.error(f"[V2 BATCH DEBUG] Full traceback:\n{error_details}")
-            self._events_cache = {}  # Empty cache to prevent repeated calls
-            logger.info("[V2 BATCH DEBUG] === EXITING _load_all_events_batch FAILURE ===")
-            # Re-raise para que el error se propague y se pueda debuggear
-            raise
-
-    def _reconstruir_estado_spool(self, spool: Spool) -> Spool:
-        """
-        Reconstruye el estado real de ARM/SOLD desde eventos en Metadata usando caché.
-
-        v2.0 BATCH: Usa self._events_cache en lugar de llamar al repository por cada spool.
-        Esto reduce de N API calls a 1 API call total.
-
-        Args:
-            spool: Spool con estados por defecto (PENDIENTE)
-
-        Returns:
-            Spool con estados reconstruidos (PENDIENTE/EN_PROGRESO/COMPLETADO)
-        """
-        if self._events_cache is None:
-            # Cache not loaded, retornar spool sin modificar
-            logger.warning(f"[V2] Events cache not loaded, using default states for {spool.tag_spool}")
-            return spool
-
-        tag_spool = spool.tag_spool
-
-        # Obtener eventos del caché (evita N llamadas a Metadata)
-        events = self._events_cache.get(tag_spool, [])
-
-        if not events:
-            # No hay eventos para este spool, retornar estado original
-            return spool
-
-        # Reconstruir estado ARM
-        arm_status = ActionStatus.PENDIENTE
-        armador = None
-        for event in events:
-            if event.operacion == "ARM":
-                if event.accion == Accion.INICIAR:
-                    arm_status = ActionStatus.EN_PROGRESO
-                    armador = event.worker_nombre
-                elif event.accion == Accion.COMPLETAR:
-                    arm_status = ActionStatus.COMPLETADO
-
-        # Reconstruir estado SOLD
-        sold_status = ActionStatus.PENDIENTE
-        soldador = None
-        for event in events:
-            if event.operacion == "SOLD":
-                if event.accion == Accion.INICIAR:
-                    sold_status = ActionStatus.EN_PROGRESO
-                    soldador = event.worker_nombre
-                elif event.accion == Accion.COMPLETAR:
-                    sold_status = ActionStatus.COMPLETADO
-
-        # Crear nuevo spool con estados reconstruidos
-        spool_reconstruido = replace(
-            spool,
-            arm=arm_status,
-            armador=armador,
-            sold=sold_status,
-            soldador=soldador
-        )
-
-        logger.debug(
-            f"[V2] Rebuilt state for {tag_spool}: "
-            f"ARM={arm_status.value}, armador={armador}, "
-            f"SOLD={sold_status.value}, soldador={soldador}"
-        )
-
-        return spool_reconstruido
+        logger.info(f"SpoolServiceV2 initialized with {len(self.column_map)} columns (v2.1 Direct Read)")
 
     def parse_spool_row(self, row: list) -> Spool:
         """
@@ -299,20 +161,16 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_iniciar_arm(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR ARM con Event Sourcing.
+        Obtiene spools disponibles para INICIAR ARM (v2.1 Direct Read).
 
-        REGLA DE NEGOCIO v2.0 (Event Sourcing - 2026-01-14):
-        - Fecha_Materiales (col AG): CON DATO (prerequisito cumplido)
-        - ARM estado: PENDIENTE (reconstruido desde Metadata)
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Fecha_Materiales: CON DATO (prerequisito cumplido)
+        - Armador: SIN DATO (operación no iniciada)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2 BATCH] Retrieving spools available for INICIAR ARM with Event Sourcing")
-
-        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        # WORKAROUND: Temporarily disabled due to Railway 500 error - investigating root cause
-        # self._load_all_events_batch()
+        logger.info("[V2.1] Retrieving spools available for INICIAR ARM (Direct Read)")
 
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -321,14 +179,11 @@ class SpoolServiceV2:
             try:
                 spool = self.parse_spool_row(row)
 
-                # v2.0: Reconstruir estado desde Metadata
-                spool = self._reconstruir_estado_spool(spool)
-
-                # REGLA v2.0: Fecha_Materiales llena Y ARM PENDIENTE (estado reconstruido)
-                if spool.fecha_materiales is not None and spool.arm == ActionStatus.PENDIENTE:
+                # REGLA v2.1: Fecha_Materiales llena Y Armador vacío (Direct Read from columns)
+                if spool.fecha_materiales is not None and spool.armador is None:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2] Spool {spool.tag_spool} disponible INICIAR ARM: "
+                        f"[V2.1] Spool {spool.tag_spool} disponible INICIAR ARM: "
                         f"fecha_materiales={spool.fecha_materiales}, armador={spool.armador}"
                     )
 
@@ -341,19 +196,17 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_completar_arm(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para COMPLETAR o CANCELAR ARM con Event Sourcing.
+        Obtiene spools disponibles para COMPLETAR ARM (v2.1 Direct Read).
 
-        REGLA DE NEGOCIO v2.0 (Event Sourcing - 2026-01-14):
-        - ARM estado: EN_PROGRESO (reconstruido desde Metadata)
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Armador: CON DATO (operación iniciada)
+        - Fecha_Armado: SIN DATO (operación no completada)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2] Retrieving spools available for COMPLETAR ARM with Event Sourcing")
+        logger.info("[V2.1] Retrieving spools available for COMPLETAR ARM (Direct Read)")
 
-        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        # WORKAROUND: Temporarily disabled due to Railway 500 error
-        # self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -361,15 +214,12 @@ class SpoolServiceV2:
             try:
                 spool = self.parse_spool_row(row)
 
-                # v2.0: Reconstruir estado desde Metadata
-                spool = self._reconstruir_estado_spool(spool)
-
-                # REGLA v2.0: ARM EN_PROGRESO (estado reconstruido)
-                if spool.arm == ActionStatus.EN_PROGRESO:
+                # REGLA v2.1: Armador lleno Y Fecha_Armado vacía (Direct Read from columns)
+                if spool.armador is not None and spool.fecha_armado is None:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2] Spool {spool.tag_spool} disponible COMPLETAR ARM: "
-                        f"arm={spool.arm.value}, armador={spool.armador}"
+                        f"[V2.1] Spool {spool.tag_spool} disponible COMPLETAR ARM: "
+                        f"armador={spool.armador}, fecha_armado={spool.fecha_armado}"
                     )
 
             except ValueError as e:
@@ -381,20 +231,17 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_iniciar_sold(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR SOLD con Event Sourcing.
+        Obtiene spools disponibles para INICIAR SOLD (v2.1 Direct Read).
 
-        REGLA DE NEGOCIO v2.0 (Event Sourcing - 2026-01-14):
-        - ARM estado: COMPLETADO (prerequisito cumplido)
-        - SOLD estado: PENDIENTE (reconstruido desde Metadata)
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Fecha_Armado: CON DATO (prerequisito ARM completado)
+        - Soldador: SIN DATO (operación SOLD no iniciada)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2] Retrieving spools available for INICIAR SOLD with Event Sourcing")
+        logger.info("[V2.1] Retrieving spools available for INICIAR SOLD (Direct Read)")
 
-        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        # WORKAROUND: Temporarily disabled due to Railway 500 error
-        # self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -402,15 +249,12 @@ class SpoolServiceV2:
             try:
                 spool = self.parse_spool_row(row)
 
-                # v2.0: Reconstruir estado desde Metadata
-                spool = self._reconstruir_estado_spool(spool)
-
-                # REGLA v2.0: ARM COMPLETADO Y SOLD PENDIENTE (estados reconstruidos)
-                if spool.arm == ActionStatus.COMPLETADO and spool.sold == ActionStatus.PENDIENTE:
+                # REGLA v2.1: Fecha_Armado llena Y Soldador vacío (Direct Read from columns)
+                if spool.fecha_armado is not None and spool.soldador is None:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2] Spool {spool.tag_spool} disponible INICIAR SOLD: "
-                        f"arm={spool.arm.value}, sold={spool.sold.value}"
+                        f"[V2.1] Spool {spool.tag_spool} disponible INICIAR SOLD: "
+                        f"fecha_armado={spool.fecha_armado}, soldador={spool.soldador}"
                     )
 
             except ValueError as e:
@@ -422,19 +266,17 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_completar_sold(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para COMPLETAR o CANCELAR SOLD.
+        Obtiene spools disponibles para COMPLETAR SOLD (v2.1 Direct Read).
 
-        REGLA v2.0 (Event Sourcing):
-        - SOLD estado: EN_PROGRESO (reconstruido desde Metadata)
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Soldador: CON DATO (operación iniciada)
+        - Fecha_Soldadura: SIN DATO (operación no completada)
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2] Retrieving spools available for COMPLETAR SOLD with Event Sourcing")
+        logger.info("[V2.1] Retrieving spools available for COMPLETAR SOLD (Direct Read)")
 
-        # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
-        # WORKAROUND: Temporarily disabled due to Railway 500 error
-        # self._load_all_events_batch()
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
@@ -442,22 +284,19 @@ class SpoolServiceV2:
             try:
                 spool = self.parse_spool_row(row)
 
-                # v2.0: Reconstruir estado desde Metadata
-                spool = self._reconstruir_estado_spool(spool)
-
-                # REGLA v2.0: SOLD EN_PROGRESO
-                if spool.sold == ActionStatus.EN_PROGRESO:
+                # REGLA v2.1: Soldador lleno Y Fecha_Soldadura vacía (Direct Read from columns)
+                if spool.soldador is not None and spool.fecha_soldadura is None:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2] Spool {spool.tag_spool} disponible COMPLETAR SOLD: "
-                        f"sold={spool.sold}, soldador={spool.soldador}"
+                        f"[V2.1] Spool {spool.tag_spool} disponible COMPLETAR SOLD: "
+                        f"soldador={spool.soldador}, fecha_soldadura={spool.fecha_soldadura}"
                     )
 
             except ValueError as e:
                 logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
                 continue
 
-        logger.info(f"[V2] Found {len(spools_disponibles)} spools for COMPLETAR SOLD")
+        logger.info(f"Found {len(spools_disponibles)} spools for COMPLETAR SOLD")
         return spools_disponibles
 
     def find_spool_by_tag(self, tag_spool: str) -> Optional[Spool]:

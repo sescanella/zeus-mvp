@@ -143,25 +143,20 @@ def get_metadata_repository(
     return MetadataRepository(sheets_repo=sheets_repo)
 
 
-def get_validation_service(
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
-) -> ValidationService:
+def get_validation_service() -> ValidationService:
     """
     Factory para ValidationService (nueva instancia por request).
 
-    v2.0: ValidationService necesita MetadataRepository para reconstruir
-    estados de spools desde eventos antes de aplicar validaciones.
-
-    Ya NO es singleton porque necesita acceso a MetadataRepository que
-    contiene estado dinámico por request.
+    v2.1 Direct Read: ValidationService lee estados directamente desde
+    columnas de Operaciones, NO necesita MetadataRepository.
 
     Returns:
-        Nueva instancia de ValidationService con MetadataRepository inyectado.
+        Nueva instancia de ValidationService (sin dependencias).
 
     Usage:
         validation_service: ValidationService = Depends(get_validation_service)
     """
-    return ValidationService(metadata_repository=metadata_repository)
+    return ValidationService()
 
 
 def get_worker_service(
@@ -215,28 +210,26 @@ def get_spool_service(
 
 
 def get_spool_service_v2(
-    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
 ) -> SpoolServiceV2:
     """
     Factory para SpoolServiceV2 (nueva instancia por request).
 
-    Retorna una nueva instancia de SpoolServiceV2 con mapeo dinámico de columnas
-    y Event Sourcing v2.0 integrado.
+    v2.1 Direct Read: SpoolServiceV2 con mapeo dinámico de columnas
+    y lectura directa de estados desde Operaciones (sin Event Sourcing).
 
     SpoolServiceV2 implementa:
     - Mapeo dinámico de columnas (lee header row 1)
     - Resistente a cambios de estructura en spreadsheet
-    - Event Sourcing v2.0: Reconstruye estado ARM/SOLD desde Metadata
-    - Reglas de negocio correctas para las 4 operaciones:
-      * INICIAR ARM: Fecha_Materiales llena Y ARM PENDIENTE (desde Metadata)
-      * COMPLETAR ARM: ARM EN_PROGRESO (desde Metadata)
-      * INICIAR SOLD: ARM COMPLETADO Y SOLD PENDIENTE (desde Metadata)
-      * COMPLETAR SOLD: SOLD EN_PROGRESO (desde Metadata)
+    - Direct Read v2.1: Lee estados directamente desde columnas
+    - Reglas de negocio basadas en presencia de datos:
+      * INICIAR ARM: Fecha_Materiales llena Y Armador vacío
+      * COMPLETAR ARM: Armador lleno Y Fecha_Armado vacía
+      * INICIAR SOLD: Fecha_Armado llena Y Soldador vacío
+      * COMPLETAR SOLD: Soldador lleno Y Fecha_Soldadura vacía
 
     Args:
         sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
-        metadata_repository: Repositorio Metadata para Event Sourcing (inyectado automáticamente).
 
     Returns:
         Nueva instancia de SpoolServiceV2 con dependencias configuradas.
@@ -244,13 +237,11 @@ def get_spool_service_v2(
     Usage:
         spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
     """
-    return SpoolServiceV2(
-        sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository
-    )
+    return SpoolServiceV2(sheets_repository=sheets_repo)
 
 
 def get_action_service(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
     metadata_repository: MetadataRepository = Depends(get_metadata_repository),
     validation_service: ValidationService = Depends(get_validation_service),
     worker_service: WorkerService = Depends(get_worker_service),
@@ -259,18 +250,19 @@ def get_action_service(
     """
     Factory para ActionService (nueva instancia por request) - CRÍTICO.
 
-    Retorna una nueva instancia de ActionService con TODAS las dependencias
-    inyectadas. ActionService v2.0 usa Event Sourcing con Metadata y
-    SpoolServiceV2 con mapeo dinámico de columnas.
+    v2.1 Direct Write: ActionService escribe directamente en hoja Operaciones
+    + auditoría opcional en Metadata.
 
     ActionService coordina:
     - Validación de trabajadores (WorkerService)
     - Búsqueda de spools (SpoolServiceV2 - mapeo dinámico)
-    - Validación de ownership (ValidationService)
-    - Escritura de eventos en Metadata (MetadataRepository)
+    - Validación de ownership (ValidationService - Direct Read)
+    - Escritura en Operaciones (SheetsRepository - CRÍTICO)
+    - Escritura en Metadata (MetadataRepository - OPCIONAL auditoría)
 
     Args:
-        metadata_repository: Repositorio Metadata para Event Sourcing (v2.0).
+        sheets_repo: Repositorio Sheets para escribir en Operaciones (v2.1 CRÍTICO).
+        metadata_repository: Repositorio Metadata para auditoría (v2.1 OPCIONAL).
         validation_service: Servicio de validación (inyectado automáticamente).
         worker_service: Servicio de trabajadores (inyectado automáticamente).
         spool_service_v2: SpoolServiceV2 con mapeo dinámico (inyectado automáticamente).
@@ -282,11 +274,11 @@ def get_action_service(
         action_service: ActionService = Depends(get_action_service)
 
     Note:
-        Este es el service más importante del sistema. Coordina el workflow
-        completo de INICIAR y COMPLETAR acciones de manufactura usando
-        Event Sourcing (v2.0) y mapeo dinámico de columnas (SpoolServiceV2).
+        v2.1: Escribe directamente en Operaciones (columnas: Armador, Fecha_Armado, etc.)
+        Metadata se mantiene como auditoría paralela (best effort, no crítico).
     """
     return ActionService(
+        sheets_repository=sheets_repo,
         metadata_repository=metadata_repository,
         validation_service=validation_service,
         spool_service=spool_service_v2,
