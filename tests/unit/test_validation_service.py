@@ -283,10 +283,11 @@ class TestHappyPath:
         spool_arm_en_progreso
     ):
         """ARM puede completarse por el trabajador que la inició."""
-        # No debe lanzar excepción
+        # No debe lanzar excepción (worker_id agregado en v2.0)
         validation_service.validar_puede_completar_arm(
             spool_arm_en_progreso,
-            "Juan Pérez"
+            "Juan Pérez",
+            worker_id=93
         )
 
     def test_validar_puede_iniciar_sold_success(
@@ -305,10 +306,7 @@ class TestHappyPath:
     ):
         """SOLD puede completarse por el trabajador que la inició."""
         # No debe lanzar excepción
-        validation_service.validar_puede_completar_sold(
-            spool_sold_en_progreso,
-            "María González"
-        )
+        validation_service.validar_puede_completar_sold(spool_sold_en_progreso, "María González", worker_id=94)
 
 
 # ==================== STATUS VALIDATION TESTS ====================
@@ -348,10 +346,7 @@ class TestStatusValidation:
     ):
         """No se puede completar ARM si no está EN_PROGRESO."""
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_arm(
-                spool_arm_pendiente,
-                "Juan Pérez"
-            )
+            validation_service.validar_puede_completar_arm(spool_arm_pendiente, "Juan Pérez", worker_id=93)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
         assert "SP-001" in exc_info.value.message
@@ -364,10 +359,7 @@ class TestStatusValidation:
     ):
         """No se puede completar ARM si ya está COMPLETADO."""
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_arm(
-                spool_arm_completado,
-                "Juan Pérez"
-            )
+            validation_service.validar_puede_completar_arm(spool_arm_completado, "Juan Pérez", worker_id=93)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
 
@@ -391,10 +383,7 @@ class TestStatusValidation:
     ):
         """No se puede completar SOLD si no está EN_PROGRESO."""
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_sold(
-                spool_sold_pendiente,
-                "María González"
-            )
+            validation_service.validar_puede_completar_sold(spool_sold_pendiente, "María González", worker_id=94)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
         assert "SP-004" in exc_info.value.message
@@ -502,7 +491,8 @@ class TestOwnership:
         with pytest.raises(NoAutorizadoError) as exc_info:
             validation_service.validar_puede_completar_arm(
                 spool_arm_en_progreso,
-                "María González"  # Trabajador diferente
+                "María González",  # Trabajador diferente
+                worker_id=94
             )
 
         assert exc_info.value.error_code == "NO_AUTORIZADO"
@@ -524,10 +514,7 @@ class TestOwnership:
         )
 
         with pytest.raises(NoAutorizadoError) as exc_info:
-            validation_service.validar_puede_completar_arm(
-                spool,
-                "Juan Pérez"
-            )
+            validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
 
         assert exc_info.value.error_code == "NO_AUTORIZADO"
         assert "DESCONOCIDO" in exc_info.value.message or "vacío" in exc_info.value.message.lower()
@@ -542,15 +529,18 @@ class TestOwnership:
         # Debe pasar con diferentes combinaciones de mayúsculas
         validation_service.validar_puede_completar_arm(
             spool_arm_en_progreso,
-            "juan pérez"  # lowercase
+            "juan pérez",  # lowercase
+            worker_id=93
         )
         validation_service.validar_puede_completar_arm(
             spool_arm_en_progreso,
-            "JUAN PÉREZ"  # uppercase
+            "JUAN PÉREZ",  # uppercase
+            worker_id=93
         )
         validation_service.validar_puede_completar_arm(
             spool_arm_en_progreso,
-            "JuAn PéReZ"  # mixed case
+            "JuAn PéReZ",  # mixed case
+            worker_id=93
         )
 
     def test_completar_sold_fails_if_different_worker(
@@ -563,7 +553,8 @@ class TestOwnership:
         with pytest.raises(NoAutorizadoError) as exc_info:
             validation_service.validar_puede_completar_sold(
                 spool_sold_en_progreso,
-                "Juan Pérez"  # Trabajador diferente
+                "Juan Pérez",  # Trabajador diferente
+                worker_id=93
             )
 
         assert exc_info.value.error_code == "NO_AUTORIZADO"
@@ -585,10 +576,7 @@ class TestOwnership:
         )
 
         with pytest.raises(NoAutorizadoError) as exc_info:
-            validation_service.validar_puede_completar_sold(
-                spool,
-                "María González"
-            )
+            validation_service.validar_puede_completar_sold(spool, "María González", worker_id=94)
 
         assert exc_info.value.error_code == "NO_AUTORIZADO"
         assert "DESCONOCIDO" in exc_info.value.message or "vacío" in exc_info.value.message.lower()
@@ -603,15 +591,18 @@ class TestOwnership:
         # Debe pasar con espacios extra
         validation_service.validar_puede_completar_sold(
             spool_sold_en_progreso,
-            "  María González  "  # espacios al inicio y final
+            "  María González  ",  # espacios al inicio y final
+            worker_id=94
         )
         validation_service.validar_puede_completar_sold(
             spool_sold_en_progreso,
-            "María González "  # espacio al final
+            "María González ",  # espacio al final
+            worker_id=94
         )
         validation_service.validar_puede_completar_sold(
             spool_sold_en_progreso,
-            " María González"  # espacio al inicio
+            " María González",  # espacio al inicio
+            worker_id=94
         )
 
 
@@ -637,8 +628,8 @@ class TestEdgeCases:
         )
 
         # Debe pasar con o sin espacios extra
-        validation_service.validar_puede_completar_arm(spool, "Juan Pérez")
-        validation_service.validar_puede_completar_arm(spool, "  Juan Pérez  ")
+        validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
+        validation_service.validar_puede_completar_arm(spool, "  Juan Pérez  ", worker_id=93)
 
     def test_completar_with_uppercase_vs_lowercase_match(
         self,
@@ -657,9 +648,9 @@ class TestEdgeCases:
         )
 
         # Debe pasar con cualquier combinación
-        validation_service.validar_puede_completar_arm(spool, "juan pérez")
-        validation_service.validar_puede_completar_arm(spool, "Juan Pérez")
-        validation_service.validar_puede_completar_arm(spool, "JUAN PÉREZ")
+        validation_service.validar_puede_completar_arm(spool, "juan pérez", worker_id=93)
+        validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
+        validation_service.validar_puede_completar_arm(spool, "JUAN PÉREZ", worker_id=93)
 
     # NOTE v2.0: Los siguientes tests se removieron porque en Event Sourcing
     # no es posible tener estados EN_PROGRESO con worker_nombre vacío/whitespace.

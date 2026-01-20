@@ -34,11 +34,13 @@ from fastapi import Depends
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.sheets_service import SheetsService
+from backend.core.column_map_cache import ColumnMapCache
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
 from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
 from backend.services.action_service import ActionService
+from backend.config import config
 
 
 # ============================================================================
@@ -80,21 +82,22 @@ def get_sheets_repository() -> SheetsRepository:
     return _sheets_repo_singleton
 
 
-def get_sheets_service() -> SheetsService:
+def get_sheets_service(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> SheetsService:
     """
-    Factory para SheetsService (singleton).
+    Factory para SheetsService (singleton v2.1).
 
+    v2.1: Usa ColumnMapCache para obtener mapeo dinámico de columnas.
     Retorna la misma instancia de SheetsService en todos los requests.
-    SheetsService es stateless (solo tiene métodos de parseo), por lo que
-    es seguro compartir una instancia.
 
     Razón del singleton:
-    - Stateless parser (no tiene estado interno)
-    - No necesita múltiples instancias
+    - Stateless parser (no tiene estado interno mutable)
+    - column_map se obtiene de cache (compartido)
     - Reduce overhead de creación de objetos
 
     Returns:
-        Instancia singleton de SheetsService.
+        Instancia singleton de SheetsService con column_map.
 
     Usage:
         sheets_service: SheetsService = Depends(get_sheets_service)
@@ -102,7 +105,12 @@ def get_sheets_service() -> SheetsService:
     global _sheets_service_singleton
 
     if _sheets_service_singleton is None:
-        _sheets_service_singleton = SheetsService()
+        # Obtener column_map desde cache (lazy load)
+        column_map = ColumnMapCache.get_or_build(
+            config.HOJA_OPERACIONES_NOMBRE,
+            sheets_repo
+        )
+        _sheets_service_singleton = SheetsService(column_map=column_map)
 
     return _sheets_service_singleton
 

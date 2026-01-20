@@ -29,14 +29,15 @@ def worker_service(mock_sheets_repository):
 @pytest.fixture
 def sample_workers_data():
     """
-    Datos de prueba con trabajadores activos e inactivos.
+    Datos de prueba con trabajadores activos e inactivos (v2.0: con id).
     """
+    from backend.models.role import RolTrabajador
     return [
-        Worker(nombre="Juan", apellido="Pérez", activo=True),
-        Worker(nombre="María", apellido="González", activo=True),
-        Worker(nombre="Pedro", apellido="López", activo=False),  # Inactivo
-        Worker(nombre="Ana", apellido="Martínez", activo=True),
-        Worker(nombre="Carlos", apellido="Rodríguez", activo=False),  # Inactivo
+        Worker(id=93, nombre="Juan", apellido="Pérez", rol=RolTrabajador.ARMADOR, activo=True),
+        Worker(id=94, nombre="María", apellido="González", rol=RolTrabajador.SOLDADOR, activo=True),
+        Worker(id=95, nombre="Pedro", apellido="López", rol=RolTrabajador.AYUDANTE, activo=False),  # Inactivo
+        Worker(id=96, nombre="Ana", apellido="Martínez", rol=RolTrabajador.ARMADOR, activo=True),
+        Worker(id=97, nombre="Carlos", apellido="Rodríguez", rol=RolTrabajador.SOLDADOR, activo=False),  # Inactivo
     ]
 
 
@@ -59,10 +60,9 @@ class TestGetAllActiveWorkers:
             *[['row'] for _ in sample_workers_data]  # Data rows
         ]
 
-        # Mock parser
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        # Mock parser (v2.0: classmethod directo)
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=sample_workers_data
         )
 
@@ -88,18 +88,18 @@ class TestGetAllActiveWorkers:
         mocker
     ):
         """get_all_active_workers excluye trabajadores inactivos."""
+        from backend.models.role import RolTrabajador
         workers = [
-            Worker(nombre="Pedro", apellido="López", activo=False),
-            Worker(nombre="Carlos", apellido="Rodríguez", activo=False),
+            Worker(id=95, nombre="Pedro", apellido="López", rol=RolTrabajador.AYUDANTE, activo=False),
+            Worker(id=97, nombre="Carlos", apellido="Rodríguez", rol=RolTrabajador.SOLDADOR, activo=False),
         ]
 
         mock_sheets_repository.read_worksheet.return_value = [
             ['header'],
             *[['row'] for _ in workers]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=workers
         )
 
@@ -119,9 +119,8 @@ class TestGetAllActiveWorkers:
         mock_sheets_repository.read_worksheet.return_value = [
             ['header']  # Solo header, sin datos
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=[]
         )
 
@@ -150,9 +149,8 @@ class TestFindWorkerByNombre:
             ['header'],
             *[['row'] for _ in sample_workers_data]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=sample_workers_data
         )
 
@@ -172,15 +170,15 @@ class TestFindWorkerByNombre:
         mocker
     ):
         """find_worker_by_nombre funciona case-insensitive."""
-        worker = Worker(nombre="Juan", apellido="Pérez", activo=True)
+        from backend.models.role import RolTrabajador
+        worker = Worker(id=93, nombre="Juan", apellido="Pérez", rol=RolTrabajador.ARMADOR, activo=True)
 
         mock_sheets_repository.read_worksheet.return_value = [
             ['header'],
             ['row']
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             return_value=worker
         )
 
@@ -201,15 +199,15 @@ class TestFindWorkerByNombre:
         mocker
     ):
         """find_worker_by_nombre normaliza espacios."""
-        worker = Worker(nombre="María", apellido="González", activo=True)
+        from backend.models.role import RolTrabajador
+        worker = Worker(id=94, nombre="María", apellido="González", rol=RolTrabajador.SOLDADOR, activo=True)
 
         mock_sheets_repository.read_worksheet.return_value = [
             ['header'],
             ['row']
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             return_value=worker
         )
 
@@ -232,9 +230,8 @@ class TestFindWorkerByNombre:
             ['header'],
             *[['row'] for _ in sample_workers_data]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=sample_workers_data
         )
 
@@ -256,9 +253,8 @@ class TestFindWorkerByNombre:
             ['header'],
             *[['row'] for _ in sample_workers_data]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=sample_workers_data
         )
 
@@ -275,18 +271,18 @@ class TestFindWorkerByNombre:
         mocker
     ):
         """find_worker_by_nombre solo busca entre trabajadores activos."""
+        from backend.models.role import RolTrabajador
         workers = [
-            Worker(nombre="Juan", apellido="Pérez", activo=True),  # Activo
-            Worker(nombre="Juan", apellido="Pérez", activo=False),  # Inactivo (duplicado)
+            Worker(id=93, nombre="Juan", apellido="Pérez", rol=RolTrabajador.ARMADOR, activo=True),  # Activo
+            Worker(id=98, nombre="Juan", apellido="Pérez", rol=RolTrabajador.ARMADOR, activo=False),  # Inactivo (duplicado)
         ]
 
         mock_sheets_repository.read_worksheet.return_value = [
             ['header'],
             *[['row'] for _ in workers]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=workers
         )
 
@@ -309,9 +305,8 @@ class TestFindWorkerByNombre:
             ['header'],
             *[['row'] for _ in sample_workers_data]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=sample_workers_data
         )
 
@@ -333,9 +328,8 @@ class TestFindWorkerByNombre:
             ['header'],
             *[['row'] for _ in sample_workers_data]
         ]
-        mocker.patch.object(
-            worker_service.sheets_service,
-            'parse_worker_row',
+        mocker.patch(
+            'backend.services.sheets_service.SheetsService.parse_worker_row',
             side_effect=sample_workers_data
         )
 

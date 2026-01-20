@@ -33,6 +33,7 @@ from dataclasses import replace
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.sheets_service import SheetsService
+from backend.core.column_map_cache import ColumnMapCache
 from backend.models.spool import Spool
 from backend.models.enums import ActionStatus
 from backend.models.metadata import Accion
@@ -55,7 +56,9 @@ class SpoolServiceV2:
         metadata_repository: Optional[MetadataRepository] = None
     ):
         """
-        Inicializa el servicio con repositorio de Sheets y Metadata.
+        Inicializa el servicio con repositorio de Sheets y Metadata (v2.2).
+
+        v2.2: Usa ColumnMapCache para mapeo dinámico (lazy loading).
 
         Args:
             sheets_repository: Repositorio para acceso a Google Sheets
@@ -63,120 +66,39 @@ class SpoolServiceV2:
         """
         self.sheets_repository = sheets_repository or SheetsRepository()
         self.metadata_repository = metadata_repository
-        self.column_map: Optional[dict[str, int]] = None
-        self.sheets_service: Optional[SheetsService] = None
         self._events_cache: Optional[dict[str, list]] = None  # Cache for batch queries
 
-    def _ensure_column_map(self):
-        """
-        Construye el mapeo de columnas si no existe.
-
-        Lee el header (row 1) de la hoja Operaciones y crea el mapeo
-        nombre_columna → índice.
-
-        VALIDACIÓN: Verifica que todas las columnas críticas existen.
-        Si falta alguna columna crítica, lanza error detallado.
-        """
-        if self.column_map is not None:
-            return  # Ya inicializado
-
-        logger.info("Building column map from header row")
-
-        # Leer hoja Operaciones completa (incluye header)
-        all_rows = self.sheets_repository.read_worksheet(
-            config.HOJA_OPERACIONES_NOMBRE
+        # v2.2: Obtener column_map desde cache (lazy load)
+        self.column_map = ColumnMapCache.get_or_build(
+            config.HOJA_OPERACIONES_NOMBRE,
+            self.sheets_repository
         )
-
-        if not all_rows or len(all_rows) == 0:
-            raise ValueError("Hoja Operaciones vacía")
-
-        # Row 1 = header
-        header_row = all_rows[0]
-
-        # Construir mapeo dinámico
-        self.column_map = SheetsService.build_column_map(header_row)
 
         # Crear SheetsService con column_map
         self.sheets_service = SheetsService(column_map=self.column_map)
 
-        logger.info(f"Column map built with {len(self.column_map)} entries")
+        # Validar columnas críticas
+        critical_columns = [
+            "TAG_SPOOL",
+            "Fecha_Materiales",
+            "Fecha_Armado",
+            "Armador",
+            "Fecha_Soldadura",
+            "Soldador"
+        ]
 
-        # VALIDACIÓN CRÍTICA: Verificar que columnas obligatorias existen
-        self._validate_critical_columns()
+        all_present, missing = ColumnMapCache.validate_critical_columns(
+            config.HOJA_OPERACIONES_NOMBRE,
+            critical_columns
+        )
 
-    def _validate_critical_columns(self):
-        """
-        Valida que todas las columnas críticas existen en el spreadsheet.
+        if not all_present:
+            raise ValueError(
+                f"Missing critical columns in Operaciones sheet: {missing}. "
+                f"Check Google Sheets structure."
+            )
 
-        COLUMNAS CRÍTICAS (obligatorias para funcionamiento):
-        - TAG_SPOOL: Identificador único del spool
-        - Fecha_Materiales: Prerequisito para iniciar ARM
-        - Fecha_Armado: Estado de completitud ARM
-        - Armador: Worker asignado a ARM
-        - Fecha_Soldadura: Estado de completitud SOLD
-        - Soldador: Worker asignado a SOLD
-
-        Raises:
-            ValueError: Si falta alguna columna crítica, con detalles de:
-                       - Columnas faltantes
-                       - Columnas encontradas
-                       - Posibles soluciones
-        """
-        # Definir columnas críticas con nombres alternativos posibles
-        critical_columns = {
-            "TAG_SPOOL": ["tagspool", "tag", "codigobarra"],
-            "Fecha_Materiales": ["fechamateriales", "materialesdate"],
-            "Fecha_Armado": ["fechaarmado", "armadodate"],
-            "Armador": ["armador", "worker_arm"],
-            "Fecha_Soldadura": ["fechasoldadura", "soldaduradate"],
-            "Soldador": ["soldador", "worker_sold"]
-        }
-
-        missing_columns = []
-        found_columns = {}
-
-        for col_name, alternatives in critical_columns.items():
-            # Intentar encontrar la columna (normalizada)
-            normalized_name = col_name.lower().replace("_", "").replace(" ", "")
-
-            # Buscar en column_map (ya normalizado)
-            found = False
-            for alt in [normalized_name] + alternatives:
-                if alt in self.column_map:
-                    found_columns[col_name] = self.column_map[alt]
-                    found = True
-                    break
-
-            if not found:
-                missing_columns.append(col_name)
-
-        # Si faltan columnas críticas, lanzar error detallado
-        if missing_columns:
-            error_msg = f"""
-❌ ESTRUCTURA DE SPREADSHEET INVÁLIDA
-
-Columnas CRÍTICAS faltantes: {', '.join(missing_columns)}
-
-Esto puede ocurrir si:
-1. Se eliminó una columna del spreadsheet
-2. Se cambió el nombre de una columna en el header (row 1)
-3. El header (row 1) está vacío para esa columna
-
-SOLUCIÓN:
-1. Verifica que el header (row 1) de la hoja "Operaciones" contenga:
-   {', '.join(critical_columns.keys())}
-
-2. Si eliminaste una columna por error, restáurala desde el historial
-
-3. Si cambiaste el nombre, usa el nombre original o actualiza el código
-
-Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
-{chr(10).join(f'  ✅ {name} → columna {idx}' for name, idx in found_columns.items())}
-"""
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        logger.info(f"✅ All {len(critical_columns)} critical columns validated successfully")
+        logger.info(f"SpoolServiceV2 initialized with {len(self.column_map)} columns")
 
     def _load_all_events_batch(self):
         """
@@ -315,10 +237,7 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
         Raises:
             ValueError: Si TAG_SPOOL está vacío
         """
-        # Asegurar que column_map existe
-        self._ensure_column_map()
-
-        # Obtener índices dinámicamente por nombre de columna
+        # Obtener índices dinámicamente por nombre de columna (column_map ya inicializado en constructor)
         idx_tag_spool = self.sheets_service._get_col_idx("TAG_SPOOL", fallback_idx=6)
         idx_nv = self.sheets_service._get_col_idx("NV", fallback_idx=1)
         idx_fecha_materiales = self.sheets_service._get_col_idx("Fecha_Materiales", fallback_idx=32)
@@ -390,7 +309,6 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             Lista de spools que cumplen las condiciones
         """
         logger.info("[V2 BATCH] Retrieving spools available for INICIAR ARM with Event Sourcing")
-        self._ensure_column_map()
 
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
         # WORKAROUND: Temporarily disabled due to Railway 500 error - investigating root cause
@@ -432,8 +350,7 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             Lista de spools que cumplen las condiciones
         """
         logger.info("[V2] Retrieving spools available for COMPLETAR ARM with Event Sourcing")
-        self._ensure_column_map()
-        
+
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
         # WORKAROUND: Temporarily disabled due to Railway 500 error
         # self._load_all_events_batch()
@@ -474,8 +391,7 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             Lista de spools que cumplen las condiciones
         """
         logger.info("[V2] Retrieving spools available for INICIAR SOLD with Event Sourcing")
-        self._ensure_column_map()
-        
+
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
         # WORKAROUND: Temporarily disabled due to Railway 500 error
         # self._load_all_events_batch()
@@ -515,8 +431,7 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             Lista de spools que cumplen las condiciones
         """
         logger.info("[V2] Retrieving spools available for COMPLETAR SOLD with Event Sourcing")
-        self._ensure_column_map()
-        
+
         # PERFORMANCE: Cargar TODOS los eventos UNA VEZ (batch query)
         # WORKAROUND: Temporarily disabled due to Railway 500 error
         # self._load_all_events_batch()
@@ -562,7 +477,6 @@ Columnas encontradas correctamente: {len(found_columns)}/{len(critical_columns)}
             DEBUG: Resultado de búsqueda (encontrado/no encontrado)
         """
         logger.info(f"[V2] Searching for spool with TAG: '{tag_spool}'")
-        self._ensure_column_map()
 
         # Normalizar TAG para búsqueda case-insensitive
         tag_normalized = tag_spool.strip().upper()

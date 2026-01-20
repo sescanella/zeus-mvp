@@ -50,20 +50,26 @@ class TestRoleRepositoryInit:
     """Tests for RoleRepository initialization."""
 
     def test_init_success(self, mock_spreadsheet, mock_worksheet):
-        """Test successful initialization."""
+        """Test successful initialization with lazy loading."""
         mock_spreadsheet.worksheet.return_value = mock_worksheet
         repo = RoleRepository(mock_spreadsheet, hoja_nombre="Roles")
 
-        assert repo.worksheet == mock_worksheet
-        mock_spreadsheet.worksheet.assert_called_once_with("Roles")
+        # v2.0: Lazy loading - worksheet NOT loaded during __init__
+        assert repo.spreadsheet == mock_spreadsheet
+        assert repo.hoja_nombre == "Roles"
+        assert repo._worksheet is None  # Not loaded yet
+        mock_spreadsheet.worksheet.assert_not_called()  # No API call yet
 
     def test_init_hoja_no_encontrada(self, mock_spreadsheet):
-        """Test initialization when Roles sheet not found."""
+        """Test lazy loading raises exception when Roles sheet not found."""
         import gspread
         mock_spreadsheet.worksheet.side_effect = gspread.exceptions.WorksheetNotFound("Worksheet not found")
 
+        repo = RoleRepository(mock_spreadsheet, hoja_nombre="Roles")
+
+        # v2.0: Lazy loading - exception raised when first method called
         with pytest.raises(SheetsConnectionError) as exc_info:
-            RoleRepository(mock_spreadsheet, hoja_nombre="Roles")
+            repo.get_roles_by_worker_id(93)  # Triggers _get_worksheet()
 
         assert "Roles" in str(exc_info.value)
 

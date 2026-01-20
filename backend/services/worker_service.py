@@ -43,7 +43,6 @@ class WorkerService:
             role_service: Servicio de roles para obtener roles de trabajadores (optional, v2.0)
         """
         self.sheets_repository = sheets_repository or SheetsRepository()
-        self.sheets_service = SheetsService()  # Stateless parser
 
         # v2.0: Integrar RoleService para obtener roles desde hoja Roles
         if role_service is None:
@@ -93,7 +92,7 @@ class WorkerService:
         workers = []
         for row_index, row in enumerate(all_rows[1:], start=2):  # Skip header
             try:
-                worker = self.sheets_service.parse_worker_row(row)
+                worker = SheetsService.parse_worker_row(row)
 
                 # v2.0: Obtener roles desde diccionario en memoria (O(1))
                 roles_str = roles_by_worker.get(worker.id, [])

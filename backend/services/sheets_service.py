@@ -29,14 +29,28 @@ class SheetsService:
     - Resistente a cambios en estructura del spreadsheet
     """
 
-    def __init__(self, column_map: Optional[dict[str, int]] = None):
+    def __init__(self, column_map: dict[str, int]):
         """
-        Inicializa el servicio con un mapeo opcional de columnas.
+        Inicializa el servicio con un mapeo de columnas (REQUERIDO v2.1).
 
         Args:
-            column_map: Diccionario {nombre_columna: índice}. Si None, usa índices legacy.
+            column_map: Diccionario {nombre_columna_normalizado: índice}.
+                        Obtener desde ColumnMapCache.get_or_build()
+
+        Raises:
+            ValueError: Si column_map está vacío o es None
+
+        Examples:
+            >>> from backend.core.column_map_cache import ColumnMapCache
+            >>> column_map = ColumnMapCache.get_or_build("Operaciones", sheets_repo)
+            >>> sheets_service = SheetsService(column_map=column_map)
         """
-        self._column_map = column_map or {}
+        if not column_map:
+            raise ValueError(
+                "column_map is required. "
+                "Use ColumnMapCache.get_or_build() to obtain it."
+            )
+        self._column_map = column_map
 
     @staticmethod
     def build_column_map(header_row: list[str]) -> dict[str, int]:
@@ -104,19 +118,8 @@ class SheetsService:
         logger.error(f"Column '{column_name}' not found and no fallback provided")
         return None
 
-    # ==================== LEGACY CONSTANTS (DEPRECATED) ====================
-    # Mantenidos temporalmente para compatibilidad, pero se debe usar column_map
-    # TODO: Eliminar después de migrar todos los usos a mapeo dinámico
-    IDX_NV = 1                  # B  - NV (Número de Nota de Venta)
-    IDX_TAG_SPOOL = 6           # G  - TAG_SPOOL / CODIGO_BARRA
-    IDX_FECHA_MATERIALES = 35   # AJ - OBSOLETO: ahora es AG (32)
-    IDX_FECHA_ARMADO = 36       # AK - OBSOLETO: ahora es AH (33)
-    IDX_ARMADOR = 37            # AL - OBSOLETO: ahora es AI (34)
-    IDX_FECHA_SOLDADURA = 38    # AM - OBSOLETO: ahora es AJ (35)
-    IDX_SOLDADOR = 39           # AN - OBSOLETO: ahora es AK (36)
-    IDX_FECHA_METROLOGIA = 40   # AO - OBSOLETO
-
-    # Hoja "Trabajadores" - Estructura estable
+    # ==================== WORKER SHEET CONSTANTS (STABLE) ====================
+    # Hoja "Trabajadores" - Estructura estable (no cambia)
     IDX_WORKER_ID = 0           # A - Id (numérico)
     IDX_WORKER_NOMBRE = 1       # B - Nombre
     IDX_WORKER_APELLIDO = 2     # C - Apellido
@@ -357,71 +360,80 @@ class SheetsService:
             activo=activo
         )
 
-    @classmethod
-    def parse_spool_row(cls, row: list) -> Spool:
+    def parse_spool_row(self, row: list) -> Spool:
         """
-        Parsea una fila de la hoja 'Operaciones' a un objeto Spool (v2.0 Event Sourcing).
+        Parsea una fila de la hoja 'Operaciones' a un objeto Spool (v2.1 Dynamic Mapping).
 
-        **IMPORTANTE v2.0:**
+        **IMPORTANTE v2.1:**
+        - Usa mapeo dinámico de columnas (_get_col_idx) - resistente a cambios de estructura
         - La hoja Operaciones es READ-ONLY (no se modifica)
         - Estados ARM/SOLD se reconstruyen desde hoja Metadata (Event Sourcing)
         - Esta función solo lee datos base: tag_spool, fecha_materiales, etc.
         - Estados siempre se setean como PENDIENTE (se reconstruyen después)
 
         Args:
-            row: Lista con valores de la fila (mínimo 41 columnas)
+            row: Lista con valores de la fila (mínimo recomendado: 65 columnas)
 
         Returns:
             Spool: Objeto Spool con datos base (estados PENDIENTE por defecto)
 
         Raises:
-            ValueError: Si TAG_SPOOL está vacío
+            ValueError: Si TAG_SPOOL está vacío o no se encuentra
 
         Examples:
-            >>> row = [''] * 65
-            >>> row[6] = "MK-1335-CW-25238-011"  # TAG_SPOOL
-            >>> row[35] = "30/7/2025"             # Fecha_Materiales (AJ)
-            >>> spool = SheetsService.parse_spool_row(row)
+            >>> column_map = ColumnMapCache.get_or_build("Operaciones", sheets_repo)
+            >>> sheets_service = SheetsService(column_map=column_map)
+            >>> row = all_rows[1]  # Segunda fila (skip header)
+            >>> spool = sheets_service.parse_spool_row(row)
             >>> spool.tag_spool
             'MK-1335-CW-25238-011'
             >>> spool.arm  # Siempre PENDIENTE (se reconstruye desde Metadata)
             <ActionStatus.PENDIENTE: 'PENDIENTE'>
         """
-        # Validar y rellenar fila si es muy corta
-        if len(row) < 41:  # Mínimo hasta AO (Fecha_Metrología)
-            row = row + [''] * (41 - len(row))
-            logger.debug(f"Fila corta rellenada a 41 columnas (original: {len(row)})")
+        # Rellenar fila si es muy corta (evitar index out of range)
+        if len(row) < 65:  # Hoja Operaciones tiene ~62-65 columnas
+            row = row + [''] * (65 - len(row))
+            logger.debug(f"Fila corta rellenada a 65 columnas (original: {len(row) - (65 - len(row))})")
 
-        # 1. Parsear TAG_SPOOL (obligatorio)
-        tag_spool = row[cls.IDX_TAG_SPOOL].strip() if row[cls.IDX_TAG_SPOOL] else None
+        # 1. Obtener índices usando mapeo dinámico
+        idx_tag_spool = self._get_col_idx("TAG_SPOOL", fallback_idx=6)
+        idx_nv = self._get_col_idx("NV", fallback_idx=1)
+        idx_fecha_materiales = self._get_col_idx("Fecha_Materiales", fallback_idx=32)
+        idx_fecha_armado = self._get_col_idx("Fecha_Armado", fallback_idx=33)
+        idx_armador = self._get_col_idx("Armador", fallback_idx=34)
+        idx_fecha_soldadura = self._get_col_idx("Fecha_Soldadura", fallback_idx=35)
+        idx_soldador = self._get_col_idx("Soldador", fallback_idx=36)
+
+        # 2. Parsear TAG_SPOOL (obligatorio)
+        tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None
         if not tag_spool:
             raise ValueError("TAG_SPOOL vacío en fila")
 
-        # 1.5. Parsear NV (v2.0 - opcional para filtrado multidimensional)
-        nv = row[cls.IDX_NV].strip() if cls.IDX_NV < len(row) and row[cls.IDX_NV] else None
+        # 3. Parsear NV (v2.0 - opcional para filtrado multidimensional)
+        nv = row[idx_nv].strip() if idx_nv < len(row) and row[idx_nv] else None
         if nv == '':
             nv = None
 
-        # 2. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
+        # 4. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
         # No leemos estados de Operaciones porque es READ-ONLY en v2.0
         arm_status = ActionStatus.PENDIENTE
         sold_status = ActionStatus.PENDIENTE
 
-        # 3. Parsear fechas (solo lectura, NO se usan para determinar estado)
-        fecha_materiales = cls.parse_date(row[cls.IDX_FECHA_MATERIALES])
-        fecha_armado = cls.parse_date(row[cls.IDX_FECHA_ARMADO])
-        fecha_soldadura = cls.parse_date(row[cls.IDX_FECHA_SOLDADURA])
+        # 5. Parsear fechas (solo lectura, NO se usan para determinar estado)
+        fecha_materiales = self.parse_date(row[idx_fecha_materiales]) if idx_fecha_materiales < len(row) else None
+        fecha_armado = self.parse_date(row[idx_fecha_armado]) if idx_fecha_armado < len(row) else None
+        fecha_soldadura = self.parse_date(row[idx_fecha_soldadura]) if idx_fecha_soldadura < len(row) else None
 
-        # 4. Parsear trabajadores legacy (solo lectura informativa)
-        armador = row[cls.IDX_ARMADOR].strip() if cls.IDX_ARMADOR < len(row) and row[cls.IDX_ARMADOR] else None
+        # 6. Parsear trabajadores legacy (solo lectura informativa)
+        armador = row[idx_armador].strip() if idx_armador < len(row) and row[idx_armador] else None
         if armador == '':
             armador = None
 
-        soldador = row[cls.IDX_SOLDADOR].strip() if cls.IDX_SOLDADOR < len(row) and row[cls.IDX_SOLDADOR] else None
+        soldador = row[idx_soldador].strip() if idx_soldador < len(row) and row[idx_soldador] else None
         if soldador == '':
             soldador = None
 
-        # 5. Crear objeto Spool con datos base
+        # 7. Crear objeto Spool con datos base
         # NOTA: Los estados reales se reconstruyen en ValidationService desde MetadataRepository
         return Spool(
             tag_spool=tag_spool,
@@ -470,15 +482,31 @@ if __name__ == "__main__":
     assert worker.activo is True
     print(f"✅ parse_worker_row: Id={worker.id}, {worker.nombre_completo}, rol={worker.rol.value}, activo={worker.activo}")
 
-    # Test parse_spool_row (v2.0 Event Sourcing - estados siempre PENDIENTE)
+    # Test parse_spool_row (v2.1 Dynamic Mapping - estados siempre PENDIENTE)
     print("\n=== Test parse_spool_row ===")
-    spool_row = [''] * 65  # v2.0 tiene 65 columnas
-    spool_row[6] = "MK-1335-CW-25238-011"  # G - TAG_SPOOL
-    spool_row[35] = "30/7/2025"            # AJ - Fecha_Materiales
-    spool_row[36] = "05/8/2025"            # AK - Fecha_Armado (legacy)
-    spool_row[37] = "Juan Pérez"           # AL - Armador (legacy)
 
-    spool = SheetsService.parse_spool_row(spool_row)
+    # Crear column_map mockeado con índices correctos
+    mock_column_map = {
+        "tagspool": 6,
+        "nv": 1,
+        "fechamateriales": 32,  # Columna AG (correcto)
+        "fechaarmado": 33,      # Columna AH (correcto)
+        "armador": 34,          # Columna AI (correcto)
+        "fechasoldadura": 35,   # Columna AJ (correcto)
+        "soldador": 36          # Columna AK (correcto)
+    }
+
+    # Instanciar SheetsService con column_map
+    sheets_service = SheetsService(column_map=mock_column_map)
+
+    # Crear fila de prueba con índices correctos
+    spool_row = [''] * 65
+    spool_row[6] = "MK-1335-CW-25238-011"  # G - TAG_SPOOL
+    spool_row[32] = "30/7/2025"            # AG - Fecha_Materiales (CORRECTO)
+    spool_row[33] = "05/8/2025"            # AH - Fecha_Armado (CORRECTO)
+    spool_row[34] = "Juan Pérez"           # AI - Armador (CORRECTO)
+
+    spool = sheets_service.parse_spool_row(spool_row)
     assert spool.tag_spool == "MK-1335-CW-25238-011"
     assert spool.arm == ActionStatus.PENDIENTE  # Siempre PENDIENTE (se reconstruye desde Metadata)
     assert spool.sold == ActionStatus.PENDIENTE  # Siempre PENDIENTE

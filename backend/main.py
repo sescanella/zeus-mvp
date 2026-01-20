@@ -32,6 +32,8 @@ from backend.config import config
 from backend.exceptions import ZEUSException
 from backend.models.error import ErrorResponse
 from backend.utils.logger import setup_logger
+from backend.core.column_map_cache import ColumnMapCache
+from backend.core.dependency import get_sheets_repository
 
 # FASE 2: Routers READ-ONLY implementados (health, workers, spools)
 from backend.routers import health, workers, spools
@@ -234,13 +236,52 @@ async def startup_event():
     - Configurar logging con setup_logger()
     - Log de información del ambiente
     - Log de configuración Google Sheets
-    - Validar variables de entorno (futuro)
+    - Pre-warm ColumnMapCache para hojas críticas (v2.1)
+    - Validar columnas críticas existen (fail-fast)
     """
     setup_logger()
     logging.info("✅ ZEUES API iniciada correctamente")
     logging.info(f"Environment: {config.ENVIRONMENT}")
     logging.info(f"Google Sheet ID: {config.GOOGLE_SHEET_ID[:10]}...{config.GOOGLE_SHEET_ID[-10:]}")
     logging.info(f"CORS Origins: {config.ALLOWED_ORIGINS}")
+
+    # v2.1: Pre-warm column map cache para hoja Operaciones
+    try:
+        logging.info("🔄 Pre-warming ColumnMapCache for 'Operaciones'...")
+        sheets_repo = get_sheets_repository()
+        column_map = ColumnMapCache.get_or_build("Operaciones", sheets_repo)
+
+        logging.info(f"✅ Column map loaded: {len(column_map)} columns detected")
+
+        # Validar columnas críticas para operaciones ARM/SOLD
+        critical_columns = [
+            "TAG_SPOOL",
+            "Fecha_Materiales",
+            "Fecha_Armado",
+            "Armador",
+            "Fecha_Soldadura",
+            "Soldador"
+        ]
+
+        all_present, missing = ColumnMapCache.validate_critical_columns(
+            "Operaciones",
+            critical_columns
+        )
+
+        if not all_present:
+            logging.error(
+                f"❌ CRITICAL: Missing columns in Operaciones sheet: {missing}. "
+                f"App may fail at runtime!"
+            )
+        else:
+            logging.info(f"✅ All {len(critical_columns)} critical columns validated")
+
+    except Exception as e:
+        # No bloquear startup - el cache se construirá lazy en primera request
+        logging.warning(
+            f"⚠️  Failed to pre-warm column map cache: {e}. "
+            f"Cache will be built on first request (lazy loading)."
+        )
 
 
 @app.on_event("shutdown")

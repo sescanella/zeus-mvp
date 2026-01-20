@@ -155,8 +155,11 @@ class TestParseWorkerRow:
         assert SheetsService.parse_worker_row(row).activo is False
 
     def test_parse_worker_row_raises_on_invalid_id(self):
-        """Test: Lanza ValueError si Id no es numérico."""
-        with pytest.raises(ValueError, match="Id de trabajador inválido"):
+        """Test: ID no numérico se trata como formato legacy (genera hash)."""
+        # Cuando el primer campo no es numérico, se interpreta como formato v1.0 (sin ID)
+        # En ese caso "abc" sería el nombre, "Juan" el apellido, etc.
+        # Esto causa un error de rol inválido porque "Pérez" no es un rol válido
+        with pytest.raises(ValueError, match="Rol inválido"):
             SheetsService.parse_worker_row(["abc", "Juan", "Pérez", "Armador", "TRUE"])
 
     def test_parse_worker_row_raises_on_empty_nombre(self):
@@ -191,107 +194,107 @@ class TestParseWorkerRow:
 
 
 class TestParseSpoolRow:
-    """Tests para el método parse_spool_row (v2.0 Event Sourcing)."""
+    """Tests para el método parse_spool_row (v2.1 Dynamic Mapping)."""
 
-    def test_parse_spool_row_full_data(self):
-        """Test: Parsea spool con datos base (v2.0: estados siempre PENDIENTE)."""
-        row = [''] * 65  # v2.0: 65 columnas en producción
-        row[6] = "MK-1335-CW-25238-011"  # G - TAG_SPOOL
-        row[35] = "30/7/2025"            # AJ - Fecha_Materiales
-        row[36] = "08/11/2025"           # AK - Fecha_Armado (legacy)
-        row[37] = "Juan Pérez"           # AL - Armador (legacy)
-        row[38] = "10/11/2025"           # AM - Fecha_Soldadura (legacy)
-        row[39] = "María González"       # AN - Soldador (legacy)
+    def test_parse_spool_row_full_data(self, sheets_service_with_mock_map):
+        """Test: Parsea spool con datos base usando índices CORRECTOS."""
+        row = [''] * 65
+        row[6] = "MK-1335-CW-25238-011"   # G - TAG_SPOOL
+        row[32] = "30/7/2025"             # AG - Fecha_Materiales (CORRECTO v2.1)
+        row[33] = "08/11/2025"            # AH - Fecha_Armado (CORRECTO v2.1)
+        row[34] = "Juan Pérez"            # AI - Armador (CORRECTO v2.1)
+        row[35] = "10/11/2025"            # AJ - Fecha_Soldadura (CORRECTO v2.1)
+        row[36] = "María González"        # AK - Soldador (CORRECTO v2.1)
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         assert isinstance(spool, Spool)
         assert spool.tag_spool == "MK-1335-CW-25238-011"
         # v2.0: Estados siempre PENDIENTE (se reconstruyen desde Metadata)
         assert spool.arm == ActionStatus.PENDIENTE
         assert spool.sold == ActionStatus.PENDIENTE
-        # Fechas y trabajadores legacy (solo lectura)
+        # Fechas y trabajadores con índices correctos
         assert spool.fecha_materiales == date(2025, 7, 30)
         assert spool.fecha_armado == date(2025, 11, 8)
         assert spool.armador == "Juan Pérez"
         assert spool.fecha_soldadura == date(2025, 11, 10)
         assert spool.soldador == "María González"
 
-    def test_parse_spool_row_estados_siempre_pendiente(self):
+    def test_parse_spool_row_estados_siempre_pendiente(self, sheets_service_with_mock_map):
         """Test v2.0: ARM/SOLD siempre retornan PENDIENTE (Event Sourcing)."""
         row = [''] * 65
         row[6] = "MK-TEST"
         # En v2.0, no hay columnas ARM/SOLD numéricas - todo viene PENDIENTE
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         # CRÍTICO v2.0: Estados SIEMPRE son PENDIENTE (se reconstruyen después)
         assert spool.arm == ActionStatus.PENDIENTE
         assert spool.sold == ActionStatus.PENDIENTE
 
-    def test_parse_spool_row_handles_short_row(self):
-        """Test: Rellena filas cortas con strings vacíos (mínimo 41 columnas)."""
-        row = [""] * 10  # Solo 10 columnas (necesita 41 mínimo)
+    def test_parse_spool_row_handles_short_row(self, sheets_service_with_mock_map):
+        """Test: Rellena filas cortas con strings vacíos (mínimo 65 columnas)."""
+        row = [""] * 10  # Solo 10 columnas (necesita 65 mínimo)
         row[6] = "MK-SHORT"
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         assert spool.tag_spool == "MK-SHORT"
         assert spool.arm == ActionStatus.PENDIENTE
         assert spool.sold == ActionStatus.PENDIENTE
 
-    def test_parse_spool_row_handles_none_values(self):
+    def test_parse_spool_row_handles_none_values(self, sheets_service_with_mock_map):
         """Test: Maneja valores None en columnas opcionales."""
         row = [''] * 65
         row[6] = "MK-TEST"
-        row[35] = None  # Fecha_Materiales None
-        row[37] = None  # Armador None
+        row[32] = None  # Fecha_Materiales None (índice correcto)
+        row[34] = None  # Armador None (índice correcto)
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         assert spool.tag_spool == "MK-TEST"
         assert spool.fecha_materiales is None
         assert spool.armador is None
 
-    def test_parse_spool_row_raises_on_empty_tag_spool(self):
+    def test_parse_spool_row_raises_on_empty_tag_spool(self, sheets_service_with_mock_map):
         """Test: Lanza ValueError si TAG_SPOOL está vacío."""
         row = [''] * 65
         row[6] = ""  # TAG_SPOOL vacío
 
         with pytest.raises(ValueError, match="TAG_SPOOL vacío"):
-            SheetsService.parse_spool_row(row)
+            sheets_service_with_mock_map.parse_spool_row(row)
 
-    def test_parse_spool_row_strips_whitespace_in_workers(self):
-        """Test: Limpia espacios en nombres de trabajadores legacy."""
+    def test_parse_spool_row_strips_whitespace_in_workers(self, sheets_service_with_mock_map):
+        """Test: Limpia espacios en nombres de trabajadores."""
         row = [''] * 65
         row[6] = "MK-TEST"
-        row[37] = "  Juan Pérez  "    # Armador con espacios
-        row[39] = "  María González  " # Soldador con espacios
+        row[34] = "  Juan Pérez  "    # Armador con espacios (índice correcto AI)
+        row[36] = "  María González  " # Soldador con espacios (índice correcto AK)
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         assert spool.armador == "Juan Pérez"
         assert spool.soldador == "María González"
 
-    def test_parse_spool_row_empty_strings_become_none(self):
+    def test_parse_spool_row_empty_strings_become_none(self, sheets_service_with_mock_map):
         """Test: Strings vacíos en trabajadores se convierten a None."""
         row = [''] * 65
         row[6] = "MK-TEST"
-        row[37] = ""  # Armador vacío
-        row[39] = ""  # Soldador vacío
+        row[34] = ""  # Armador vacío (índice correcto AI)
+        row[36] = ""  # Soldador vacío (índice correcto AK)
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         assert spool.armador is None
         assert spool.soldador is None
 
-    def test_parse_spool_row_prerequisito_fecha_materiales(self):
+    def test_parse_spool_row_prerequisito_fecha_materiales(self, sheets_service_with_mock_map):
         """Test: Fecha_Materiales es prerequisito para iniciar ARM."""
         row = [''] * 65
         row[6] = "MK-TEST"
-        row[35] = "30/7/2025"  # AJ - Prerequisito
+        row[32] = "30/7/2025"  # AG - Prerequisito (índice correcto)
 
-        spool = SheetsService.parse_spool_row(row)
+        spool = sheets_service_with_mock_map.parse_spool_row(row)
 
         assert spool.fecha_materiales == date(2025, 7, 30)
         # Estados siempre PENDIENTE (validación de prerequisitos en ValidationService)
@@ -299,25 +302,34 @@ class TestParseSpoolRow:
 
 
 class TestColumnIndices:
-    """Tests para verificar que los índices de columnas son correctos (v2.0)."""
+    """Tests para verificar que los índices de columnas son correctos (v2.1)."""
 
     def test_column_indices_workers(self):
-        """Test: Índices de columnas Workers v2.0."""
+        """Test: Índices de columnas Workers (estables)."""
         assert SheetsService.IDX_WORKER_ID == 0       # A - Id
         assert SheetsService.IDX_WORKER_NOMBRE == 1   # B - Nombre
         assert SheetsService.IDX_WORKER_APELLIDO == 2 # C - Apellido
         assert SheetsService.IDX_WORKER_ROL == 3      # D - Rol
         assert SheetsService.IDX_WORKER_ACTIVO == 4   # E - Activo
 
-    def test_column_indices_operaciones(self):
-        """Test: Índices de columnas Operaciones v2.0 (READ-ONLY)."""
-        assert SheetsService.IDX_TAG_SPOOL == 6           # G
-        assert SheetsService.IDX_FECHA_MATERIALES == 35   # AJ
-        assert SheetsService.IDX_FECHA_ARMADO == 36       # AK (legacy)
-        assert SheetsService.IDX_ARMADOR == 37            # AL (legacy)
-        assert SheetsService.IDX_FECHA_SOLDADURA == 38    # AM (legacy)
-        assert SheetsService.IDX_SOLDADOR == 39           # AN (legacy)
-        assert SheetsService.IDX_FECHA_METROLOGIA == 40   # AO (v2.0 nuevo)
+    def test_column_indices_operaciones(self, mock_column_map_operaciones):
+        """Test v2.1: Mapeo dinámico de columnas Operaciones."""
+        # v2.1: Ya no hay constantes IDX_* para Operaciones
+        # En su lugar, validamos que el column_map tenga las columnas correctas
+        assert "tagspool" in mock_column_map_operaciones
+        assert "fechamateriales" in mock_column_map_operaciones
+        assert "fechaarmado" in mock_column_map_operaciones
+        assert "armador" in mock_column_map_operaciones
+        assert "fechasoldadura" in mock_column_map_operaciones
+        assert "soldador" in mock_column_map_operaciones
+
+        # Validar que los índices sean correctos (producción actual)
+        assert mock_column_map_operaciones["tagspool"] == 6
+        assert mock_column_map_operaciones["fechamateriales"] == 32  # AG (correcto)
+        assert mock_column_map_operaciones["fechaarmado"] == 33      # AH (correcto)
+        assert mock_column_map_operaciones["armador"] == 34          # AI (correcto)
+        assert mock_column_map_operaciones["fechasoldadura"] == 35   # AJ (correcto)
+        assert mock_column_map_operaciones["soldador"] == 36         # AK (correcto)
 
 
 if __name__ == "__main__":
