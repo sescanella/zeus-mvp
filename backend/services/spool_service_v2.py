@@ -26,6 +26,7 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.services.sheets_service import SheetsService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.models.spool import Spool
+from backend.models.enums import ActionStatus
 from backend.config import config
 
 logger = logging.getLogger(__name__)
