@@ -246,7 +246,10 @@ class SheetsRepository:
         value: any
     ) -> None:
         """
-        Actualiza una celda específica.
+        Actualiza una celda específica usando USER_ENTERED para formateo correcto.
+
+        USER_ENTERED permite que Google Sheets interprete valores como fechas,
+        números, etc., en lugar de tratarlos como texto plano.
 
         Args:
             sheet_name: Nombre de la hoja
@@ -261,11 +264,14 @@ class SheetsRepository:
             spreadsheet = self._get_spreadsheet()
             worksheet = spreadsheet.worksheet(sheet_name)
 
-            # Convertir letra a índice de columna
-            column_index = self._column_letter_to_index(column_letter)
-
-            # Actualizar celda (gspread usa 1-indexed para columnas también)
-            worksheet.update_cell(row, column_index + 1, value)
+            # Usar worksheet.update() con value_input_option='USER_ENTERED'
+            # en lugar de update_cell() para permitir interpretación de fechas
+            cell_address = f"{column_letter}{row}"
+            worksheet.update(
+                cell_address,
+                [[value]],
+                value_input_option='USER_ENTERED'
+            )
 
             self.logger.info(f"✅ Actualizada celda {column_letter}{row} = {value} en '{sheet_name}'")
 
@@ -282,10 +288,13 @@ class SheetsRepository:
         updates: list[dict]
     ) -> None:
         """
-        Actualiza múltiples celdas en una sola operación (más eficiente).
+        Actualiza múltiples celdas en una sola operación con USER_ENTERED.
 
         Invalida el cache de la hoja después de actualizar para asegurar
         que lecturas subsecuentes obtengan datos actualizados.
+
+        Usa value_input_option='USER_ENTERED' para permitir que Google Sheets
+        interprete valores como fechas, números, etc.
 
         Args:
             sheet_name: Nombre de la hoja
@@ -314,8 +323,8 @@ class SheetsRepository:
                     'values': [[value]]
                 })
 
-            # Ejecutar batch update
-            worksheet.batch_update(batch_data)
+            # Ejecutar batch update con value_input_option='USER_ENTERED'
+            worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
 
             self.logger.info(
                 f"✅ Batch update: {len(updates)} celdas actualizadas en '{sheet_name}'"
@@ -339,10 +348,11 @@ class SheetsRepository:
         value: any
     ) -> None:
         """
-        Actualiza una celda usando NOMBRE de columna en lugar de letra (v2.1).
+        Actualiza una celda usando NOMBRE de columna con USER_ENTERED (v2.1).
 
         Usa ColumnMapCache para obtener índice dinámicamente.
         Resistente a cambios en estructura del spreadsheet.
+        Usa value_input_option='USER_ENTERED' para formateo correcto de fechas.
 
         Args:
             sheet_name: Nombre de la hoja
@@ -382,8 +392,16 @@ class SheetsRepository:
             spreadsheet = self._get_spreadsheet()
             worksheet = spreadsheet.worksheet(sheet_name)
 
-            # Actualizar celda (gspread usa 1-indexed para columnas)
-            worksheet.update_cell(row, column_index + 1, value)
+            # Convertir índice a letra de columna
+            column_letter = self._index_to_column_letter(column_index)
+            cell_address = f"{column_letter}{row}"
+
+            # Actualizar celda con value_input_option='USER_ENTERED'
+            worksheet.update(
+                cell_address,
+                [[value]],
+                value_input_option='USER_ENTERED'
+            )
 
             self.logger.info(
                 f"✅ Actualizada celda '{column_name}' (idx={column_index}) fila {row} = {value} en '{sheet_name}'"
@@ -404,10 +422,11 @@ class SheetsRepository:
         updates: list[dict]
     ) -> None:
         """
-        Actualiza múltiples celdas usando NOMBRES de columnas (v2.1).
+        Actualiza múltiples celdas usando NOMBRES de columnas con USER_ENTERED (v2.1).
 
         Usa ColumnMapCache para resolver nombres dinámicamente.
         Más eficiente que múltiples llamadas individuales.
+        Usa value_input_option='USER_ENTERED' para formateo correcto de fechas.
 
         Args:
             sheet_name: Nombre de la hoja
@@ -421,7 +440,7 @@ class SheetsRepository:
         Example:
             >>> updates = [
             ...     {"row": 10, "column_name": "Armador", "value": "Juan"},
-            ...     {"row": 10, "column_name": "Fecha_Armado", "value": "2026-01-20"}
+            ...     {"row": 10, "column_name": "Fecha_Armado", "value": "21-01-2026"}
             ... ]
             >>> repo.batch_update_by_column_name("Operaciones", updates)
         """
@@ -463,8 +482,8 @@ class SheetsRepository:
                     'values': [[value]]
                 })
 
-            # Ejecutar batch update
-            worksheet.batch_update(batch_data)
+            # Ejecutar batch update con value_input_option='USER_ENTERED'
+            worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
 
             self.logger.info(
                 f"✅ Batch update by column name: {len(updates)} celdas actualizadas en '{sheet_name}'"

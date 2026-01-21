@@ -42,6 +42,9 @@ class Config:
     # Environment
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'development')
 
+    # Timezone - Santiago, Chile (UTC-3 standard, UTC-4 daylight saving)
+    TIMEZONE: str = os.getenv('TIMEZONE', 'America/Santiago')
+
     # API Configuration
     API_HOST: str = os.getenv('API_HOST', '0.0.0.0')
     API_PORT: int = int(os.getenv('API_PORT', '8000'))
@@ -133,6 +136,7 @@ if __name__ == '__main__':
         print(f"   - Sheet ID: {config.GOOGLE_SHEET_ID}")
         print(f"   - Service Account: {config.GOOGLE_SERVICE_ACCOUNT_EMAIL}")
         print(f"   - Environment: {config.ENVIRONMENT}")
+        print(f"   - Timezone: {config.TIMEZONE}")
         print(f"   - Cache TTL: {config.CACHE_TTL_SECONDS}s")
         print(f"   - Allowed Origins: {config.ALLOWED_ORIGINS}")
     except ValueError as e:
