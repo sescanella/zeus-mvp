@@ -479,26 +479,22 @@ class TestDependencies:
 # ==================== CRITICAL: OWNERSHIP TESTS ====================
 
 class TestOwnership:
-    """Tests CRÍTICOS de validación de propiedad (restricción BC/BE)."""
+    """Tests de validación de estado (sin restricción de ownership)."""
 
-    def test_completar_arm_fails_if_different_worker(
+    def test_completar_arm_succeeds_with_different_worker(
         self,
         validation_service,
         spool_arm_en_progreso
     ):
-        """No se puede completar ARM si el trabajador no es quien la inició."""
+        """Cualquier trabajador con rol Armador puede completar ARM iniciado por otro."""
         # spool_arm_en_progreso tiene armador="JP(93)"
-        with pytest.raises(NoAutorizadoError) as exc_info:
-            validation_service.validar_puede_completar_arm(
-                spool_arm_en_progreso,
-                "MG(94)",  # Trabajador diferente
-                worker_id=94
-            )
-
-        assert exc_info.value.error_code == "NO_AUTORIZADO"
-        assert "JP(93)" in exc_info.value.message
-        assert "MG(94)" in exc_info.value.message
-        assert "SP-002" in exc_info.value.message
+        # Otro trabajador (MG(94)) puede completar si tiene el rol correcto
+        # No debe lanzar excepción
+        validation_service.validar_puede_completar_arm(
+            spool_arm_en_progreso,
+            "MG(94)",  # Trabajador diferente
+            worker_id=94
+        )
 
     def test_completar_arm_fails_if_bc_empty(self, validation_service):
         """No se puede completar ARM si BC (armador) está vacío (v2.1: NOT STARTED)."""
@@ -543,24 +539,20 @@ class TestOwnership:
             worker_id=93
         )
 
-    def test_completar_sold_fails_if_different_worker(
+    def test_completar_sold_succeeds_with_different_worker(
         self,
         validation_service,
         spool_sold_en_progreso
     ):
-        """No se puede completar SOLD si el trabajador no es quien la inició."""
+        """Cualquier trabajador con rol Soldador puede completar SOLD iniciado por otro."""
         # spool_sold_en_progreso tiene soldador="MG(94)"
-        with pytest.raises(NoAutorizadoError) as exc_info:
-            validation_service.validar_puede_completar_sold(
-                spool_sold_en_progreso,
-                "JP(93)",  # Trabajador diferente
-                worker_id=93
-            )
-
-        assert exc_info.value.error_code == "NO_AUTORIZADO"
-        assert "MG(94)" in exc_info.value.message
-        assert "JP(93)" in exc_info.value.message
-        assert "SP-005" in exc_info.value.message
+        # Otro trabajador (JP(93)) puede completar si tiene el rol correcto
+        # No debe lanzar excepción
+        validation_service.validar_puede_completar_sold(
+            spool_sold_en_progreso,
+            "JP(93)",  # Trabajador diferente
+            worker_id=93
+        )
 
     def test_completar_sold_fails_if_be_empty(self, validation_service):
         """No se puede completar SOLD si BE (soldador) está vacío (v2.1: NOT STARTED)."""

@@ -72,7 +72,7 @@ class ValidationService:
         logger.debug(f"[V2.1] ✅ ARM start validation passed | {spool.tag_spool}")
 
     def validar_puede_completar_arm(self, spool: Spool, worker_nombre: str, worker_id: int) -> None:
-        """Valida COMPLETAR ARM con ownership (v2.1 Direct Read)."""
+        """Valida COMPLETAR ARM (v2.1 Direct Read - sin restricción de ownership)."""
         logger.info(f"[V2.1] Validating ARM completion | Spool: {spool.tag_spool} | Worker: {worker_nombre}")
 
         # 1. Validar NO completado primero (si ya completado, no está EN_PROGRESO)
@@ -84,16 +84,7 @@ class ValidationService:
             # v2.1: Si armador=None, la operación NO FUE INICIADA
             raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="ARM")
 
-        # 3. CRÍTICO: Ownership validation (armador debe coincidir con worker)
-        if spool.armador.strip().lower() != worker_nombre.strip().lower():
-            raise NoAutorizadoError(
-                tag_spool=spool.tag_spool,
-                trabajador_esperado=spool.armador,
-                trabajador_solicitante=worker_nombre,
-                operacion="ARM"
-            )
-
-        # Validar rol
+        # 3. Validar rol (cualquier trabajador con rol Armador puede completar)
         if self.role_service:
             self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, "ARM")
 
@@ -137,7 +128,7 @@ class ValidationService:
         logger.debug(f"[V2.1] ✅ SOLD start validation passed | {spool.tag_spool}")
 
     def validar_puede_completar_sold(self, spool: Spool, worker_nombre: str, worker_id: int) -> None:
-        """Valida COMPLETAR SOLD con ownership (v2.1 Direct Read)."""
+        """Valida COMPLETAR SOLD (v2.1 Direct Read - sin restricción de ownership)."""
         logger.info(f"[V2.1] Validating SOLD completion | Spool: {spool.tag_spool} | Worker: {worker_nombre}")
 
         # 1. Validar NO completado primero (si ya completado, no está EN_PROGRESO)
@@ -149,16 +140,7 @@ class ValidationService:
             # v2.1: Si soldador=None, la operación NO FUE INICIADA
             raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="SOLD")
 
-        # 3. CRÍTICO: Ownership validation (soldador debe coincidir con worker)
-        if spool.soldador.strip().lower() != worker_nombre.strip().lower():
-            raise NoAutorizadoError(
-                tag_spool=spool.tag_spool,
-                trabajador_esperado=spool.soldador,
-                trabajador_solicitante=worker_nombre,
-                operacion="SOLD"
-            )
-
-        # Validar rol
+        # 3. Validar rol (cualquier trabajador con rol Soldador puede completar)
         if self.role_service:
             self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, "SOLD")
 
@@ -171,7 +153,7 @@ class ValidationService:
         worker_nombre: str,
         worker_id: int
     ) -> None:
-        """Valida CANCELAR acción EN_PROGRESO con ownership (v2.1 Direct Read)."""
+        """Valida CANCELAR acción EN_PROGRESO (v2.1 Direct Read - sin restricción de ownership)."""
         logger.info(f"[V2.1] Validating {operacion.value} cancellation | Spool: {spool.tag_spool}")
 
         if operacion == ActionType.ARM:
@@ -181,14 +163,6 @@ class ValidationService:
             if spool.fecha_armado is not None:
                 raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="ARM")
 
-            # Ownership
-            if spool.armador.strip().lower() != worker_nombre.strip().lower():
-                raise NoAutorizadoError(
-                    tag_spool=spool.tag_spool,
-                    trabajador_esperado=spool.armador,
-                    trabajador_solicitante=worker_nombre,
-                    operacion="ARM"
-                )
         elif operacion == ActionType.SOLD:
             # Validar SOLD EN_PROGRESO
             if spool.soldador is None:
@@ -196,16 +170,7 @@ class ValidationService:
             if spool.fecha_soldadura is not None:
                 raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="SOLD")
 
-            # Ownership
-            if spool.soldador.strip().lower() != worker_nombre.strip().lower():
-                raise NoAutorizadoError(
-                    tag_spool=spool.tag_spool,
-                    trabajador_esperado=spool.soldador,
-                    trabajador_solicitante=worker_nombre,
-                    operacion="SOLD"
-                )
-
-        # Validar rol
+        # Validar rol (cualquier trabajador con el rol correcto puede cancelar)
         if self.role_service:
             self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, operacion.value)
 
