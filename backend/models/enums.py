@@ -8,13 +8,15 @@ from enum import Enum
 
 class ActionType(str, Enum):
     """
-    Tipos de acción soportados en el MVP.
+    Tipos de acción soportados en el sistema.
 
     ARM: Armado de spool
     SOLD: Soldado de spool
+    METROLOGIA: Metrología/QC de spool
     """
     ARM = "ARM"
     SOLD = "SOLD"
+    METROLOGIA = "METROLOGIA"
 
 
 class ActionStatus(str, Enum):

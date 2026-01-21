@@ -7,7 +7,7 @@ export interface Worker {
   rol?: string;  // Legacy/deprecated - usar roles array
   roles?: string[];  // v2.0: Array de roles desde hoja Roles
   activo: boolean;
-  nombre_completo: string;
+  nombre_completo: string;  // v2.1: Formato "INICIALES(ID)" ej: "MR(93)"
 }
 
 export interface Spool {
@@ -18,9 +18,10 @@ export interface Spool {
   proyecto?: string;
   fecha_materiales?: string;
   fecha_armado?: string;
-  armador?: string;
+  armador?: string;  // v2.1: Formato "INICIALES(ID)" ej: "JP(93)"
   fecha_soldadura?: string;
-  soldador?: string;
+  soldador?: string;  // v2.1: Formato "INICIALES(ID)" ej: "MG(94)"
+  fecha_qc_metrologia?: string | null;  // v2.1: Fecha QC/Metrología completada
 }
 
 export interface ActionPayload {
@@ -37,7 +38,7 @@ export interface ActionResponse {
   data: {
     tag_spool: string;
     operacion: string;
-    trabajador: string;
+    trabajador: string;  // v2.1: Formato "INICIALES(ID)" ej: "MR(93)"
     fila_actualizada: number;
     columna_actualizada: string;
     valor_nuevo: number;

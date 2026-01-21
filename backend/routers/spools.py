@@ -24,7 +24,7 @@ router = APIRouter()
 
 @router.get("/spools/iniciar", response_model=SpoolListResponse, status_code=status.HTTP_200_OK)
 async def get_spools_para_iniciar(
-    operacion: str = Query(..., description="Tipo de operación (ARM o SOLD)"),
+    operacion: str = Query(..., description="Tipo de operación (ARM, SOLD o METROLOGIA)"),
     spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
 ):
     """
@@ -33,6 +33,7 @@ async def get_spools_para_iniciar(
     Aplica reglas de negocio correctas usando mapeo dinámico de columnas:
     - **ARM**: Fecha_Materiales llena Y Armador vacío
     - **SOLD**: Fecha_Armado llena Y Soldador vacío
+    - **METROLOGIA**: Fecha_Soldadura llena Y Fecha_QC_Metrología vacía
 
     V2 mejoras:
     - Lee header (row 1) para construir mapeo dinámico: nombre_columna → índice
@@ -40,7 +41,7 @@ async def get_spools_para_iniciar(
     - Reglas de negocio correctas (no depende de estados numéricos obsoletos)
 
     Args:
-        operacion: Tipo de operación a iniciar ("ARM" o "SOLD").
+        operacion: Tipo de operación a iniciar ("ARM", "SOLD" o "METROLOGIA").
                    Query param obligatorio.
         spool_service_v2: Servicio de spools V2 (inyectado automáticamente).
 
@@ -51,7 +52,7 @@ async def get_spools_para_iniciar(
         - filtro_aplicado: Descripción del filtro usado
 
     Raises:
-        HTTPException 400: Si operación es inválida (no es ARM ni SOLD).
+        HTTPException 400: Si operación es inválida (no es ARM, SOLD ni METROLOGIA).
         HTTPException 503: Si falla conexión Google Sheets.
 
     Example request:
@@ -83,16 +84,19 @@ async def get_spools_para_iniciar(
         logger.warning(f"Invalid operation type: {operacion}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Operación inválida '{operacion}'. Debe ser ARM o SOLD."
+            detail=f"Operación inválida '{operacion}'. Debe ser ARM, SOLD o METROLOGIA."
         )
 
     # Obtener spools elegibles para iniciar usando V2
     if action_type == ActionType.ARM:
         spools = spool_service_v2.get_spools_disponibles_para_iniciar_arm()
         filtro = "ARM - Fecha_Materiales llena Y Armador vacío"
-    else:  # ActionType.SOLD
+    elif action_type == ActionType.SOLD:
         spools = spool_service_v2.get_spools_disponibles_para_iniciar_sold()
         filtro = "SOLD - Fecha_Armado llena Y Soldador vacío"
+    else:  # ActionType.METROLOGIA
+        spools = spool_service_v2.get_spools_disponibles_para_iniciar_metrologia()
+        filtro = "METROLOGIA - Fecha_Soldadura llena Y Fecha_QC_Metrología vacía"
 
     logger.info(f"Found {len(spools)} spools eligible to start {operacion}")
 
@@ -185,6 +189,92 @@ async def get_spools_para_completar(
         filtro = "SOLD - Soldador lleno Y Fecha_Soldadura vacía"
 
     logger.info(f"Found {len(spools)} spools to complete for {operacion}")
+
+    # Construir response
+    return SpoolListResponse(
+        spools=spools,
+        total=len(spools),
+        filtro_aplicado=filtro
+    )
+
+
+@router.get("/spools/cancelar", response_model=SpoolListResponse, status_code=status.HTTP_200_OK)
+async def get_spools_para_cancelar(
+    operacion: str = Query(..., description="Tipo de operación (ARM o SOLD)"),
+    worker_id: int = Query(..., description="ID del trabajador"),
+    spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
+):
+    """
+    Lista spools EN_PROGRESO del trabajador para CANCELAR (V2 Dynamic Mapping).
+
+    Aplica reglas de negocio correctas usando mapeo dinámico de columnas:
+    - **ARM**: Armador lleno Y Fecha_Armado vacía Y worker_id coincide
+    - **SOLD**: Soldador lleno Y Fecha_Soldadura vacía Y worker_id coincide
+
+    V2 mejoras:
+    - Lee header (row 1) para construir mapeo dinámico: nombre_columna → índice
+    - Resistente a cambios de estructura en spreadsheet
+    - Reglas de negocio correctas (no depende de estados numéricos obsoletos)
+    - Filtro ownership: Solo spools iniciados por el trabajador (formato "XX(ID)")
+
+    Args:
+        operacion: Tipo de operación a cancelar ("ARM" o "SOLD").
+                   Query param obligatorio.
+        worker_id: ID numérico del trabajador.
+                   Query param obligatorio.
+        spool_service_v2: Servicio de spools V2 (inyectado automáticamente).
+
+    Returns:
+        SpoolListResponse con:
+        - spools: Lista de objetos Spool EN_PROGRESO del trabajador
+        - total: Cantidad de spools cancelables
+        - filtro_aplicado: Descripción del filtro usado
+
+    Raises:
+        HTTPException 400: Si operación es inválida (no es ARM ni SOLD).
+        HTTPException 503: Si falla conexión Google Sheets.
+
+    Example request:
+        ```bash
+        curl "http://localhost:8000/api/spools/cancelar?operacion=ARM&worker_id=93"
+        ```
+
+    Example response (200 OK):
+        ```json
+        {
+            "spools": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "armador": "Nicolas(93)",
+                    "fecha_armado": null
+                }
+            ],
+            "total": 1,
+            "filtro_aplicado": "ARM - Armador lleno Y Fecha_Armado vacía Y worker_id=93"
+        }
+        ```
+    """
+    logger.info(f"GET /api/spools/cancelar (V2) - operacion={operacion}, worker_id={worker_id}")
+
+    # Validar operación (convertir string → ActionType enum)
+    try:
+        action_type = ActionType(operacion.upper())
+    except ValueError:
+        logger.warning(f"Invalid operation type: {operacion}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Operación inválida '{operacion}'. Debe ser ARM o SOLD."
+        )
+
+    # Obtener spools cancelables del trabajador usando V2
+    if action_type == ActionType.ARM:
+        spools = spool_service_v2.get_spools_disponibles_para_cancelar_arm(worker_id)
+        filtro = f"ARM - Armador lleno Y Fecha_Armado vacía Y worker_id={worker_id}"
+    else:  # ActionType.SOLD
+        spools = spool_service_v2.get_spools_disponibles_para_cancelar_sold(worker_id)
+        filtro = f"SOLD - Soldador lleno Y Fecha_Soldadura vacía Y worker_id={worker_id}"
+
+    logger.info(f"Found {len(spools)} spools to cancel for {operacion} by worker_id={worker_id}")
 
     # Construir response
     return SpoolListResponse(

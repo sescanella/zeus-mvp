@@ -11,7 +11,7 @@ class Spool(BaseModel):
     """
     Modelo completo de un spool (pieza de tubería).
 
-    Representa un spool con sus estados de operaciones (ARM/SOLD),
+    Representa un spool con sus estados de operaciones (ARM/SOLD/METROLOGIA),
     fechas de dependencias, y metadata de trabajadores.
     """
     tag_spool: str = Field(
@@ -54,17 +54,23 @@ class Spool(BaseModel):
         description="Fecha cuando se completó la soldadura (columna BD)",
         examples=["2025-11-10"]
     )
+    fecha_qc_metrologia: Optional[date] = Field(
+        None,
+        description="Fecha cuando se completó QC/Metrología (columna 38 'Fecha_QC_Metrología')",
+        examples=["2025-11-15"]
+    )
 
     # Metadata de trabajadores (columnas BC, BE)
+    # v2.1: Formato "INICIALES(ID)" - ej: "MR(93)"
     armador: Optional[str] = Field(
         None,
-        description="Nombre del trabajador que inició ARM (columna BC)",
-        examples=["Juan Pérez"]
+        description="Trabajador que inició ARM en formato 'INICIALES(ID)' (columna BC)",
+        examples=["MR(93)", "JP(94)"]
     )
     soldador: Optional[str] = Field(
         None,
-        description="Nombre del trabajador que inició SOLD (columna BE)",
-        examples=["María González"]
+        description="Trabajador que inició SOLD en formato 'INICIALES(ID)' (columna BE)",
+        examples=["MG(95)", "CP(96)"]
     )
 
     # Metadata adicional (opcional para MVP)
@@ -151,6 +157,22 @@ class Spool(BaseModel):
         return (
             self.sold == ActionStatus.EN_PROGRESO and
             self.soldador == worker_nombre
+        )
+
+    def puede_iniciar_metrologia(self) -> bool:
+        """
+        Verifica si el spool puede iniciar la operación METROLOGIA/QC.
+
+        Reglas v2.1 (sin columna Metrólogo en Sheets):
+        - fecha_soldadura debe estar llena (SOLD completado - prerequisito)
+        - fecha_qc_metrologia debe estar vacía (METROLOGIA no iniciada)
+
+        Returns:
+            bool: True si cumple todas las condiciones
+        """
+        return (
+            self.fecha_soldadura is not None and
+            self.fecha_qc_metrologia is None
         )
 
 

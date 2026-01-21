@@ -71,7 +71,8 @@ class SpoolServiceV2:
             "Fecha_Armado",
             "Armador",
             "Fecha_Soldadura",
-            "Soldador"
+            "Soldador",
+            "Fecha_QC_Metrología"
         ]
 
         all_present, missing = ColumnMapCache.validate_critical_columns(
@@ -108,6 +109,7 @@ class SpoolServiceV2:
         idx_armador = self.sheets_service._get_col_idx("Armador", fallback_idx=34)
         idx_fecha_soldadura = self.sheets_service._get_col_idx("Fecha_Soldadura", fallback_idx=35)
         idx_soldador = self.sheets_service._get_col_idx("Soldador", fallback_idx=36)
+        idx_fecha_qc_metrologia = self.sheets_service._get_col_idx("Fecha_QC_Metrología", fallback_idx=37)
 
         logger.debug(
             f"Column indices: TAG_SPOOL={idx_tag_spool}, "
@@ -115,7 +117,7 @@ class SpoolServiceV2:
         )
 
         # Validar y rellenar fila si es corta
-        required_len = max(idx_tag_spool, idx_fecha_armado, idx_armador, idx_soldador) + 1
+        required_len = max(idx_tag_spool, idx_fecha_armado, idx_armador, idx_soldador, idx_fecha_qc_metrologia) + 1
         if len(row) < required_len:
             row = row + [''] * (required_len - len(row))
 
@@ -137,6 +139,7 @@ class SpoolServiceV2:
         fecha_materiales = SheetsService.parse_date(row[idx_fecha_materiales] if idx_fecha_materiales < len(row) else "")
         fecha_armado = SheetsService.parse_date(row[idx_fecha_armado] if idx_fecha_armado < len(row) else "")
         fecha_soldadura = SheetsService.parse_date(row[idx_fecha_soldadura] if idx_fecha_soldadura < len(row) else "")
+        fecha_qc_metrologia = SheetsService.parse_date(row[idx_fecha_qc_metrologia] if idx_fecha_qc_metrologia < len(row) else "")
 
         # 5. Parsear trabajadores
         armador = row[idx_armador].strip() if idx_armador < len(row) and row[idx_armador] else None
@@ -157,6 +160,7 @@ class SpoolServiceV2:
             armador=armador,
             fecha_soldadura=fecha_soldadura,
             soldador=soldador,
+            fecha_qc_metrologia=fecha_qc_metrologia,
             proyecto=None
         )
 
@@ -298,6 +302,126 @@ class SpoolServiceV2:
                 continue
 
         logger.info(f"Found {len(spools_disponibles)} spools for COMPLETAR SOLD")
+        return spools_disponibles
+
+    def get_spools_disponibles_para_cancelar_arm(self, worker_id: int) -> list[Spool]:
+        """
+        Obtiene spools EN_PROGRESO de ARM del trabajador para CANCELAR (v2.1 Direct Read).
+
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Armador: CON DATO en formato "XX(ID)" donde ID = worker_id
+        - Fecha_Armado: SIN DATO (operación no completada)
+        - Ownership: Solo spools donde armador contiene "(worker_id)"
+
+        Args:
+            worker_id: ID numérico del trabajador para filtrar ownership
+
+        Returns:
+            Lista de spools EN_PROGRESO del trabajador específico
+        """
+        logger.info(f"[V2.1] Retrieving spools available for CANCELAR ARM by worker_id={worker_id} (Direct Read)")
+
+        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        spools_disponibles = []
+
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            try:
+                spool = self.parse_spool_row(row)
+
+                # REGLA v2.1: Armador lleno Y Fecha_Armado vacía Y Ownership
+                if (spool.armador is not None and
+                    spool.fecha_armado is None and
+                    f"({worker_id})" in spool.armador):
+                    spools_disponibles.append(spool)
+                    logger.debug(
+                        f"[V2.1] Spool {spool.tag_spool} disponible CANCELAR ARM: "
+                        f"armador={spool.armador}, fecha_armado={spool.fecha_armado}, worker_id={worker_id}"
+                    )
+
+            except ValueError as e:
+                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
+                continue
+
+        logger.info(f"Found {len(spools_disponibles)} spools for CANCELAR ARM by worker_id={worker_id}")
+        return spools_disponibles
+
+    def get_spools_disponibles_para_cancelar_sold(self, worker_id: int) -> list[Spool]:
+        """
+        Obtiene spools EN_PROGRESO de SOLD del trabajador para CANCELAR (v2.1 Direct Read).
+
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Soldador: CON DATO en formato "XX(ID)" donde ID = worker_id
+        - Fecha_Soldadura: SIN DATO (operación no completada)
+        - Ownership: Solo spools donde soldador contiene "(worker_id)"
+
+        Args:
+            worker_id: ID numérico del trabajador para filtrar ownership
+
+        Returns:
+            Lista de spools EN_PROGRESO del trabajador específico
+        """
+        logger.info(f"[V2.1] Retrieving spools available for CANCELAR SOLD by worker_id={worker_id} (Direct Read)")
+
+        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        spools_disponibles = []
+
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            try:
+                spool = self.parse_spool_row(row)
+
+                # REGLA v2.1: Soldador lleno Y Fecha_Soldadura vacía Y Ownership
+                if (spool.soldador is not None and
+                    spool.fecha_soldadura is None and
+                    f"({worker_id})" in spool.soldador):
+                    spools_disponibles.append(spool)
+                    logger.debug(
+                        f"[V2.1] Spool {spool.tag_spool} disponible CANCELAR SOLD: "
+                        f"soldador={spool.soldador}, fecha_soldadura={spool.fecha_soldadura}, worker_id={worker_id}"
+                    )
+
+            except ValueError as e:
+                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
+                continue
+
+        logger.info(f"Found {len(spools_disponibles)} spools for CANCELAR SOLD by worker_id={worker_id}")
+        return spools_disponibles
+
+    def get_spools_disponibles_para_iniciar_metrologia(self) -> list[Spool]:
+        """
+        Obtiene spools disponibles para INICIAR METROLOGIA/QC (v2.1 Direct Read).
+
+        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        - Fecha_Soldadura: CON DATO (prerequisito SOLD completado)
+        - Fecha_QC_Metrología: SIN DATO (operación METROLOGIA no completada)
+
+        NOTA: METROLOGIA no tiene estado EN_PROGRESO porque no existe columna "Metrólogo".
+        Solo tiene flujo PENDIENTE → COMPLETADO (al llenar Fecha_QC_Metrología).
+
+        Returns:
+            Lista de spools que cumplen las condiciones
+        """
+        logger.info("[V2.1] Retrieving spools available for INICIAR METROLOGIA (Direct Read)")
+
+        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        spools_disponibles = []
+
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            try:
+                spool = self.parse_spool_row(row)
+
+                # REGLA v2.1: Fecha_Soldadura llena Y Fecha_QC_Metrología vacía (Direct Read from columns)
+                if spool.fecha_soldadura is not None and spool.fecha_qc_metrologia is None:
+                    spools_disponibles.append(spool)
+                    logger.debug(
+                        f"[V2.1] Spool {spool.tag_spool} disponible INICIAR METROLOGIA: "
+                        f"fecha_soldadura={spool.fecha_soldadura}, fecha_qc_metrologia={spool.fecha_qc_metrologia}"
+                    )
+
+            except ValueError as e:
+                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
+                continue
+
+        logger.info(f"Found {len(spools_disponibles)} spools for INICIAR METROLOGIA")
         return spools_disponibles
 
     def find_spool_by_tag(self, tag_spool: str) -> Optional[Spool]:
