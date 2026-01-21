@@ -23,3 +23,106 @@ button {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
+
+/* ========================================
+   TABLET VIEWPORT OPTIMIZATIONS
+   Target: Android Tablets 10" (800x1280, 1024x600)
+   iPad (768x1024 portrait, 1024x768 landscape)
+   ======================================== */
+
+/* Base: Force 100vh height in tablets to prevent zoom issues */
+@media (min-width: 768px) and (max-width: 1280px) {
+  html {
+    height: 100vh;
+    height: 100dvh; /* Dynamic Viewport Height - Chrome 108+, Safari 15.4+ */
+  }
+
+  /* Fallback for older browsers */
+  @supports not (height: 100dvh) {
+    html {
+      height: 100vh;
+    }
+  }
+}
+
+/* Tablet-specific spacing reductions (moderate - 20-25% reduction) */
+@media (min-width: 768px) and (max-width: 1280px) {
+
+  /* Padding reductions */
+  .tablet\:p-5 {
+    padding: 1.25rem !important; /* 20px vs 32px (p-8) */
+  }
+
+  .tablet\:px-6 {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+
+  .tablet\:py-4 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .tablet\:py-3 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .tablet\:p-4 {
+    padding: 1rem !important;
+  }
+
+  /* Gap reductions */
+  .tablet\:gap-4 {
+    gap: 1rem !important; /* 16px vs 24px (gap-6) */
+  }
+
+  .tablet\:gap-3 {
+    gap: 0.75rem !important; /* 12px vs 16px */
+  }
+
+  /* Margin reductions */
+  .tablet\:mb-6 {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .tablet\:mb-4 {
+    margin-bottom: 1rem !important;
+  }
+
+  /* Header compact */
+  .tablet\:header-compact {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  /* Content with fixed footer - add bottom padding */
+  .tablet\:pb-footer {
+    padding-bottom: 6rem !important; /* 96px = footer height + safe area */
+  }
+}
+
+/* Custom scrollbar for internal scroll areas (all devices) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Scrollbar for Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}

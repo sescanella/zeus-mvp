@@ -28,6 +28,7 @@ from datetime import datetime, date
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.validation_service import ValidationService
+from backend.utils.date_formatter import format_date_for_sheets
 from backend.services.spool_service import SpoolService
 from backend.services.worker_service import WorkerService
 
@@ -221,7 +222,7 @@ class ActionService:
 
             # PASO 5: Actualizar columna Armador/Soldador en Operaciones (CRÍTICO - v2.1)
             worker_nombre = trabajador.nombre_completo
-            fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
+            fecha_hoy = format_date_for_sheets(date.today())  # DD-MM-YYYY
 
             if operacion == ActionType.ARM:
                 column_name = "Armador"
@@ -386,7 +387,7 @@ class ActionService:
             logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
 
             # PASO 5: Actualizar columna Fecha_Armado/Fecha_Soldadura en Operaciones (CRÍTICO - v2.1)
-            fecha_hoy = date.today().isoformat()  # YYYY-MM-DD
+            fecha_hoy = format_date_for_sheets(date.today())  # DD-MM-YYYY
 
             if operacion == ActionType.ARM:
                 column_name = "Fecha_Armado"
@@ -554,7 +555,7 @@ class ActionService:
             logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
 
             # PASO 5: Limpiar columna Armador/Soldador en Operaciones (CRÍTICO - v2.1)
-            fecha_hoy = date.today().isoformat()
+            fecha_hoy = format_date_for_sheets(date.today())  # DD-MM-YYYY
 
             if operacion == ActionType.ARM:
                 column_name = "Armador"

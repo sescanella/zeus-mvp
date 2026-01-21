@@ -46,7 +46,7 @@ export default function TipoInteraccionPage() {
       }}
     >
       {/* Logo */}
-      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+      <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
@@ -57,7 +57,7 @@ export default function TipoInteraccionPage() {
       </div>
 
       {/* Header */}
-      <div className="px-10 py-6 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4 mb-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
           <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
@@ -70,7 +70,7 @@ export default function TipoInteraccionPage() {
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-8 tablet:p-5 tablet:pb-footer">
         {/* Worker Info Bar - expandido con double-row + left accent */}
         <div className="border-4 border-white mb-6 relative overflow-hidden">
           {/* Left accent bar */}
@@ -115,9 +115,9 @@ export default function TipoInteraccionPage() {
           </div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 tablet:mb-4">
           {/* Grid 2 columnas */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-4 tablet:gap-3 mb-4">
             {/* INICIAR */}
             <button
               onClick={() => handleSelectTipo('iniciar')}
@@ -180,43 +180,45 @@ export default function TipoInteraccionPage() {
           </button>
         </div>
 
-        {/* Navigation */}
-        <div className="flex gap-4">
-          <button
-            onClick={() => router.back()}
-            className="
-              flex-1 h-16
-              bg-transparent
-              border-4 border-white
-              flex items-center justify-center gap-3
-              active:bg-white active:text-[#001F3F]
-              transition-all duration-200
-              group
-            "
-          >
-            <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-            <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
-              VOLVER
-            </span>
-          </button>
+        {/* Fixed Navigation Footer */}
+        <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+          <div className="flex gap-4 tablet:gap-3">
+            <button
+              onClick={() => router.back()}
+              className="
+                flex-1 h-16
+                bg-transparent
+                border-4 border-white
+                flex items-center justify-center gap-3
+                active:bg-white active:text-[#001F3F]
+                transition-all duration-200
+                group
+              "
+            >
+              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                VOLVER
+              </span>
+            </button>
 
-          <button
-            onClick={() => router.push('/')}
-            className="
-              flex-1 h-16
-              bg-transparent
-              border-4 border-red-500
-              flex items-center justify-center gap-3
-              active:bg-red-500 active:border-red-500
-              transition-all duration-200
-              group
-            "
-          >
-            <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-            <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
-              INICIO
-            </span>
-          </button>
+            <button
+              onClick={() => router.push('/')}
+              className="
+                flex-1 h-16
+                bg-transparent
+                border-4 border-red-500
+                flex items-center justify-center gap-3
+                active:bg-red-500 active:border-red-500
+                transition-all duration-200
+                group
+              "
+            >
+              <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
+              <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                INICIO
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

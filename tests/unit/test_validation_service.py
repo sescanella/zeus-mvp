@@ -28,9 +28,9 @@ def mock_metadata_repository(mocker):
     Mock de MetadataRepository para v2.0.
 
     Genera eventos basados en el tag_spool para simular Event Sourcing:
-    - SP-002: ARM en progreso (Juan Pérez)
-    - SP-003: ARM completado (Juan Pérez)
-    - SP-005: ARM completado + SOLD en progreso (María González)
+    - SP-002: ARM en progreso (JP(93))
+    - SP-003: ARM completado (JP(93))
+    - SP-005: ARM completado + SOLD en progreso (MG(94))
     - Otros: Sin eventos (PENDIENTE)
     """
     from backend.models.metadata import MetadataEvent, EventoTipo, Accion
@@ -46,10 +46,10 @@ def mock_metadata_repository(mocker):
                 evento_tipo=EventoTipo.INICIAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
         elif tag_spool == "SP-003":
@@ -58,20 +58,20 @@ def mock_metadata_repository(mocker):
                 evento_tipo=EventoTipo.INICIAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
             events.append(MetadataEvent(
                 evento_tipo=EventoTipo.COMPLETAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.COMPLETAR,
-                fecha_operacion="2025-11-08",
+                fecha_operacion="08-11-2025",
                 metadata_json=None
             ))
         elif tag_spool == "SP-005":
@@ -80,30 +80,30 @@ def mock_metadata_repository(mocker):
                 evento_tipo=EventoTipo.INICIAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
             events.append(MetadataEvent(
                 evento_tipo=EventoTipo.COMPLETAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.COMPLETAR,
-                fecha_operacion="2025-11-08",
+                fecha_operacion="08-11-2025",
                 metadata_json=None
             ))
             events.append(MetadataEvent(
                 evento_tipo=EventoTipo.INICIAR_SOLD,
                 tag_spool=tag_spool,
                 worker_id=2,
-                worker_nombre="María González",
+                worker_nombre="MG(94)",
                 operacion="SOLD",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-09",
+                fecha_operacion="09-11-2025",
                 metadata_json=None
             ))
         elif tag_spool == "SP-020":
@@ -115,7 +115,7 @@ def mock_metadata_repository(mocker):
                 worker_nombre="DESCONOCIDO",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
         elif tag_spool == "SP-021":
@@ -124,20 +124,20 @@ def mock_metadata_repository(mocker):
                 evento_tipo=EventoTipo.INICIAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
             events.append(MetadataEvent(
                 evento_tipo=EventoTipo.COMPLETAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(93)",
                 operacion="ARM",
                 accion=Accion.COMPLETAR,
-                fecha_operacion="2025-11-08",
+                fecha_operacion="08-11-2025",
                 metadata_json=None
             ))
             events.append(MetadataEvent(
@@ -147,7 +147,7 @@ def mock_metadata_repository(mocker):
                 worker_nombre="DESCONOCIDO",
                 operacion="SOLD",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-09",
+                fecha_operacion="09-11-2025",
                 metadata_json=None
             ))
         elif tag_spool == "SP-030":
@@ -156,10 +156,10 @@ def mock_metadata_repository(mocker):
                 evento_tipo=EventoTipo.INICIAR_ARM,
                 tag_spool=tag_spool,
                 worker_id=1,
-                worker_nombre="  Juan Pérez  ",
+                worker_nombre="  JP(93)  ",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
         elif tag_spool == "SP-031":
@@ -171,7 +171,7 @@ def mock_metadata_repository(mocker):
                 worker_nombre="JUAN PÉREZ",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-11-01",
+                fecha_operacion="01-11-2025",
                 metadata_json=None
             ))
 
@@ -213,7 +213,7 @@ def spool_arm_en_progreso():
         fecha_materiales=date(2025, 11, 1),
         fecha_armado=None,
         fecha_soldadura=None,
-        armador="Juan Pérez",
+        armador="JP(93)",
         soldador=None
     )
 
@@ -228,7 +228,7 @@ def spool_arm_completado():
         fecha_materiales=date(2025, 11, 1),
         fecha_armado=date(2025, 11, 8),
         fecha_soldadura=None,
-        armador="Juan Pérez",
+        armador="JP(93)",
         soldador=None
     )
 
@@ -243,7 +243,7 @@ def spool_sold_pendiente():
         fecha_materiales=date(2025, 11, 1),
         fecha_armado=date(2025, 11, 8),
         fecha_soldadura=None,
-        armador="Juan Pérez",
+        armador="JP(93)",
         soldador=None
     )
 
@@ -258,8 +258,8 @@ def spool_sold_en_progreso():
         fecha_materiales=date(2025, 11, 1),
         fecha_armado=date(2025, 11, 8),
         fecha_soldadura=None,
-        armador="Juan Pérez",
-        soldador="María González"
+        armador="JP(93)",
+        soldador="MG(94)"
     )
 
 
@@ -286,7 +286,7 @@ class TestHappyPath:
         # No debe lanzar excepción (worker_id agregado en v2.0)
         validation_service.validar_puede_completar_arm(
             spool_arm_en_progreso,
-            "Juan Pérez",
+            "JP(93)",
             worker_id=93
         )
 
@@ -306,7 +306,7 @@ class TestHappyPath:
     ):
         """SOLD puede completarse por el trabajador que la inició."""
         # No debe lanzar excepción
-        validation_service.validar_puede_completar_sold(spool_sold_en_progreso, "María González", worker_id=94)
+        validation_service.validar_puede_completar_sold(spool_sold_en_progreso, "MG(94)", worker_id=94)
 
 
 # ==================== STATUS VALIDATION TESTS ====================
@@ -346,7 +346,7 @@ class TestStatusValidation:
     ):
         """No se puede completar ARM si no está EN_PROGRESO."""
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_arm(spool_arm_pendiente, "Juan Pérez", worker_id=93)
+            validation_service.validar_puede_completar_arm(spool_arm_pendiente, "JP(93)", worker_id=93)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
         assert "SP-001" in exc_info.value.message
@@ -359,7 +359,7 @@ class TestStatusValidation:
     ):
         """No se puede completar ARM si ya está COMPLETADO."""
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_arm(spool_arm_completado, "Juan Pérez", worker_id=93)
+            validation_service.validar_puede_completar_arm(spool_arm_completado, "JP(93)", worker_id=93)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
 
@@ -383,7 +383,7 @@ class TestStatusValidation:
     ):
         """No se puede completar SOLD si no está EN_PROGRESO."""
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_sold(spool_sold_pendiente, "María González", worker_id=94)
+            validation_service.validar_puede_completar_sold(spool_sold_pendiente, "MG(94)", worker_id=94)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
         assert "SP-004" in exc_info.value.message
@@ -464,7 +464,7 @@ class TestDependencies:
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=date(2025, 11, 8),
             fecha_soldadura=date(2025, 11, 10),  # BD llena (incorrecto)
-            armador="Juan Pérez",
+            armador="JP(93)",
             soldador=None
         )
 
@@ -487,17 +487,17 @@ class TestOwnership:
         spool_arm_en_progreso
     ):
         """No se puede completar ARM si el trabajador no es quien la inició."""
-        # spool_arm_en_progreso tiene armador="Juan Pérez"
+        # spool_arm_en_progreso tiene armador="JP(93)"
         with pytest.raises(NoAutorizadoError) as exc_info:
             validation_service.validar_puede_completar_arm(
                 spool_arm_en_progreso,
-                "María González",  # Trabajador diferente
+                "MG(94)",  # Trabajador diferente
                 worker_id=94
             )
 
         assert exc_info.value.error_code == "NO_AUTORIZADO"
-        assert "Juan Pérez" in exc_info.value.message
-        assert "María González" in exc_info.value.message
+        assert "JP(93)" in exc_info.value.message
+        assert "MG(94)" in exc_info.value.message
         assert "SP-002" in exc_info.value.message
 
     def test_completar_arm_fails_if_bc_empty(self, validation_service):
@@ -515,7 +515,7 @@ class TestOwnership:
 
         # v2.1: armador=None → OperacionNoIniciadaError (operation never started)
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
+            validation_service.validar_puede_completar_arm(spool, "JP(93)", worker_id=93)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
 
@@ -525,7 +525,7 @@ class TestOwnership:
         spool_arm_en_progreso
     ):
         """Completar ARM es case-insensitive (JUAN PÉREZ == juan pérez)."""
-        # spool_arm_en_progreso tiene armador="Juan Pérez"
+        # spool_arm_en_progreso tiene armador="JP(93)"
         # Debe pasar con diferentes combinaciones de mayúsculas
         validation_service.validar_puede_completar_arm(
             spool_arm_en_progreso,
@@ -549,17 +549,17 @@ class TestOwnership:
         spool_sold_en_progreso
     ):
         """No se puede completar SOLD si el trabajador no es quien la inició."""
-        # spool_sold_en_progreso tiene soldador="María González"
+        # spool_sold_en_progreso tiene soldador="MG(94)"
         with pytest.raises(NoAutorizadoError) as exc_info:
             validation_service.validar_puede_completar_sold(
                 spool_sold_en_progreso,
-                "Juan Pérez",  # Trabajador diferente
+                "JP(93)",  # Trabajador diferente
                 worker_id=93
             )
 
         assert exc_info.value.error_code == "NO_AUTORIZADO"
-        assert "María González" in exc_info.value.message
-        assert "Juan Pérez" in exc_info.value.message
+        assert "MG(94)" in exc_info.value.message
+        assert "JP(93)" in exc_info.value.message
         assert "SP-005" in exc_info.value.message
 
     def test_completar_sold_fails_if_be_empty(self, validation_service):
@@ -571,13 +571,13 @@ class TestOwnership:
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=date(2025, 11, 8),
             fecha_soldadura=None,
-            armador="Juan Pérez",
+            armador="JP(93)",
             soldador=None  # v2.1: soldador=None means NOT STARTED
         )
 
         # v2.1: soldador=None → OperacionNoIniciadaError (operation never started)
         with pytest.raises(OperacionNoIniciadaError) as exc_info:
-            validation_service.validar_puede_completar_sold(spool, "María González", worker_id=94)
+            validation_service.validar_puede_completar_sold(spool, "MG(94)", worker_id=94)
 
         assert exc_info.value.error_code == "OPERACION_NO_INICIADA"
 
@@ -587,21 +587,21 @@ class TestOwnership:
         spool_sold_en_progreso
     ):
         """Completar SOLD normaliza espacios (trim leading/trailing)."""
-        # spool_sold_en_progreso tiene soldador="María González"
+        # spool_sold_en_progreso tiene soldador="MG(94)"
         # Debe pasar con espacios extra
         validation_service.validar_puede_completar_sold(
             spool_sold_en_progreso,
-            "  María González  ",  # espacios al inicio y final
+            "  MG(94)  ",  # espacios al inicio y final
             worker_id=94
         )
         validation_service.validar_puede_completar_sold(
             spool_sold_en_progreso,
-            "María González ",  # espacio al final
+            "MG(94) ",  # espacio al final
             worker_id=94
         )
         validation_service.validar_puede_completar_sold(
             spool_sold_en_progreso,
-            " María González",  # espacio al inicio
+            " MG(94)",  # espacio al inicio
             worker_id=94
         )
 
@@ -623,13 +623,13 @@ class TestEdgeCases:
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=None,
             fecha_soldadura=None,
-            armador="  Juan Pérez  ",  # Espacios extra en BC
+            armador="  JP(93)  ",  # Espacios extra en BC
             soldador=None
         )
 
         # Debe pasar con o sin espacios extra
-        validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
-        validation_service.validar_puede_completar_arm(spool, "  Juan Pérez  ", worker_id=93)
+        validation_service.validar_puede_completar_arm(spool, "JP(93)", worker_id=93)
+        validation_service.validar_puede_completar_arm(spool, "  JP(93)  ", worker_id=93)
 
     def test_completar_with_uppercase_vs_lowercase_match(
         self,
@@ -649,7 +649,7 @@ class TestEdgeCases:
 
         # Debe pasar con cualquier combinación
         validation_service.validar_puede_completar_arm(spool, "juan pérez", worker_id=93)
-        validation_service.validar_puede_completar_arm(spool, "Juan Pérez", worker_id=93)
+        validation_service.validar_puede_completar_arm(spool, "JP(93)", worker_id=93)
         validation_service.validar_puede_completar_arm(spool, "JUAN PÉREZ", worker_id=93)
 
     # NOTE v2.0: Los siguientes tests se removieron porque en Event Sourcing

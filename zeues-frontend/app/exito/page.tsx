@@ -72,14 +72,14 @@ export default function ExitoPage() {
         )}
 
         {/* Mensaje */}
-        <h1 className="text-8xl font-black text-white font-mono tracking-[0.3em] text-center">
+        <h1 className="text-5xl sm:text-6xl md:text-7xl font-black text-white font-mono tracking-[0.3em] text-center">
           {mensaje}
         </h1>
 
         {/* Countdown con "SEGUNDOS" */}
         <div className="text-center">
-          <div className="text-9xl font-black text-zeues-orange font-mono">{countdown}</div>
-          <div className="text-2xl font-black text-white/50 font-mono mt-4">SEGUNDOS</div>
+          <div className="text-6xl sm:text-7xl md:text-8xl font-black text-zeues-orange font-mono">{countdown}</div>
+          <div className="text-xl sm:text-2xl font-black text-white/50 font-mono mt-4">SEGUNDOS</div>
         </div>
 
         {/* Botón */}

@@ -158,7 +158,7 @@ function SeleccionarSpoolContent() {
       }}
     >
       {/* Logo */}
-      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+      <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
@@ -169,7 +169,7 @@ function SeleccionarSpoolContent() {
       </div>
 
       {/* Header */}
-      <div className="px-10 py-6 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4 mb-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
           <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
@@ -179,7 +179,7 @@ function SeleccionarSpoolContent() {
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-8 tablet:p-5 tablet:pb-footer">
         {/* Loading State */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-20">
@@ -208,9 +208,9 @@ function SeleccionarSpoolContent() {
         {/* Main Content - VAR-1 Table */}
         {!loading && !error && (
           <>
-            <div className="mb-6">
-              <div className="border-4 border-white p-6 mb-4">
-                <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="mb-6 tablet:mb-4">
+              <div className="border-4 border-white p-6 tablet:p-4 mb-4">
+                <div className="grid grid-cols-2 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
                   <div>
                     <label className="block text-xs font-black text-white/50 font-mono mb-2">BUSCAR NV</label>
                     <div className="relative">
@@ -260,7 +260,7 @@ function SeleccionarSpoolContent() {
               </div>
 
               {/* Tabla */}
-              <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto">
+              <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto custom-scrollbar">
                 <table className="w-full">
                   <thead className="sticky top-0 bg-[#001F3F] border-b-4 border-white">
                     <tr>
@@ -305,7 +305,7 @@ function SeleccionarSpoolContent() {
             <button
               onClick={handleContinueWithBatch}
               disabled={selectedCount === 0}
-              className="w-full h-20 mb-6 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
+              className="w-full h-20 mb-6 tablet:mb-4 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
             >
               <span className="text-2xl font-black text-white font-mono tracking-[0.2em] group-active:text-white">
                 CONTINUAR CON {selectedCount} SPOOL{selectedCount !== 1 ? 'S' : ''}
@@ -314,27 +314,29 @@ function SeleccionarSpoolContent() {
           </>
         )}
 
-        {/* Navigation */}
-        <div className="flex gap-4">
-          <button
-            onClick={() => router.back()}
-            className="flex-1 h-16 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
-          >
-            <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-            <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
-              VOLVER
-            </span>
-          </button>
+        {/* Fixed Navigation Footer */}
+        <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+          <div className="flex gap-4 tablet:gap-3">
+            <button
+              onClick={() => router.back()}
+              className="flex-1 h-16 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
+            >
+              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                VOLVER
+              </span>
+            </button>
 
-          <button
-            onClick={() => router.push('/')}
-            className="flex-1 h-16 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
-          >
-            <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-            <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
-              INICIO
-            </span>
-          </button>
+            <button
+              onClick={() => router.push('/')}
+              className="flex-1 h-16 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
+            >
+              <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
+              <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                INICIO
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

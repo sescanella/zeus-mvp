@@ -67,9 +67,9 @@ class MetadataEvent(BaseModel):
     )
     worker_nombre: str = Field(
         ...,
-        description="Nombre completo del trabajador",
+        description="Trabajador en formato 'INICIALES(ID)' - v2.1",
         min_length=1,
-        examples=["Mauricio Rodriguez", "Carlos Pimiento"]
+        examples=["MR(93)", "CP(95)", "JP(94)"]
     )
     operacion: str = Field(
         ...,
@@ -84,9 +84,9 @@ class MetadataEvent(BaseModel):
     )
     fecha_operacion: str = Field(
         ...,
-        description="Fecha de la operación (formato ISO: YYYY-MM-DD)",
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        examples=["2025-12-10"]
+        description="Fecha de la operación (formato: DD-MM-YYYY)",
+        pattern=r"^\d{2}-\d{2}-\d{4}$",
+        examples=["10-12-2025"]
     )
     metadata_json: Optional[str] = Field(
         None,
@@ -104,7 +104,7 @@ class MetadataEvent(BaseModel):
                 "evento_tipo": "INICIAR_ARM",
                 "tag_spool": "MK-1335-CW-25238-011",
                 "worker_id": 93,
-                "worker_nombre": "Mauricio Rodriguez",
+                "worker_nombre": "MR(93)",
                 "operacion": "ARM",
                 "accion": "INICIAR",
                 "fecha_operacion": "2025-12-10",

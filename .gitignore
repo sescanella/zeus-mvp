@@ -149,3 +149,4 @@ zeues-frontend/.vercel
 zeues-frontend/*.tsbuildinfo
 zeues-frontend/next-env.d.ts
 zeues_backend.egg-info/
+CORS_ERROR_FIX.md

@@ -57,7 +57,7 @@ def sample_spools_data():
             armador=None,
             soldador=None
         ),
-        # SP-002: ARM en progreso por Juan (ARM=0.1, BC=Juan Pérez)
+        # SP-002: ARM en progreso por Juan (ARM=0.1, BC=JP(93))
         Spool(
             tag_spool="SP-002",
             arm=ActionStatus.EN_PROGRESO,
@@ -65,7 +65,7 @@ def sample_spools_data():
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=None,
             fecha_soldadura=None,
-            armador="Juan Pérez",
+            armador="JP(93)",
             soldador=None
         ),
         # SP-003: ARM completado, listo para iniciar SOLD (BB llena, BD vacía, SOLD=0)
@@ -76,10 +76,10 @@ def sample_spools_data():
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=date(2025, 11, 8),
             fecha_soldadura=None,
-            armador="Juan Pérez",
+            armador="JP(93)",
             soldador=None
         ),
-        # SP-004: SOLD en progreso por María (SOLD=0.1, BE=María González)
+        # SP-004: SOLD en progreso por María (SOLD=0.1, BE=MG(94))
         Spool(
             tag_spool="SP-004",
             arm=ActionStatus.COMPLETADO,
@@ -87,8 +87,8 @@ def sample_spools_data():
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=date(2025, 11, 8),
             fecha_soldadura=None,
-            armador="Juan Pérez",
-            soldador="María González"
+            armador="JP(93)",
+            soldador="MG(94)"
         ),
         # SP-005: Sin materiales, no puede iniciar ARM (BA vacía)
         Spool(
@@ -109,7 +109,7 @@ def sample_spools_data():
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=None,
             fecha_soldadura=None,
-            armador="Pedro López",
+            armador="PL(95)",
             soldador=None
         ),
         # SP-007: ARM completado pero sin BB (inconsistente, no puede iniciar SOLD)
@@ -120,7 +120,7 @@ def sample_spools_data():
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=None,  # Inconsistente: completado pero sin fecha
             fecha_soldadura=None,
-            armador="Juan Pérez",
+            armador="JP(93)",
             soldador=None
         ),
     ]
@@ -184,7 +184,7 @@ class TestGetSpoolsParaIniciar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=None,
                 fecha_soldadura=None,
-                armador="Juan Pérez",
+                armador="JP(93)",
                 soldador=None
             ),
             Spool(
@@ -194,7 +194,7 @@ class TestGetSpoolsParaIniciar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=date(2025, 11, 8),
                 fecha_soldadura=None,
-                armador="Juan Pérez",
+                armador="JP(93)",
                 soldador=None
             ),
         ]
@@ -231,7 +231,7 @@ class TestGetSpoolsParaIniciar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=date(2025, 11, 8),  # BB llena
                 fecha_soldadura=None,
-                armador="Juan Pérez",
+                armador="JP(93)",
                 soldador=None
             ),
             # SP-021: BB vacía, NO elegible
@@ -279,8 +279,8 @@ class TestGetSpoolsParaIniciar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=date(2025, 11, 8),
                 fecha_soldadura=None,
-                armador="Juan Pérez",
-                soldador="María González"
+                armador="JP(93)",
+                soldador="MG(94)"
             ),
         ]
 
@@ -360,7 +360,7 @@ class TestGetSpoolsParaCompletar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=None,
                 fecha_soldadura=None,
-                armador="Juan Pérez",
+                armador="JP(93)",
                 soldador=None
             ),
             # SP-051: María es la armadora (no Juan)
@@ -371,7 +371,7 @@ class TestGetSpoolsParaCompletar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=None,
                 fecha_soldadura=None,
-                armador="María González",
+                armador="MG(94)",
                 soldador=None
             ),
         ]
@@ -389,13 +389,13 @@ class TestGetSpoolsParaCompletar:
         # Ejecutar para Juan
         result = spool_service.get_spools_para_completar(
             ActionType.ARM,
-            "Juan Pérez"
+            "JP(93)"
         )
 
         # Verificar: solo SP-050 (Juan es el armador)
         assert len(result) == 1
         assert result[0].tag_spool == "SP-050"
-        assert result[0].armador == "Juan Pérez"
+        assert result[0].armador == "JP(93)"
 
     def test_get_spools_para_completar_arm_excludes_other_workers(
         self,
@@ -412,7 +412,7 @@ class TestGetSpoolsParaCompletar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=None,
                 fecha_soldadura=None,
-                armador="Pedro López",  # Otro trabajador
+                armador="PL(95)",  # Otro trabajador
                 soldador=None
             ),
         ]
@@ -430,7 +430,7 @@ class TestGetSpoolsParaCompletar:
         # Ejecutar para Juan (no es el armador)
         result = spool_service.get_spools_para_completar(
             ActionType.ARM,
-            "Juan Pérez"
+            "JP(93)"
         )
 
         # Verificar: lista vacía (Juan no es el armador)
@@ -469,7 +469,7 @@ class TestGetSpoolsParaCompletar:
         # Ejecutar
         result = spool_service.get_spools_para_completar(
             ActionType.ARM,
-            "Juan Pérez"
+            "JP(93)"
         )
 
         # Verificar: lista vacía (no iniciado)
@@ -490,8 +490,8 @@ class TestGetSpoolsParaCompletar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=date(2025, 11, 8),
                 fecha_soldadura=None,
-                armador="Juan Pérez",
-                soldador="María González"  # María es la soldadora
+                armador="JP(93)",
+                soldador="MG(94)"  # María es la soldadora
             ),
         ]
 
@@ -508,7 +508,7 @@ class TestGetSpoolsParaCompletar:
         # Ejecutar para María
         result = spool_service.get_spools_para_completar(
             ActionType.SOLD,
-            "María González"
+            "MG(94)"
         )
 
         # Verificar: SP-080 aparece (María es la soldadora)
@@ -530,7 +530,7 @@ class TestGetSpoolsParaCompletar:
                 fecha_materiales=date(2025, 11, 1),
                 fecha_armado=None,
                 fecha_soldadura=None,
-                armador="Pedro López",
+                armador="PL(95)",
                 soldador=None
             ),
         ]
@@ -568,7 +568,7 @@ class TestGetSpoolsParaCompletar:
             fecha_materiales=date(2025, 11, 1),
             fecha_armado=None,
             fecha_soldadura=None,
-            armador="Juan Pérez",  # Mayúsculas y minúsculas mixtas
+            armador="JP(93)",  # Mayúsculas y minúsculas mixtas
             soldador=None
         )
 

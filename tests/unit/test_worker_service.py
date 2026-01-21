@@ -161,7 +161,7 @@ class TestFindWorkerByNombre:
         assert result is not None
         assert result.nombre == "Juan"
         assert result.apellido == "Pérez"
-        assert result.nombre_completo == "Juan Pérez"
+        assert result.nombre_completo == "JP(93)"  # v2.1: Formato INICIALES(ID)
 
     def test_find_worker_by_nombre_case_insensitive(
         self,

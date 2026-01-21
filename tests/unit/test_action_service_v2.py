@@ -181,7 +181,7 @@ class TestCancelarAccionSuccess:
             estado_sold=ActionStatus.EN_PROGRESO,
             armador="Mauricio Rodriguez",
             soldador="Carlos Pimiento",
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -385,7 +385,7 @@ class TestIniciarAccionWorkerIdMigration:
             estado_sold=ActionStatus.PENDIENTE,
             armador="Mauricio Rodriguez",
             soldador=None,
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -459,7 +459,7 @@ class TestCompletarAccionWorkerIdMigration:
             estado_sold=ActionStatus.EN_PROGRESO,
             armador="Mauricio Rodriguez",
             soldador="Carlos Pimiento",
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -604,7 +604,7 @@ class TestGetEventoTipoForCancelar:
             estado_sold=ActionStatus.EN_PROGRESO,
             armador="Mauricio Rodriguez",
             soldador="Carlos Pimiento",
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 

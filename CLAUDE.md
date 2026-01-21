@@ -8,11 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Mobile-first web app for tracking manufacturing actions (Assembly/Welding/Metrology) on tablets with **JWT authentication**, **role-based access control**, **Event Sourcing auditing**, and **batch operations** using Google Sheets as source of truth.
 
-**Current Status:** v2.0 Development (Branch: `v2.0-dev`)
+**Current Status:** v2.1 Development (Branch: `v2.0-dev`)
 - ✅ v1.0 MVP in Production (2 operations: ARM/SOLD)
-- 🚧 v2.0 In Development: Auth + Metadata Event Sourcing + METROLOGÍA + Batch
-- 📅 Target Launch: 27 Dic 2025
-- 📊 Progress: DÍA 4 (6%) - Metadata Repository implemented
+- ✅ v2.0 Backend Complete: Roles + CANCELAR + Batch (244/244 tests passing)
+- 🚧 v2.1 Architecture: Direct Read/Write (migrated from Event Sourcing)
+- 📅 Current Focus: Frontend multiselect + Deploy
+- 📊 Progress: Backend 87% | Frontend 50% | Deploy 20%
 
 ## CRITICAL: Python Virtual Environment
 
@@ -53,23 +54,24 @@ pip freeze > requirements.txt
 - ARM: Armado (Assembly)
 - SOLD: Soldado (Welding)
 
-**v2.0 Scope (Development):** 3 operations + Auth + Auditing + Batch
+**v2.1 Scope (Development):** 3 operations + Roles + Batch + Auditing
 - ARM: Armado (Assembly)
 - SOLD: Soldado (Welding)
-- METROLOGIA: Metrología (Quality Inspection) 🆕
-- **Event Sourcing:** All actions logged to Metadata sheet (append-only, immutable) 🆕
-- **JWT Auth:** Email-based login with roles (Trabajador/Supervisor/Administrador) 🆕
-- **Batch Operations:** Multiselect up to 50 spools simultaneously 🆕
+- METROLOGIA: Metrología (Quality Inspection) 🟡 Nice-to-have
+- **Multi-Role System:** Workers with multiple operational roles (Armador/Soldador/Metrologia) ✅
+- **Batch Operations:** Multiselect up to 50 spools simultaneously ✅
+- **Metadata Auditing:** All actions logged to Metadata sheet (append-only audit trail) ✅
+- **Direct Read/Write:** v2.1 architecture - read from Operaciones, write to Metadata ✅
 
-**Data Model v2.0:**
-- **Spools** - Operaciones sheet (READ-ONLY): TAG_SPOOL, ARM status, SOLD status, METROLOGÍA status
-- **Workers** - Trabajadores sheet (READ-ONLY): Id, Nombre, Apellido, Rol, Activo
-- **Metadata** - Event Sourcing log (WRITE-ONLY): 10 columns (id, timestamp, evento_tipo, tag_spool, worker_id, worker_nombre, operacion, accion, fecha_operacion, metadata_json)
-- **Roles** - Authentication (pending): email, nombre_completo, rol, activo
-- Actions: 0 = pending, 0.1 = in progress, 1 = completed
+**Data Model v2.1:**
+- **Spools** - Operaciones sheet (READ-ONLY): TAG_SPOOL, Fecha_Materiales, Armador, Soldador, Fecha_Armado, Fecha_Soldadura
+- **Workers** - Trabajadores sheet (READ-ONLY): Id, Nombre, Apellido, Activo (4 columns, Rol column removed)
+- **Roles** - Roles sheet (READ-ONLY): Id, Rol, Activo (multi-role support: one worker can have multiple roles)
+- **Metadata** - Audit log (APPEND-ONLY): 10 columns (id, timestamp, evento_tipo, tag_spool, worker_id, worker_nombre, operacion, accion, fecha_operacion, metadata_json)
+- **State determination v2.1:** Direct Read from columns (armador/soldador presence + fecha_armado/soldadura presence)
 
-**User Flow v2.0:**
-Login (email) → Worker Select → Operation → INICIAR/COMPLETAR → Spool(s) Multiselect → Confirm Batch → Success + Metadata Log (< 30 sec)
+**User Flow v2.1:**
+Operation Select (ARM/SOLD/METROLOGIA) → Worker Select (filtered by role) → INICIAR/COMPLETAR/CANCELAR → Spool(s) Multiselect → Confirm Batch → Success + Metadata Log (< 30 sec)
 
 ## Development Commands
 
@@ -93,16 +95,24 @@ uvicorn main:app --reload --port 8000
 **Testing:**
 ```bash
 # Run all tests (from project root with venv active)
-PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest
+pytest
 
 # Run with coverage
-PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest --cov=backend
+pytest --cov=backend
 
 # Run specific test file
-PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest tests/test_validation_service.py
+pytest tests/unit/test_validation_service.py
 
 # Run single test
-PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest tests/test_validation_service.py::test_validar_puede_iniciar_arm_success
+pytest tests/unit/test_validation_service.py::test_validar_puede_iniciar_arm_success -v
+
+# Run tests by category
+pytest tests/unit/          # Unit tests only
+pytest tests/e2e/           # E2E integration tests
+pytest tests/unit/ -v --tb=short  # Verbose with short traceback
+
+# Check test status
+pytest --collect-only      # List all tests without running
 ```
 
 **Package management:**
@@ -192,15 +202,22 @@ main.py                      # FastAPI app, CORS, exception handlers
 - **Custom Exceptions**: All business errors use ZEUSException subclasses → HTTP status in main.py
 - **Dependency Injection**: FastAPI Depends() for service instantiation
 
-**CRITICAL: Ownership Restriction**
+**CRITICAL: Ownership Validation (v2.1 Direct Read)**
 ```python
 # backend/services/validation_service.py
-def validar_puede_completar_arm(self, spool: Spool, worker_nombre: str) -> None:
+def validar_puede_completar_arm(self, spool: Spool, worker_nombre: str, worker_id: int) -> None:
     """
-    CRITICAL: Only worker who started can complete (spool.armador == worker_nombre).
-    Violation → NoAutorizadoError → 403 FORBIDDEN
+    v2.1: Read armador directly from Operaciones sheet column.
+    - If armador = None → OperacionNoIniciadaError (not started)
+    - If armador != worker_nombre → NoAutorizadoError (ownership violation)
+    - If fecha_armado != None → OperacionYaCompletadaError (already completed)
     """
 ```
+
+**Worker Name Format v2.1:**
+- `Worker.nombre_completo` now returns format `"INICIALES(ID)"`
+- Examples: "Mauricio Rodriguez" id=93 → `"MR(93)"`, "Juan Pérez" id=94 → `"JP(94)"`
+- Columns Armador/Soldador store this new format
 
 ### Frontend Structure (Next.js App Router)
 
@@ -248,17 +265,18 @@ lib/
 
 ## Important Files
 
-**Project Documentation v2.0:** 🆕
-- `proyecto-v2.md` - **v2.0 ROADMAP** - Vision, 5 new features, 16-day timeline, breaking changes, metrics
-- `proyecto-v2-backend.md` - **v2.0 BACKEND DOCS (LLM-FIRST)** - Auth JWT, Event Sourcing, Metadata, Batch operations, 95 new tests
-- `proyecto-v2-frontend.md` - **v2.0 FRONTEND DOCS (LLM-FIRST)** - Login, AuthContext, Multiselect, Admin Panel, 8 new E2E tests
+**Project Documentation v2.1:** 🆕
+- `proyecto-v2.md` - **v2.0/v2.1 ROADMAP** - Vision, features, timeline, breaking changes
+- `proyecto-v2-backend.md` - **v2.1 BACKEND DOCS (LLM-FIRST)** - Direct Read architecture, Roles, Metadata auditing, Batch operations, 244 tests
+- `proyecto-v2-frontend.md` - **v2.0 FRONTEND DOCS (LLM-FIRST)** - Multiselect, Role filtering, Operation-first UX, Tests
 
 **CRITICAL: Actualización de Documentos v2.0**
 
 **Archivos Activos (actualizar SIEMPRE en esta etapa):**
 - `proyecto-v2.md` - **SIEMPRE** después de avanzar en roadmap (completar días, features, cambios estado)
-- `proyecto-v2-backend.md` - **SIEMPRE** después de modificar backend (código, tests, arquitectura, endpoints)
+- `proyecto-v2-backend.md` - **SIEMPRE** después de modificar backend (código, tests, arquitectura, endpoints) - **v2.1 CURRENT**
 - `proyecto-v2-frontend.md` - **SIEMPRE** después de modificar frontend (componentes, páginas, API client, types)
+- `CLAUDE.md` - Este archivo - Actualizar después de cambios arquitectónicos mayores (como v2.0→v2.1)
 
 **Archivos Historial (NO actualizar - solo referencia v1.0):**
 - `proyecto.md`, `proyecto-backend.md`, `proyecto-frontend.md`, `proyecto-frontend-ui.md` - Base v1.0 completada
@@ -315,26 +333,36 @@ lib/
 
 **Data Source:** Google Sheets is the single source of truth (no database)
 
-**v2.0 Architecture - Event Sourcing:** ✅
-- **Operaciones** sheet: **READ-ONLY** - Base data, never modified
-- **Metadata** sheet: **WRITE-ONLY** - All events logged here (append-only, immutable)
-- State is reconstructed from events, NOT read from Operaciones columns
+**v2.1 Architecture - Direct Read/Write:** ✅ **CURRENT**
+- **Operaciones** sheet: **READ-ONLY** - State read from columns (Armador, Soldador, Fecha_Armado, Fecha_Soldadura)
+- **Metadata** sheet: **APPEND-ONLY** - All events logged here (audit trail, NOT for state reconstruction)
+- State determination: Direct Read from Operaciones columns (e.g., armador != None means ARM in progress)
+- **Key change from v2.0:** v2.1 reads state from Operaciones columns directly, not from Metadata events
 
-**Sheets Structure v2.0:**
-- **Operaciones** sheet (READ-ONLY): Spools base data (65 columns)
-  - Column G: TAG_SPOOL (código de barra)
-  - Column AK (37): Fecha_Armado (read-only reference)
-  - Column AL (38): Armador (read-only reference)
-  - Column AM (39): Fecha_Soldadura (read-only reference)
-  - Column AN (40): Soldador (read-only reference)
-  - Column AO (41): Fecha_Metrología (read-only reference) 🆕
+**Sheets Structure v2.1:**
+- **Operaciones** sheet (READ-WRITE in v2.1): Spools base data (65 columns)
+  - **CRITICAL:** Use dynamic header mapping - column indices change frequently
+  - Access by name: `headers["TAG_SPOOL"]`, `headers["Armador"]`, NOT by index
+  - Key columns (⚠️ indices are VOLATILE):
+    - "TAG_SPOOL": Código de barra (identifier)
+    - "Fecha_Materiales": Prerequisite for ARM INICIAR
+    - "Armador": Worker assigned to ARM (format: "INICIALES(ID)" e.g., "MR(93)")
+    - "Fecha_Armado": Completion date for ARM
+    - "Soldador": Worker assigned to SOLD (format: "INICIALES(ID)")
+    - "Fecha_Soldadura": Completion date for SOLD
 
-- **Trabajadores** sheet (READ-ONLY): Workers list (columns A-E) 🆕
+- **Trabajadores** sheet (READ-ONLY): Workers list (4 columns A-D) ✅ v2.1
   - Column A: Id (numeric, e.g., 93, 94, 95)
   - Column B: Nombre
   - Column C: Apellido
-  - Column D: Rol (Armador, Soldador, Ayudante, Metrologia, Revestimiento, Pintura, Despacho)
-  - Column E: Activo (TRUE/FALSE)
+  - Column D: Activo (TRUE/FALSE)
+  - **REMOVED in v2.1:** Column D "Rol" (moved to separate Roles sheet)
+
+- **Roles** sheet (READ-ONLY): Multi-role support (3 columns A-C) ✅ v2.1
+  - Column A: Id (FK to Trabajadores, allows duplicates)
+  - Column B: Rol (Armador, Soldador, Ayudante, Metrologia, etc.)
+  - Column C: Activo (TRUE/FALSE)
+  - **Multi-role:** One worker can have multiple rows (e.g., Id=93 has Armador + Soldador)
 
 - **Metadata** sheet (WRITE-ONLY - Event Sourcing): 10 columns 🆕
   - Column A: id (UUID v4)
@@ -356,15 +384,17 @@ lib/
   - Column E: fecha_creacion
   - Column F: ultima_modificacion
 
-**State Transitions:**
-- PENDIENTE: 0 → ready to start
-- EN_PROGRESO: 0.1 → worker assigned, in progress
-- COMPLETADO: 1.0 → action finished
+**State Determination v2.1 (Direct Read):**
+- **ARM PENDIENTE:** armador = None (not started)
+- **ARM EN_PROGRESO:** armador != None AND fecha_armado = None (in progress)
+- **ARM COMPLETADO:** fecha_armado != None (completed)
+- Same pattern applies for SOLD (soldador, fecha_soldadura)
 
-**Workflow v2.0 (Event Sourcing):**
-1. **INICIAR**: Write event to Metadata (INICIAR_ARM/INICIAR_SOLD/INICIAR_METROLOGIA)
-2. **COMPLETAR**: Write event to Metadata (COMPLETAR_ARM/COMPLETAR_SOLD/COMPLETAR_METROLOGIA)
-3. **State Query**: Read latest events from Metadata to reconstruct current state
+**Workflow v2.1 (Direct Read/Write):**
+1. **INICIAR**: Write armador/soldador to Operaciones (col AL/AN) + Log event to Metadata
+2. **COMPLETAR**: Write fecha_armado/soldadura to Operaciones (col AK/AM) + Log event to Metadata
+3. **CANCELAR**: Clear armador/soldador + fecha in Operaciones + Log event to Metadata
+4. **State Query**: Read directly from Operaciones columns (NOT from Metadata)
 
 **Environment Variables (see docs/GOOGLE-RESOURCES.md):**
 - `GOOGLE_SHEET_ID` - **PRODUCTION (ACTIVE):** `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ` ✅
@@ -375,12 +405,37 @@ lib/
 **Sheet TESTING (deprecated):**
 - ID: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM` ⚠️ (v1.0 only - historical reference)
 
+## CRITICAL: v2.1 Architecture Changes (Jan 2026)
+
+**Migration from Event Sourcing v2.0 → Direct Read/Write v2.1**
+
+The project underwent a major architectural shift in January 2026:
+
+**v2.0 (DEPRECATED):**
+- State reconstructed from Metadata events
+- Read Metadata to determine if ARM is PENDIENTE/EN_PROGRESO/COMPLETADO
+- Complex event sourcing logic
+
+**v2.1 (CURRENT):**
+- State read directly from Operaciones sheet columns
+- `armador = None` → ARM PENDIENTE
+- `armador != None AND fecha_armado = None` → ARM EN_PROGRESO
+- `fecha_armado != None` → ARM COMPLETADO
+- Metadata used ONLY for audit trail, NOT for state determination
+
+**Key Implications:**
+1. ValidationService reads Operaciones columns directly (NOT Metadata events)
+2. SheetsService must implement dynamic column mapping by header name (NEVER hardcoded indices)
+3. Worker names stored as "INICIALES(ID)" format (e.g., "MR(93)")
+4. All 244 tests updated to reflect Direct Read architecture
+
 ## Key Constraints
 
 1. Google Sheets is source of truth (preserve existing workflow)
 2. Mobile-first design (large buttons, high contrast)
 3. Speed critical (< 30 seconds per registration)
 4. Simple UI (minimal typing, immediate feedback)
+5. **Column mapping MUST be dynamic** - NEVER use hardcoded indices (sheet structure changes frequently)
 
 ## TypeScript & Code Quality Rules
 
@@ -581,23 +636,27 @@ function isValidWorker(obj: unknown): obj is Worker {
 ### /actualizar-docs
 Updates project documentation after implementation work.
 
-**Updates:**
-- `proyecto.md` - General MVP documentation (max 850 lines)
-- `proyecto-backend.md` - Backend technical docs (max 1000 lines)
+**Updates (v2.1):**
+- `proyecto-v2.md` - Roadmap and general progress (max 1000 lines)
+- `proyecto-v2-backend.md` - Backend technical docs v2.1 Direct Read architecture (max 1000 lines)
+- `proyecto-v2-frontend.md` - Frontend technical docs (max 800 lines)
 
 **Usage:** Run after completing features, fixing bugs, or making architectural changes.
 
 **What it captures:**
-- Project state changes
-- Technical decisions
+- Project state changes (v2.0 → v2.1 migration)
+- Technical decisions (Event Sourcing → Direct Read)
 - Blockers identified/resolved
-- Implementation progress
+- Implementation progress (244/244 tests)
 - Roadmap updates
+- Architecture changes
 
 **Example:**
 ```bash
-# After implementing a new feature
+# After implementing a new feature or architectural change
 /actualizar-docs
 ```
 
-The command uses the `project-architect` agent to extract relevant information from the conversation and update both documentation files while preserving critical information and compacting less important details if needed.
+The command uses the `project-architect` agent to extract relevant information from the conversation and update documentation files while preserving critical information and compacting less important details if needed.
+
+**Note:** v1.0 docs (`proyecto.md`, `proyecto-backend.md`, `proyecto-frontend.md`) are now historical reference only.

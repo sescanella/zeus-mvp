@@ -172,9 +172,10 @@ class WorkerService:
 
         # Buscar por nombre completo normalizado
         for worker in active_workers:
-            # Comparar con nombre_completo (nombre + apellido)
-            if worker.nombre_completo.lower() == nombre_normalized:
-                logger.debug(f"Found worker: {worker.nombre_completo}")
+            # v2.1: Comparar con formato "Nombre Apellido" (no usar nombre_completo que es "XX(ID)")
+            full_name_legacy = f"{worker.nombre} {worker.apellido}".strip().lower()
+            if full_name_legacy == nombre_normalized:
+                logger.debug(f"Found worker: {worker.nombre} {worker.apellido} (display: {worker.nombre_completo})")
                 return worker
 
         logger.debug(f"Worker '{nombre}' not found among active workers")

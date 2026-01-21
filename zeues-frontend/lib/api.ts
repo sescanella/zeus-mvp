@@ -39,7 +39,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
  *
  * @example
  * const workers = await getWorkers();
- * console.log(workers); // [{nombre: "Juan", apellido: "Pérez", activo: true, nombre_completo: "Juan Pérez"}]
+ * console.log(workers); // [{id: 93, nombre: "Juan", apellido: "Pérez", activo: true, nombre_completo: "JP(93)"}]
  */
 export async function getWorkers(): Promise<Worker[]> {
   try {
@@ -94,8 +94,8 @@ export async function getSpoolsParaIniciar(operacion: 'ARM' | 'SOLD'): Promise<S
  * @throws Error si operación inválida o falla request
  *
  * @example
- * const spools = await getSpoolsParaCompletar('ARM', 'Juan Pérez');
- * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "Juan Pérez", ...}]
+ * const spools = await getSpoolsParaCompletar('ARM', 'JP(93)');
+ * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "JP(93)", ...}]
  */
 export async function getSpoolsParaCompletar(
   operacion: 'ARM' | 'SOLD',
@@ -180,7 +180,7 @@ export async function iniciarAccion(payload: ActionPayload): Promise<ActionRespo
  *     tag_spool: 'MK-1335-CW-25238-011'
  *   });
  * } catch (error) {
- *   console.error(error.message); // "Solo Juan Pérez puede completar esta acción..."
+ *   console.error(error.message); // "Solo JP(93) puede completar esta acción..."
  * }
  */
 export async function completarAccion(payload: ActionPayload): Promise<ActionResponse> {
@@ -273,7 +273,7 @@ export async function getWorkerRoles(workerId: number): Promise<string[]> {
  *
  * @example
  * const spools = await getSpoolsParaCancelar('ARM', 93);
- * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "Juan Pérez", ...}]
+ * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "JP(93)", ...}]
  */
 export async function getSpoolsParaCancelar(
   operacion: 'ARM' | 'SOLD',
@@ -335,7 +335,7 @@ export async function getSpoolsParaCancelar(
  *     tag_spool: 'MK-1335-CW-25238-011'
  *   });
  * } catch (error) {
- *   console.error(error.message); // "Solo Juan Pérez puede cancelar esta acción."
+ *   console.error(error.message); // "Solo JP(93) puede cancelar esta acción."
  * }
  *
  * @example

@@ -68,7 +68,7 @@ def eventos_arm_iniciado():
             worker_nombre="Mauricio Rodriguez",
             operacion="ARM",
             accion=Accion.INICIAR,
-            fecha_operacion="2025-12-11",
+            fecha_operacion="11-12-2025",
             metadata_json=None
         )
     ]
@@ -180,7 +180,7 @@ class TestValidarPuedeCancelarSOLDSuccess:
             estado_sold=ActionStatus.PENDIENTE,  # Will be reconstructed
             armador="Mauricio Rodriguez",
             soldador=None,
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -194,7 +194,7 @@ class TestValidarPuedeCancelarSOLDSuccess:
                 worker_nombre="Mauricio Rodriguez",
                 operacion="ARM",
                 accion=Accion.COMPLETAR,
-                fecha_operacion="2025-12-10",
+                fecha_operacion="10-12-2025",
                 metadata_json=None
             ),
             MetadataEvent(
@@ -206,7 +206,7 @@ class TestValidarPuedeCancelarSOLDSuccess:
                 worker_nombre="Carlos Pimiento",
                 operacion="SOLD",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             )
         ]
@@ -274,7 +274,7 @@ class TestValidarPuedeCancelarOwnershipErrors:
             estado_sold=ActionStatus.PENDIENTE,
             armador="Mauricio Rodriguez",
             soldador=None,
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -288,7 +288,7 @@ class TestValidarPuedeCancelarOwnershipErrors:
                 worker_nombre="Carlos Pimiento",
                 operacion="SOLD",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             )
         ]
@@ -356,7 +356,7 @@ class TestValidarPuedeCancelarRoleErrors:
             estado_sold=ActionStatus.PENDIENTE,
             armador="Mauricio Rodriguez",
             soldador=None,
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -370,7 +370,7 @@ class TestValidarPuedeCancelarRoleErrors:
                 worker_nombre="Carlos Pimiento",
                 operacion="SOLD",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             )
         ]
@@ -456,7 +456,7 @@ class TestValidarPuedeCancelarStateErrors:
                 worker_nombre="Mauricio Rodriguez",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             ),
             MetadataEvent(
@@ -468,7 +468,7 @@ class TestValidarPuedeCancelarStateErrors:
                 worker_nombre="Mauricio Rodriguez",
                 operacion="ARM",
                 accion=Accion.COMPLETAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             )
         ]
@@ -500,7 +500,7 @@ class TestValidarPuedeCancelarStateErrors:
             estado_sold=ActionStatus.PENDIENTE,
             armador="Mauricio Rodriguez",
             soldador=None,
-            fecha_armado="2025-12-10",
+            fecha_armado="10-12-2025",
             fecha_soldadura=None
         )
 
@@ -515,7 +515,7 @@ class TestValidarPuedeCancelarStateErrors:
                 worker_nombre="Mauricio Rodriguez",
                 operacion="ARM",
                 accion=Accion.COMPLETAR,
-                fecha_operacion="2025-12-10",
+                fecha_operacion="10-12-2025",
                 metadata_json=None
             )
         ]
@@ -618,7 +618,7 @@ class TestValidarPuedeCancelarEventReconstruction:
                 worker_nombre="Mauricio Rodriguez",
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             ),
             MetadataEvent(
@@ -630,7 +630,7 @@ class TestValidarPuedeCancelarEventReconstruction:
                 worker_nombre="Mauricio Rodriguez",
                 operacion="ARM",
                 accion=Accion.CANCELAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             ),
             MetadataEvent(
@@ -642,7 +642,7 @@ class TestValidarPuedeCancelarEventReconstruction:
                 worker_nombre="Carlos Pimiento",  # Different worker
                 operacion="ARM",
                 accion=Accion.INICIAR,
-                fecha_operacion="2025-12-11",
+                fecha_operacion="11-12-2025",
                 metadata_json=None
             )
         ]

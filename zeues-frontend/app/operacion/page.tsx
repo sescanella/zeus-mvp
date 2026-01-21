@@ -91,7 +91,7 @@ export default function TrabajadorSelectionPage() {
       }}
     >
       {/* Logo */}
-      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+      <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
@@ -102,7 +102,7 @@ export default function TrabajadorSelectionPage() {
       </div>
 
       {/* Header con operación */}
-      <div className="px-10 py-6 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4 mb-4">
           <IconComponent size={48} strokeWidth={3} className="text-zeues-orange" />
           <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
@@ -115,7 +115,7 @@ export default function TrabajadorSelectionPage() {
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-8 tablet:p-5 tablet:pb-footer">
         {filteredWorkers.length === 0 ? (
           <div>
             <div className="mb-8 text-center">
@@ -144,7 +144,7 @@ export default function TrabajadorSelectionPage() {
         ) : (
           <>
             {/* Large touch buttons - VAR-5 */}
-            <div className="flex flex-col gap-4 mb-8">
+            <div className="flex flex-col gap-4 tablet:gap-3 mb-8 tablet:mb-6">
               {filteredWorkers.map((worker) => {
                 // Obtener todos los roles del trabajador (multirol)
                 const workerRoles = worker.roles && worker.roles.length > 0 ? worker.roles : ['Trabajador'];
@@ -207,43 +207,45 @@ export default function TrabajadorSelectionPage() {
               })}
             </div>
 
-            {/* Botones de navegación */}
-            <div className="flex gap-4">
-              <button
-                onClick={() => router.back()}
-                className="
-                  flex-1 h-16
-                  bg-transparent
-                  border-4 border-white
-                  flex items-center justify-center gap-3
-                  active:bg-white active:text-[#001F3F]
-                  transition-all duration-200
-                  group
-                "
-              >
-                <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-                <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
-                  VOLVER
-                </span>
-              </button>
+            {/* Fixed Navigation Footer */}
+            <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+              <div className="flex gap-4 tablet:gap-3">
+                <button
+                  onClick={() => router.back()}
+                  className="
+                    flex-1 h-16
+                    bg-transparent
+                    border-4 border-white
+                    flex items-center justify-center gap-3
+                    active:bg-white active:text-[#001F3F]
+                    transition-all duration-200
+                    group
+                  "
+                >
+                  <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+                  <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                    VOLVER
+                  </span>
+                </button>
 
-              <button
-                onClick={() => router.push('/')}
-                className="
-                  flex-1 h-16
-                  bg-transparent
-                  border-4 border-red-500
-                  flex items-center justify-center gap-3
-                  active:bg-red-500 active:border-red-500
-                  transition-all duration-200
-                  group
-                "
-              >
-                <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-                <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
-                  CANCELAR
-                </span>
-              </button>
+                <button
+                  onClick={() => router.push('/')}
+                  className="
+                    flex-1 h-16
+                    bg-transparent
+                    border-4 border-red-500
+                    flex items-center justify-center gap-3
+                    active:bg-red-500 active:border-red-500
+                    transition-all duration-200
+                    group
+                  "
+                >
+                  <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
+                  <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                    CANCELAR
+                  </span>
+                </button>
+              </div>
             </div>
           </>
         )}

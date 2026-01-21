@@ -210,11 +210,11 @@ class SheetsService:
 
         # Formatos a intentar (en orden de más común a menos común)
         formats = [
-            "%d/%m/%Y",     # 30/7/2025 (más común en Sheets)
-            "%d/%m/%y",     # 30/7/25
-            "%Y-%m-%d",     # 2025-11-08 (ISO format)
+            "%d-%m-%Y",     # 21-01-2026 (formato principal - DD-MM-YYYY)
+            "%d/%m/%Y",     # 30/7/2025 (legacy - mantener compatibilidad)
+            "%d/%m/%y",     # 30/7/25 (legacy)
+            "%Y-%m-%d",     # 2025-11-08 (legacy ISO format)
             "%d-%b-%Y",     # 08-Nov-2025
-            "%d-%m-%Y",     # 08-11-2025
         ]
 
         # Intentar cada formato

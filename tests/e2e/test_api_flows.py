@@ -61,7 +61,8 @@ def active_worker() -> str:
         pytest.skip("No active workers available in Trabajadores sheet")
 
     first_worker = workers[0]
-    nombre_completo = f"{first_worker['nombre']} {first_worker['apellido']}"
+    # v2.1: nombre_completo viene en formato "INICIALES(ID)" desde la API
+    nombre_completo = first_worker['nombre_completo']
 
     return nombre_completo
 

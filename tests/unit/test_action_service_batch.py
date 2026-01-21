@@ -69,7 +69,7 @@ def mock_spool_service_batch():
         if tag_spool.startswith("MK-1335"):
             return Spool(
                 tag_spool=tag_spool,
-                fecha_materiales="2025-11-15",  # Formato ISO: YYYY-MM-DD
+                fecha_materiales="15-11-2025",  # Formato: DD-MM-YYYY
                 estado_armado=0.0,
                 estado_soldado=0.0,
                 armador=None,

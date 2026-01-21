@@ -1,6 +1,6 @@
 # ZEUES v2.0 - Backend Technical Documentation
 
-**Última actualización:** 16 Dic 2025 | **Versión:** 2.1 (READ-ONLY Architecture) | **Branch:** `v2.0-dev`
+**Última actualización:** 20 Ene 2026 | **Versión:** 2.1 (READ-ONLY Architecture + Formato Nombres) | **Branch:** `v2.0-dev`
 
 ---
 
@@ -8,12 +8,12 @@
 
 | Aspecto | Estado | Detalles |
 |---------|--------|----------|
-| **Progreso Backend** | 85% | 3 días completados (DÍA 4 + DÍA 1 + DÍA 2 completo) |
-| **Tests** | 232/232 passing | v1.0: 113 → +119 nuevos (100%) |
-| **Archivos** | 33 archivos | +11 nuevos vs v1.0 |
-| **Código nuevo** | ~3,657 líneas | DÍA 4 (800) + DÍA 1 (1,300) + DÍA 2 (1,557) |
+| **Progreso Backend** | 87% | 3 días + v2.1 Formato Nombres (20 Ene 2026) |
+| **Tests** | 244/244 passing | v2.0: 232 → +12 nuevos tests formato (100%) |
+| **Archivos** | 34 archivos | +1 nuevo (test_worker_nombre_formato.py) |
+| **Código nuevo** | ~3,807 líneas | v2.0 (3,657) + v2.1 formato (150) |
 | **Sheet activo** | PRODUCCIÓN | ID: `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ` |
-| **Deadline** | 14 Dic 2025 | 2 días restantes |
+| **Formato Nombres** | v2.1 ✅ | `"INICIALES(ID)"` ej: `"MR(93)"` |
 
 ### Estado Implementación
 
@@ -34,11 +34,20 @@
 | Change | v1.0 | v2.0 |
 |--------|------|------|
 | **API Request** | `worker_nombre: str` | `worker_id: int` ✅ |
+| **Worker nombre_completo** | `"Nombre Apellido"` (v1.0) | `"INICIALES(ID)"` (v2.1) ✅ |
 | **Sheet Trabajadores** | 5 columnas (con Rol) | 4 columnas (sin Rol) ✅ |
 | **Sheet Roles** | No existe | Multi-rol (3 columnas) ✅ |
 | **Arquitectura Data** | Operaciones R/W (estados 0/0.1/1.0) | Operaciones READ-ONLY + Metadata append-only ✅ |
 | **Validación Disponibilidad** | Estados numéricos (V=0, W=0) | Columnas trabajadores (AG, AI, AK) ✅ |
 | **Operaciones modificadas** | SÍ (backend escribe V/W/AL/AN) | NO (backend NUNCA escribe) ✅ |
+
+**v2.1 Formato de Nombres (20 Ene 2026):**
+- `Worker.nombre_completo` ahora retorna formato `"INICIALES(ID)"` ej: `"MR(93)"`
+- Reglas: Primera letra primer nombre + Primera letra primer apellido + ID entre paréntesis
+- Siempre MAYÚSCULAS, sin espacios
+- Ejemplos: "Juan Pérez" id=93 → `"JP(93)"` | "María José García" id=94 → `"MG(94)"`
+- Búsqueda: `find_worker_by_nombre()` acepta formato antiguo "Nombre Apellido"
+- Google Sheets: Columnas Armador/Soldador/worker_nombre almacenan formato nuevo
 
 ---
 

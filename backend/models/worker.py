@@ -66,14 +66,36 @@ class Worker(BaseModel):
     @property
     def nombre_completo(self) -> str:
         """
-        Retorna el nombre completo del trabajador.
+        Retorna el nombre del trabajador en formato 'INICIALES(ID)'.
+
+        El formato toma la primera letra del primer nombre y la primera letra
+        del primer apellido (ignorando nombres/apellidos compuestos), las
+        convierte a MAYÚSCULAS y las combina con el ID entre paréntesis.
 
         Returns:
-            str: "Nombre Apellido" o solo "Nombre" si no tiene apellido
+            str: Formato "XX(ID)" donde XX son las iniciales del primer nombre y
+                 primer apellido en MAYÚSCULAS, e ID es el identificador numérico.
+
+        Examples:
+            - "Mauricio Rodriguez" con id=93 → "MR(93)"
+            - "Juan Carlos Pérez López" con id=94 → "JP(94)"
+            - "María José García" con id=95 → "MG(95)"
+
+        Note:
+            - Siempre retorna MAYÚSCULAS sin espacios
+            - Para nombres compuestos usa solo la primera palabra de cada campo
         """
-        if self.apellido:
-            return f"{self.nombre} {self.apellido}"
-        return self.nombre
+        # Extraer primera letra del primer nombre
+        primer_nombre = self.nombre.strip().split()[0] if self.nombre.strip() else ""
+        inicial_nombre = primer_nombre[0].upper() if primer_nombre else ""
+
+        # Extraer primera letra del primer apellido
+        primer_apellido = self.apellido.strip().split()[0] if self.apellido.strip() else ""
+        inicial_apellido = primer_apellido[0].upper() if primer_apellido else ""
+
+        # Formato: "XX(ID)"
+        iniciales = f"{inicial_nombre}{inicial_apellido}"
+        return f"{iniciales}({self.id})"
 
 
 class WorkerListResponse(BaseModel):
@@ -92,9 +114,9 @@ class WorkerListResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "workers": [
-                    {"id": 93, "nombre": "Mauricio", "apellido": "Rodriguez", "rol": "Armador", "activo": True},
-                    {"id": 94, "nombre": "Nicolás", "apellido": "Rodriguez", "rol": "Armador", "activo": True},
-                    {"id": 95, "nombre": "Carlos", "apellido": "Pimiento", "rol": "Soldador", "activo": True}
+                    {"id": 93, "nombre": "Mauricio", "apellido": "Rodriguez", "nombre_completo": "MR(93)", "rol": "Armador", "activo": True},
+                    {"id": 94, "nombre": "Nicolás", "apellido": "Rodriguez", "nombre_completo": "NR(94)", "rol": "Armador", "activo": True},
+                    {"id": 95, "nombre": "Carlos", "apellido": "Pimiento", "nombre_completo": "CP(95)", "rol": "Soldador", "activo": True}
                 ],
                 "total": 3
             }

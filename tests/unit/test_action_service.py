@@ -109,7 +109,7 @@ def sample_spool_arm_iniciado():
         tag_spool="MK-123",
         fecha_materiales=date(2025, 1, 15),
         fecha_armado=None,
-        armador="Juan Pérez",            # BC = Juan Pérez
+        armador="JP(1)",            # BC = JP(1)
         fecha_soldadura=None,
         soldador=None,
         arm=ActionStatus.EN_PROGRESO,    # V=0.1
@@ -124,7 +124,7 @@ def sample_spool_arm_completado():
         tag_spool="MK-123",
         fecha_materiales=date(2025, 1, 15),
         fecha_armado=date(2025, 1, 20),   # BB completada
-        armador="Juan Pérez",
+        armador="JP(1)",
         fecha_soldadura=None,
         soldador=None,
         arm=ActionStatus.COMPLETADO,      # V=1.0
@@ -139,9 +139,9 @@ def sample_spool_sold_iniciado():
         tag_spool="MK-123",
         fecha_materiales=date(2025, 1, 15),
         fecha_armado=date(2025, 1, 20),
-        armador="Juan Pérez",
+        armador="JP(1)",
         fecha_soldadura=None,
-        soldador="Pedro López",          # BE = Pedro López
+        soldador="PL(2)",          # BE = PL(2)
         arm=ActionStatus.COMPLETADO,
         sold=ActionStatus.EN_PROGRESO    # W=0.1
     )
@@ -171,7 +171,7 @@ class TestIniciarAccion:
 
         # Act
         response = action_service.iniciar_accion(
-            worker_nombre="Juan Pérez",
+            worker_nombre="JP(1)",
             operacion=ActionType.ARM,
             tag_spool="MK-123"
         )
@@ -181,11 +181,11 @@ class TestIniciarAccion:
         assert "ARM iniciada exitosamente" in response.message
         assert response.data.tag_spool == "MK-123"
         assert response.data.operacion == "ARM"
-        assert response.data.trabajador == "Juan Pérez"
+        assert response.data.trabajador == "JP(1)"
         assert response.data.fila_actualizada == 25
         assert response.data.columna_actualizada == "V"
         assert response.data.valor_nuevo == 0.1
-        assert response.data.metadata_actualizada.armador == "Juan Pérez"
+        assert response.data.metadata_actualizada.armador == "JP(1)"
         assert response.data.metadata_actualizada.soldador is None
 
         # Verificar batch_update llamado correctamente
@@ -195,7 +195,7 @@ class TestIniciarAccion:
         updates = call_args[1]
         assert len(updates) == 2
         assert updates[0] == {"row": 25, "column": "V", "value": 0.1}
-        assert updates[1] == {"row": 25, "column": "BC", "value": "Juan Pérez"}
+        assert updates[1] == {"row": 25, "column": "BC", "value": "JP(1)"}
 
     def test_iniciar_sold_exitoso(
         self,
@@ -216,7 +216,7 @@ class TestIniciarAccion:
 
         # Act
         response = action_service.iniciar_accion(
-            worker_nombre="Juan Pérez",
+            worker_nombre="JP(1)",
             operacion=ActionType.SOLD,
             tag_spool="MK-123"
         )
@@ -225,13 +225,13 @@ class TestIniciarAccion:
         assert response.success is True
         assert response.data.operacion == "SOLD"
         assert response.data.columna_actualizada == "W"
-        assert response.data.metadata_actualizada.soldador == "Juan Pérez"
+        assert response.data.metadata_actualizada.soldador == "JP(1)"
         assert response.data.metadata_actualizada.armador is None
 
         # Verificar updates correctos para SOLD
         updates = mock_sheets_repo.batch_update.call_args[0][1]
         assert updates[0] == {"row": 25, "column": "W", "value": 0.1}
-        assert updates[1] == {"row": 25, "column": "BE", "value": "Juan Pérez"}
+        assert updates[1] == {"row": 25, "column": "BE", "value": "JP(1)"}
 
     def test_iniciar_arm_trabajador_no_encontrado(
         self,
@@ -265,7 +265,7 @@ class TestIniciarAccion:
         # Act & Assert
         with pytest.raises(SpoolNoEncontradoError, match="Spool 'INEXISTENTE' no encontrado"):
             action_service.iniciar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="INEXISTENTE"
             )
@@ -292,7 +292,7 @@ class TestIniciarAccion:
         # Act & Assert
         with pytest.raises(OperacionNoPendienteError):
             action_service.iniciar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -333,7 +333,7 @@ class TestIniciarAccion:
         # Act & Assert
         with pytest.raises(DependenciasNoSatisfechasError):
             action_service.iniciar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -363,7 +363,7 @@ class TestIniciarAccion:
         # Act & Assert
         with pytest.raises(DependenciasNoSatisfechasError):
             action_service.iniciar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.SOLD,
                 tag_spool="MK-123"
             )
@@ -389,7 +389,7 @@ class TestIniciarAccion:
         # Act & Assert
         with pytest.raises(SheetsUpdateError, match="Error al actualizar Google Sheets"):
             action_service.iniciar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -423,7 +423,7 @@ class TestCompletarAccion:
             mock_datetime.strftime = datetime.strftime
 
             response = action_service.completar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -452,7 +452,7 @@ class TestCompletarAccion:
     ):
         """Test: Completar SOLD exitosamente."""
         # Arrange
-        soldador = Worker(nombre="Pedro", apellido="López", activo=True)
+        soldador = Worker(id=2, nombre="Pedro", apellido="López", activo=True)
         mock_worker_service.find_worker_by_nombre.return_value = soldador
         mock_spool_service.find_spool_by_tag.return_value = sample_spool_sold_iniciado
         mock_validation_service.validar_puede_completar_sold.return_value = None
@@ -464,7 +464,7 @@ class TestCompletarAccion:
             mock_datetime.strftime = datetime.strftime
 
             response = action_service.completar_accion(
-                worker_nombre="Pedro López",
+                worker_nombre="PL(2)",
                 operacion=ActionType.SOLD,
                 tag_spool="MK-123"
             )
@@ -490,23 +490,23 @@ class TestCompletarAccion:
     ):
         """Test CRÍTICO: Error si trabajador != quien inició (BC mismatch)."""
         # Arrange
-        otro_trabajador = Worker(nombre="Pedro", apellido="López", activo=True)
+        otro_trabajador = Worker(id=2, nombre="Pedro", apellido="López", activo=True)
         mock_worker_service.find_worker_by_nombre.return_value = otro_trabajador
-        mock_spool_service.find_spool_by_tag.return_value = sample_spool_arm_iniciado  # BC="Juan Pérez"
+        mock_spool_service.find_spool_by_tag.return_value = sample_spool_arm_iniciado  # BC="JP(1)"
         mock_sheets_repo.find_row_by_column_value.return_value = 25  # Mock fila
 
         # ValidationService detecta mismatch
         mock_validation_service.validar_puede_completar_arm.side_effect = NoAutorizadoError(
             tag_spool="MK-123",
-            trabajador_esperado="Juan Pérez",
-            trabajador_solicitante="Pedro López",
+            trabajador_esperado="JP(1)",
+            trabajador_solicitante="PL(2)",
             operacion="ARM"
         )
 
         # Act & Assert
         with pytest.raises(NoAutorizadoError):
             action_service.completar_accion(
-                worker_nombre="Pedro López",  # Diferente a BC
+                worker_nombre="PL(2)",  # Diferente a BC
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -525,22 +525,22 @@ class TestCompletarAccion:
     ):
         """Test CRÍTICO: Error si trabajador != quien inició SOLD (BE mismatch)."""
         # Arrange
-        otro_trabajador = Worker(nombre="Juan", apellido="Pérez", activo=True)
+        otro_trabajador = Worker(id=1, nombre="Juan", apellido="Pérez", activo=True)
         mock_worker_service.find_worker_by_nombre.return_value = otro_trabajador
-        mock_spool_service.find_spool_by_tag.return_value = sample_spool_sold_iniciado  # BE="Pedro López"
+        mock_spool_service.find_spool_by_tag.return_value = sample_spool_sold_iniciado  # BE="PL(2)"
         mock_sheets_repo.find_row_by_column_value.return_value = 25  # Mock fila
 
         mock_validation_service.validar_puede_completar_sold.side_effect = NoAutorizadoError(
             tag_spool="MK-123",
-            trabajador_esperado="Pedro López",
-            trabajador_solicitante="Juan Pérez",
+            trabajador_esperado="PL(2)",
+            trabajador_solicitante="JP(1)",
             operacion="SOLD"
         )
 
         # Act & Assert
         with pytest.raises(NoAutorizadoError):
             action_service.completar_accion(
-                worker_nombre="Juan Pérez",  # Diferente a BE
+                worker_nombre="JP(1)",  # Diferente a BE
                 operacion=ActionType.SOLD,
                 tag_spool="MK-123"
             )
@@ -568,7 +568,7 @@ class TestCompletarAccion:
         # Act & Assert
         with pytest.raises(OperacionNoIniciadaError):
             action_service.completar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -596,7 +596,7 @@ class TestCompletarAccion:
         # Act & Assert
         with pytest.raises(OperacionYaCompletadaError):
             action_service.completar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
@@ -633,7 +633,7 @@ class TestCompletarAccion:
         # Act & Assert
         with pytest.raises(SpoolNoEncontradoError):
             action_service.completar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="INEXISTENTE"
             )
@@ -657,7 +657,7 @@ class TestCompletarAccion:
 
         # Act
         response = action_service.completar_accion(
-            worker_nombre="Juan Pérez",
+            worker_nombre="JP(1)",
             operacion=ActionType.ARM,
             tag_spool="MK-123",
             timestamp=datetime(2024, 12, 31, 23, 59)  # Fecha custom
@@ -691,7 +691,7 @@ class TestCompletarAccion:
         # Act & Assert
         with pytest.raises(SheetsUpdateError):
             action_service.completar_accion(
-                worker_nombre="Juan Pérez",
+                worker_nombre="JP(1)",
                 operacion=ActionType.ARM,
                 tag_spool="MK-123"
             )
