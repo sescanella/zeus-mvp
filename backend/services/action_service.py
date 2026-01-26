@@ -536,7 +536,7 @@ class ActionService:
             worker_nombre = trabajador.nombre_completo
             self.validation_service.validar_puede_cancelar(
                 spool=spool,
-                operacion=operacion.value,
+                operacion=operacion,
                 worker_nombre=worker_nombre,
                 worker_id=worker_id
             )
