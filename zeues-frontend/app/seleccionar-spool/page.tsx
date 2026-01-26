@@ -249,7 +249,7 @@ function SeleccionarSpoolContent() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-black text-white/70 font-mono">
-                    SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS (v2.1.2)
+                    SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS (v2.1.3)
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -279,8 +279,9 @@ function SeleccionarSpoolContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Render only filtered spools (v2.1.2 - renamed variable) */}
-                    {spoolsFiltrados.map((spool) => {
+                    {/* Render only filtered spools (v2.1.3 - debug render) */}
+                    {spoolsFiltrados.map((spool, index) => {
+                      console.log(`[RENDER v2.1.3] Row ${index}:`, spool.tag_spool);
                       const isSelected = (state.selectedSpools || []).includes(spool.tag_spool);
                       return (
                         <tr
