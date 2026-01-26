@@ -92,6 +92,15 @@ function SeleccionarSpoolContent() {
     s.tag_spool.toLowerCase().includes(searchTag.toLowerCase())
   );
 
+  // Debug logging (v2.1.1)
+  console.log('[FILTER DEBUG]', {
+    totalSpools: spools.length,
+    filteredSpools: filteredSpools.length,
+    searchTag,
+    searchNV,
+    filteredTags: filteredSpools.map(s => s.tag_spool)
+  });
+
   // Toggle selection
   const toggleSelect = (tag: string) => {
     const currentSelected = state.selectedSpools || [];
