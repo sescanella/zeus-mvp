@@ -31,6 +31,45 @@ class ActionStatus(str, Enum):
     EN_PROGRESO = "EN_PROGRESO"
     COMPLETADO = "COMPLETADO"
 
+
+class EventoTipo(str, Enum):
+    """
+    Tipos de eventos soportados en el sistema v3.0.
+
+    Eventos v2.1:
+    - INICIAR_ARM, COMPLETAR_ARM, CANCELAR_ARM
+    - INICIAR_SOLD, COMPLETAR_SOLD, CANCELAR_SOLD
+    - INICIAR_METROLOGIA, COMPLETAR_METROLOGIA
+
+    Eventos v3.0:
+    - TOMAR_SPOOL: Worker ocupa un spool (marca inicio de trabajo)
+    - PAUSAR_SPOOL: Worker pausa trabajo en spool (libera recurso)
+    """
+    # v2.1 Events (legacy)
+    INICIAR_ARM = "INICIAR_ARM"
+    COMPLETAR_ARM = "COMPLETAR_ARM"
+    CANCELAR_ARM = "CANCELAR_ARM"
+    INICIAR_SOLD = "INICIAR_SOLD"
+    COMPLETAR_SOLD = "COMPLETAR_SOLD"
+    CANCELAR_SOLD = "CANCELAR_SOLD"
+    INICIAR_METROLOGIA = "INICIAR_METROLOGIA"
+    COMPLETAR_METROLOGIA = "COMPLETAR_METROLOGIA"
+
+    # v3.0 Events (new)
+    TOMAR_SPOOL = "TOMAR_SPOOL"
+    PAUSAR_SPOOL = "PAUSAR_SPOOL"
+
+
+class EstadoOcupacion(str, Enum):
+    """
+    Estados de ocupación de un spool en v3.0.
+
+    DISPONIBLE: Spool está libre, puede ser tomado por un worker
+    OCUPADO: Spool está siendo trabajado por un worker
+    """
+    DISPONIBLE = "DISPONIBLE"
+    OCUPADO = "OCUPADO"
+
     @classmethod
     def from_sheets_value(cls, value: float) -> "ActionStatus":
         """

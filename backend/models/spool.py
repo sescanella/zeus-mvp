@@ -80,6 +80,23 @@ class Spool(BaseModel):
         examples=["Proyecto Alpha"]
     )
 
+    # v3.0: Campos de ocupación
+    ocupado_por: Optional[str] = Field(
+        None,
+        description="Trabajador que actualmente ocupa el spool en formato 'INICIALES(ID)' (columna 64)",
+        examples=["MR(93)", "JP(94)"]
+    )
+    fecha_ocupacion: Optional[str] = Field(
+        None,
+        description="Fecha cuando el spool fue ocupado en formato YYYY-MM-DD (columna 65)",
+        examples=["2026-01-26"]
+    )
+    version: int = Field(
+        0,
+        description="Token de versión para optimistic locking - incrementa en cada TOMAR/PAUSAR/COMPLETAR (columna 66)",
+        ge=0
+    )
+
     model_config = ConfigDict(
         frozen=True,  # Inmutable
         str_strip_whitespace=True,
@@ -174,6 +191,18 @@ class Spool(BaseModel):
             self.fecha_soldadura is not None and
             self.fecha_qc_metrologia is None
         )
+
+    @property
+    def esta_ocupado(self) -> bool:
+        """
+        Verifica si el spool está actualmente ocupado por un worker (v3.0).
+
+        Un spool está ocupado si tiene un worker asignado en ocupado_por.
+
+        Returns:
+            bool: True si el spool está ocupado, False si está disponible
+        """
+        return self.ocupado_por is not None
 
 
 class SpoolListResponse(BaseModel):
