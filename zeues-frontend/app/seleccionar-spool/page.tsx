@@ -300,45 +300,50 @@ function SeleccionarSpoolContent() {
                 </table>
               </div>
             </div>
+          </>
+        )}
+      </div>
 
-            {/* Botón continuar */}
+      {/* Fixed Navigation Footer with Continuar Button */}
+      {!loading && !error && (
+        <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+          <div className="flex flex-col gap-4 tablet:gap-3">
+            {/* Botón Continuar - Primera fila */}
             <button
               onClick={handleContinueWithBatch}
               disabled={selectedCount === 0}
-              className="w-full h-20 mb-6 tablet:mb-4 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
+              className="w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
             >
-              <span className="text-2xl font-black text-white font-mono tracking-[0.2em] group-active:text-white">
+              <span className="text-xl tablet:text-lg font-black text-white font-mono tracking-[0.2em] group-active:text-white">
                 CONTINUAR CON {selectedCount} SPOOL{selectedCount !== 1 ? 'S' : ''}
               </span>
             </button>
-          </>
-        )}
 
-        {/* Fixed Navigation Footer */}
-        <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
-          <div className="flex gap-4 tablet:gap-3">
-            <button
-              onClick={() => router.back()}
-              className="flex-1 h-16 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
-            >
-              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
-                VOLVER
-              </span>
-            </button>
+            {/* Botones Volver/Inicio - Segunda fila */}
+            <div className="flex gap-4 tablet:gap-3">
+              <button
+                onClick={() => router.back()}
+                className="flex-1 h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
+              >
+                <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
+                <span className="text-xl tablet:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                  VOLVER
+                </span>
+              </button>
 
-            <button
-              onClick={() => router.push('/')}
-              className="flex-1 h-16 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
-            >
-              <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-              <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
-                INICIO
-              </span>
-            </button>
+              <button
+                onClick={() => router.push('/')}
+                className="flex-1 h-16 tablet:h-14 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
+              >
+                <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
+                <span className="text-xl tablet:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                  INICIO
+                </span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

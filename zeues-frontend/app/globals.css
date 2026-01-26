@@ -98,7 +98,7 @@ button {
 
   /* Content with fixed footer - add bottom padding */
   .tablet\:pb-footer {
-    padding-bottom: 6rem !important; /* 96px = footer height + safe area */
+    padding-bottom: 11rem !important; /* 176px = two-row footer height (56px + 56px + gaps + padding + safe area) */
   }
 }
 
