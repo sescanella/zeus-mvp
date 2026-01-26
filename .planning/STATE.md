@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 1 of 6 (Migration Foundation)
-Plan: 3 of 5 complete (01-03-PLAN.md)
-Status: In progress - Wave 2 complete
-Last activity: 2026-01-26 — Completed 01-03: Test Migration and v3.0 Smoke Tests
+Plan: 4 of 5 complete (01-04-PLAN.md)
+Status: In progress - Wave 3 in progress (01-04 complete, 01-05 pending)
+Last activity: 2026-01-26 — Completed 01-04: Migration Coordinator and Rollback System
 
-Progress: [████░░░░░░] 40% (3 plans complete)
+Progress: [████████░░] 80% (4 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 6 minutes
-- Total execution time: 0.32 hours
+- Total plans completed: 4
+- Average duration: 8 minutes
+- Total execution time: 0.53 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01    | 3/5   | 19 min | 6 min    |
+| 01    | 4/5   | 32 min | 8 min    |
 
 **Recent Trend:**
-- Last 3 plans: 01-01 (5 min), 01-02 (5 min), 01-03 (9 min)
-- Trend: Steady progress, slightly longer for testing infrastructure
+- Last 4 plans: 01-01 (5 min), 01-02 (5 min), 01-03 (9 min), 01-04 (13 min)
+- Trend: Increasing complexity - orchestration tasks take longer than simple scripts
 
 *Updated after each plan completion*
 
@@ -57,6 +57,10 @@ Recent decisions affecting current work:
 - **Phase 1 (01-03):** Archive v2.1 tests, create 28 focused v3.0 smoke tests (< 3 sec execution)
 - Phase 1 (01-03): Use pytest.skip for migration-dependent tests (clear communication)
 - Phase 1 (01-03): Test archival preserves historical knowledge without maintenance burden
+- **Phase 1 (01-04):** 5-step migration process (backup, add columns, verify, init versions, smoke tests)
+- Phase 1 (01-04): JSON checkpoint files for atomic operations with recovery
+- Phase 1 (01-04): Sample-based verification (10 rows) for fast validation
+- Phase 1 (01-04): 7-day rollback window balances safety and storage costs
 
 ### Pending Todos
 
@@ -68,13 +72,15 @@ None yet.
 
 **Phase 5 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
 
+**Phase 1 (01-04 - Minor):** Google Sheets API (gspread) doesn't support full sheet restoration or column deletion - rollback requires manual intervention for these steps. Not blocking - provides clear instructions.
+
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 01-03-PLAN.md (Test Migration and v3.0 Smoke Tests)
+Stopped at: Completed 01-04-PLAN.md (Migration Coordinator and Rollback System)
 Resume file: None
 
 **Next steps:**
-1. Execute Wave 3 in parallel (01-04: State Machine, 01-05: Migration Execution)
-2. Wave 3 depends on Wave 1 (01-01 ✅, 01-02 ✅) and Wave 2 (01-03 ✅) complete
-3. After Wave 3, Phase 1 complete - proceed to Phase 2
+1. Execute 01-05: Migration Execution Plan (final Wave 3 plan)
+2. 01-05 completes Phase 1 - Migration Foundation
+3. After 01-05, proceed to Phase 2: State Machine Implementation
