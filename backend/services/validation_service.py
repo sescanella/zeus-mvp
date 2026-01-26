@@ -170,6 +170,12 @@ class ValidationService:
             if spool.fecha_soldadura is not None:
                 raise OperacionYaCompletadaError(tag_spool=spool.tag_spool, operacion="SOLD")
 
+        elif operacion == ActionType.METROLOGIA:
+            # METROLOGIA: Solo hay estado COMPLETADO (fecha_qc_metrologia llena)
+            # CANCELAR revierte COMPLETADO → PENDIENTE
+            if spool.fecha_qc_metrologia is None:
+                raise OperacionNoIniciadaError(tag_spool=spool.tag_spool, operacion="METROLOGIA")
+
         # Validar rol (cualquier trabajador con el rol correcto puede cancelar)
         if self.role_service:
             self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, operacion.value)

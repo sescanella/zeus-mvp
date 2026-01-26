@@ -203,6 +203,21 @@ class ActionService:
                 self.validation_service.validar_puede_iniciar_arm(spool, worker_id=worker_id)
             elif operacion == ActionType.SOLD:
                 self.validation_service.validar_puede_iniciar_sold(spool, worker_id=worker_id)
+            elif operacion == ActionType.METROLOGIA:
+                # METROLOGIA: Solo verificar que puede iniciar (fecha_soldadura llena, fecha_qc_metrologia vacía)
+                if not spool.puede_iniciar_metrologia():
+                    if spool.fecha_soldadura is None:
+                        raise DependenciasNoSatisfechasError(
+                            f"Spool {tag_spool}: SOLD debe estar completado antes de iniciar METROLOGIA"
+                        )
+                    elif spool.fecha_qc_metrologia is not None:
+                        raise OperacionYaCompletadaError(
+                            f"Spool {tag_spool}: METROLOGIA ya está completada"
+                        )
+                # Validar rol METROLOGIA
+                from backend.services.role_service import RoleService
+                role_service = RoleService()
+                role_service.validar_worker_tiene_rol_para_operacion(worker_id, "METROLOGIA")
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
 
@@ -220,26 +235,32 @@ class ActionService:
 
             logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
 
-            # PASO 5: Actualizar columna Armador/Soldador en Operaciones (CRÍTICO - v2.1)
+            # PASO 5: Actualizar columna Armador/Soldador/Fecha_QC_Metrología en Operaciones (CRÍTICO - v2.1)
             worker_nombre = trabajador.nombre_completo
             fecha_hoy = format_date_for_sheets(today_chile())  # DD-MM-YYYY (Chile timezone)
 
             if operacion == ActionType.ARM:
                 column_name = "Armador"
+                column_value = worker_nombre
             elif operacion == ActionType.SOLD:
                 column_name = "Soldador"
+                column_value = worker_nombre
+            elif operacion == ActionType.METROLOGIA:
+                # METROLOGIA: INICIAR escribe fecha directamente (no hay columna Metrólogo)
+                column_name = "Fecha_QC_Metrología"
+                column_value = fecha_hoy
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
 
             updates = [
-                {"row": row_num, "column_name": column_name, "value": worker_nombre}
+                {"row": row_num, "column_name": column_name, "value": column_value}
             ]
 
             self.sheets_repository.batch_update_by_column_name(config.HOJA_OPERACIONES_NOMBRE, updates)
 
             logger.info(
                 f"[v2.1] ✅ Acción {operacion.value} iniciada exitosamente. "
-                f"Actualizada columna '{column_name}' en fila {row_num}: {worker_nombre}"
+                f"Actualizada columna '{column_name}' en fila {row_num}: {column_value}"
             )
 
             # PASO 6: Auditoría en Metadata (OPCIONAL - best effort)
@@ -268,10 +289,18 @@ class ActionService:
                     fecha_armado=None,
                     fecha_soldadura=None
                 )
-            else:  # SOLD
+            elif operacion == ActionType.SOLD:
                 metadata = ActionMetadata(
                     armador=None,
                     soldador=worker_nombre,
+                    fecha_armado=None,
+                    fecha_soldadura=None
+                )
+            else:  # METROLOGIA
+                # METROLOGIA: INICIAR completa la operación directamente
+                metadata = ActionMetadata(
+                    armador=None,
+                    soldador=None,
                     fecha_armado=None,
                     fecha_soldadura=None
                 )
@@ -281,7 +310,7 @@ class ActionService:
                 operacion=operacion,
                 trabajador=worker_nombre,
                 metadata=metadata,
-                accion_tipo="iniciada",
+                accion_tipo="iniciada y completada" if operacion == ActionType.METROLOGIA else "iniciada",
                 evento_id="v2.1-direct-write"
             )
 
@@ -369,6 +398,11 @@ class ActionService:
             elif operacion == ActionType.SOLD:
                 self.validation_service.validar_puede_completar_sold(spool, worker_nombre=worker_nombre, worker_id=worker_id)
                 logger.debug(f"Ownership y rol validados desde Metadata para SOLD")
+            elif operacion == ActionType.METROLOGIA:
+                # METROLOGIA no tiene paso COMPLETAR separado - se completa en INICIAR
+                raise OperacionYaCompletadaError(
+                    f"METROLOGIA no tiene paso COMPLETAR separado. La operación se completa al INICIAR."
+                )
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
 
@@ -554,13 +588,16 @@ class ActionService:
 
             logger.debug(f"Spool {tag_spool} encontrado en fila {row_num}")
 
-            # PASO 5: Limpiar columna Armador/Soldador en Operaciones (CRÍTICO - v2.1)
+            # PASO 5: Limpiar columna Armador/Soldador/Fecha_QC_Metrología en Operaciones (CRÍTICO - v2.1)
             fecha_hoy = format_date_for_sheets(today_chile())  # DD-MM-YYYY (Chile timezone)
 
             if operacion == ActionType.ARM:
                 column_name = "Armador"
             elif operacion == ActionType.SOLD:
                 column_name = "Soldador"
+            elif operacion == ActionType.METROLOGIA:
+                # METROLOGIA: CANCELAR limpia la fecha (ya que INICIAR la escribió)
+                column_name = "Fecha_QC_Metrología"
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
 
