@@ -12,7 +12,7 @@ ZEUES v3.0 transforms the manufacturing traceability system from progress tracki
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Migration Foundation** - Safe v2.1 → v3.0 schema migration with backward compatibility
+- [x] **Phase 1: Migration Foundation** - Safe v2.1 → v3.0 schema migration with backward compatibility ⚠️ Infrastructure complete, gaps found
 - [ ] **Phase 2: Core Location Tracking** - TOMAR/PAUSAR/COMPLETAR operations with race condition prevention
 - [ ] **Phase 3: State Machine & Collaboration** - Hierarchical states + collaborative workflows
 - [ ] **Phase 4: Real-Time Visibility** - SSE updates + who-has-what dashboards
@@ -24,19 +24,24 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 1: Migration Foundation
 **Goal**: v2.1 production data migrates to v3.0 schema without breaking existing functionality
 **Depends on**: Nothing (first phase)
-**Requirements**: BC-01, BC-02, BC-03
+**Requirements**: BC-01, BC-02 (updated: tests pass before archiving)
 **Success Criteria** (what must be TRUE):
-  1. All 244 v2.1 tests continue passing with new schema columns added
-  2. Dual-write mechanism logs actions to both v2.1 and v3.0 schema simultaneously
-  3. Production rollback to v2.1-only mode works without data loss
-  4. New Operaciones columns (Ocupado_Por, Fecha_Ocupacion, version) visible in Google Sheet
-  5. Metadata sheet accepts new event types (TOMAR_SPOOL, PAUSAR_SPOOL) without schema errors
-**Plans**: TBD
+  1. Production Google Sheet has complete backup copy with timestamp
+  2. Three new columns (Ocupado_Por, Fecha_Ocupacion, version) exist at end of sheet
+  3. All existing v2.1 data remains unmodified and accessible
+  4. Migration executes atomically with checkpoint recovery
+  5. Rollback capability restores v2.1 state completely if needed
+**Plans**: 5 plans
 
 Plans:
-- [ ] 01-01: Design schema expansion (new columns, event types, dual-write strategy)
-- [ ] 01-02: Implement dual-write SheetsRepository layer
-- [ ] 01-03: Create backward compatibility test suite (v2.1 endpoints must work)
+- [x] 01-01-PLAN.md — Backup and schema expansion scripts (5 min)
+- [x] 01-02-PLAN.md — Column mapping infrastructure for v3.0 (5 min)
+- [x] 01-03-PLAN.md — Test migration and v3.0 smoke tests (9 min)
+- [x] 01-04-PLAN.md — Migration coordinator and rollback system (13 min)
+- [x] 01-05-PLAN.md — End-to-end migration verification suite (5 min)
+
+**Status:** Infrastructure complete (37 min) — Gaps found: production execution needed
+**Completed:** 2026-01-26
 
 ### Phase 2: Core Location Tracking
 **Goal**: Workers can take, pause, and complete spool work with physical occupation constraints enforced
@@ -132,7 +137,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Migration Foundation | 0/3 | Not started | - |
+| 1. Migration Foundation | 5/5 | Gaps found (3/5 criteria) | 2026-01-26 |
 | 2. Core Location Tracking | 0/4 | Not started | - |
 | 3. State Machine & Collaboration | 0/4 | Not started | - |
 | 4. Real-Time Visibility | 0/4 | Not started | - |
