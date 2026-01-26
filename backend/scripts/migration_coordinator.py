@@ -344,9 +344,9 @@ class MigrationCoordinator:
         self.logger.info("Migration completed successfully!")
         self.logger.info("="*70)
 
-        # Clean up checkpoints
-        if not self.dry_run:
-            self._clear_checkpoints()
+        # Clean up checkpoints after successful completion
+        self._clear_checkpoints()
+        self.logger.info("Checkpoints cleared after successful migration")
 
         # Generate report
         self._generate_report(success=True)
