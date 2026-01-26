@@ -1,0 +1,14 @@
+{
+  "production_sheet_id": "17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ",
+  "backup_folder_id": null,
+  "migration_steps": [
+    "create_backup",
+    "add_v3_columns",
+    "verify_schema",
+    "initialize_versions",
+    "test_smoke"
+  ],
+  "rollback_window_days": 7,
+  "dry_run": false,
+  "log_level": "INFO"
+}
