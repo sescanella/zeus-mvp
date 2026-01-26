@@ -27,6 +27,7 @@ from datetime import datetime
 
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
+from backend.repositories.role_repository import RoleRepository
 from backend.services.validation_service import ValidationService
 from backend.utils.date_formatter import format_date_for_sheets, today_chile
 from backend.services.spool_service import SpoolService
@@ -216,7 +217,9 @@ class ActionService:
                         )
                 # Validar rol METROLOGIA
                 from backend.services.role_service import RoleService
-                role_service = RoleService()
+                spreadsheet = self.sheets_repository._get_spreadsheet()
+                role_repo = RoleRepository(spreadsheet)
+                role_service = RoleService(role_repo)
                 role_service.validar_worker_tiene_rol_para_operacion(worker_id, "METROLOGIA")
             else:
                 raise ValueError(f"Operación no soportada: {operacion}")
