@@ -109,37 +109,37 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOC-01 | TBD | Pending |
-| LOC-02 | TBD | Pending |
-| LOC-03 | TBD | Pending |
-| LOC-04 | TBD | Pending |
-| LOC-05 | TBD | Pending |
-| LOC-06 | TBD | Pending |
-| STATE-01 | TBD | Pending |
-| STATE-02 | TBD | Pending |
-| STATE-03 | TBD | Pending |
-| STATE-04 | TBD | Pending |
-| COLLAB-01 | TBD | Pending |
-| COLLAB-02 | TBD | Pending |
-| COLLAB-03 | TBD | Pending |
-| COLLAB-04 | TBD | Pending |
-| METRO-01 | TBD | Pending |
-| METRO-02 | TBD | Pending |
-| METRO-03 | TBD | Pending |
-| METRO-04 | TBD | Pending |
-| REPAR-01 | TBD | Pending |
-| REPAR-02 | TBD | Pending |
-| REPAR-03 | TBD | Pending |
-| REPAR-04 | TBD | Pending |
-| BC-01 | TBD | Pending |
-| BC-02 | TBD | Pending |
-| BC-03 | TBD | Pending |
+| BC-01 | Phase 1 | Pending |
+| BC-02 | Phase 1 | Pending |
+| BC-03 | Phase 1 | Pending |
+| LOC-01 | Phase 2 | Pending |
+| LOC-02 | Phase 2 | Pending |
+| LOC-03 | Phase 2 | Pending |
+| LOC-04 | Phase 2 | Pending |
+| STATE-01 | Phase 3 | Pending |
+| STATE-02 | Phase 3 | Pending |
+| STATE-03 | Phase 3 | Pending |
+| STATE-04 | Phase 3 | Pending |
+| COLLAB-01 | Phase 3 | Pending |
+| COLLAB-02 | Phase 3 | Pending |
+| COLLAB-03 | Phase 3 | Pending |
+| COLLAB-04 | Phase 3 | Pending |
+| LOC-05 | Phase 4 | Pending |
+| LOC-06 | Phase 4 | Pending |
+| METRO-01 | Phase 5 | Pending |
+| METRO-02 | Phase 5 | Pending |
+| METRO-03 | Phase 5 | Pending |
+| METRO-04 | Phase 5 | Pending |
+| REPAR-01 | Phase 6 | Pending |
+| REPAR-02 | Phase 6 | Pending |
+| REPAR-03 | Phase 6 | Pending |
+| REPAR-04 | Phase 6 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 25 total
-- Mapped to phases: 0 (awaiting roadmap)
-- Unmapped: 25 ⚠️
+- Mapped to phases: 25/25 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after initial definition*
+*Last updated: 2026-01-26 after roadmap creation*
