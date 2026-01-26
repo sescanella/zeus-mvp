@@ -391,9 +391,10 @@ class SheetsService:
             <ActionStatus.PENDIENTE: 'PENDIENTE'>
         """
         # Rellenar fila si es muy corta (evitar index out of range)
-        if len(row) < 65:  # Hoja Operaciones tiene ~62-65 columnas
-            row = row + [''] * (65 - len(row))
-            logger.debug(f"Fila corta rellenada a 65 columnas (original: {len(row) - (65 - len(row))})")
+        # v3.0: Extendido a 68 columnas (65 v2.1 + 3 v3.0)
+        if len(row) < 68:  # Hoja Operaciones tiene ~68 columnas en v3.0
+            row = row + [''] * (68 - len(row))
+            logger.debug(f"Fila corta rellenada a 68 columnas (original: {len(row) - (68 - len(row))})")
 
         # 1. Obtener índices usando mapeo dinámico
         idx_tag_spool = self._get_col_idx("TAG_SPOOL", fallback_idx=6)
@@ -403,6 +404,11 @@ class SheetsService:
         idx_armador = self._get_col_idx("Armador", fallback_idx=34)
         idx_fecha_soldadura = self._get_col_idx("Fecha_Soldadura", fallback_idx=35)
         idx_soldador = self._get_col_idx("Soldador", fallback_idx=36)
+
+        # v3.0: Índices de columnas de ocupación
+        idx_ocupado_por = self._get_col_idx("Ocupado_Por", fallback_idx=64)
+        idx_fecha_ocupacion = self._get_col_idx("Fecha_Ocupacion", fallback_idx=65)
+        idx_version = self._get_col_idx("version", fallback_idx=66)
 
         # 2. Parsear TAG_SPOOL (obligatorio)
         tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None
@@ -433,7 +439,25 @@ class SheetsService:
         if soldador == '':
             soldador = None
 
-        # 7. Crear objeto Spool con datos base
+        # 7. Parsear campos v3.0 (ocupación)
+        ocupado_por = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
+        if ocupado_por == '':
+            ocupado_por = None
+
+        fecha_ocupacion = row[idx_fecha_ocupacion].strip() if idx_fecha_ocupacion < len(row) and row[idx_fecha_ocupacion] else None
+        if fecha_ocupacion == '':
+            fecha_ocupacion = None
+
+        # Version defaults to 0 if empty or invalid
+        version = 0
+        if idx_version < len(row) and row[idx_version]:
+            try:
+                version = int(row[idx_version])
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid version value '{row[idx_version]}' for {tag_spool}, defaulting to 0")
+                version = 0
+
+        # 8. Crear objeto Spool con datos base
         # NOTA: Los estados reales se reconstruyen en ValidationService desde MetadataRepository
         return Spool(
             tag_spool=tag_spool,
@@ -445,7 +469,11 @@ class SheetsService:
             armador=armador,
             fecha_soldadura=fecha_soldadura,
             soldador=soldador,
-            proyecto=None  # TODO: Agregar si existe columna proyecto
+            proyecto=None,  # TODO: Agregar si existe columna proyecto
+            # v3.0: Campos de ocupación
+            ocupado_por=ocupado_por,
+            fecha_ocupacion=fecha_ocupacion,
+            version=version
         )
 
 

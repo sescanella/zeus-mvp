@@ -65,12 +65,20 @@ class SheetsRepository:
     - Manejo de errores y reintentos
     """
 
-    def __init__(self):
-        """Inicializa el repositorio (autenticación lazy)."""
+    def __init__(self, compatibility_mode: str = "v2.1"):
+        """
+        Inicializa el repositorio (autenticación lazy).
+
+        Args:
+            compatibility_mode: Version mode ("v2.1" or "v3.0")
+                - "v2.1": v3.0 columns return None/0 (default until migration complete)
+                - "v3.0": Full v3.0 column access enabled
+        """
         self.logger = logging.getLogger(__name__)
         self._client: Optional[gspread.Client] = None
         self._spreadsheet: Optional[gspread.Spreadsheet] = None
         self._cache = get_cache()  # Cache singleton para reducir API calls
+        self._compatibility_mode = compatibility_mode  # v2.1 or v3.0
 
     def _get_client(self) -> gspread.Client:
         """
@@ -552,6 +560,183 @@ class SheetsRepository:
         for i, char in enumerate(reversed(column)):
             index += (ord(char) - ord('A') + 1) * (26 ** i)
         return index - 1  # Convertir a 0-indexed
+
+    # =========================================================================
+    # v3.0 Column Access Methods (Occupation tracking)
+    # =========================================================================
+
+    def get_ocupado_por(self, sheet_name: str, row: int) -> Optional[str]:
+        """
+        Lee el valor de la columna Ocupado_Por para una fila (v3.0).
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+
+        Returns:
+            str: Worker ocupando el spool (formato "INICIALES(ID)") o None
+        """
+        if self._compatibility_mode == "v2.1":
+            return None
+
+        all_rows = self.read_worksheet(sheet_name)
+        if row >= len(all_rows):
+            return None
+
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "")
+
+        idx = column_map.get(normalize("Ocupado_Por"))
+        if idx is None or idx >= len(all_rows[row]):
+            return None
+
+        value = all_rows[row][idx]
+        return value.strip() if value else None
+
+    def get_fecha_ocupacion(self, sheet_name: str, row: int) -> Optional[str]:
+        """
+        Lee el valor de la columna Fecha_Ocupacion para una fila (v3.0).
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+
+        Returns:
+            str: Fecha de ocupación (YYYY-MM-DD) o None
+        """
+        if self._compatibility_mode == "v2.1":
+            return None
+
+        all_rows = self.read_worksheet(sheet_name)
+        if row >= len(all_rows):
+            return None
+
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "")
+
+        idx = column_map.get(normalize("Fecha_Ocupacion"))
+        if idx is None or idx >= len(all_rows[row]):
+            return None
+
+        value = all_rows[row][idx]
+        return value.strip() if value else None
+
+    def get_version(self, sheet_name: str, row: int) -> int:
+        """
+        Lee el valor de la columna version para una fila (v3.0).
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+
+        Returns:
+            int: Version token (default 0)
+        """
+        if self._compatibility_mode == "v2.1":
+            return 0
+
+        all_rows = self.read_worksheet(sheet_name)
+        if row >= len(all_rows):
+            return 0
+
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "")
+
+        idx = column_map.get(normalize("version"))
+        if idx is None or idx >= len(all_rows[row]):
+            return 0
+
+        value = all_rows[row][idx]
+        try:
+            return int(value) if value else 0
+        except (ValueError, TypeError):
+            return 0
+
+    def set_ocupado_por(
+        self,
+        sheet_name: str,
+        row: int,
+        worker_nombre: Optional[str]
+    ) -> None:
+        """
+        Actualiza la columna Ocupado_Por para una fila (v3.0).
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+            worker_nombre: Worker ocupando el spool o None para liberar
+        """
+        if self._compatibility_mode == "v2.1":
+            self.logger.warning("Skipping set_ocupado_por in v2.1 compatibility mode")
+            return
+
+        self.update_cell_by_column_name(
+            sheet_name=sheet_name,
+            row=row,
+            column_name="Ocupado_Por",
+            value=worker_nombre if worker_nombre else ""
+        )
+
+    def set_fecha_ocupacion(
+        self,
+        sheet_name: str,
+        row: int,
+        fecha: Optional[str]
+    ) -> None:
+        """
+        Actualiza la columna Fecha_Ocupacion para una fila (v3.0).
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+            fecha: Fecha de ocupación (YYYY-MM-DD) o None para limpiar
+        """
+        if self._compatibility_mode == "v2.1":
+            self.logger.warning("Skipping set_fecha_ocupacion in v2.1 compatibility mode")
+            return
+
+        self.update_cell_by_column_name(
+            sheet_name=sheet_name,
+            row=row,
+            column_name="Fecha_Ocupacion",
+            value=fecha if fecha else ""
+        )
+
+    def increment_version(self, sheet_name: str, row: int) -> int:
+        """
+        Incrementa el token de versión para una fila (v3.0 optimistic locking).
+
+        Args:
+            sheet_name: Nombre de la hoja
+            row: Número de fila (1-indexed)
+
+        Returns:
+            int: Nueva versión después de incrementar
+        """
+        if self._compatibility_mode == "v2.1":
+            self.logger.warning("Skipping increment_version in v2.1 compatibility mode")
+            return 0
+
+        current_version = self.get_version(sheet_name, row)
+        new_version = current_version + 1
+
+        self.update_cell_by_column_name(
+            sheet_name=sheet_name,
+            row=row,
+            column_name="version",
+            value=new_version
+        )
+
+        return new_version
 
 
 if __name__ == "__main__":

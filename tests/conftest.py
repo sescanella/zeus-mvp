@@ -39,6 +39,10 @@ def mock_column_map_operaciones():
         "fechasoldadura": 35,
         "soldador": 36,
         "fechaqcmetrologia": 37,
+        # v3.0 columns (positions 64-66 per 01-01 plan)
+        "ocupadopor": 64,
+        "fechaocupacion": 65,
+        "version": 66,
     }
 
 
