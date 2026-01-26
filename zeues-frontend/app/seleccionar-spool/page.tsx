@@ -232,7 +232,7 @@ function SeleccionarSpoolContent() {
                         type="text"
                         value={searchTag}
                         onChange={(e) => setSearchTag(e.target.value)}
-                        placeholder="SP-..."
+                        placeholder="Buscar TAG..."
                         className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
                       />
                     </div>
