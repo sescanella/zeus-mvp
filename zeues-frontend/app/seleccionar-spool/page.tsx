@@ -169,10 +169,10 @@ function SeleccionarSpoolContent() {
       </div>
 
       {/* Header */}
-      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 narrow:px-5 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4 mb-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
-          <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
+          <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
             {operationLabel} - {actionLabel}
           </h2>
         </div>
@@ -209,8 +209,8 @@ function SeleccionarSpoolContent() {
         {!loading && !error && (
           <>
             <div className="mb-6 tablet:mb-4">
-              <div className="border-4 border-white p-6 tablet:p-4 mb-4">
-                <div className="grid grid-cols-2 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
+              <div className="border-4 border-white p-6 tablet:p-4 narrow:p-4 mb-4">
+                <div className="grid grid-cols-2 narrow:grid-cols-1 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
                   <div>
                     <label className="block text-xs font-black text-white/50 font-mono mb-2">BUSCAR NV</label>
                     <div className="relative">
@@ -220,7 +220,7 @@ function SeleccionarSpoolContent() {
                         value={searchNV}
                         onChange={(e) => setSearchNV(e.target.value)}
                         placeholder="NV-2024-..."
-                        className="w-full h-12 pl-12 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                        className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
                       />
                     </div>
                   </div>
@@ -233,7 +233,7 @@ function SeleccionarSpoolContent() {
                         value={searchTag}
                         onChange={(e) => setSearchTag(e.target.value)}
                         placeholder="SP-..."
-                        className="w-full h-12 pl-12 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                        className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
                       />
                     </div>
                   </div>
@@ -270,6 +270,7 @@ function SeleccionarSpoolContent() {
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Render only filtered spools (v2.1 fix) */}
                     {filteredSpools.map((spool) => {
                       const isSelected = (state.selectedSpools || []).includes(spool.tag_spool);
                       return (
@@ -314,29 +315,29 @@ function SeleccionarSpoolContent() {
               disabled={selectedCount === 0}
               className="w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
             >
-              <span className="text-xl tablet:text-lg font-black text-white font-mono tracking-[0.2em] group-active:text-white">
+              <span className="text-xl tablet:text-lg narrow:text-lg font-black text-white font-mono tracking-[0.2em] group-active:text-white">
                 CONTINUAR CON {selectedCount} SPOOL{selectedCount !== 1 ? 'S' : ''}
               </span>
             </button>
 
             {/* Botones Volver/Inicio - Segunda fila */}
-            <div className="flex gap-4 tablet:gap-3">
+            <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
               <button
                 onClick={() => router.back()}
-                className="flex-1 h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
+                className="flex-1 narrow:w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
               >
                 <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-                <span className="text-xl tablet:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                <span className="text-xl tablet:text-lg narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
                   VOLVER
                 </span>
               </button>
 
               <button
                 onClick={() => router.push('/')}
-                className="flex-1 h-16 tablet:h-14 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
+                className="flex-1 narrow:w-full h-16 tablet:h-14 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
               >
                 <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-                <span className="text-xl tablet:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                <span className="text-xl tablet:text-lg narrow:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
                   INICIO
                 </span>
               </button>
