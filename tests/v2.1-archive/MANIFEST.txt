@@ -1,0 +1,12 @@
+v2.1 Archived Files Manifest
+======================================================================
+
+Total items moved: 6
+
+Files/directories:
+  - .DS_Store
+  - __init__.py
+  - conftest.py
+  - e2e
+  - integration
+  - unit
