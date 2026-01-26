@@ -249,7 +249,7 @@ function SeleccionarSpoolContent() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-black text-white/70 font-mono">
-                    SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS (v2.1.3)
+                    SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS (v2.1.4)
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -270,7 +270,7 @@ function SeleccionarSpoolContent() {
 
               {/* Tabla */}
               <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto custom-scrollbar">
-                <table className="w-full">
+                <table className="w-full" key={`table-${spoolsFiltrados.length}-${searchTag}-${searchNV}`}>
                   <thead className="sticky top-0 bg-[#001F3F] border-b-4 border-white">
                     <tr>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">SEL</th>
