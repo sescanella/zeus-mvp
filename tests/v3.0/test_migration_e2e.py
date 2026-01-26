@@ -274,8 +274,12 @@ def test_memory_usage_stable():
     3. Connection pool properly managed
     """
     import gc
-    import psutil
     import os
+
+    try:
+        import psutil
+    except ImportError:
+        pytest.skip("psutil not installed - install with: pip install psutil")
 
     process = psutil.Process(os.getpid())
 
