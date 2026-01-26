@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 1 of 6 (Migration Foundation)
-Plan: 4 of 5 complete (01-04-PLAN.md)
-Status: In progress - Wave 3 in progress (01-04 complete, 01-05 pending)
-Last activity: 2026-01-26 — Completed 01-04: Migration Coordinator and Rollback System
+Plan: 5 of 5 complete (01-05-PLAN.md) ✅ PHASE COMPLETE
+Status: Complete - All Wave 3 plans complete
+Last activity: 2026-01-26 — Completed 01-05: End-to-End Migration Verification Suite
 
-Progress: [████████░░] 80% (4 plans complete)
+Progress: [██████████] 100% (5 plans complete - Phase 1 COMPLETE)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 8 minutes
-- Total execution time: 0.53 hours
+- Total plans completed: 5
+- Average duration: 7 minutes
+- Total execution time: 0.62 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01    | 4/5   | 32 min | 8 min    |
+| 01    | 5/5 ✅ | 37 min | 7 min    |
 
 **Recent Trend:**
-- Last 4 plans: 01-01 (5 min), 01-02 (5 min), 01-03 (9 min), 01-04 (13 min)
-- Trend: Increasing complexity - orchestration tasks take longer than simple scripts
+- Last 5 plans: 01-01 (5 min), 01-02 (5 min), 01-03 (9 min), 01-04 (13 min), 01-05 (5 min)
+- Trend: Testing tasks faster than orchestration, Phase 1 complete
 
 *Updated after each plan completion*
 
@@ -61,6 +61,10 @@ Recent decisions affecting current work:
 - Phase 1 (01-04): JSON checkpoint files for atomic operations with recovery
 - Phase 1 (01-04): Sample-based verification (10 rows) for fast validation
 - Phase 1 (01-04): 7-day rollback window balances safety and storage costs
+- **Phase 1 (01-05):** Skip-based test organization for manual tests (clear distinction between CI-automated and manual)
+- Phase 1 (01-05): Test harness dry-run mode prevents accidental sheet manipulation
+- Phase 1 (01-05): Two-job CI pipeline (test-migration + smoke-tests) for parallel execution and fast feedback
+- Phase 1 (01-05): psutil optional dependency with graceful skip for memory tests
 
 ### Pending Todos
 
@@ -77,10 +81,10 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 01-04-PLAN.md (Migration Coordinator and Rollback System)
+Stopped at: Completed 01-05-PLAN.md (End-to-End Migration Verification Suite) ✅ PHASE 1 COMPLETE
 Resume file: None
 
 **Next steps:**
-1. Execute 01-05: Migration Execution Plan (final Wave 3 plan)
-2. 01-05 completes Phase 1 - Migration Foundation
-3. After 01-05, proceed to Phase 2: State Machine Implementation
+1. ✅ Phase 1 (Migration Foundation) complete - all 5 plans executed successfully
+2. 🎯 Proceed to Phase 2: State Machine Implementation
+3. Phase 2 will implement 9-state hierarchical state machine for occupation management
