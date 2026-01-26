@@ -240,7 +240,7 @@ function SeleccionarSpoolContent() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-black text-white/70 font-mono">
-                    SELECCIONADOS: {selectedCount} / {filteredSpools.length} FILTRADOS
+                    SELECCIONADOS: {selectedCount} / {filteredSpools.length} FILTRADOS (v2.1.1)
                   </span>
                   <div className="flex gap-2">
                     <button
