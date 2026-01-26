@@ -58,6 +58,29 @@ class Config:
     # Logging
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
 
+    # Migration Configuration (v3.0)
+    BACKUP_FOLDER_ID: Optional[str] = os.getenv('BACKUP_FOLDER_ID')  # Google Drive folder for backups
+    MIGRATION_DRY_RUN: bool = os.getenv('MIGRATION_DRY_RUN', 'false').lower() == 'true'
+
+    # V3.0 Column Definitions
+    V3_COLUMNS = [
+        {
+            "name": "Ocupado_Por",
+            "type": "string",
+            "description": "Worker currently occupying the spool (format: INICIALES(ID))"
+        },
+        {
+            "name": "Fecha_Ocupacion",
+            "type": "date",
+            "description": "Date when spool was occupied (format: YYYY-MM-DD)"
+        },
+        {
+            "name": "version",
+            "type": "integer",
+            "description": "Version token for optimistic locking (starts at 0)"
+        }
+    ]
+
     @classmethod
     def get_credentials_dict(cls) -> Optional[dict]:
         """

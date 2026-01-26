@@ -24,24 +24,8 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.config import config
 
 
-# V3.0 column definitions
-V3_COLUMNS = [
-    {
-        "name": "Ocupado_Por",
-        "type": "string",
-        "description": "Worker currently occupying the spool (format: INICIALES(ID))"
-    },
-    {
-        "name": "Fecha_Ocupacion",
-        "type": "date",
-        "description": "Date when spool was occupied (format: YYYY-MM-DD)"
-    },
-    {
-        "name": "version",
-        "type": "integer",
-        "description": "Version token for optimistic locking (starts at 0)"
-    }
-]
+# V3.0 column definitions (imported from config)
+V3_COLUMNS = config.V3_COLUMNS
 
 
 def setup_logging(verbose: bool = False) -> None:
