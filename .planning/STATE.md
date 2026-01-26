@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 1 of 6 (Migration Foundation)
-Plan: 1 of 5 complete (01-01-PLAN.md)
+Plan: 2 of 5 complete (01-02-PLAN.md)
 Status: In progress - Wave 1 execution
-Last activity: 2026-01-26 — Completed 01-01: Backup and Schema Expansion Scripts
+Last activity: 2026-01-26 — Completed 01-02: Column Mapping Infrastructure for v3.0
 
-Progress: [██░░░░░░░░] 13% (1 plan complete)
+Progress: [███░░░░░░░] 26% (2 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
+- Total plans completed: 2
 - Average duration: 5 minutes
-- Total execution time: 0.08 hours
+- Total execution time: 0.17 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01    | 1/5   | 5 min | 5 min    |
+| 01    | 2/5   | 10 min | 5 min    |
 
 **Recent Trend:**
-- Last plan: 01-01 (5 min)
-- Trend: Establishing baseline
+- Last 2 plans: 01-01 (5 min), 01-02 (5 min)
+- Trend: Consistent velocity established
 
 *Updated after each plan completion*
 
@@ -51,6 +51,9 @@ Recent decisions affecting current work:
 - **Phase 1 (01-01):** Script-based migrations with idempotency for safe re-execution
 - Phase 1 (01-01): Import V3_COLUMNS from config for single source of truth
 - Phase 1 (01-01): Idempotency via column existence check (no migration version tracking)
+- **Phase 1 (01-02):** Compatibility mode pattern for safe v2.1 → v3.0 migration
+- Phase 1 (01-02): Default to v2.1 mode until migration complete (explicit opt-in to v3.0)
+- Phase 1 (01-02): esta_ocupado as computed property (single source of truth from ocupado_por)
 
 ### Pending Todos
 
@@ -65,10 +68,10 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 01-01-PLAN.md (Backup and Schema Expansion Scripts)
+Stopped at: Completed 01-02-PLAN.md (Column Mapping Infrastructure for v3.0)
 Resume file: None
 
 **Next steps:**
-1. Execute 01-02 (State Machine Implementation) - can run in parallel with other Wave 1 plans
-2. After Wave 1 complete (01-01 ✅, 01-02), execute Wave 2 (01-03)
-3. After Wave 2 complete, execute Wave 3 in parallel (01-04, 01-05)
+1. Execute Wave 2 (01-03: State Machine Implementation) - depends on 01-01 ✅ and 01-02 ✅
+2. After Wave 2 complete, execute Wave 3 in parallel (01-04, 01-05)
+3. Deploy and test migration
