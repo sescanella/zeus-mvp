@@ -86,19 +86,19 @@ function SeleccionarSpoolContent() {
     }
   };
 
-  // Filter spools locally
-  const filteredSpools = spools.filter(s =>
+  // Filter spools locally (v2.1.2 - renamed variable to force rebuild)
+  const spoolsFiltrados = spools.filter(s =>
     (s.nv ?? '').toLowerCase().includes(searchNV.toLowerCase()) &&
     s.tag_spool.toLowerCase().includes(searchTag.toLowerCase())
   );
 
-  // Debug logging (v2.1.1)
-  console.log('[FILTER DEBUG]', {
+  // Debug logging (v2.1.2)
+  console.log('[FILTER DEBUG v2.1.2]', {
     totalSpools: spools.length,
-    filteredSpools: filteredSpools.length,
+    filteredCount: spoolsFiltrados.length,
     searchTag,
     searchNV,
-    filteredTags: filteredSpools.map(s => s.tag_spool)
+    filteredTags: spoolsFiltrados.map(s => s.tag_spool)
   });
 
   // Toggle selection
@@ -115,7 +115,7 @@ function SeleccionarSpoolContent() {
 
   // Select/Deselect all
   const handleSelectAll = () => {
-    setState({ selectedSpools: filteredSpools.map(s => s.tag_spool) });
+    setState({ selectedSpools: spoolsFiltrados.map(s => s.tag_spool) });
   };
 
   const handleDeselectAll = () => {
@@ -249,7 +249,7 @@ function SeleccionarSpoolContent() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-black text-white/70 font-mono">
-                    SELECCIONADOS: {selectedCount} / {filteredSpools.length} FILTRADOS (v2.1.1)
+                    SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS (v2.1.2)
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -279,8 +279,8 @@ function SeleccionarSpoolContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Render only filtered spools (v2.1 fix) */}
-                    {filteredSpools.map((spool) => {
+                    {/* Render only filtered spools (v2.1.2 - renamed variable) */}
+                    {spoolsFiltrados.map((spool) => {
                       const isSelected = (state.selectedSpools || []).includes(spool.tag_spool);
                       return (
                         <tr
