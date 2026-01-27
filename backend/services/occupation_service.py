@@ -10,6 +10,7 @@ Orchestrates:
 - RedisLockService: Atomic lock acquisition/release
 - SheetsRepository: Write to Operaciones sheet
 - MetadataRepository: Audit trail logging
+- ConflictService: Optimistic locking with retry (v3.0)
 """
 
 import logging
@@ -17,8 +18,16 @@ import json
 from typing import Optional
 from datetime import date, datetime
 from redis.exceptions import RedisError
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
 
 from backend.services.redis_lock_service import RedisLockService
+from backend.services.conflict_service import ConflictService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.occupation import (
@@ -36,7 +45,8 @@ from backend.exceptions import (
     DependenciasNoSatisfechasError,
     NoAutorizadoError,
     LockExpiredError,
-    SheetsUpdateError
+    SheetsUpdateError,
+    VersionConflictError
 )
 
 logger = logging.getLogger(__name__)
@@ -46,14 +56,16 @@ class OccupationService:
     """
     Service for spool occupation operations with Redis locking and Sheets updates.
 
-    Implements TOMAR/PAUSAR/COMPLETAR with proper dependency injection.
+    Implements TOMAR/PAUSAR/COMPLETAR with proper dependency injection and
+    optimistic locking via ConflictService (v3.0).
     """
 
     def __init__(
         self,
         redis_lock_service: RedisLockService,
         sheets_repository: SheetsRepository,
-        metadata_repository: MetadataRepository
+        metadata_repository: MetadataRepository,
+        conflict_service: ConflictService
     ):
         """
         Initialize occupation service with injected dependencies.
@@ -62,11 +74,13 @@ class OccupationService:
             redis_lock_service: Service for Redis lock operations
             sheets_repository: Repository for Sheets writes
             metadata_repository: Repository for audit logging
+            conflict_service: Service for version conflict handling and retry
         """
         self.redis_lock_service = redis_lock_service
         self.sheets_repository = sheets_repository
         self.metadata_repository = metadata_repository
-        logger.info("OccupationService initialized with Redis lock integration")
+        self.conflict_service = conflict_service
+        logger.info("OccupationService initialized with Redis lock + optimistic locking")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
         """
@@ -128,22 +142,35 @@ class OccupationService:
                 # Re-raise to be mapped to 409 by router
                 raise
 
-            # Step 3: Update Operaciones sheet with occupation data
+            # Step 3: Update Operaciones sheet with occupation data (with version retry)
             try:
                 # Write Ocupado_Por (column 64) and Fecha_Ocupacion (column 65)
                 fecha_ocupacion_str = date.today().isoformat()
 
-                self.sheets_repository.update_spool_occupation(
+                # Use ConflictService for version-aware update with automatic retry
+                updates_dict = {
+                    "Ocupado_Por": worker_nombre,
+                    "Fecha_Ocupacion": fecha_ocupacion_str
+                }
+
+                new_version = await self.conflict_service.update_with_retry(
                     tag_spool=tag_spool,
-                    ocupado_por=worker_nombre,
-                    fecha_ocupacion=fecha_ocupacion_str
+                    updates=updates_dict,
+                    operation="TOMAR"
                 )
 
                 logger.info(
                     f"✅ Sheets updated: {tag_spool} occupied by {worker_nombre} "
-                    f"on {fecha_ocupacion_str}"
+                    f"on {fecha_ocupacion_str} (version: {new_version})"
                 )
 
+            except VersionConflictError as e:
+                # Max retries exhausted - rollback Redis lock
+                logger.error(
+                    f"Version conflict persists after retries, rolling back Redis lock: {e}"
+                )
+                await self.redis_lock_service.release_lock(tag_spool, lock_token)
+                raise
             except Exception as e:
                 # Rollback: release Redis lock if Sheets update fails
                 logger.error(f"Sheets update failed, rolling back Redis lock: {e}")
@@ -258,22 +285,31 @@ class OccupationService:
             operacion = "ARM"  # Default, will be enhanced in future
             estado_pausado = f"{operacion} parcial (pausado)"
 
-            # Step 3: Update Sheets - mark as paused and clear occupation
+            # Step 3: Update Sheets - mark as paused and clear occupation (with version retry)
             try:
                 # Note: Estado_Ocupacion column will be added to v3.0 schema
-                # For now, we'll update occupation fields
-                self.sheets_repository.update_spool_occupation(
+                # For now, we'll clear occupation fields
+                updates_dict = {
+                    "Ocupado_Por": "",  # Clear occupation
+                    "Fecha_Ocupacion": ""
+                }
+
+                # Use ConflictService for version-aware update with automatic retry
+                new_version = await self.conflict_service.update_with_retry(
                     tag_spool=tag_spool,
-                    ocupado_por=None,  # Clear occupation
-                    fecha_ocupacion=None,
-                    estado=estado_pausado  # Mark as paused (new field)
+                    updates=updates_dict,
+                    operation="PAUSAR"
                 )
 
                 logger.info(
                     f"✅ Sheets updated: {tag_spool} marked as '{estado_pausado}', "
-                    f"occupation cleared"
+                    f"occupation cleared (version: {new_version})"
                 )
 
+            except VersionConflictError as e:
+                # Max retries exhausted
+                logger.error(f"Version conflict persists after retries for PAUSAR: {e}")
+                raise
             except Exception as e:
                 logger.error(f"Sheets update failed for PAUSAR: {e}")
                 raise SheetsUpdateError(
@@ -393,23 +429,40 @@ class OccupationService:
             operacion = "ARM"  # Default, will be enhanced in future
             fecha_column = "Fecha_Armado" if operacion == "ARM" else "Fecha_Soldadura"
 
-            # Step 3: Update Sheets - set fecha and clear occupation
+            # Step 3: Update Sheets - set fecha and clear occupation (with version retry)
             try:
                 fecha_str = fecha_operacion.isoformat()
 
-                self.sheets_repository.update_spool_completion(
+                # Determine which fecha column to update
+                if operacion == "ARM":
+                    fecha_column_name = "Fecha_Armado"
+                elif operacion == "SOLD":
+                    fecha_column_name = "Fecha_Soldadura"
+                else:
+                    fecha_column_name = f"Fecha_{operacion}"
+
+                # Use ConflictService for version-aware update with automatic retry
+                updates_dict = {
+                    fecha_column_name: fecha_str,
+                    "Ocupado_Por": "",  # Clear occupation
+                    "Fecha_Ocupacion": ""
+                }
+
+                new_version = await self.conflict_service.update_with_retry(
                     tag_spool=tag_spool,
-                    operacion=operacion,
-                    fecha_operacion=fecha_str,
-                    ocupado_por=None,  # Clear occupation
-                    fecha_ocupacion=None
+                    updates=updates_dict,
+                    operation="COMPLETAR"
                 )
 
                 logger.info(
                     f"✅ Sheets updated: {tag_spool} {operacion} completed on {fecha_str}, "
-                    f"occupation cleared"
+                    f"occupation cleared (version: {new_version})"
                 )
 
+            except VersionConflictError as e:
+                # Max retries exhausted
+                logger.error(f"Version conflict persists after retries for COMPLETAR: {e}")
+                raise
             except Exception as e:
                 logger.error(f"Sheets update failed for COMPLETAR: {e}")
                 raise SheetsUpdateError(

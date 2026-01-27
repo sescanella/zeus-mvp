@@ -36,6 +36,7 @@ from backend.repositories.metadata_repository import MetadataRepository
 from backend.repositories.redis_repository import RedisRepository
 from backend.services.sheets_service import SheetsService
 from backend.services.redis_lock_service import RedisLockService
+from backend.services.conflict_service import ConflictService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
@@ -345,19 +346,52 @@ def get_redis_lock_service(
     return RedisLockService(redis_client=redis_repo.get_client())
 
 
+def get_conflict_service(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> ConflictService:
+    """
+    Factory para ConflictService (nueva instancia por request) - v3.0 OPTIMISTIC LOCKING.
+
+    v3.0: ConflictService handles version conflicts with automatic retry.
+
+    ConflictService implementa:
+    - Version token generation (UUID4)
+    - Exponential backoff retry with jitter
+    - Automatic retry on version conflicts (max 3 attempts)
+    - Conflict pattern detection (hot spots)
+    - Conflict metrics tracking
+
+    Args:
+        sheets_repo: Repository for reading/writing sheets with version checks.
+
+    Returns:
+        Nueva instancia de ConflictService con retry configuration.
+
+    Usage:
+        conflict_service: ConflictService = Depends(get_conflict_service)
+
+    Note:
+        v3.0: Secondary defense against race conditions. Primary defense is Redis locks.
+        Version tokens prevent data corruption from concurrent sheet updates.
+    """
+    return ConflictService(sheets_repository=sheets_repo)
+
+
 def get_occupation_service(
     redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
+    conflict_service: ConflictService = Depends(get_conflict_service)
 ) -> OccupationService:
     """
     Factory para OccupationService (nueva instancia por request) - v3.0 CORE.
 
     v3.0: OccupationService orchestrates TOMAR/PAUSAR/COMPLETAR operations
-    with Redis locking and Sheets updates.
+    with Redis locking, optimistic locking, and Sheets updates.
 
     OccupationService coordinates:
-    - Redis lock acquisition/release (RedisLockService)
+    - Redis lock acquisition/release (RedisLockService) - PRIMARY defense
+    - Version-aware updates with retry (ConflictService) - SECONDARY defense
     - Sheets writes to Ocupado_Por/Fecha_Ocupacion (SheetsRepository)
     - Audit logging to Metadata (MetadataRepository)
 
@@ -365,6 +399,7 @@ def get_occupation_service(
         redis_lock_service: Service for atomic lock operations (injected).
         sheets_repo: Repository for Sheets writes (injected).
         metadata_repository: Repository for audit logging (injected).
+        conflict_service: Service for version conflict handling (injected).
 
     Returns:
         Nueva instancia de OccupationService con todas las dependencias.
@@ -373,13 +408,15 @@ def get_occupation_service(
         occupation_service: OccupationService = Depends(get_occupation_service)
 
     Note:
-        v3.0 Core: Implements atomic occupation tracking with Redis locks
-        to prevent race conditions in concurrent TOMAR operations.
+        v3.0 Core: Two-layer defense against race conditions:
+        1. Redis locks prevent concurrent TOMAR
+        2. Version tokens prevent data corruption from concurrent sheet updates
     """
     return OccupationService(
         redis_lock_service=redis_lock_service,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository
+        metadata_repository=metadata_repository,
+        conflict_service=conflict_service
     )
 
 
