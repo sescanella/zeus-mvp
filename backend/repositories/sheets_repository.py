@@ -844,6 +844,144 @@ class SheetsRepository:
             f"occupation cleared"
         )
 
+    def get_spool_version(self, tag_spool: str) -> str:
+        """
+        Get current version token for a spool (v3.0 optimistic locking).
+
+        Args:
+            tag_spool: TAG del spool
+
+        Returns:
+            str: Current version token (UUID4 string) or "0" if not set
+
+        Raises:
+            SpoolNoEncontradoError: If spool not found
+        """
+        from backend.exceptions import SpoolNoEncontradoError
+        from backend.config import config
+
+        # Find spool row by TAG_SPOOL column
+        row_num = self.find_row_by_column_value(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            column_letter="G",  # TAG_SPOOL column
+            value=tag_spool
+        )
+
+        if row_num is None:
+            raise SpoolNoEncontradoError(tag_spool)
+
+        # Read version using dynamic column mapping
+        version = self.get_version(config.HOJA_OPERACIONES_NOMBRE, row_num)
+
+        # Return as string (UUID4 format expected)
+        return str(version) if version else "0"
+
+    @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+    def update_spool_with_version(
+        self,
+        tag_spool: str,
+        updates: dict,
+        expected_version: str
+    ) -> str:
+        """
+        Update spool with version check for optimistic locking (v3.0).
+
+        This is the critical method for preventing race conditions via version validation.
+
+        Flow:
+        1. Read current version from sheet using dynamic header mapping
+        2. Compare with expected_version
+        3. If mismatch: raise VersionConflictError
+        4. If match: update all fields atomically + increment version
+        5. Return new version token
+
+        Args:
+            tag_spool: TAG del spool a actualizar
+            updates: Dictionary of {column_name: value} updates
+            expected_version: Version token expected by this operation
+
+        Returns:
+            str: New version token after successful update
+
+        Raises:
+            SpoolNoEncontradoError: If spool not found
+            VersionConflictError: If version mismatch (concurrent update detected)
+            SheetsUpdateError: If update fails
+
+        Example:
+            >>> repo.update_spool_with_version(
+            ...     tag_spool="TAG-123",
+            ...     updates={"Ocupado_Por": "MR(93)", "Fecha_Ocupacion": "2026-01-27"},
+            ...     expected_version="550e8400-e29b-41d4-a716-446655440000"
+            ... )
+            "7c9e6679-7425-40de-944b-e07fc1f90ae7"  # New version
+        """
+        from backend.exceptions import SpoolNoEncontradoError, VersionConflictError
+        from backend.config import config
+        import uuid
+
+        sheet_name = config.HOJA_OPERACIONES_NOMBRE
+
+        # Step 1: Find spool row
+        row_num = self.find_row_by_column_value(
+            sheet_name=sheet_name,
+            column_letter="G",  # TAG_SPOOL column
+            value=tag_spool
+        )
+
+        if row_num is None:
+            raise SpoolNoEncontradoError(tag_spool)
+
+        # Step 2: Read current version using dynamic header mapping
+        current_version = self.get_version(sheet_name, row_num)
+        current_version_str = str(current_version) if current_version else "0"
+
+        # Step 3: Version check - raise VersionConflictError if mismatch
+        if current_version_str != expected_version:
+            raise VersionConflictError(
+                expected=expected_version,
+                actual=current_version_str,
+                message=f"Spool {tag_spool} was modified by another operation"
+            )
+
+        # Step 4: Generate new version token (UUID4)
+        new_version = str(uuid.uuid4())
+
+        # Step 5: Prepare batch update (all updates + version increment)
+        batch_updates = []
+
+        for column_name, value in updates.items():
+            batch_updates.append({
+                "row": row_num,
+                "column_name": column_name,
+                "value": value
+            })
+
+        # Add version update to batch
+        batch_updates.append({
+            "row": row_num,
+            "column_name": "version",
+            "value": new_version
+        })
+
+        # Step 6: Execute atomic batch update
+        try:
+            self.batch_update_by_column_name(sheet_name, batch_updates)
+
+            self.logger.info(
+                f"✅ Spool {tag_spool} updated with version check: "
+                f"version {expected_version} → {new_version}, "
+                f"{len(updates)} fields updated"
+            )
+
+            return new_version
+
+        except Exception as e:
+            raise SheetsUpdateError(
+                f"Failed to update spool {tag_spool} with version check: {e}",
+                updates={"expected_version": expected_version, "updates": updates}
+            )
+
 
 if __name__ == "__main__":
     """Script de prueba para validar el repositorio."""
