@@ -46,6 +46,8 @@ from backend.routers import occupation
 from backend.routers import history
 # v3.0 Phase 4: Router SSE implementado (real-time event streaming)
 from backend.routers import sse_router
+# v3.0 Phase 4: Router DASHBOARD implementado (occupied spools for initial load)
+from backend.routers import dashboard_router
 
 
 # ============================================================================
@@ -356,6 +358,9 @@ app.include_router(history.router, prefix="/api", tags=["History"])
 
 # v3.0 Phase 4: Router SSE registrado (real-time event streaming)
 app.include_router(sse_router.router, tags=["SSE"])
+
+# v3.0 Phase 4: Router DASHBOARD registrado (occupied spools for initial load)
+app.include_router(dashboard_router.router, tags=["Dashboard"])
 
 
 # ============================================================================
