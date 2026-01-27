@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 4 of 6 (Real-Time Visibility) 🔄 IN PROGRESS
-Plan: 1 of 3 (04-01-PLAN.md) ✓ SSE backend infrastructure complete
-Status: Phase 4 started - Real-time event streaming via SSE + Redis pub/sub
-Last activity: 2026-01-27 — Completed 04-01: SSE endpoint with Redis pub/sub broadcasting
+Plan: 2 of 3 (04-02-PLAN.md) ✓ Event integration & dashboard endpoint complete
+Status: Phase 4 - Services publish events, dashboard provides initial state
+Last activity: 2026-01-27 — Completed 04-02: Event publishing in services + dashboard REST endpoint
 
-Progress: [█████████████████░] 33% Phase 4 - 1 of 3 plans complete
+Progress: [██████████████████████░] 67% Phase 4 - 2 of 3 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
-- Average duration: 4.2 minutes
-- Total execution time: 1.68 hours
+- Total plans completed: 25
+- Average duration: 4.0 minutes
+- Total execution time: 1.73 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [█████████████████░] 33% Phase 4 -
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
-| 04    | 1/3 🔄 | 4 min  | 4.0 min    |
+| 04    | 2/3 🔄 | 7 min  | 3.5 min    |
 
 **Recent Trend:**
-- Last 3 plans: 03-03 (3.6 min), 03-04 (6 min), 04-01 (4 min)
-- Trend: Phase 4 started strong with 4 min (matching Phase 3 average)
+- Last 3 plans: 03-04 (6 min), 04-01 (4 min), 04-02 (3 min)
+- Trend: Phase 4 accelerating - 3 min for event integration (faster than phase average)
 
 *Updated after each plan completion*
 
@@ -118,6 +118,11 @@ Recent decisions affecting current work:
 - Phase 4 (04-01): 15-second keepalive ping with 30-second send timeout for connection management
 - Phase 4 (04-01): X-Accel-Buffering: no header prevents nginx/proxy buffering issues
 - Phase 4 (04-01): Best-effort event publishing (logs errors, returns bool) - doesn't block operations
+- **Phase 4 (04-02):** Event publishing after successful Sheets writes (inside tenacity retry logic)
+- Phase 4 (04-02): Best-effort event delivery with try/catch wrapper - logs warnings, never blocks
+- Phase 4 (04-02): Dashboard REST + SSE pattern: REST for initial load, SSE for incremental updates
+- Phase 4 (04-02): STATE_CHANGE events separate from occupation events (different semantic meaning)
+- Phase 4 (04-02): Estado_detalle built before event publishing for client-side consistency
 
 ### Pending Todos
 
@@ -163,18 +168,23 @@ None yet.
   - Integration tests verify multi-worker collaboration
 - **Status:** Phase 3 complete
 
-**Phase 4 (IN PROGRESS):** 🔄 Real-Time Visibility - 1 of 3 plans complete
+**Phase 4 (IN PROGRESS):** 🔄 Real-Time Visibility - 2 of 3 plans complete
 - ✅ Plan 04-01: SSE backend infrastructure (4 min)
   - GET /api/sse/stream endpoint with Redis pub/sub
   - RedisEventService publishes to spools:updates channel
   - EventSourceResponse with anti-buffering headers
   - 10 unit tests for event publisher
   - Graceful degradation when Redis unavailable
-- 🔲 Plan 04-02: Frontend SSE client integration (pending)
-- 🔲 Plan 04-03: Event integration with state machines (pending)
-- **Status:** Phase 4 Wave 1 complete - Real-time push infrastructure ready
+- ✅ Plan 04-02: Event integration & dashboard endpoint (3 min)
+  - OccupationService publishes TOMAR/PAUSAR/COMPLETAR events
+  - StateService publishes STATE_CHANGE events on transitions
+  - GET /api/dashboard/occupied endpoint returns occupied spools
+  - Best-effort event delivery (logs errors, doesn't block)
+  - Dynamic column mapping for robust sheet reading
+- 🔲 Plan 04-03: Frontend SSE client integration (pending)
+- **Status:** Phase 4 backend complete - Ready for frontend integration
 
-**Phase 4 Next:** Integrate RedisEventService with state machine callbacks to broadcast TOMAR/PAUSAR/COMPLETAR events
+**Phase 4 Next:** Build frontend SSE client with EventSource, handle real-time events, update dashboard UI
 
 **Phase 5 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -183,31 +193,31 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 04-01-PLAN.md (SSE backend infrastructure) ✅
+Stopped at: Completed 04-02-PLAN.md (Event integration & dashboard endpoint) ✅
 Resume file: None
 
 **Phase 4 IN PROGRESS:**
 1. ✅ Plan 04-01 complete - SSE backend infrastructure (4 min)
+2. ✅ Plan 04-02 complete - Event integration & dashboard endpoint (3 min)
 
-**Phase 4 Plan 04-01 complete!**
-- GET /api/sse/stream endpoint streams Redis events to clients
-- RedisEventService publishes state changes to spools:updates channel
-- EventSourceResponse with anti-buffering headers and timeouts
-- 10 unit tests for event publisher with 100% coverage
-- Graceful degradation when Redis unavailable (503 response)
+**Phase 4 Plan 04-02 complete!**
+- OccupationService publishes TOMAR/PAUSAR/COMPLETAR events after successful operations
+- StateService publishes STATE_CHANGE events on state machine transitions
+- GET /api/dashboard/occupied endpoint returns current occupied spools
+- Best-effort event delivery (try/catch wrapper, logs errors)
+- All events include complete data (tag_spool, worker_nombre, estado_detalle)
 
 **Commits:**
-- cb7660a: chore(04-01): add sse-starlette dependency
-- d6dad2a: feat(04-01): add Redis event publisher service
-- 59a830a: feat(04-01): implement SSE streaming endpoint
+- 7a904d9: feat(04-02): integrate event publishing in OccupationService
+- 1de7a03: feat(04-02): add STATE_CHANGE event publishing to StateService
+- 855e800: feat(04-02): create dashboard REST endpoint for occupied spools
 
-**Phase 4 Plan 04-01 - All Success Criteria Met:**
-- ✅ SSE endpoint returns EventSource stream with ping keepalive
-- ✅ Redis pub/sub channel "spools:updates" created
-- ✅ EventSourceResponse streams events with proper headers
-- ✅ Connection cleanup on client disconnect
-- ✅ No buffering issues (X-Accel-Buffering header set)
+**Phase 4 Plan 04-02 - All Success Criteria Met:**
+- ✅ OccupationService publishes events on TOMAR/PAUSAR/COMPLETAR
+- ✅ StateService publishes STATE_CHANGE on transitions
+- ✅ Dashboard endpoint returns occupied spools with estado_detalle
+- ✅ Events contain complete data (no additional Sheets fetches needed)
+- ✅ No performance impact (best-effort delivery, non-blocking)
 
 **Next steps:**
-- Plan 04-02: Frontend SSE client integration (EventSource, auto-reconnect)
-- Plan 04-03: Integrate RedisEventService with state machine callbacks
+- Plan 04-03: Frontend SSE client with EventSource, auto-reconnect, UI updates
