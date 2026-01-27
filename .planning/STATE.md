@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 1 of 6 (Migration Foundation)
-Plan: 6 of 8 (01-06-GAP-PLAN.md) ⚠️ GAPS IN PROGRESS
-Status: Gap closure in progress - 1 of 3 gaps closed
-Last activity: 2026-01-27 — Completed 01-06-GAP: Production backup created and verified
+Plan: 7 of 8 (01-07-GAP-PLAN.md) ⚠️ GAPS IN PROGRESS
+Status: Gap closure in progress - 2 of 3 gaps closed
+Last activity: 2026-01-27 — Completed 01-07-GAP: v3.0 columns added to production (66 columns)
 
-Progress: [█████░░░░░] 50% (Backup complete, column addition next)
+Progress: [██████░░░░] 62% (Backup + columns complete, version init next)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 7 minutes
-- Total execution time: 0.65 hours
+- Total plans completed: 7
+- Average duration: 6 minutes
+- Total execution time: 0.71 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01    | 6/8 🔄 | 39 min | 7 min    |
+| 01    | 7/8 🔄 | 42 min | 6 min    |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (5 min), 01-03 (9 min), 01-04 (13 min), 01-05 (5 min), 01-06-gap (2 min)
-- Trend: Gap closure plans are quick (manual execution + documentation), infrastructure plans longer
+- Last 5 plans: 01-03 (9 min), 01-04 (13 min), 01-05 (5 min), 01-06-gap (2 min), 01-07-gap (3.5 min)
+- Trend: Gap closure plans are fast (2-4 min), infrastructure plans longer (9-13 min)
 
 *Updated after each plan completion*
 
@@ -68,6 +68,9 @@ Recent decisions affecting current work:
 - **Phase 1 (01-06-GAP):** Manual backup via Google Sheets UI when API storage quota is exceeded
 - Phase 1 (01-06-GAP): 7-day rollback window balances safety with storage constraints
 - Phase 1 (01-06-GAP): Verification via gspread API confirms backup integrity (row/column counts)
+- **Phase 1 (01-07-GAP):** Sheet grid expansion before column addition (Google Sheets API enforces strict limits)
+- Phase 1 (01-07-GAP): Production schema is 66 columns (63 v2.1 + 3 v3.0), not 68 as originally planned
+- Phase 1 (01-07-GAP): Column positions 64-66 (1-indexed) for Ocupado_Por, Fecha_Ocupacion, version
 
 ### Pending Todos
 
@@ -75,11 +78,11 @@ None yet.
 
 ### Blockers/Concerns
 
-**Phase 1 (IN PROGRESS):** Gap closure underway - 1 of 3 complete
+**Phase 1 (IN PROGRESS):** Gap closure underway - 2 of 3 complete
 - ✅ Gap 1 CLOSED: Production backup created (1kWUjegxV00MOJver_9ljZqHxgJJBgErnH_J--N4TS9M) - 7-day rollback window active
-- ⚠️ Gap 2: v3.0 columns not added to production sheet (still has 63 columns, not 68)
+- ✅ Gap 2 CLOSED: v3.0 columns added to production sheet (66 columns: 63 v2.1 + 3 v3.0)
 - ⚠️ Gap 3: migration_coordinator.py not executed in production (only dry-runs performed)
-- **Next:** Execute 01-07-GAP to add v3.0 columns to production sheet
+- **Next:** Execute 01-08a-GAP or 01-08b-GAP to initialize version tokens
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -90,11 +93,11 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 01-06-GAP-PLAN.md (Production Backup Creation) ✅ GAP 1 CLOSED
+Stopped at: Completed 01-07-GAP-PLAN.md (v3.0 Columns Addition) ✅ GAP 2 CLOSED
 Resume file: None
 
 **Next steps:**
 1. ✅ Gap 1 complete - Production backup created and verified
-2. 🎯 Execute 01-07-GAP: Add v3.0 columns to production sheet
-3. Execute 01-08a-GAP or 01-08b-GAP: Run migration coordinator
-4. After all gaps closed, Phase 1 complete → proceed to Phase 2: Core Location Tracking
+2. ✅ Gap 2 complete - v3.0 columns added to production (66 columns)
+3. 🎯 Execute 01-08a-GAP or 01-08b-GAP: Initialize version tokens
+4. After Gap 3 closed, Phase 1 complete → proceed to Phase 2: Core Location Tracking
