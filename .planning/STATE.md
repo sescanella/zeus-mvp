@@ -9,30 +9,30 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 2 of 6 (Core Location Tracking)
-Plan: 2 of N (02-02-PLAN.md) ✓ COMPLETE
-Status: Phase 2 in progress - OccupationService with TOMAR/PAUSAR/COMPLETAR deployed
-Last activity: 2026-01-27 — Completed 02-02: OccupationService with REST endpoints
+Phase: 2 of 6 (Core Location Tracking) ◆ IN PROGRESS
+Plan: 3 of 4 (02-03-PLAN.md) ✓ Wave 3 complete
+Status: Optimistic locking deployed, proceeding to Wave 4 (tests + monitoring)
+Last activity: 2026-01-27 — Completed 02-03: Optimistic locking with version tokens and retry
 
-Progress: [███████████░░░░░░░░░] 20% Phase 1 complete + Phase 2 in progress (2 plans)
+Progress: [█████████░░] 75% Phase 2 - Wave 3 complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 5.5 minutes
-- Total execution time: 1.01 hours
+- Total plans completed: 12
+- Average duration: 5.2 minutes
+- Total execution time: 1.07 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 6 min    |
-| 02    | 2/N   | 8.5 min | 4 min    |
+| 02    | 3/4 ◆  | 12.5 min  | 4.2 min    |
 
 **Recent Trend:**
-- Last 5 plans: 01-07-gap (3.5 min), 01-08a-gap (5 min), 01-08b-gap (3.5 min), 02-01 (3 min), 02-02 (5.5 min)
-- Trend: Phase 2 averaging 4 minutes per plan (infrastructure + service implementation)
+- Last 3 plans: 02-01 (3 min), 02-02 (5.5 min), 02-03 (4 min)
+- Trend: Phase 2 consistently fast - averaging 4.2 minutes per plan
 
 *Updated after each plan completion*
 
@@ -84,6 +84,10 @@ Recent decisions affecting current work:
 - **Phase 2 (02-02):** Explicit 409 mapping in router endpoints for clear LOC-04 requirement compliance
 - Phase 2 (02-02): Best-effort metadata logging - Redis lock + Sheets write are critical, metadata is audit only
 - Phase 2 (02-02): Deferred Estado_Ocupacion column to future v3.0 schema enhancement
+- **Phase 2 (02-03):** UUID4 version tokens chosen over sequential counters for global uniqueness
+- Phase 2 (02-03): Max 3 retry attempts with exponential backoff (100ms-10s range) balances success rate with load
+- Phase 2 (02-03): Jittered backoff (±25%) prevents thundering herd during concurrent retries
+- Phase 2 (02-03): Two-layer defense - Redis locks (primary) + version tokens (secondary) for data integrity
 
 ### Pending Todos
 
@@ -98,14 +102,15 @@ None yet.
 - ✅ Gap 3b CLOSED: Migration documentation complete (MIGRATION_COMPLETE.md, 01-VERIFICATION.md updated)
 - **Status:** Phase 1 complete
 
-**Phase 2 (IN PROGRESS):** Core Location Tracking - Building occupation tracking API endpoints
-- ✅ Plan 02-01 COMPLETE: Redis infrastructure deployed (3 commits: b3f0cba, 3936944, 3d15394)
-- ✅ Plan 02-02 COMPLETE: OccupationService with TOMAR/PAUSAR/COMPLETAR (3 commits: 29b3f76, 8a87219, b5f69e4)
-- **Next:** Plan 02-03 - Frontend integration with occupation endpoints
-- **Gaps:**
-  - FastAPI startup/shutdown events needed for Redis connection lifecycle
+**Phase 2 (IN PROGRESS):** Core Location Tracking - 3/4 waves complete
+- ✅ Wave 1: Redis infrastructure deployed (02-01: 3 min)
+- ✅ Wave 2: OccupationService with TOMAR/PAUSAR/COMPLETAR (02-02: 5.5 min)
+- ✅ Wave 3: Optimistic locking with version tokens (02-03: 4 min)
+- ◆ Wave 4 next: Race condition tests + monitoring (02-04)
+- **Gaps (deferred to future):**
+  - FastAPI startup/shutdown events for Redis connection lifecycle
   - Redis health check endpoint for monitoring
-  - Estado_Ocupacion column for paused state marking (future enhancement)
+  - Estado_Ocupacion column for paused state marking
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -114,17 +119,17 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 02-02-PLAN.md (OccupationService) ✅
+Stopped at: Completed 02-03-PLAN.md (Optimistic locking) ✅
 Resume file: None
 
 **Phase 2 progress:**
 1. ✅ Plan 02-01 complete - Redis infrastructure deployed
 2. ✅ Plan 02-02 complete - OccupationService with TOMAR/PAUSAR/COMPLETAR
-3. ⏳ Plan 02-03 next - Frontend integration with occupation endpoints
-4. ⏳ Plan 02-04 pending - Real-time occupation status visibility
+3. ✅ Plan 02-03 complete - Optimistic locking with version tokens and retry
+4. ⏳ Plan 02-04 next - Race condition tests + monitoring
 
 **Next steps:**
-- Add Redis startup/shutdown lifecycle events to main.py
-- Implement Redis health check endpoint
-- Integrate frontend with TOMAR/PAUSAR/COMPLETAR endpoints
-- Build EN VIVO occupation status display
+- Implement race condition integration tests (concurrent TOMAR scenarios)
+- Add conflict metrics monitoring endpoint
+- Document hot spot detection for operations team
+- Add Redis health check endpoint (deferred from 02-01/02-02)
