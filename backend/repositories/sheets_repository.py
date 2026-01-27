@@ -876,6 +876,83 @@ class SheetsRepository:
         # Return as string (UUID4 format expected)
         return str(version) if version else "0"
 
+    def get_spool_by_tag(self, tag_spool: str) -> Optional['Spool']:
+        """
+        Get complete spool data by TAG_SPOOL.
+
+        Args:
+            tag_spool: TAG unique identifier of the spool
+
+        Returns:
+            Spool object with all data, or None if not found
+
+        Raises:
+            SheetsConnectionError: On Google Sheets API errors
+        """
+        from backend.models.spool import Spool
+        from backend.config import config
+        from datetime import datetime
+
+        # Find spool row by TAG_SPOOL column
+        row_num = self.find_row_by_column_value(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            column_letter="G",  # TAG_SPOOL column (hardcoded for stability)
+            value=tag_spool
+        )
+
+        if row_num is None:
+            return None  # Spool not found
+
+        # Read the entire row
+        all_rows = self.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        if not all_rows or row_num > len(all_rows):
+            return None
+
+        row_data = all_rows[row_num - 1]  # Convert 1-indexed to 0-indexed
+
+        # Get column map for dynamic column access
+        column_map = self._get_column_map(config.HOJA_OPERACIONES_NOMBRE)
+
+        def get_col_value(col_name: str) -> Optional[str]:
+            """Helper to safely get column value by name."""
+            if col_name not in column_map:
+                return None
+            col_index = column_map[col_name] - 1  # Convert 1-indexed to 0-indexed
+            if col_index < len(row_data):
+                value = row_data[col_index]
+                return value if value and value.strip() else None
+            return None
+
+        def parse_date(date_str: Optional[str]) -> Optional[date]:
+            """Helper to parse date string to date object."""
+            if not date_str:
+                return None
+            try:
+                # Try YYYY-MM-DD format first
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                try:
+                    # Try DD/MM/YYYY format (Google Sheets default)
+                    return datetime.strptime(date_str, "%d/%m/%Y").date()
+                except ValueError:
+                    return None
+
+        # Build Spool object
+        try:
+            spool = Spool(
+                tag_spool=tag_spool,
+                nv=get_col_value("NV"),
+                fecha_materiales=parse_date(get_col_value("Fecha_Materiales")),
+                fecha_armado=parse_date(get_col_value("Fecha_Armado")),
+                fecha_soldadura=parse_date(get_col_value("Fecha_Soldadura")),
+                armador=get_col_value("Armador"),
+                soldador=get_col_value("Soldador"),
+            )
+            return spool
+        except Exception as e:
+            self.logger.error(f"Error constructing Spool object for {tag_spool}: {e}")
+            return None
+
     @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def update_spool_with_version(
         self,
