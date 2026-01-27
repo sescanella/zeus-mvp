@@ -46,8 +46,8 @@ Requirements for v3.0 real-time location tracking system. Each maps to roadmap p
 
 ### Backward Compatibility
 
-- [ ] **BC-01**: v2.1 data migrates to v3.0 schema without loss
-- [ ] **BC-02**: 244 v2.1 tests pass before archiving and are preserved as reference
+- [x] **BC-01**: v2.1 data migrates to v3.0 schema without loss
+- [x] **BC-02**: 244 v2.1 tests pass before archiving and are preserved as reference
 
 ## v2.1 Requirements (Validated)
 
