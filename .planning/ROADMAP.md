@@ -71,13 +71,13 @@ Plans:
   3. Any Armador can continue ARM work started by different Armador (no strict ownership)
   4. System prevents SOLD TOMAR if ARM not initiated (dependency validation)
   5. Worker can view occupation history showing 3 workers worked on spool sequentially with durations
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 03-01: Design hierarchical state machine (< 15 states, peer-reviewed diagram)
-- [ ] 03-02: Implement python-statemachine integration with guards/callbacks
-- [ ] 03-03: Create StateService for combined state display logic
-- [ ] 03-04: Build occupation history view (leverage Metadata events)
+- [ ] 03-01-PLAN.md — Schema and state machine foundation
+- [ ] 03-02-PLAN.md — StateService orchestration with hydration
+- [ ] 03-03-PLAN.md — State callbacks and column updates
+- [ ] 03-04-PLAN.md — Collaboration history and testing
 
 ### Phase 4: Real-Time Visibility
 **Goal**: Workers see available vs occupied spools in real-time with sub-10-second refresh latency
