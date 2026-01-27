@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 3 of 6 (State Machine & Collaboration) 🚧 IN PROGRESS
-Plan: 2 of 4 (03-02-PLAN.md) ✓ StateService orchestration complete
-Status: StateService orchestrates state machines with OccupationService via hydration
-Last activity: 2026-01-27 — Completed 03-02: StateService orchestration with hydration logic
+Phase: 3 of 6 (State Machine & Collaboration) ✅ COMPLETE
+Plan: 4 of 4 (03-04-PLAN.md) ✓ History endpoint and collaboration tests complete
+Status: Phase 3 complete - State machines + collaboration + history timeline implemented
+Last activity: 2026-01-27 — Completed 03-04: Occupation history endpoint and integration tests
 
-Progress: [█████████████░] 75% Phase 3 - 2/4 plans complete (State machine orchestration done)
+Progress: [██████████████] 100% Phase 3 - All 4 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 4.3 minutes
-- Total execution time: 1.37 hours
+- Total plans completed: 23
+- Average duration: 4.2 minutes
+- Total execution time: 1.61 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [█████████████░] 75% Phase 3 - 2/4 plans c
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
-| 03    | 3/4 🚧 | 10 min  | 3.3 min    |
+| 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 
 **Recent Trend:**
-- Last 3 plans: 03-01 (3 min), 03-02 (3 min), 03-03 (3.6 min)
-- Trend: Phase 3 maintaining fast pace - averaging 3.3 min (faster than Phase 1/2)
+- Last 3 plans: 03-02 (3 min), 03-03 (3.6 min), 03-04 (6 min)
+- Trend: Phase 3 complete with 4.0 min average (slightly slower than Phase 2, faster than Phase 1)
 
 *Updated after each plan completion*
 
@@ -109,6 +109,9 @@ Recent decisions affecting current work:
 - **Phase 3 (03-03):** State machines own column updates via callbacks - single source of truth for Sheets writes
 - Phase 3 (03-03): Estado_Detalle updates on EVERY state transition (TOMAR/PAUSAR/COMPLETAR) for real-time visibility
 - Phase 3 (03-03): Date format DD-MM-YYYY for consistency with existing production data
+- **Phase 3 (03-04):** History shows ALL events chronologically - no filtering for simple complete view
+- Phase 3 (03-04): Duration calculation shows time between TOMAR and PAUSAR/COMPLETAR
+- Phase 3 (03-04): Integration tests use mocks to verify StateService orchestration patterns
 
 ### Pending Todos
 
@@ -134,7 +137,7 @@ None yet.
 - **Deferred to future:**
   - Estado_Ocupacion column for paused state marking
 
-**Phase 3 (IN PROGRESS):** 🚧 State Machine & Collaboration - 3/4 plans complete
+**Phase 3 (COMPLETE):** ✅ State Machine & Collaboration - All 4 plans complete
 - ✅ Plan 03-01: State machine foundation (3 min)
   - Estado_Detalle column added at position 67
   - ARM state machine created (3 states, 3 transitions)
@@ -148,8 +151,11 @@ None yet.
   - ARM/SOLD callbacks update columns automatically
   - Estado_Detalle updates on every transition
   - TOMAR/PAUSAR/COMPLETAR trigger column writes
-- **Next:** Plan 03-04 - Integration testing and refinement
-- **Status:** Callbacks working, Estado_Detalle synchronized
+- ✅ Plan 03-04: History and collaboration tests (6 min)
+  - GET /api/history/{tag_spool} endpoint with timeline
+  - HistoryService aggregates Metadata events into sessions
+  - Integration tests verify multi-worker collaboration
+- **Status:** Phase 3 complete - Ready for Phase 4 (Metrología)
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -158,25 +164,31 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 03-03-PLAN.md (State machine callbacks) ✅
+Stopped at: Completed 03-04-PLAN.md (Occupation history and collaboration tests) ✅
 Resume file: None
 
-**Phase 3 progress:**
+**Phase 3 COMPLETE:**
 1. ✅ Plan 03-01 complete - State machine foundation with guards (3 min)
 2. ✅ Plan 03-02 complete - StateService orchestration (3 min)
 3. ✅ Plan 03-03 complete - State machine callbacks (3.6 min)
+4. ✅ Plan 03-04 complete - History endpoint and integration tests (6 min)
 
-**Phase 3 Plan 03-03 complete!**
-- ARM state machine callbacks: on_enter_en_progreso, on_enter_completado, on_enter_pendiente
-- SOLD state machine callbacks: Same pattern for SOLD-specific columns
-- EstadoDetalleBuilder formats occupation + operation state display
-- StateService _update_estado_detalle called on TOMAR/PAUSAR/COMPLETAR
-- Estado_Detalle synchronized on every state transition
+**Phase 3 Plan 03-04 complete!**
+- GET /api/history/{tag_spool} endpoint returns occupation timeline
+- HistoryService aggregates Metadata events into sessions with durations
+- Integration tests verify ARM handoff, dependency enforcement, sequential operations
+- 5 comprehensive collaboration tests covering multi-worker scenarios
 
 **Commits:**
-- 7734381: feat(03-03): add ARM state machine callbacks for column updates
-- 46296c9: feat(03-03): add SOLD state machine callbacks for column updates
-- cbcea58: feat(03-03): implement automatic Estado_Detalle updates in StateService
+- cc808d2: feat(03-04): create occupation history endpoint and service
+- e0f4742: test(03-04): add collaboration integration tests
+
+**Phase 3 Complete - All Success Criteria Met:**
+- ✅ State machines coordinate with OccupationService (03-01, 03-02)
+- ✅ Column updates via callbacks on state transitions (03-03)
+- ✅ Estado_Detalle synchronized on TOMAR/PAUSAR/COMPLETAR (03-03)
+- ✅ Occupation history timeline shows worker sessions (03-04)
+- ✅ Integration tests verify multi-worker collaboration (03-04)
 
 **Next steps:**
-- Plan 03-04: Integration testing and refinement (final plan in Phase 3)
+- Phase 4: Metrología operation with instant COMPLETAR workflow
