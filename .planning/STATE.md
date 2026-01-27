@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 2 of 6 (Core Location Tracking)
-Plan: 1 of N (02-01-PLAN.md) ✓ COMPLETE
-Status: Phase 2 started - Redis infrastructure deployed
-Last activity: 2026-01-27 — Completed 02-01: Redis infrastructure for atomic spool locking
+Plan: 2 of N (02-02-PLAN.md) ✓ COMPLETE
+Status: Phase 2 in progress - OccupationService with TOMAR/PAUSAR/COMPLETAR deployed
+Last activity: 2026-01-27 — Completed 02-02: OccupationService with REST endpoints
 
-Progress: [██████████░░░░░░░░░░] 17% Phase 1 complete + Phase 2 started (1 plan)
+Progress: [███████████░░░░░░░░░] 20% Phase 1 complete + Phase 2 in progress (2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: 5.7 minutes
-- Total execution time: 0.95 hours
+- Total plans completed: 11
+- Average duration: 5.5 minutes
+- Total execution time: 1.01 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 6 min    |
-| 02    | 1/N   | 3 min  | 3 min    |
+| 02    | 2/N   | 8.5 min | 4 min    |
 
 **Recent Trend:**
-- Last 5 plans: 01-06-gap (2 min), 01-07-gap (3.5 min), 01-08a-gap (5 min), 01-08b-gap (3.5 min), 02-01 (3 min)
-- Trend: Infrastructure plans fast when following established patterns (3 min)
+- Last 5 plans: 01-07-gap (3.5 min), 01-08a-gap (5 min), 01-08b-gap (3.5 min), 02-01 (3 min), 02-02 (5.5 min)
+- Trend: Phase 2 averaging 4 minutes per plan (infrastructure + service implementation)
 
 *Updated after each plan completion*
 
@@ -81,6 +81,9 @@ Recent decisions affecting current work:
 - **Phase 2 (02-01):** 1-hour lock TTL balances long operations safety with preventing permanent locks
 - Phase 2 (02-01): Lock token format "{worker_id}:{uuid4}" embeds identity + unique token for ownership verification
 - Phase 2 (02-01): RedisRepository singleton pattern shares connection pool (max 50 connections) across all requests
+- **Phase 2 (02-02):** Explicit 409 mapping in router endpoints for clear LOC-04 requirement compliance
+- Phase 2 (02-02): Best-effort metadata logging - Redis lock + Sheets write are critical, metadata is audit only
+- Phase 2 (02-02): Deferred Estado_Ocupacion column to future v3.0 schema enhancement
 
 ### Pending Todos
 
@@ -97,8 +100,12 @@ None yet.
 
 **Phase 2 (IN PROGRESS):** Core Location Tracking - Building occupation tracking API endpoints
 - ✅ Plan 02-01 COMPLETE: Redis infrastructure deployed (3 commits: b3f0cba, 3936944, 3d15394)
-- **Next:** Plan 02-02 - TOMAR endpoint with atomic locking
-- **Gaps:** FastAPI startup/shutdown events needed for Redis connection lifecycle
+- ✅ Plan 02-02 COMPLETE: OccupationService with TOMAR/PAUSAR/COMPLETAR (3 commits: 29b3f76, 8a87219, b5f69e4)
+- **Next:** Plan 02-03 - Frontend integration with occupation endpoints
+- **Gaps:**
+  - FastAPI startup/shutdown events needed for Redis connection lifecycle
+  - Redis health check endpoint for monitoring
+  - Estado_Ocupacion column for paused state marking (future enhancement)
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -107,16 +114,17 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 02-01-PLAN.md (Redis Infrastructure) ✅
+Stopped at: Completed 02-02-PLAN.md (OccupationService) ✅
 Resume file: None
 
 **Phase 2 progress:**
 1. ✅ Plan 02-01 complete - Redis infrastructure deployed
-2. ⏳ Plan 02-02 next - TOMAR endpoint with atomic locking
-3. ⏳ Plan 02-03 pending - PAUSAR/COMPLETAR endpoints
-4. ⏳ Plan 02-04 pending - Batch operations
+2. ✅ Plan 02-02 complete - OccupationService with TOMAR/PAUSAR/COMPLETAR
+3. ⏳ Plan 02-03 next - Frontend integration with occupation endpoints
+4. ⏳ Plan 02-04 pending - Real-time occupation status visibility
 
 **Next steps:**
-- Integrate Redis connection lifecycle with FastAPI (startup/shutdown events in main.py)
-- Implement TOMAR endpoint using RedisLockService
-- Add Redis health check endpoint for monitoring
+- Add Redis startup/shutdown lifecycle events to main.py
+- Implement Redis health check endpoint
+- Integrate frontend with TOMAR/PAUSAR/COMPLETAR endpoints
+- Build EN VIVO occupation status display
