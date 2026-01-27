@@ -44,6 +44,8 @@ from backend.routers import actions
 from backend.routers import occupation
 # v3.0 Phase 3: Router HISTORY implementado (occupation history timeline)
 from backend.routers import history
+# v3.0 Phase 4: Router SSE implementado (real-time event streaming)
+from backend.routers import sse_router
 
 
 # ============================================================================
@@ -351,6 +353,9 @@ app.include_router(occupation.router, prefix="/api", tags=["Occupation"])
 
 # v3.0 Phase 3: Router HISTORY registrado (occupation history timeline)
 app.include_router(history.router, prefix="/api", tags=["History"])
+
+# v3.0 Phase 4: Router SSE registrado (real-time event streaming)
+app.include_router(sse_router.router, tags=["SSE"])
 
 
 # ============================================================================
