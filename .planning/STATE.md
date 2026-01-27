@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Real-time visibility of spool occupation - See EN VIVO who is working on which spool
-**Current focus:** Phase 1 - Migration Foundation
+**Current focus:** Phase 2 - Core Location Tracking
 
 ## Current Position
 
-Phase: 1 of 6 (Migration Foundation) ✅ COMPLETE
-Plan: 9 of 9 (01-08b-GAP-PLAN.md) ✓ ALL COMPLETE
-Status: Phase 1 complete - all 5 truths verified, ready for Phase 2
-Last activity: 2026-01-27 — Completed 01-08b-GAP: Migration documentation complete, Phase 1 verified
+Phase: 2 of 6 (Core Location Tracking)
+Plan: 1 of N (02-01-PLAN.md) ✓ COMPLETE
+Status: Phase 2 started - Redis infrastructure deployed
+Last activity: 2026-01-27 — Completed 02-01: Redis infrastructure for atomic spool locking
 
-Progress: [██████████] 100% Phase 1 complete
+Progress: [██████████░░░░░░░░░░] 17% Phase 1 complete + Phase 2 started (1 plan)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 6 minutes
-- Total execution time: 0.85 hours
+- Total plans completed: 10
+- Average duration: 5.7 minutes
+- Total execution time: 0.95 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 6 min    |
+| 02    | 1/N   | 3 min  | 3 min    |
 
 **Recent Trend:**
-- Last 5 plans: 01-05 (5 min), 01-06-gap (2 min), 01-07-gap (3.5 min), 01-08a-gap (5 min), 01-08b-gap (3.5 min)
-- Trend: Gap closure plans consistently fast (2-5 min), infrastructure plans longer (9-13 min)
+- Last 5 plans: 01-06-gap (2 min), 01-07-gap (3.5 min), 01-08a-gap (5 min), 01-08b-gap (3.5 min), 02-01 (3 min)
+- Trend: Infrastructure plans fast when following established patterns (3 min)
 
 *Updated after each plan completion*
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - **Phase 1 (01-08b-GAP):** Phase 1 marked complete with all 5 truths verified after gap closure
 - Phase 1 (01-08b-GAP): Migration completion documentation includes rollback window expiration (2026-02-02)
 - Phase 1 (01-08b-GAP): Production schema is 66 columns (63 v2.1 + 3 v3.0), confirmed and documented
+- **Phase 2 (02-01):** 1-hour lock TTL balances long operations safety with preventing permanent locks
+- Phase 2 (02-01): Lock token format "{worker_id}:{uuid4}" embeds identity + unique token for ownership verification
+- Phase 2 (02-01): RedisRepository singleton pattern shares connection pool (max 50 connections) across all requests
 
 ### Pending Todos
 
@@ -89,10 +93,12 @@ None yet.
 - ✅ Gap 2 CLOSED: v3.0 columns added to production sheet (66 columns: 63 v2.1 + 3 v3.0)
 - ✅ Gap 3a CLOSED: Migration coordinator executed - 6/6 verification checks, 39/39 tests passed
 - ✅ Gap 3b CLOSED: Migration documentation complete (MIGRATION_COMPLETE.md, 01-VERIFICATION.md updated)
-- **Status:** Phase 1 complete, ready for Phase 2: Core Location Tracking
-- ⚠️ **Recommended:** Monitor production for 24-48 hours before starting Phase 2
+- **Status:** Phase 1 complete
 
-**Phase 2 (NEXT):** Core Location Tracking - Build occupation tracking API endpoints
+**Phase 2 (IN PROGRESS):** Core Location Tracking - Building occupation tracking API endpoints
+- ✅ Plan 02-01 COMPLETE: Redis infrastructure deployed (3 commits: b3f0cba, 3936944, 3d15394)
+- **Next:** Plan 02-02 - TOMAR endpoint with atomic locking
+- **Gaps:** FastAPI startup/shutdown events needed for Redis connection lifecycle
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -101,17 +107,16 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 01-08b-GAP-PLAN.md (Migration Documentation) ✅ PHASE 1 COMPLETE
+Stopped at: Completed 02-01-PLAN.md (Redis Infrastructure) ✅
 Resume file: None
 
-**Phase 1 completion checklist:**
-1. ✅ Gap 1 complete - Production backup created and verified
-2. ✅ Gap 2 complete - v3.0 columns added to production (66 columns)
-3. ✅ Gap 3a complete - Migration coordinator executed, all checks passed
-4. ✅ Gap 3b complete - Migration documentation created (MIGRATION_COMPLETE.md)
-5. ✅ Phase 1 verification updated to "complete" status (5/5 truths verified)
+**Phase 2 progress:**
+1. ✅ Plan 02-01 complete - Redis infrastructure deployed
+2. ⏳ Plan 02-02 next - TOMAR endpoint with atomic locking
+3. ⏳ Plan 02-03 pending - PAUSAR/COMPLETAR endpoints
+4. ⏳ Plan 02-04 pending - Batch operations
 
-**Next phase:**
-- Ready to start Phase 2: Core Location Tracking
-- Production monitoring recommended for 24-48 hours before Phase 2
-- Rollback window active until 2026-02-02 (7 days from backup creation)
+**Next steps:**
+- Integrate Redis connection lifecycle with FastAPI (startup/shutdown events in main.py)
+- Implement TOMAR endpoint using RedisLockService
+- Add Redis health check endpoint for monitoring
