@@ -12,6 +12,8 @@ Guard condition prevents SOLD from starting if ARM not initiated.
 from statemachine import State
 from backend.services.state_machines.base_state_machine import BaseOperationStateMachine
 from backend.exceptions import DependenciasNoSatisfechasError
+from backend.config import config
+from datetime import date
 
 
 class SOLDStateMachine(BaseOperationStateMachine):
@@ -97,3 +99,87 @@ class SOLDStateMachine(BaseOperationStateMachine):
             DependenciasNoSatisfechasError: If ARM not initiated
         """
         self.validate_arm_initiated()
+
+    async def on_enter_en_progreso(self, event_data):
+        """
+        Callback when SOLD work starts.
+
+        Updates Soldador column with worker name.
+
+        Args:
+            event_data: Transition event data with kwargs containing worker_nombre
+        """
+        worker_nombre = event_data.kwargs.get('worker_nombre')
+        if worker_nombre and self.sheets_repo:
+            # Find row for this spool
+            row_num = self.sheets_repo.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL column
+                value=self.tag_spool
+            )
+
+            if row_num:
+                # Update Soldador column
+                self.sheets_repo.update_cell_by_column_name(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    row=row_num,
+                    column_name="Soldador",
+                    value=worker_nombre
+                )
+
+    async def on_enter_completado(self, event_data):
+        """
+        Callback when SOLD work completes.
+
+        Updates Fecha_Soldadura column with completion date.
+
+        Args:
+            event_data: Transition event data with kwargs containing fecha_operacion
+        """
+        fecha = event_data.kwargs.get('fecha_operacion', date.today())
+        if self.sheets_repo:
+            # Find row for this spool
+            row_num = self.sheets_repo.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL column
+                value=self.tag_spool
+            )
+
+            if row_num:
+                # Format date as DD-MM-YYYY for consistency with existing data
+                fecha_str = fecha.strftime("%d-%m-%Y") if hasattr(fecha, 'strftime') else str(fecha)
+
+                # Update Fecha_Soldadura column
+                self.sheets_repo.update_cell_by_column_name(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    row=row_num,
+                    column_name="Fecha_Soldadura",
+                    value=fecha_str
+                )
+
+    async def on_enter_pendiente(self, event_data):
+        """
+        Callback when returning to pendiente state (CANCELAR).
+
+        Clears Soldador column to revert the spool to unassigned state.
+
+        Args:
+            event_data: Transition event data
+        """
+        # Only clear if coming from EN_PROGRESO (CANCELAR transition)
+        if event_data.transition.source == self.en_progreso and self.sheets_repo:
+            # Find row for this spool
+            row_num = self.sheets_repo.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL column
+                value=self.tag_spool
+            )
+
+            if row_num:
+                # Clear Soldador column
+                self.sheets_repo.update_cell_by_column_name(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    row=row_num,
+                    column_name="Soldador",
+                    value=""
+                )
