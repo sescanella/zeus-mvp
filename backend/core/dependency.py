@@ -459,7 +459,8 @@ def get_occupation_service(
 def get_state_service(
     occupation_service: OccupationService = Depends(get_occupation_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
+    redis_event_service: RedisEventService = Depends(get_redis_event_service)
 ) -> StateService:
     """
     Factory para StateService (nueva instancia por request) - v3.0 PHASE 3.
@@ -471,11 +472,13 @@ def get_state_service(
     - OccupationService (Redis locks + occupation tracking)
     - Estado_Detalle updates (combined state display)
     - Hydration logic (sync state machines with Sheets columns)
+    - Real-time event publishing (RedisEventService) - v3.0 Phase 4
 
     Args:
         occupation_service: Service for occupation operations (injected).
         sheets_repo: Repository for Sheets reads/writes (injected).
         metadata_repository: Repository for audit logging (injected).
+        redis_event_service: Service for real-time event publishing (injected).
 
     Returns:
         Nueva instancia de StateService con todas las dependencias.
@@ -486,11 +489,13 @@ def get_state_service(
     Note:
         v3.0 Phase 3: StateService wraps OccupationService and adds state machine
         orchestration on top of Phase 2 Redis locking infrastructure.
+        v3.0 Phase 4: Real-time events broadcast state machine transitions.
     """
     return StateService(
         occupation_service=occupation_service,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository
+        metadata_repository=metadata_repository,
+        redis_event_service=redis_event_service
     )
 
 

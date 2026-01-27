@@ -19,6 +19,7 @@ from backend.services.state_machines.arm_state_machine import ARMStateMachine
 from backend.services.state_machines.sold_state_machine import SOLDStateMachine
 from backend.services.occupation_service import OccupationService
 from backend.services.estado_detalle_builder import EstadoDetalleBuilder
+from backend.services.redis_event_service import RedisEventService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.occupation import TomarRequest, PausarRequest, CompletarRequest, OccupationResponse
@@ -44,7 +45,8 @@ class StateService:
         self,
         occupation_service: OccupationService,
         sheets_repository: SheetsRepository,
-        metadata_repository: MetadataRepository
+        metadata_repository: MetadataRepository,
+        redis_event_service: RedisEventService
     ):
         """
         Initialize state service with injected dependencies.
@@ -53,10 +55,12 @@ class StateService:
             occupation_service: Service for Redis locks and occupation operations
             sheets_repository: Repository for Sheets reads/writes
             metadata_repository: Repository for audit logging
+            redis_event_service: Service for real-time event publishing
         """
         self.occupation_service = occupation_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
+        self.redis_event_service = redis_event_service
         self.estado_builder = EstadoDetalleBuilder()
         logger.info("StateService initialized with state machine orchestration")
 
@@ -223,6 +227,31 @@ class StateService:
                 fecha_operacion=request.fecha_operacion
             )
             logger.info(f"SOLD state machine transitioned to {sold_machine.get_state_id()}")
+
+        # Build new estado_detalle after state machine transition
+        nuevo_estado_detalle = self.estado_builder.build(
+            ocupado_por=None,  # Clear occupation after completion
+            arm_state=arm_machine.get_state_id(),
+            sold_state=sold_machine.get_state_id()
+        )
+
+        # Publish STATE_CHANGE event (best effort)
+        try:
+            await self.redis_event_service.publish_spool_update(
+                event_type="STATE_CHANGE",
+                tag_spool=tag_spool,
+                worker_nombre=request.worker_nombre,
+                estado_detalle=nuevo_estado_detalle,
+                additional_data={
+                    "operacion": operacion.value,
+                    "arm_state": arm_machine.get_state_id(),
+                    "sold_state": sold_machine.get_state_id()
+                }
+            )
+            logger.info(f"✅ Real-time event published: STATE_CHANGE for {tag_spool}")
+        except Exception as e:
+            # Best effort - log but don't fail operation
+            logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
         # Update Estado_Detalle - now available since operation completed
         self._update_estado_detalle(
