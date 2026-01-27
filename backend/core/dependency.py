@@ -35,12 +35,14 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.repositories.redis_repository import RedisRepository
 from backend.services.sheets_service import SheetsService
+from backend.services.redis_lock_service import RedisLockService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
 from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
 from backend.services.action_service import ActionService
+from backend.services.occupation_service import OccupationService
 from backend.config import config
 
 
@@ -314,6 +316,70 @@ def get_action_service(
         validation_service=validation_service,
         spool_service=spool_service_v2,
         worker_service=worker_service
+    )
+
+
+def get_redis_lock_service(
+    redis_repo: RedisRepository = Depends(get_redis_repository)
+) -> RedisLockService:
+    """
+    Factory para RedisLockService (nueva instancia por request).
+
+    v3.0: RedisLockService para operaciones atómicas de lock en spools.
+
+    RedisLockService implementa:
+    - Atomic lock acquisition (SET NX EX)
+    - Safe lock release (Lua script with ownership verification)
+    - Lock extension for long operations
+    - Owner query for error messages
+
+    Args:
+        redis_repo: Repositorio Redis (inyectado automáticamente).
+
+    Returns:
+        Nueva instancia de RedisLockService con Redis client.
+
+    Usage:
+        redis_lock_service: RedisLockService = Depends(get_redis_lock_service)
+    """
+    return RedisLockService(redis_client=redis_repo.get_client())
+
+
+def get_occupation_service(
+    redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+) -> OccupationService:
+    """
+    Factory para OccupationService (nueva instancia por request) - v3.0 CORE.
+
+    v3.0: OccupationService orchestrates TOMAR/PAUSAR/COMPLETAR operations
+    with Redis locking and Sheets updates.
+
+    OccupationService coordinates:
+    - Redis lock acquisition/release (RedisLockService)
+    - Sheets writes to Ocupado_Por/Fecha_Ocupacion (SheetsRepository)
+    - Audit logging to Metadata (MetadataRepository)
+
+    Args:
+        redis_lock_service: Service for atomic lock operations (injected).
+        sheets_repo: Repository for Sheets writes (injected).
+        metadata_repository: Repository for audit logging (injected).
+
+    Returns:
+        Nueva instancia de OccupationService con todas las dependencias.
+
+    Usage:
+        occupation_service: OccupationService = Depends(get_occupation_service)
+
+    Note:
+        v3.0 Core: Implements atomic occupation tracking with Redis locks
+        to prevent race conditions in concurrent TOMAR operations.
+    """
+    return OccupationService(
+        redis_lock_service=redis_lock_service,
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repository
     )
 
 

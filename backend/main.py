@@ -39,6 +39,8 @@ from backend.core.dependency import get_sheets_repository
 from backend.routers import health, workers, spools
 # FASE 3: Router WRITE implementado (actions)
 from backend.routers import actions
+# v3.0: Router OCCUPATION implementado (TOMAR/PAUSAR/COMPLETAR)
+from backend.routers import occupation
 
 
 # ============================================================================
@@ -155,6 +157,13 @@ async def zeus_exception_handler(request: Request, exc: ZEUSException):
 
         # 403 FORBIDDEN (CRÍTICO - ownership violation)
         "NO_AUTORIZADO": status.HTTP_403_FORBIDDEN,
+
+        # 409 CONFLICT (v3.0 - spool occupation race conditions)
+        "SPOOL_OCCUPIED": status.HTTP_409_CONFLICT,
+        "VERSION_CONFLICT": status.HTTP_409_CONFLICT,
+
+        # 410 GONE (v3.0 - lock expired)
+        "LOCK_EXPIRED": status.HTTP_410_GONE,
 
         # 429 TOO MANY REQUESTS
         "SHEETS_RATE_LIMIT": status.HTTP_429_TOO_MANY_REQUESTS,
@@ -308,6 +317,9 @@ app.include_router(spools.router, prefix="/api", tags=["Spools"])
 
 # FASE 3: Router WRITE registrado (CRÍTICO - ownership validation)
 app.include_router(actions.router, prefix="/api", tags=["Actions"])
+
+# v3.0: Router OCCUPATION registrado (TOMAR/PAUSAR/COMPLETAR with Redis locks)
+app.include_router(occupation.router, prefix="/api", tags=["Occupation"])
 
 
 # ============================================================================
