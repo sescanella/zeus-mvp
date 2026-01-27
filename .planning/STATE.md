@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 3 of 6 (State Machine & Collaboration) 🚧 IN PROGRESS
-Plan: 1 of 4 (03-01-PLAN.md) ✓ State machine foundation complete
-Status: Estado_Detalle column added + ARM/SOLD state machines created
-Last activity: 2026-01-27 — Completed 03-01: State machine foundation with guards
+Plan: 2 of 4 (03-02-PLAN.md) ✓ StateService orchestration complete
+Status: StateService orchestrates state machines with OccupationService via hydration
+Last activity: 2026-01-27 — Completed 03-02: StateService orchestration with hydration logic
 
-Progress: [████████████░░] 67% Phase 3 - 1/4 plans complete (State machine foundation done)
+Progress: [█████████████░] 75% Phase 3 - 2/4 plans complete (State machine orchestration done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
-- Average duration: 4.5 minutes
-- Total execution time: 1.24 hours
+- Total plans completed: 19
+- Average duration: 4.3 minutes
+- Total execution time: 1.37 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [████████████░░] 67% Phase 3 - 1/4 plans c
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
-| 03    | 1/4 🚧 | 3 min  | 3.0 min    |
+| 03    | 3/4 🚧 | 10 min  | 3.3 min    |
 
 **Recent Trend:**
-- Last 3 plans: 02-05-GAP (1 min), 02-06-GAP (2.6 min), 03-01 (3 min)
-- Trend: Phase 3 starting strong - 3 min for foundation (faster than Phase 1/2 averages)
+- Last 3 plans: 03-01 (3 min), 03-02 (3 min), 03-03 (3.6 min)
+- Trend: Phase 3 maintaining fast pace - averaging 3.3 min (faster than Phase 1/2)
 
 *Updated after each plan completion*
 
@@ -106,6 +106,9 @@ Recent decisions affecting current work:
 - Phase 3 (03-01): Separate state machines per operation (ARM/SOLD) prevents state explosion (9 states instead of 27+)
 - Phase 3 (03-01): Guard + validator pattern for dependencies - guards control transitions, validators provide error messages
 - Phase 3 (03-01): python-statemachine==2.5.0 chosen for declarative state management with async support
+- **Phase 3 (03-03):** State machines own column updates via callbacks - single source of truth for Sheets writes
+- Phase 3 (03-03): Estado_Detalle updates on EVERY state transition (TOMAR/PAUSAR/COMPLETAR) for real-time visibility
+- Phase 3 (03-03): Date format DD-MM-YYYY for consistency with existing production data
 
 ### Pending Todos
 
@@ -131,14 +134,22 @@ None yet.
 - **Deferred to future:**
   - Estado_Ocupacion column for paused state marking
 
-**Phase 3 (IN PROGRESS):** 🚧 State Machine & Collaboration - 1/4 plans complete
+**Phase 3 (IN PROGRESS):** 🚧 State Machine & Collaboration - 3/4 plans complete
 - ✅ Plan 03-01: State machine foundation (3 min)
   - Estado_Detalle column added at position 67
   - ARM state machine created (3 states, 3 transitions)
   - SOLD state machine with ARM dependency guard
   - python-statemachine==2.5.0 integrated
-- **Next:** Plan 03-02 - Add state machine callbacks for column updates
-- **Status:** Foundation ready, no blockers
+- ✅ Plan 03-02: StateService orchestration (3 min)
+  - StateService integrates with OccupationService
+  - Hydration logic syncs state machines with Sheets
+  - EstadoDetalleBuilder for display formatting
+- ✅ Plan 03-03: State machine callbacks (3.6 min)
+  - ARM/SOLD callbacks update columns automatically
+  - Estado_Detalle updates on every transition
+  - TOMAR/PAUSAR/COMPLETAR trigger column writes
+- **Next:** Plan 03-04 - Integration testing and refinement
+- **Status:** Callbacks working, Estado_Detalle synchronized
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -147,25 +158,25 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 03-01-PLAN.md (State machine foundation) ✅
+Stopped at: Completed 03-03-PLAN.md (State machine callbacks) ✅
 Resume file: None
 
 **Phase 3 progress:**
 1. ✅ Plan 03-01 complete - State machine foundation with guards (3 min)
+2. ✅ Plan 03-02 complete - StateService orchestration (3 min)
+3. ✅ Plan 03-03 complete - State machine callbacks (3.6 min)
 
-**Phase 3 Plan 03-01 complete!**
-- Estado_Detalle column added at position 67 in production sheet
-- ARM state machine created with 3 states (pendiente/en_progreso/completado)
-- SOLD state machine created with ARM dependency guard
-- BaseOperationStateMachine shared foundation
-- python-statemachine==2.5.0 library integrated
-- Guard + validator pattern for dependencies
+**Phase 3 Plan 03-03 complete!**
+- ARM state machine callbacks: on_enter_en_progreso, on_enter_completado, on_enter_pendiente
+- SOLD state machine callbacks: Same pattern for SOLD-specific columns
+- EstadoDetalleBuilder formats occupation + operation state display
+- StateService _update_estado_detalle called on TOMAR/PAUSAR/COMPLETAR
+- Estado_Detalle synchronized on every state transition
 
 **Commits:**
-- 89cd263: feat(03-01): add Estado_Detalle column to Operaciones sheet
-- ee60eb1: feat(03-01): create ARM and SOLD state machines with guards
+- 7734381: feat(03-03): add ARM state machine callbacks for column updates
+- 46296c9: feat(03-03): add SOLD state machine callbacks for column updates
+- cbcea58: feat(03-03): implement automatic Estado_Detalle updates in StateService
 
 **Next steps:**
-- Plan 03-02: Add state machine callbacks for column updates (on_enter_*, after_transition)
-- Plan 03-03: StateService orchestration with hydration logic
-- Plan 03-04: Estado_Detalle builder and update logic
+- Plan 03-04: Integration testing and refinement (final plan in Phase 3)
