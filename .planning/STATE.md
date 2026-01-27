@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Real-time visibility of spool occupation - See EN VIVO who is working on which spool
-**Current focus:** Phase 2 - Core Location Tracking
+**Current focus:** Phase 4 - Real-Time Visibility
 
 ## Current Position
 
