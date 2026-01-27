@@ -45,6 +45,7 @@ from backend.services.worker_service import WorkerService
 from backend.services.action_service import ActionService
 from backend.services.occupation_service import OccupationService
 from backend.services.state_service import StateService
+from backend.services.history_service import HistoryService
 from backend.config import config
 
 
@@ -456,6 +457,39 @@ def get_state_service(
         occupation_service=occupation_service,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository
+    )
+
+
+def get_history_service(
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> HistoryService:
+    """
+    Factory para HistoryService (nueva instancia por request) - v3.0 PHASE 3.
+
+    v3.0 Phase 3: HistoryService aggregates Metadata events into occupation history.
+
+    HistoryService provides:
+    - Occupation timeline showing which workers worked on each spool
+    - Duration calculation between TOMAR and PAUSAR/COMPLETAR events
+    - Human-readable duration format (e.g., "2h 15m")
+
+    Args:
+        metadata_repository: Repository for reading Metadata events (injected).
+        sheets_repo: Repository for spool verification (injected).
+
+    Returns:
+        Nueva instancia de HistoryService con todas las dependencias.
+
+    Usage:
+        history_service: HistoryService = Depends(get_history_service)
+
+    Note:
+        v3.0 Phase 3: HistoryService reads from Metadata for audit trail visibility.
+    """
+    return HistoryService(
+        metadata_repository=metadata_repository,
+        sheets_repository=sheets_repo
     )
 
 

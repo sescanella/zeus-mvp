@@ -42,6 +42,8 @@ from backend.routers import health, workers, spools
 from backend.routers import actions
 # v3.0: Router OCCUPATION implementado (TOMAR/PAUSAR/COMPLETAR)
 from backend.routers import occupation
+# v3.0 Phase 3: Router HISTORY implementado (occupation history timeline)
+from backend.routers import history
 
 
 # ============================================================================
@@ -346,6 +348,9 @@ app.include_router(actions.router, prefix="/api", tags=["Actions"])
 
 # v3.0: Router OCCUPATION registrado (TOMAR/PAUSAR/COMPLETAR with Redis locks)
 app.include_router(occupation.router, prefix="/api", tags=["Occupation"])
+
+# v3.0 Phase 3: Router HISTORY registrado (occupation history timeline)
+app.include_router(history.router, prefix="/api", tags=["History"])
 
 
 # ============================================================================
