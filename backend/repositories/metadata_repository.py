@@ -8,6 +8,7 @@ import logging
 from typing import Optional
 from functools import wraps
 import time
+from datetime import date, datetime
 
 from backend.config import config
 from backend.models.metadata import MetadataEvent, EventoTipo, Accion
