@@ -65,8 +65,8 @@ class HistoryResponse(BaseModel):
         description="Chronological list of occupation sessions"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "tag_spool": "MK-1335-CW-25238-011",
                 "sessions": [
@@ -89,3 +89,4 @@ class HistoryResponse(BaseModel):
                 ]
             }
         }
+    }
