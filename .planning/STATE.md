@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 2 of 6 (Core Location Tracking) ✅ COMPLETE
-Plan: 4 of 4 (02-04-PLAN.md) ✓ All waves complete
-Status: Phase 2 complete - Redis locking + testing deployed
-Last activity: 2026-01-27 — Completed 02-04: Race condition test suite
+Plan: 5 of 5 (02-05-GAP-PLAN.md) ✓ All waves + gap closure complete
+Status: Phase 2 complete - Redis locking + testing + dependency injection
+Last activity: 2026-01-27 — Completed 02-05-GAP: Fix Redis repository get_client method
 
-Progress: [███████████] 100% Phase 2 - All 4 waves complete
+Progress: [███████████] 100% Phase 2 - All 4 waves + gap closure complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 5.1 minutes
-- Total execution time: 1.13 hours
+- Total plans completed: 14
+- Average duration: 4.7 minutes
+- Total execution time: 1.16 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
-| 02    | 4/4 ✅  | 18.5 min  | 4.6 min    |
+| 02    | 5/5 ✅  | 19.5 min  | 3.9 min    |
 
 **Recent Trend:**
-- Last 3 plans: 02-02 (5.5 min), 02-03 (4 min), 02-04 (6 min)
-- Trend: Phase 2 complete - averaged 4.6 minutes per plan (20% faster than Phase 1)
+- Last 3 plans: 02-03 (4 min), 02-04 (6 min), 02-05-GAP (1 min)
+- Trend: Phase 2 complete - averaged 3.9 minutes per plan (32% faster than Phase 1), gap plan took only 1 minute
 
 *Updated after each plan completion*
 
@@ -91,6 +91,9 @@ Recent decisions affecting current work:
 - **Phase 2 (02-04):** Integration tests require real infrastructure (FastAPI + Redis + Sheets) for true race condition validation
 - Phase 2 (02-04): Unit tests use AsyncMock for fast, isolated testing without infrastructure dependencies
 - Phase 2 (02-04): Test guide documents procedures instead of automated verification during plan execution
+- **Phase 2 (02-05-GAP):** get_client() method for dependency injection - repository owns client lifecycle
+- Phase 2 (02-05-GAP): Optional[Redis] return type handles pre-connection state safely
+- Phase 2 (02-05-GAP): Warning logs help debug startup timing issues
 
 ### Pending Todos
 
@@ -105,11 +108,12 @@ None yet.
 - ✅ Gap 3b CLOSED: Migration documentation complete (MIGRATION_COMPLETE.md, 01-VERIFICATION.md updated)
 - **Status:** Phase 1 complete
 
-**Phase 2 (COMPLETE):** ✅ Core Location Tracking - All 4 waves complete
+**Phase 2 (COMPLETE):** ✅ Core Location Tracking - All 4 waves + gap closure complete
 - ✅ Wave 1: Redis infrastructure deployed (02-01: 3 min)
 - ✅ Wave 2: OccupationService with TOMAR/PAUSAR/COMPLETAR (02-02: 5.5 min)
 - ✅ Wave 3: Optimistic locking with version tokens (02-03: 4 min)
 - ✅ Wave 4: Race condition test suite (02-04: 6 min)
+- ✅ Gap 5: Fix Redis repository get_client method (02-05-GAP: 1 min)
 - **Status:** Phase 2 complete - ready for Phase 3
 - **Deferred to future:**
   - FastAPI startup/shutdown events for Redis connection lifecycle
@@ -123,7 +127,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 02-04-PLAN.md (Race condition test suite) ✅
+Stopped at: Completed 02-05-GAP-PLAN.md (Fix Redis repository get_client method) ✅
 Resume file: None
 
 **Phase 2 progress:**
@@ -131,13 +135,15 @@ Resume file: None
 2. ✅ Plan 02-02 complete - OccupationService with TOMAR/PAUSAR/COMPLETAR
 3. ✅ Plan 02-03 complete - Optimistic locking with version tokens and retry
 4. ✅ Plan 02-04 complete - Race condition test suite (integration + unit)
+5. ✅ Plan 02-05-GAP complete - Fix Redis repository get_client method
 
 **Phase 2 complete!**
-- 4/4 plans executed successfully
+- 5/5 plans executed successfully (4 main + 1 gap)
 - Redis locking infrastructure deployed
 - Occupation operations implemented (TOMAR/PAUSAR/COMPLETAR)
 - Optimistic locking with version tokens
 - Comprehensive test suite (40+ tests)
+- Dependency injection chain fixed (get_client method)
 
 **Next steps:**
 - Phase 3: State machine and operations workflow
