@@ -44,6 +44,7 @@ from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
 from backend.services.action_service import ActionService
 from backend.services.occupation_service import OccupationService
+from backend.services.state_service import StateService
 from backend.config import config
 
 
@@ -417,6 +418,44 @@ def get_occupation_service(
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository,
         conflict_service=conflict_service
+    )
+
+
+def get_state_service(
+    occupation_service: OccupationService = Depends(get_occupation_service),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
+) -> StateService:
+    """
+    Factory para StateService (nueva instancia por request) - v3.0 PHASE 3.
+
+    v3.0 Phase 3: StateService orchestrates state machines with OccupationService.
+
+    StateService coordinates:
+    - ARM and SOLD state machines (per-operation)
+    - OccupationService (Redis locks + occupation tracking)
+    - Estado_Detalle updates (combined state display)
+    - Hydration logic (sync state machines with Sheets columns)
+
+    Args:
+        occupation_service: Service for occupation operations (injected).
+        sheets_repo: Repository for Sheets reads/writes (injected).
+        metadata_repository: Repository for audit logging (injected).
+
+    Returns:
+        Nueva instancia de StateService con todas las dependencias.
+
+    Usage:
+        state_service: StateService = Depends(get_state_service)
+
+    Note:
+        v3.0 Phase 3: StateService wraps OccupationService and adds state machine
+        orchestration on top of Phase 2 Redis locking infrastructure.
+    """
+    return StateService(
+        occupation_service=occupation_service,
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repository
     )
 
 

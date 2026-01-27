@@ -1,25 +1,32 @@
 """
-Occupation Router - Spool occupation operations (v3.0).
+Occupation Router - Spool occupation operations (v3.0 Phase 3).
 
-Core endpoints for TOMAR/PAUSAR/COMPLETAR operations with Redis locking.
+Core endpoints for TOMAR/PAUSAR/COMPLETAR operations with state machine orchestration.
 Implements LOC-04 requirement: explicit 409 Conflict for race conditions.
 
+v3.0 Phase 3 Updates:
+- Uses StateService for TOMAR/PAUSAR/COMPLETAR (state machine orchestration)
+- Batch operations still use OccupationService directly (no per-spool state machine)
+- State machines hydrate from Sheets columns on each operation
+
 Key features:
-- POST /api/occupation/tomar: Take single spool (atomic lock)
-- POST /api/occupation/pausar: Pause work on spool (release lock)
-- POST /api/occupation/completar: Complete work on spool (release lock)
-- POST /api/occupation/batch-tomar: Take multiple spools (up to 50)
+- POST /api/occupation/tomar: Take single spool (Redis lock + state machine transition)
+- POST /api/occupation/pausar: Pause work on spool (release lock + update Estado_Detalle)
+- POST /api/occupation/completar: Complete work on spool (completar transition + release lock)
+- POST /api/occupation/batch-tomar: Take multiple spools (up to 50, direct OccupationService)
 - GET /api/occupation/status/{tag_spool}: Check occupation status
 
 Exception handling:
 - SpoolOccupiedError → 409 CONFLICT (LOC-04 requirement)
 - NoAutorizadoError → 403 FORBIDDEN
 - SpoolNoEncontradoError → 404 NOT FOUND
+- DependenciasNoSatisfechasError → 400 BAD REQUEST (state machine guards)
 - Other errors → appropriate HTTP status codes
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from backend.core.dependency import get_occupation_service
+from backend.core.dependency import get_state_service, get_occupation_service
+from backend.services.state_service import StateService
 from backend.services.occupation_service import OccupationService
 from backend.models.occupation import (
     TomarRequest,
@@ -47,7 +54,7 @@ router = APIRouter()
 @router.post("/occupation/tomar", response_model=OccupationResponse, status_code=status.HTTP_200_OK)
 async def tomar_spool(
     request: TomarRequest,
-    service: OccupationService = Depends(get_occupation_service)
+    service: StateService = Depends(get_state_service)
 ):
     """
     Take a spool (acquire occupation lock).
@@ -140,7 +147,7 @@ async def tomar_spool(
 @router.post("/occupation/pausar", response_model=OccupationResponse, status_code=status.HTTP_200_OK)
 async def pausar_spool(
     request: PausarRequest,
-    service: OccupationService = Depends(get_occupation_service)
+    service: StateService = Depends(get_state_service)
 ):
     """
     Pause work on a spool (mark as paused and release lock).
@@ -221,7 +228,7 @@ async def pausar_spool(
 @router.post("/occupation/completar", response_model=OccupationResponse, status_code=status.HTTP_200_OK)
 async def completar_spool(
     request: CompletarRequest,
-    service: OccupationService = Depends(get_occupation_service)
+    service: StateService = Depends(get_state_service)
 ):
     """
     Complete work on a spool (mark operation complete and release lock).
