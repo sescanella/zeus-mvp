@@ -55,6 +55,32 @@ class RedisRepository:
             RedisRepository._initialized = True
             logger.info("RedisRepository initialized (singleton)")
 
+    def get_client(self) -> Optional[aioredis.Redis]:
+        """
+        Get the Redis client instance for dependency injection.
+
+        Returns None if client not yet connected. This is the expected interface
+        for FastAPI dependency injection (used in backend/core/dependency.py).
+
+        Returns:
+            Redis client instance if connected, None otherwise
+
+        Warning:
+            If client is None, caller must handle gracefully or wait for
+            FastAPI startup event to complete connection.
+
+        Usage:
+            # In dependency.py
+            redis_client = redis_repo.get_client()
+            lock_service = RedisLockService(redis_client=redis_client)
+        """
+        if self.client is None:
+            logger.warning(
+                "Redis client requested but not yet connected. "
+                "Ensure FastAPI startup event has completed."
+            )
+        return self.client
+
     async def connect(self) -> None:
         """
         Establish connection to Redis with connection pool.

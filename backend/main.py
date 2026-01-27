@@ -34,6 +34,7 @@ from backend.models.error import ErrorResponse
 from backend.utils.logger import setup_logger
 from backend.core.column_map_cache import ColumnMapCache
 from backend.core.dependency import get_sheets_repository
+from backend.repositories.redis_repository import RedisRepository
 
 # FASE 2: Routers READ-ONLY implementados (health, workers, spools)
 from backend.routers import health, workers, spools
@@ -254,6 +255,19 @@ async def startup_event():
     logging.info(f"Google Sheet ID: {config.GOOGLE_SHEET_ID[:10]}...{config.GOOGLE_SHEET_ID[-10:]}")
     logging.info(f"CORS Origins: {config.ALLOWED_ORIGINS}")
 
+    # v3.0: Connect to Redis for occupation locking
+    try:
+        logging.info("🔄 Connecting to Redis for occupation locking...")
+        redis_repo = RedisRepository()
+        await redis_repo.connect()
+        logging.info("✅ Redis connected successfully")
+    except Exception as e:
+        # Log error but don't block startup - API works without Redis (degraded mode)
+        logging.warning(
+            f"⚠️  Failed to connect to Redis: {e}. "
+            f"API will start but occupation locking will not work."
+        )
+
     # v2.1: Pre-warm column map cache para hoja Operaciones
     try:
         logging.info("🔄 Pre-warming ColumnMapCache for 'Operaciones'...")
@@ -300,10 +314,22 @@ async def shutdown_event():
 
     Acciones:
     - Log de shutdown
+    - Disconnect Redis connection pool
     - Cerrar conexiones pendientes (futuro)
     - Flush de cache (futuro)
     """
     logging.info("🔴 ZEUES API shutting down...")
+
+    # v3.0: Disconnect from Redis
+    try:
+        redis_repo = RedisRepository()
+        if redis_repo.client is not None:
+            await redis_repo.disconnect()
+            logging.info("✅ Redis disconnected cleanly")
+        else:
+            logging.debug("Redis was not connected, skipping disconnect")
+    except Exception as e:
+        logging.warning(f"⚠️  Error disconnecting from Redis: {e}")
 
 
 # ============================================================================
