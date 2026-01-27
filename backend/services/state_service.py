@@ -18,11 +18,13 @@ from datetime import date
 from backend.services.state_machines.arm_state_machine import ARMStateMachine
 from backend.services.state_machines.sold_state_machine import SOLDStateMachine
 from backend.services.occupation_service import OccupationService
+from backend.services.estado_detalle_builder import EstadoDetalleBuilder
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.occupation import TomarRequest, PausarRequest, CompletarRequest, OccupationResponse
 from backend.models.enums import ActionType
 from backend.exceptions import SpoolNoEncontradoError
+from backend.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,7 @@ class StateService:
         self.occupation_service = occupation_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
+        self.estado_builder = EstadoDetalleBuilder()
         logger.info("StateService initialized with state machine orchestration")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
@@ -114,9 +117,14 @@ class StateService:
             )
             logger.info(f"SOLD state machine transitioned to {sold_machine.get_state_id()}")
 
-        # Step 5: Update Estado_Detalle (to be implemented in Plan 03-03)
-        # TODO: Call EstadoDetalleBuilder to format display string
-        # TODO: Write Estado_Detalle to Operaciones sheet
+        # Step 5: Update Estado_Detalle
+        self._update_estado_detalle(
+            tag_spool=tag_spool,
+            ocupado_por=request.worker_nombre,
+            arm_state=arm_machine.get_state_id(),
+            sold_state=sold_machine.get_state_id(),
+            operacion_actual=operacion.value
+        )
 
         logger.info(f"✅ StateService.tomar completed for {tag_spool}")
         return response
@@ -147,10 +155,20 @@ class StateService:
         # Delegate to OccupationService
         response = await self.occupation_service.pausar(request)
 
-        # Update Estado_Detalle to show available (to be implemented in Plan 03-03)
-        # TODO: Fetch spool state
-        # TODO: Hydrate state machines
-        # TODO: Update Estado_Detalle with "Disponible - ARM X, SOLD Y" format
+        # Fetch current spool state
+        spool = self.sheets_repo.get_spool_by_tag(tag_spool)
+        if spool:
+            # Hydrate state machines to get current states
+            arm_machine = self._hydrate_arm_machine(spool)
+            sold_machine = self._hydrate_sold_machine(spool)
+
+            # Update Estado_Detalle with "Disponible - ARM X, SOLD Y" format
+            self._update_estado_detalle(
+                tag_spool=tag_spool,
+                ocupado_por=None,  # Clear occupation
+                arm_state=arm_machine.get_state_id(),
+                sold_state=sold_machine.get_state_id()
+            )
 
         logger.info(f"✅ StateService.pausar completed for {tag_spool}")
         return response
@@ -176,17 +194,43 @@ class StateService:
             LockExpiredError: If lock no longer exists
         """
         tag_spool = request.tag_spool
+        operacion = request.operacion
 
         logger.info(f"StateService.completar: {tag_spool} by {request.worker_nombre}")
 
         # Delegate to OccupationService
         response = await self.occupation_service.completar(request)
 
-        # Update state machines (to be implemented in Plan 03-03)
-        # TODO: Fetch spool state
-        # TODO: Hydrate state machines
-        # TODO: Trigger completar transition
-        # TODO: Update Estado_Detalle
+        # Fetch current spool state after OccupationService writes
+        spool = self.sheets_repo.get_spool_by_tag(tag_spool)
+        if not spool:
+            raise SpoolNoEncontradoError(tag_spool)
+
+        # Hydrate state machines
+        arm_machine = self._hydrate_arm_machine(spool)
+        sold_machine = self._hydrate_sold_machine(spool)
+
+        # Trigger completar transition based on operation
+        if operacion == ActionType.ARM:
+            arm_machine.completar(
+                worker_nombre=request.worker_nombre,
+                fecha_operacion=request.fecha_operacion
+            )
+            logger.info(f"ARM state machine transitioned to {arm_machine.get_state_id()}")
+        elif operacion == ActionType.SOLD:
+            sold_machine.completar(
+                worker_nombre=request.worker_nombre,
+                fecha_operacion=request.fecha_operacion
+            )
+            logger.info(f"SOLD state machine transitioned to {sold_machine.get_state_id()}")
+
+        # Update Estado_Detalle - now available since operation completed
+        self._update_estado_detalle(
+            tag_spool=tag_spool,
+            ocupado_por=None,  # Clear occupation after completion
+            arm_state=arm_machine.get_state_id(),
+            sold_state=sold_machine.get_state_id()
+        )
 
         logger.info(f"✅ StateService.completar completed for {tag_spool}")
         return response
@@ -262,3 +306,48 @@ class StateService:
             logger.debug(f"SOLD hydrated to PENDIENTE for {spool.tag_spool}")
 
         return machine
+
+    def _update_estado_detalle(
+        self,
+        tag_spool: str,
+        ocupado_por: Optional[str],
+        arm_state: str,
+        sold_state: str,
+        operacion_actual: Optional[str] = None
+    ):
+        """
+        Update Estado_Detalle column with formatted display string.
+
+        Args:
+            tag_spool: Spool identifier
+            ocupado_por: Worker name occupying spool (None if available)
+            arm_state: ARM state ID (pendiente/en_progreso/completado)
+            sold_state: SOLD state ID (pendiente/en_progreso/completado)
+            operacion_actual: Current operation being worked (ARM/SOLD)
+        """
+        # Build display string
+        estado_detalle = self.estado_builder.build(
+            ocupado_por=ocupado_por,
+            arm_state=arm_state,
+            sold_state=sold_state,
+            operacion_actual=operacion_actual
+        )
+
+        # Find row for this spool
+        row_num = self.sheets_repo.find_row_by_column_value(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            column_letter="G",  # TAG_SPOOL column
+            value=tag_spool
+        )
+
+        if row_num:
+            # Update Estado_Detalle column
+            self.sheets_repo.update_cell_by_column_name(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                row=row_num,
+                column_name="Estado_Detalle",
+                value=estado_detalle
+            )
+            logger.debug(f"Estado_Detalle updated for {tag_spool}: {estado_detalle}")
+        else:
+            logger.warning(f"Could not find row for {tag_spool} to update Estado_Detalle")
