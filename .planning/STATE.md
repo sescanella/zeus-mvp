@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 3 of 6 (State Machine & Collaboration) ✅ COMPLETE
-Plan: 4 of 4 (03-04-PLAN.md) ✓ History endpoint and collaboration tests complete
-Status: Phase 3 complete - State machines + collaboration + history timeline implemented
-Last activity: 2026-01-27 — Completed 03-04: Occupation history endpoint and integration tests
+Phase: 4 of 6 (Real-Time Visibility) 🔄 IN PROGRESS
+Plan: 1 of 3 (04-01-PLAN.md) ✓ SSE backend infrastructure complete
+Status: Phase 4 started - Real-time event streaming via SSE + Redis pub/sub
+Last activity: 2026-01-27 — Completed 04-01: SSE endpoint with Redis pub/sub broadcasting
 
-Progress: [██████████████] 100% Phase 3 - All 4 plans complete
+Progress: [█████████████████░] 33% Phase 4 - 1 of 3 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 23
+- Total plans completed: 24
 - Average duration: 4.2 minutes
-- Total execution time: 1.61 hours
+- Total execution time: 1.68 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [██████████████] 100% Phase 3 - All 4 plan
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
+| 04    | 1/3 🔄 | 4 min  | 4.0 min    |
 
 **Recent Trend:**
-- Last 3 plans: 03-02 (3 min), 03-03 (3.6 min), 03-04 (6 min)
-- Trend: Phase 3 complete with 4.0 min average (slightly slower than Phase 2, faster than Phase 1)
+- Last 3 plans: 03-03 (3.6 min), 03-04 (6 min), 04-01 (4 min)
+- Trend: Phase 4 started strong with 4 min (matching Phase 3 average)
 
 *Updated after each plan completion*
 
@@ -112,6 +113,11 @@ Recent decisions affecting current work:
 - **Phase 3 (03-04):** History shows ALL events chronologically - no filtering for simple complete view
 - Phase 3 (03-04): Duration calculation shows time between TOMAR and PAUSAR/COMPLETAR
 - Phase 3 (03-04): Integration tests use mocks to verify StateService orchestration patterns
+- **Phase 4 (04-01):** Channel name spools:updates for all spool state changes (centralized broadcast)
+- Phase 4 (04-01): Event types TOMAR, PAUSAR, COMPLETAR, STATE_CHANGE for different transition types
+- Phase 4 (04-01): 15-second keepalive ping with 30-second send timeout for connection management
+- Phase 4 (04-01): X-Accel-Buffering: no header prevents nginx/proxy buffering issues
+- Phase 4 (04-01): Best-effort event publishing (logs errors, returns bool) - doesn't block operations
 
 ### Pending Todos
 
@@ -155,40 +161,53 @@ None yet.
   - GET /api/history/{tag_spool} endpoint with timeline
   - HistoryService aggregates Metadata events into sessions
   - Integration tests verify multi-worker collaboration
-- **Status:** Phase 3 complete - Ready for Phase 4 (Metrología)
+- **Status:** Phase 3 complete
 
-**Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
+**Phase 4 (IN PROGRESS):** 🔄 Real-Time Visibility - 1 of 3 plans complete
+- ✅ Plan 04-01: SSE backend infrastructure (4 min)
+  - GET /api/sse/stream endpoint with Redis pub/sub
+  - RedisEventService publishes to spools:updates channel
+  - EventSourceResponse with anti-buffering headers
+  - 10 unit tests for event publisher
+  - Graceful degradation when Redis unavailable
+- 🔲 Plan 04-02: Frontend SSE client integration (pending)
+- 🔲 Plan 04-03: Event integration with state machines (pending)
+- **Status:** Phase 4 Wave 1 complete - Real-time push infrastructure ready
 
-**Phase 5 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
+**Phase 4 Next:** Integrate RedisEventService with state machine callbacks to broadcast TOMAR/PAUSAR/COMPLETAR events
+
+**Phase 5 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
+
+**Phase 6 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
 
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 03-04-PLAN.md (Occupation history and collaboration tests) ✅
+Stopped at: Completed 04-01-PLAN.md (SSE backend infrastructure) ✅
 Resume file: None
 
-**Phase 3 COMPLETE:**
-1. ✅ Plan 03-01 complete - State machine foundation with guards (3 min)
-2. ✅ Plan 03-02 complete - StateService orchestration (3 min)
-3. ✅ Plan 03-03 complete - State machine callbacks (3.6 min)
-4. ✅ Plan 03-04 complete - History endpoint and integration tests (6 min)
+**Phase 4 IN PROGRESS:**
+1. ✅ Plan 04-01 complete - SSE backend infrastructure (4 min)
 
-**Phase 3 Plan 03-04 complete!**
-- GET /api/history/{tag_spool} endpoint returns occupation timeline
-- HistoryService aggregates Metadata events into sessions with durations
-- Integration tests verify ARM handoff, dependency enforcement, sequential operations
-- 5 comprehensive collaboration tests covering multi-worker scenarios
+**Phase 4 Plan 04-01 complete!**
+- GET /api/sse/stream endpoint streams Redis events to clients
+- RedisEventService publishes state changes to spools:updates channel
+- EventSourceResponse with anti-buffering headers and timeouts
+- 10 unit tests for event publisher with 100% coverage
+- Graceful degradation when Redis unavailable (503 response)
 
 **Commits:**
-- cc808d2: feat(03-04): create occupation history endpoint and service
-- e0f4742: test(03-04): add collaboration integration tests
+- cb7660a: chore(04-01): add sse-starlette dependency
+- d6dad2a: feat(04-01): add Redis event publisher service
+- 59a830a: feat(04-01): implement SSE streaming endpoint
 
-**Phase 3 Complete - All Success Criteria Met:**
-- ✅ State machines coordinate with OccupationService (03-01, 03-02)
-- ✅ Column updates via callbacks on state transitions (03-03)
-- ✅ Estado_Detalle synchronized on TOMAR/PAUSAR/COMPLETAR (03-03)
-- ✅ Occupation history timeline shows worker sessions (03-04)
-- ✅ Integration tests verify multi-worker collaboration (03-04)
+**Phase 4 Plan 04-01 - All Success Criteria Met:**
+- ✅ SSE endpoint returns EventSource stream with ping keepalive
+- ✅ Redis pub/sub channel "spools:updates" created
+- ✅ EventSourceResponse streams events with proper headers
+- ✅ Connection cleanup on client disconnect
+- ✅ No buffering issues (X-Accel-Buffering header set)
 
 **Next steps:**
-- Phase 4: Metrología operation with instant COMPLETAR workflow
+- Plan 04-02: Frontend SSE client integration (EventSource, auto-reconnect)
+- Plan 04-03: Integrate RedisEventService with state machine callbacks
