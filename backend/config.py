@@ -39,6 +39,11 @@ class Config:
     # Cache configuration
     CACHE_TTL_SECONDS: int = int(os.getenv('CACHE_TTL_SECONDS', '300'))  # 5 minutos default
 
+    # Redis configuration (v3.0)
+    REDIS_URL: str = os.getenv('REDIS_URL', 'redis://localhost:6379')
+    REDIS_LOCK_TTL_SECONDS: int = int(os.getenv('REDIS_LOCK_TTL_SECONDS', '3600'))  # 1 hour default
+    REDIS_MAX_CONNECTIONS: int = int(os.getenv('REDIS_MAX_CONNECTIONS', '50'))
+
     # Environment
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'development')
 
