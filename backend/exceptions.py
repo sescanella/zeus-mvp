@@ -257,3 +257,67 @@ class SheetsRateLimitError(ZEUSException):
             error_code="SHEETS_RATE_LIMIT",
             data={"retry_after_seconds": 60}
         )
+
+
+# ==================== EXCEPCIONES 409 (CONFLICT) - CONCURRENCIA ====================
+
+class SpoolOccupiedError(ZEUSException):
+    """
+    Spool ya está ocupado por otro trabajador (v3.0).
+
+    Previene race conditions en operaciones TOMAR.
+    """
+
+    def __init__(self, tag_spool: str, owner_id: int, owner_name: str):
+        super().__init__(
+            message=(
+                f"El spool '{tag_spool}' ya está ocupado por {owner_name} "
+                f"(ID: {owner_id}). Espera a que termine o elige otro spool."
+            ),
+            error_code="SPOOL_OCCUPIED",
+            data={
+                "tag_spool": tag_spool,
+                "owner_id": owner_id,
+                "owner_name": owner_name
+            }
+        )
+
+
+class VersionConflictError(ZEUSException):
+    """
+    Conflicto de versión en operación concurrente (v3.0 optimistic locking).
+
+    Indica que el spool fue modificado por otro proceso entre read y write.
+    """
+
+    def __init__(self, expected: str, actual: str, message: str):
+        super().__init__(
+            message=(
+                f"Conflicto de versión: {message}. "
+                f"Esperado: {expected}, actual: {actual}. "
+                "El spool fue modificado por otro proceso. Intenta nuevamente."
+            ),
+            error_code="VERSION_CONFLICT",
+            data={
+                "expected_version": expected,
+                "actual_version": actual
+            }
+        )
+
+
+class LockExpiredError(ZEUSException):
+    """
+    Lock de Redis expiró durante la operación (v3.0).
+
+    Indica que la operación tardó más del TTL del lock.
+    """
+
+    def __init__(self, tag_spool: str):
+        super().__init__(
+            message=(
+                f"El lock del spool '{tag_spool}' expiró durante la operación. "
+                "La operación tardó demasiado. Intenta nuevamente."
+            ),
+            error_code="LOCK_EXPIRED",
+            data={"tag_spool": tag_spool}
+        )
