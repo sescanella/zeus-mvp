@@ -97,6 +97,10 @@ Recent decisions affecting current work:
 - **Phase 2 (02-06-GAP):** Non-blocking Redis startup - API starts even if Redis fails, enabling degraded mode
 - Phase 2 (02-06-GAP): Redis lifecycle integrated in FastAPI startup/shutdown events for proper connection management
 - Phase 2 (02-06-GAP): Redis health check endpoint (/api/redis-health) for monitoring connection status
+- **Phase 2 (Orchestrator):** Missing datetime imports in metadata_repository.py fixed - date/datetime required for type hints
+- Phase 2 (Orchestrator): SheetsRepository.get_spool_by_tag() implemented - missing method required by OccupationService
+- Phase 2 (Orchestrator): Dynamic column mapping with multi-format date parsing for robustness
+- Phase 2 (Orchestrator): Integration test validation requires test data - 404 responses confirm correct error handling
 
 ### Pending Todos
 
@@ -139,18 +143,24 @@ Resume file: None
 4. ✅ Plan 02-04 complete - Race condition test suite (integration + unit)
 5. ✅ Plan 02-05-GAP complete - Fix Redis repository get_client method
 6. ✅ Plan 02-06-GAP complete - Integrate Redis lifecycle in FastAPI startup/shutdown
+7. ✅ Orchestrator fixes complete - datetime imports + get_spool_by_tag implementation
 
 **Phase 2 complete!**
-- 6/6 plans executed successfully (4 main + 2 gaps)
+- 6/6 plans executed successfully (4 main + 2 gaps) + orchestrator fixes
 - Redis locking infrastructure deployed
 - Occupation operations implemented (TOMAR/PAUSAR/COMPLETAR)
-- Optimistic locking with version tokens
+- Optimistic locking with version tokens and retry logic
 - Comprehensive test suite (40+ tests)
 - Dependency injection chain fixed (get_client method)
 - Redis lifecycle management (startup/shutdown events)
 - Redis health monitoring endpoint (/api/redis-health)
+- Orchestrator corrections: datetime imports + get_spool_by_tag method
+
+**Commits:**
+- cfe244f: fix(02-05): add missing datetime imports in metadata_repository
+- fe6e810: fix(orchestrator): add missing get_spool_by_tag method to SheetsRepository
 
 **Next steps:**
-- Phase 3: State machine and operations workflow
-- Frontend integration (call occupation endpoints)
-- Monitoring and metrics dashboard
+- Phase 3: State machine and hierarchical states
+- Design state machine diagram (< 15 states)
+- Define collaboration rules for multi-worker workflows

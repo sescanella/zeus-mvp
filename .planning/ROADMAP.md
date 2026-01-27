@@ -48,13 +48,18 @@ Plans:
   3. Worker can COMPLETAR spool and it becomes DISPONIBLE with operation marked complete
   4. Two workers cannot TOMAR same spool simultaneously (race condition test with 10 parallel requests shows 1 success, 9 conflicts)
   5. Metadata logs TOMAR/PAUSAR/COMPLETAR events with worker_id, timestamp, operation type
-**Plans**: 4 plans
+**Plans**: 6 plans (4 initial + 2 gap closure)
 
 Plans:
-- [ ] 02-01-PLAN.md — Deploy Redis infrastructure and lock service
-- [ ] 02-02-PLAN.md — Implement OccupationService with TOMAR/PAUSAR/COMPLETAR
-- [ ] 02-03-PLAN.md — Add optimistic locking with version tokens
-- [ ] 02-04-PLAN.md — Race condition test suite (TDD)
+- [x] 02-01-PLAN.md — Deploy Redis infrastructure and lock service (3 min)
+- [x] 02-02-PLAN.md — Implement OccupationService with TOMAR/PAUSAR/COMPLETAR (5.5 min)
+- [x] 02-03-PLAN.md — Add optimistic locking with version tokens (4 min)
+- [x] 02-04-PLAN.md — Race condition test suite (TDD) (6 min)
+- [x] 02-05-GAP-PLAN.md — Fix Redis repository get_client method (1 min)
+- [x] 02-06-GAP-PLAN.md — Integrate Redis lifecycle in FastAPI startup/shutdown (2.6 min)
+
+**Status:** Complete (22.1 min total: 18.5 min infrastructure + 3.6 min gap closure)
+**Completed:** 2026-01-27
 
 ### Phase 3: State Machine & Collaboration
 **Goal**: System manages hierarchical spool states and enables multiple workers to collaborate on same spool sequentially
@@ -133,13 +138,13 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1: Migration Foundation | 9/9 ✓ | Complete | 2026-01-27 |
-| 2: Core Location Tracking | 0/4 | Ready | — |
-| 3: State Machine & Collaboration | 0/4 | Blocked (needs Phase 2) | — |
+| 2: Core Location Tracking | 6/6 ✓ | Complete | 2026-01-27 |
+| 3: State Machine & Collaboration | 0/4 | Ready | — |
 | 4: Real-Time Visibility | 0/4 | Blocked (needs Phase 3) | — |
 | 5: Metrología Workflow | 0/4 | Blocked (needs Phase 4) | — |
 | 6: Reparación Loops | 0/4 | Blocked (needs Phase 5) | — |
 
-**Overall:** 9/29 plans (31%)
+**Overall:** 15/35 plans (43%)
 
 ## Decision Log
 
