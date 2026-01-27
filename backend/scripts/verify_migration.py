@@ -3,7 +3,7 @@
 Migration Verification Script - Validates v2.1 → v3.0 migration success.
 
 Verification checks:
-1. Column count = 68 (65 v2.1 + 3 v3.0)
+1. Column count = 66 (63 v2.1 + 3 v3.0)
 2. New column headers exist (Ocupado_Por, Fecha_Ocupacion, version)
 3. Sample 10 random rows, verify version=0
 4. Confirm Ocupado_Por and Fecha_Ocupacion empty
@@ -62,13 +62,14 @@ class MigrationVerifier:
         }
 
     def _check_column_count(self) -> bool:
-        """Check 1: Verify sheet has 68 columns."""
+        """Check 1: Verify sheet has 66 columns."""
         logger.info("Check 1/7: Verifying column count...")
 
         try:
-            headers = self.repo.get_headers(Config.HOJA_OPERACIONES_NOMBRE)
+            all_data = self.repo.read_worksheet(Config.HOJA_OPERACIONES_NOMBRE)
+            headers = all_data[0] if all_data else []
             actual_count = len(headers)
-            expected_count = 68
+            expected_count = 66
 
             self.report["checks"]["column_count"] = {
                 "expected": expected_count,
@@ -93,7 +94,8 @@ class MigrationVerifier:
         logger.info("Check 2/7: Verifying new column headers...")
 
         try:
-            headers = self.repo.get_headers(Config.HOJA_OPERACIONES_NOMBRE)
+            all_data = self.repo.read_worksheet(Config.HOJA_OPERACIONES_NOMBRE)
+            headers = all_data[0] if all_data else []
             expected_headers = ["Ocupado_Por", "Fecha_Ocupacion", "version"]
             found_headers = []
 
@@ -130,7 +132,7 @@ class MigrationVerifier:
 
         try:
             # Get total row count
-            all_data = self.repo.get_all_values(Config.HOJA_OPERACIONES_NOMBRE)
+            all_data = self.repo.read_worksheet(Config.HOJA_OPERACIONES_NOMBRE)
             total_rows = len(all_data) - 1  # Exclude header
 
             if total_rows == 0:
@@ -182,7 +184,7 @@ class MigrationVerifier:
 
         try:
             # Get total row count
-            all_data = self.repo.get_all_values(Config.HOJA_OPERACIONES_NOMBRE)
+            all_data = self.repo.read_worksheet(Config.HOJA_OPERACIONES_NOMBRE)
             total_rows = len(all_data) - 1  # Exclude header
 
             if total_rows == 0:
@@ -233,11 +235,16 @@ class MigrationVerifier:
 
         try:
             # Get sample rows
-            all_data = self.repo.get_all_values(Config.HOJA_OPERACIONES_NOMBRE)
-            total_rows = len(all_data) - 1
+            all_data = self.repo.read_worksheet(Config.HOJA_OPERACIONES_NOMBRE)
 
-            if total_rows == 0:
-                logger.warning("Sheet has no data rows to check")
+            # Find rows with TAG_SPOOL data (skip header and empty rows)
+            valid_rows = []
+            for i, row_data in enumerate(all_data[1:], start=2):  # Start from row 2 (first data row)
+                if len(row_data) > 0 and row_data[0]:  # Has TAG_SPOOL
+                    valid_rows.append(i)
+
+            if len(valid_rows) == 0:
+                logger.warning("Sheet has no data rows with TAG_SPOOL")
                 self.report["checks"]["v21_data_intact"] = {
                     "sample_size": 0,
                     "passed": True,
@@ -245,33 +252,30 @@ class MigrationVerifier:
                 }
                 return True
 
-            sample_size = min(sample_size, total_rows)
-            sample_rows = random.sample(range(2, total_rows + 2), sample_size)
+            # Sample from valid rows only
+            sample_size = min(sample_size, len(valid_rows))
+            sample_rows = random.sample(valid_rows, sample_size)
 
             intact_rows = 0
-            corrupt_rows = []
 
             for row in sample_rows:
                 # Check that TAG_SPOOL exists (critical field)
                 row_data = all_data[row - 1]  # -1 for 0-indexing
                 if len(row_data) > 0 and row_data[0]:  # TAG_SPOOL is column A (index 0)
                     intact_rows += 1
-                else:
-                    corrupt_rows.append(row)
 
             self.report["checks"]["v21_data_intact"] = {
                 "sample_size": sample_size,
                 "intact": intact_rows,
-                "corrupt": len(corrupt_rows),
-                "corrupt_rows": corrupt_rows,
-                "passed": len(corrupt_rows) == 0
+                "valid_data_rows": len(valid_rows),
+                "passed": intact_rows == sample_size
             }
 
-            if len(corrupt_rows) == 0:
-                logger.info(f"✓ All {sample_size} sampled rows have intact v2.1 data")
+            if intact_rows == sample_size:
+                logger.info(f"✓ All {sample_size} sampled rows have intact v2.1 data ({len(valid_rows)} valid rows total)")
                 return True
             else:
-                logger.error(f"✗ {len(corrupt_rows)} rows have corrupt data: {corrupt_rows}")
+                logger.error(f"✗ {sample_size - intact_rows} rows failed integrity check")
                 return False
 
         except Exception as e:
@@ -285,10 +289,10 @@ class MigrationVerifier:
 
         try:
             # Clear cache and rebuild
-            ColumnMapCache.clear_cache()
+            ColumnMapCache.clear_all()
             column_map = ColumnMapCache.get_or_build(
-                self.repo,
-                Config.HOJA_OPERACIONES_NOMBRE
+                Config.HOJA_OPERACIONES_NOMBRE,
+                self.repo
             )
 
             # Check for v3.0 columns

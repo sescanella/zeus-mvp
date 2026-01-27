@@ -101,14 +101,14 @@ def test_version_increments():
 @pytest.mark.v3
 @pytest.mark.smoke
 def test_column_positions(mock_column_map_v3):
-    """Verify v3.0 columns are at positions 64, 65, 66 (0-indexed)."""
+    """Verify v3.0 columns are at positions 63, 64, 65 (0-indexed) for 66-column sheet."""
     # Use mock column map
     column_map = mock_column_map_v3
 
-    # Verify positions (0-indexed, so 64, 65, 66)
-    assert column_map["ocupadopor"] == 64, f"Expected ocupadopor at index 64, got {column_map['ocupadopor']}"
-    assert column_map["fechaocupacion"] == 65, f"Expected fechaocupacion at index 65, got {column_map['fechaocupacion']}"
-    assert column_map["version"] == 66, f"Expected version at index 66, got {column_map['version']}"
+    # Verify positions (0-indexed: 63, 64, 65 = 1-indexed: 64, 65, 66)
+    assert column_map["ocupadopor"] == 63, f"Expected ocupadopor at index 63, got {column_map['ocupadopor']}"
+    assert column_map["fechaocupacion"] == 64, f"Expected fechaocupacion at index 64, got {column_map['fechaocupacion']}"
+    assert column_map["version"] == 65, f"Expected version at index 65, got {column_map['version']}"
 
 
 @pytest.mark.v3
