@@ -738,6 +738,112 @@ class SheetsRepository:
 
         return new_version
 
+    def update_spool_occupation(
+        self,
+        tag_spool: str,
+        ocupado_por: Optional[str] = None,
+        fecha_ocupacion: Optional[str] = None,
+        estado: Optional[str] = None
+    ) -> None:
+        """
+        Update occupation fields for a spool (v3.0 convenience method).
+
+        Args:
+            tag_spool: TAG del spool a actualizar
+            ocupado_por: Worker nombre (INICIALES(ID)) o None para limpiar
+            fecha_ocupacion: Fecha (YYYY-MM-DD) o None para limpiar
+            estado: Estado de ocupación (optional, for PAUSAR marking)
+
+        Raises:
+            SpoolNoEncontradoError: If spool not found
+            SheetsUpdateError: If update fails
+        """
+        from backend.models.spool import Spool
+        from backend.exceptions import SpoolNoEncontradoError
+
+        # Find spool row
+        spool = self.get_spool_by_tag(tag_spool)
+        if not spool:
+            raise SpoolNoEncontradoError(tag_spool)
+
+        sheet_name = config.HOJA_OPERACIONES_NOMBRE
+
+        # Update occupation fields
+        if ocupado_por is not None:
+            self.set_ocupado_por(sheet_name, spool.fila_sheets, ocupado_por)
+
+        if fecha_ocupacion is not None:
+            self.set_fecha_ocupacion(sheet_name, spool.fila_sheets, fecha_ocupacion)
+
+        # Note: estado field will be added in future v3.0 schema enhancement
+        # For now, we skip it if provided
+        if estado:
+            self.logger.info(f"Estado '{estado}' provided but not yet supported in v3.0 schema")
+
+        self.logger.info(
+            f"Spool {tag_spool} occupation updated: ocupado_por={ocupado_por}, "
+            f"fecha={fecha_ocupacion}"
+        )
+
+    def update_spool_completion(
+        self,
+        tag_spool: str,
+        operacion: str,
+        fecha_operacion: str,
+        ocupado_por: Optional[str] = None,
+        fecha_ocupacion: Optional[str] = None
+    ) -> None:
+        """
+        Update completion fields for a spool (v3.0 convenience method).
+
+        Args:
+            tag_spool: TAG del spool a actualizar
+            operacion: ARM or SOLD
+            fecha_operacion: Fecha de completado (YYYY-MM-DD)
+            ocupado_por: Worker nombre to clear (typically None)
+            fecha_ocupacion: Fecha ocupacion to clear (typically None)
+
+        Raises:
+            SpoolNoEncontradoError: If spool not found
+            SheetsUpdateError: If update fails
+        """
+        from backend.models.spool import Spool
+        from backend.exceptions import SpoolNoEncontradoError
+
+        # Find spool row
+        spool = self.get_spool_by_tag(tag_spool)
+        if not spool:
+            raise SpoolNoEncontradoError(tag_spool)
+
+        sheet_name = config.HOJA_OPERACIONES_NOMBRE
+
+        # Update fecha column based on operation
+        if operacion == "ARM":
+            column_name = "Fecha_Armado"
+        elif operacion == "SOLD":
+            column_name = "Fecha_Soldadura"
+        else:
+            column_name = f"Fecha_{operacion}"  # Generic for future operations
+
+        self.update_cell_by_column_name(
+            sheet_name=sheet_name,
+            row=spool.fila_sheets,
+            column_name=column_name,
+            value=fecha_operacion
+        )
+
+        # Clear occupation fields
+        if ocupado_por is not None:
+            self.set_ocupado_por(sheet_name, spool.fila_sheets, ocupado_por)
+
+        if fecha_ocupacion is not None:
+            self.set_fecha_ocupacion(sheet_name, spool.fila_sheets, fecha_ocupacion)
+
+        self.logger.info(
+            f"Spool {tag_spool} {operacion} completed: fecha={fecha_operacion}, "
+            f"occupation cleared"
+        )
+
 
 if __name__ == "__main__":
     """Script de prueba para validar el repositorio."""

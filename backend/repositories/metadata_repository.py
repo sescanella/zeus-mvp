@@ -325,3 +325,66 @@ class MetadataRepository:
                 return event.worker_nombre
 
         return None
+
+    def log_event(
+        self,
+        evento_tipo: str,
+        tag_spool: str,
+        worker_id: int,
+        worker_nombre: str,
+        operacion: str,
+        accion: str,
+        fecha_operacion: Optional[date] = None,
+        metadata_json: Optional[str] = None
+    ) -> str:
+        """
+        Log an occupation event to Metadata sheet (v3.0 convenience method).
+
+        Args:
+            evento_tipo: Event type (e.g., "TOMAR_ARM", "PAUSAR_SOLD")
+            tag_spool: Spool TAG
+            worker_id: Worker ID
+            worker_nombre: Worker name (INICIALES(ID))
+            operacion: Operation (ARM/SOLD/METROLOGIA)
+            accion: Action (TOMAR/PAUSAR/COMPLETAR)
+            fecha_operacion: Date of operation (default: today)
+            metadata_json: Additional JSON metadata
+
+        Returns:
+            str: Event UUID
+
+        Raises:
+            SheetsConnectionError: If logging fails
+        """
+        import uuid
+        from datetime import datetime, date as date_class
+
+        # Generate event UUID
+        event_id = str(uuid.uuid4())
+
+        # Use today if fecha_operacion not provided
+        if fecha_operacion is None:
+            fecha_operacion = date_class.today()
+
+        # Create MetadataEvent
+        event = MetadataEvent(
+            id=event_id,
+            timestamp=datetime.now(),
+            evento_tipo=EventoTipo(evento_tipo),
+            tag_spool=tag_spool,
+            worker_id=worker_id,
+            worker_nombre=worker_nombre,
+            operacion=operacion,
+            accion=Accion(accion),
+            fecha_operacion=fecha_operacion,
+            metadata_json=metadata_json or "{}"
+        )
+
+        # Append to Metadata sheet
+        self.append_event(event)
+
+        self.logger.info(
+            f"Event logged: {evento_tipo} for {tag_spool} by worker {worker_id}"
+        )
+
+        return event_id
