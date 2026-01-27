@@ -1,12 +1,14 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getSpoolsParaIniciar, getSpoolsParaCompletar, getSpoolsParaCancelar } from '@/lib/api';
-import type { Spool } from '@/lib/types';
+import type { Spool, SSEEvent } from '@/lib/types';
+import { useSSE } from '@/lib/hooks/useSSE';
+import { ConnectionStatus } from '@/components/ConnectionStatus';
 
 function SeleccionarSpoolContent() {
   const router = useRouter();
@@ -17,21 +19,57 @@ function SeleccionarSpoolContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [spools, setSpools] = useState<Spool[]>([]);
+  const [raceConditionError, setRaceConditionError] = useState<string>('');
 
   // Local filter states
   const [searchNV, setSearchNV] = useState('');
   const [searchTag, setSearchTag] = useState('');
+  const [shouldRefresh, setShouldRefresh] = useState(0);
 
-  useEffect(() => {
-    if (!state.selectedWorker || !state.selectedOperation || !tipo) {
-      router.push('/');
-      return;
+  // SSE real-time updates
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+  const handleSSEMessage = useCallback((event: SSEEvent) => {
+    const { type, tag_spool, worker, estado_detalle } = event;
+
+    switch (type) {
+      case 'TOMAR':
+        // Another worker took this spool - remove from available list
+        setSpools(currentSpools => currentSpools.filter(s => s.tag_spool !== tag_spool));
+        break;
+
+      case 'PAUSAR':
+        // Spool released - refresh list to potentially add it back
+        setShouldRefresh(prev => prev + 1);
+        break;
+
+      case 'COMPLETAR':
+        // Operation completed - remove from available list
+        setSpools(currentSpools => currentSpools.filter(s => s.tag_spool !== tag_spool));
+        break;
+
+      case 'STATE_CHANGE':
+        // Update estado_detalle for context display
+        setSpools(currentSpools =>
+          currentSpools.map(s =>
+            s.tag_spool === tag_spool
+              ? { ...s, estado_detalle }
+              : s
+          )
+        );
+        break;
     }
-    fetchSpools();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchSpools = async () => {
+  const { isConnected } = useSSE(`${API_URL}/api/sse/stream`, {
+    onMessage: handleSSEMessage,
+    onError: (error) => {
+      console.error('SSE connection error:', error);
+    },
+    openWhenHidden: false  // Close connection when page backgrounded
+  });
+
+  const fetchSpools = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -84,7 +122,24 @@ function SeleccionarSpoolContent() {
 
       setLoading(false);
     }
-  };
+  }, [state, tipo]);
+
+  // Initial load
+  useEffect(() => {
+    if (!state.selectedWorker || !state.selectedOperation || !tipo) {
+      router.push('/');
+      return;
+    }
+    fetchSpools();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refresh when SSE triggers PAUSAR event
+  useEffect(() => {
+    if (shouldRefresh > 0) {
+      fetchSpools();
+    }
+  }, [shouldRefresh, fetchSpools]);
 
   // Filter spools locally (v2.1.2 - renamed variable to force rebuild)
   const spoolsFiltrados = spools.filter(s =>
@@ -166,6 +221,9 @@ function SeleccionarSpoolContent() {
         backgroundSize: '50px 50px'
       }}
     >
+      {/* Connection Status */}
+      <ConnectionStatus connected={isConnected} />
+
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -210,6 +268,26 @@ function SeleccionarSpoolContent() {
               className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
             >
               REINTENTAR
+            </button>
+          </div>
+        )}
+
+        {/* Race Condition Warning */}
+        {raceConditionError && !loading && (
+          <div className="border-4 border-zeues-orange p-8 mb-6 bg-zeues-orange/10">
+            <div className="flex items-center gap-4 mb-4">
+              <AlertCircle size={48} className="text-zeues-orange" strokeWidth={3} />
+              <h3 className="text-2xl font-black text-zeues-orange font-mono">AVISO</h3>
+            </div>
+            <p className="text-lg text-white font-mono mb-6">{raceConditionError}</p>
+            <button
+              onClick={() => {
+                setRaceConditionError('');
+                fetchSpools();
+              }}
+              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+            >
+              ACTUALIZAR LISTA
             </button>
           </div>
         )}
