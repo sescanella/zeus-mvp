@@ -57,7 +57,7 @@ decisions:
     alternatives: Manual validation in service layer (rejected - less declarative)
 
 metrics:
-  duration: 3 min
+  duration: 2.87 min
   completed: 2026-01-27
 ---
 
@@ -214,7 +214,7 @@ Has guard: True
 
 ## Performance
 
-- **Duration:** 3 minutes
+- **Duration:** 2.87 minutes (172 seconds)
 - **Tasks completed:** 3/3
 - **Files created:** 5
 - **Files modified:** 2
