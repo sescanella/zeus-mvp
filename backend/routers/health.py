@@ -6,6 +6,7 @@ con Google Sheets está operativa. Usado por Railway y monitoreo externo.
 
 Endpoints:
 - GET /api/health - Health check con test de conexión Sheets
+- GET /api/redis-health - Health check con test de conexión Redis
 """
 
 from fastapi import APIRouter, Depends, status
@@ -13,6 +14,7 @@ from datetime import datetime
 
 from backend.core.dependency import get_sheets_repository
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.repositories.redis_repository import RedisRepository
 from backend.config import config
 import logging
 
@@ -166,3 +168,94 @@ async def diagnostic_check(
         diagnostic_info["error_type"] = type(e).__name__
 
     return diagnostic_info
+
+
+@router.get("/redis-health", status_code=status.HTTP_200_OK)
+async def redis_health():
+    """
+    Redis health check endpoint for monitoring Redis connection status.
+
+    Checks:
+    - If Redis client is connected
+    - If Redis responds to PING command
+    - Redis server info (version, clients, memory, uptime)
+
+    Returns:
+        Dict with:
+        - status: "healthy" if connected and responding, "unhealthy" if not responding, "disconnected" if not connected
+        - message: Human-readable status description
+        - operational: Boolean indicating if Redis is operational
+        - redis_version: Redis server version (if connected)
+        - connected_clients: Number of connected clients (if connected)
+        - used_memory_human: Human-readable memory usage (if connected)
+        - uptime_in_seconds: Redis server uptime (if connected)
+
+    Example response (healthy):
+        ```json
+        {
+            "status": "healthy",
+            "message": "Redis connected and responding",
+            "operational": true,
+            "redis_version": "7.2.3",
+            "connected_clients": 5,
+            "used_memory_human": "1.2M",
+            "uptime_in_seconds": 86400
+        }
+        ```
+
+    Example response (disconnected):
+        ```json
+        {
+            "status": "disconnected",
+            "message": "Redis client not connected",
+            "operational": false
+        }
+        ```
+
+    Usage:
+        ```bash
+        curl http://localhost:8000/api/redis-health
+        ```
+    """
+    logger.info("Redis health check requested")
+
+    redis_repo = RedisRepository()
+
+    # Check if client is connected
+    if redis_repo.client is None:
+        logger.warning("Redis health check: client not connected")
+        return {
+            "status": "disconnected",
+            "message": "Redis client not connected",
+            "operational": False
+        }
+
+    # Perform health check with PING
+    health_result = await redis_repo.health_check()
+
+    if health_result["status"] == "healthy":
+        # Get Redis info stats
+        try:
+            info = await redis_repo.get_info()
+            logger.debug("Redis health check: healthy")
+            return {
+                "status": "healthy",
+                "message": "Redis connected and responding",
+                "operational": True,
+                **info  # Include version, connected_clients, used_memory_human, uptime_in_seconds
+            }
+        except Exception as e:
+            logger.warning(f"Redis health check: failed to get info - {e}")
+            return {
+                "status": "healthy",
+                "message": "Redis connected and responding (info unavailable)",
+                "operational": True
+            }
+    else:
+        # Unhealthy - not responding to PING
+        logger.warning(f"Redis health check: unhealthy - {health_result.get('error', 'unknown')}")
+        return {
+            "status": "unhealthy",
+            "message": f"Redis not responding: {health_result.get('error', 'unknown')}",
+            "operational": False
+        }
