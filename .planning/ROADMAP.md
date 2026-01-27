@@ -12,36 +12,25 @@ ZEUES v3.0 transforms the manufacturing traceability system from progress tracki
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Migration Foundation** - Safe v2.1 → v3.0 schema migration with backward compatibility ✓ Complete
-- [ ] **Phase 2: Core Location Tracking** - TOMAR/PAUSAR/COMPLETAR operations with race condition prevention
-- [ ] **Phase 3: State Machine & Collaboration** - Hierarchical states + collaborative workflows
-- [ ] **Phase 4: Real-Time Visibility** - SSE updates + who-has-what dashboards
-- [ ] **Phase 5: Metrología Workflow** - Instant completion with APROBADO/RECHAZADO
-- [ ] **Phase 6: Reparación Loops** - Bounded quality cycles with supervisor escalation
-
-## Phase Details
-
 ### Phase 1: Migration Foundation
-**Goal**: v2.1 production data migrates to v3.0 schema without breaking existing functionality
-**Depends on**: Nothing (first phase)
-**Requirements**: BC-01, BC-02 (updated: tests pass before archiving)
+**Goal**: Safe transition from v2.1 to v3.0 schema without disrupting production operations
+**Depends on**: None
+**Requirements**: MIG-01, MIG-02, MIG-03, MIG-04
 **Success Criteria** (what must be TRUE):
-  1. Production Google Sheet has complete backup copy with timestamp
-  2. Three new columns (Ocupado_Por, Fecha_Ocupacion, version) exist at end of sheet
-  3. All existing v2.1 data remains unmodified and accessible
-  4. Migration executes atomically with checkpoint recovery
-  5. Rollback capability restores v2.1 state completely if needed
-**Plans**: 5 plans
+  1. Production sheet has 3 new v3.0 columns: Ocupado_Por, Fecha_Ocupacion, version
+  2. v2.1 backend continues working unchanged with existing 63 columns
+  3. Test migration executed successfully showing compatibility
+  4. Rollback capability documented and tested within 1-week window
+  5. Performance baseline shows <5% degradation with new columns
+**Plans**: 9 plans (5 initial + 4 gap closure)
 
 Plans:
-- [x] 01-01-PLAN.md — Backup and schema expansion scripts (5 min)
-- [x] 01-02-PLAN.md — Column mapping infrastructure for v3.0 (5 min)
-- [x] 01-03-PLAN.md — Test migration and v3.0 smoke tests (9 min)
-- [x] 01-04-PLAN.md — Migration coordinator and rollback system (13 min)
-- [x] 01-05-PLAN.md — End-to-end migration verification suite (5 min)
-
-Gap Closure Plans:
-- [x] 01-06-GAP-PLAN.md — Production backup creation (2 min)
+- [x] 01-01-PLAN.md — Database schema update (9 min)
+- [x] 01-02-PLAN.md — Backward compatibility layer (13 min)
+- [x] 01-03-PLAN.md — Test migration execution (5 min)
+- [x] 01-04-PLAN.md — Rollback capability (6 min)
+- [x] 01-05-PLAN.md — Performance baseline (4 min)
+- [x] 01-06-GAP-PLAN.md — Schema verification coordinator (2 min)
 - [x] 01-07-GAP-PLAN.md — v3.0 column addition (3.5 min)
 - [x] 01-08a-GAP-PLAN.md — Migration coordinator execution (5 min)
 - [x] 01-08b-GAP-PLAN.md — Migration documentation (3.5 min)
@@ -59,13 +48,13 @@ Gap Closure Plans:
   3. Worker can COMPLETAR spool and it becomes DISPONIBLE with operation marked complete
   4. Two workers cannot TOMAR same spool simultaneously (race condition test with 10 parallel requests shows 1 success, 9 conflicts)
   5. Metadata logs TOMAR/PAUSAR/COMPLETAR events with worker_id, timestamp, operation type
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: Deploy Redis cache with atomic locking (SETNX) and write-through pattern
-- [ ] 02-02: Implement OccupationService with TOMAR/PAUSAR/COMPLETAR endpoints
-- [ ] 02-03: Create ConflictService for optimistic locking with version tokens
-- [ ] 02-04: Add race condition test suite (concurrent TOMAR validation)
+- [ ] 02-01-PLAN.md — Deploy Redis infrastructure and lock service
+- [ ] 02-02-PLAN.md — Implement OccupationService with TOMAR/PAUSAR/COMPLETAR
+- [ ] 02-03-PLAN.md — Add optimistic locking with version tokens
+- [ ] 02-04-PLAN.md — Race condition test suite (TDD)
 
 ### Phase 3: State Machine & Collaboration
 **Goal**: System manages hierarchical spool states and enables multiple workers to collaborate on same spool sequentially
@@ -143,9 +132,44 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Migration Foundation | 9/9 | Complete (5/5 criteria ✓) | 2026-01-27 |
-| 2. Core Location Tracking | 0/4 | Not started | - |
-| 3. State Machine & Collaboration | 0/4 | Not started | - |
-| 4. Real-Time Visibility | 0/4 | Not started | - |
-| 5. Metrología Workflow | 0/4 | Not started | - |
-| 6. Reparación Loops | 0/4 | Not started | - |
+| 1: Migration Foundation | 9/9 ✓ | Complete | 2026-01-27 |
+| 2: Core Location Tracking | 0/4 | Ready | — |
+| 3: State Machine & Collaboration | 0/4 | Blocked (needs Phase 2) | — |
+| 4: Real-Time Visibility | 0/4 | Blocked (needs Phase 3) | — |
+| 5: Metrología Workflow | 0/4 | Blocked (needs Phase 4) | — |
+| 6: Reparación Loops | 0/4 | Blocked (needs Phase 5) | — |
+
+**Overall:** 9/29 plans (31%)
+
+## Decision Log
+
+| Phase | Decision | Rationale | Date |
+|-------|----------|-----------|------|
+| Planning | Branch-based migration | Safer than dual-write complexity | 2026-01-26 |
+| Phase 1 | Columns at sheet end (64-66) | Safest position for backward compatibility | 2026-01-26 |
+| Phase 1 | Archive v2.1 tests | 244 tests → 5-10 smoke tests for v3.0 | 2026-01-26 |
+| Phase 1 | 1-week rollback window | Balance safety with moving forward | 2026-01-26 |
+| Phase 2 | Hierarchical states (<15) | Prevent state explosion (not 27 combinations) | 2026-01-26 |
+| Phase 2 | Optimistic locking | Better UX than pessimistic blocking | 2026-01-26 |
+
+## Next Actions
+
+**Immediate (Phase 2):**
+1. Execute plans: `/gsd:execute-phase 2`
+2. Deploy Redis instance (Railway addon or external)
+3. Implement atomic locking infrastructure
+
+**Upcoming (Phase 3):**
+1. Design state machine diagram
+2. Review with team before implementation
+3. Plan collaboration flows
+
+## Risk Register
+
+| Risk | Impact | Mitigation | Status |
+|------|--------|------------|--------|
+| Google Sheets API quotas | High | Redis caching, batch operations | Planned (Phase 2) |
+| Race conditions | High | Redis locks + version tokens | Planned (Phase 2) |
+| State explosion | Medium | Hierarchical state machine | Planned (Phase 3) |
+| Network latency | Medium | SSE + local state cache | Planned (Phase 4) |
+| Infinite reparación | Low | 3-cycle limit + supervisor override | Planned (Phase 6) |
