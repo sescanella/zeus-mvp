@@ -83,6 +83,11 @@ class Config:
             "name": "version",
             "type": "integer",
             "description": "Version token for optimistic locking (starts at 0)"
+        },
+        {
+            "name": "Estado_Detalle",
+            "type": "string",
+            "description": "Combined state display (occupation + operation progress)"
         }
     ]
 
