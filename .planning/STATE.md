@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 2 of 6 (Core Location Tracking) ✅ COMPLETE
-Plan: 5 of 5 (02-05-GAP-PLAN.md) ✓ All waves + gap closure complete
-Status: Phase 2 complete - Redis locking + testing + dependency injection
-Last activity: 2026-01-27 — Completed 02-05-GAP: Fix Redis repository get_client method
+Plan: 6 of 6 (02-06-GAP-PLAN.md) ✓ All waves + gap closure complete
+Status: Phase 2 complete - Redis locking + testing + lifecycle + monitoring
+Last activity: 2026-01-27 — Completed 02-06-GAP: Integrate Redis lifecycle in FastAPI startup/shutdown
 
-Progress: [███████████] 100% Phase 2 - All 4 waves + gap closure complete
+Progress: [███████████] 100% Phase 2 - All 4 waves + 2 gap closures complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 4.7 minutes
-- Total execution time: 1.16 hours
+- Total plans completed: 15
+- Average duration: 4.6 minutes
+- Total execution time: 1.19 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
-| 02    | 5/5 ✅  | 19.5 min  | 3.9 min    |
+| 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 
 **Recent Trend:**
-- Last 3 plans: 02-03 (4 min), 02-04 (6 min), 02-05-GAP (1 min)
-- Trend: Phase 2 complete - averaged 3.9 minutes per plan (32% faster than Phase 1), gap plan took only 1 minute
+- Last 3 plans: 02-04 (6 min), 02-05-GAP (1 min), 02-06-GAP (2.6 min)
+- Trend: Phase 2 complete - averaged 3.7 minutes per plan (35% faster than Phase 1), gap plans very fast (avg 1.8 min)
 
 *Updated after each plan completion*
 
@@ -94,6 +94,9 @@ Recent decisions affecting current work:
 - **Phase 2 (02-05-GAP):** get_client() method for dependency injection - repository owns client lifecycle
 - Phase 2 (02-05-GAP): Optional[Redis] return type handles pre-connection state safely
 - Phase 2 (02-05-GAP): Warning logs help debug startup timing issues
+- **Phase 2 (02-06-GAP):** Non-blocking Redis startup - API starts even if Redis fails, enabling degraded mode
+- Phase 2 (02-06-GAP): Redis lifecycle integrated in FastAPI startup/shutdown events for proper connection management
+- Phase 2 (02-06-GAP): Redis health check endpoint (/api/redis-health) for monitoring connection status
 
 ### Pending Todos
 
@@ -108,16 +111,15 @@ None yet.
 - ✅ Gap 3b CLOSED: Migration documentation complete (MIGRATION_COMPLETE.md, 01-VERIFICATION.md updated)
 - **Status:** Phase 1 complete
 
-**Phase 2 (COMPLETE):** ✅ Core Location Tracking - All 4 waves + gap closure complete
+**Phase 2 (COMPLETE):** ✅ Core Location Tracking - All 4 waves + 2 gap closures complete
 - ✅ Wave 1: Redis infrastructure deployed (02-01: 3 min)
 - ✅ Wave 2: OccupationService with TOMAR/PAUSAR/COMPLETAR (02-02: 5.5 min)
 - ✅ Wave 3: Optimistic locking with version tokens (02-03: 4 min)
 - ✅ Wave 4: Race condition test suite (02-04: 6 min)
 - ✅ Gap 5: Fix Redis repository get_client method (02-05-GAP: 1 min)
+- ✅ Gap 6: Integrate Redis lifecycle in FastAPI startup/shutdown (02-06-GAP: 2.6 min)
 - **Status:** Phase 2 complete - ready for Phase 3
 - **Deferred to future:**
-  - FastAPI startup/shutdown events for Redis connection lifecycle
-  - Redis health check endpoint for monitoring
   - Estado_Ocupacion column for paused state marking
 
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
@@ -127,7 +129,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 02-05-GAP-PLAN.md (Fix Redis repository get_client method) ✅
+Stopped at: Completed 02-06-GAP-PLAN.md (Integrate Redis lifecycle in FastAPI startup/shutdown) ✅
 Resume file: None
 
 **Phase 2 progress:**
@@ -136,14 +138,17 @@ Resume file: None
 3. ✅ Plan 02-03 complete - Optimistic locking with version tokens and retry
 4. ✅ Plan 02-04 complete - Race condition test suite (integration + unit)
 5. ✅ Plan 02-05-GAP complete - Fix Redis repository get_client method
+6. ✅ Plan 02-06-GAP complete - Integrate Redis lifecycle in FastAPI startup/shutdown
 
 **Phase 2 complete!**
-- 5/5 plans executed successfully (4 main + 1 gap)
+- 6/6 plans executed successfully (4 main + 2 gaps)
 - Redis locking infrastructure deployed
 - Occupation operations implemented (TOMAR/PAUSAR/COMPLETAR)
 - Optimistic locking with version tokens
 - Comprehensive test suite (40+ tests)
 - Dependency injection chain fixed (get_client method)
+- Redis lifecycle management (startup/shutdown events)
+- Redis health monitoring endpoint (/api/redis-health)
 
 **Next steps:**
 - Phase 3: State machine and operations workflow
