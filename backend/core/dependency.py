@@ -46,6 +46,7 @@ from backend.services.action_service import ActionService
 from backend.services.occupation_service import OccupationService
 from backend.services.state_service import StateService
 from backend.services.history_service import HistoryService
+from backend.services.redis_event_service import RedisEventService
 from backend.config import config
 
 
@@ -379,11 +380,40 @@ def get_conflict_service(
     return ConflictService(sheets_repository=sheets_repo)
 
 
+def get_redis_event_service(
+    redis_repo: RedisRepository = Depends(get_redis_repository)
+) -> RedisEventService:
+    """
+    Factory para RedisEventService (nueva instancia por request) - v3.0 PHASE 4.
+
+    v3.0 Phase 4: RedisEventService publishes real-time events for SSE streaming.
+
+    RedisEventService provides:
+    - Event publishing to Redis pub/sub channel "spools:updates"
+    - JSON message serialization with timestamps
+    - Best-effort event delivery (logs errors, doesn't block operations)
+
+    Args:
+        redis_repo: Repository for Redis pub/sub operations (injected).
+
+    Returns:
+        Nueva instancia de RedisEventService con Redis client.
+
+    Usage:
+        redis_event_service: RedisEventService = Depends(get_redis_event_service)
+
+    Note:
+        v3.0 Phase 4: Real-time event streaming infrastructure for dashboard.
+    """
+    return RedisEventService(redis_client=redis_repo.get_client())
+
+
 def get_occupation_service(
     redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
     metadata_repository: MetadataRepository = Depends(get_metadata_repository),
-    conflict_service: ConflictService = Depends(get_conflict_service)
+    conflict_service: ConflictService = Depends(get_conflict_service),
+    redis_event_service: RedisEventService = Depends(get_redis_event_service)
 ) -> OccupationService:
     """
     Factory para OccupationService (nueva instancia por request) - v3.0 CORE.
@@ -396,12 +426,14 @@ def get_occupation_service(
     - Version-aware updates with retry (ConflictService) - SECONDARY defense
     - Sheets writes to Ocupado_Por/Fecha_Ocupacion (SheetsRepository)
     - Audit logging to Metadata (MetadataRepository)
+    - Real-time event publishing (RedisEventService) - v3.0 Phase 4
 
     Args:
         redis_lock_service: Service for atomic lock operations (injected).
         sheets_repo: Repository for Sheets writes (injected).
         metadata_repository: Repository for audit logging (injected).
         conflict_service: Service for version conflict handling (injected).
+        redis_event_service: Service for real-time event publishing (injected).
 
     Returns:
         Nueva instancia de OccupationService con todas las dependencias.
@@ -413,12 +445,14 @@ def get_occupation_service(
         v3.0 Core: Two-layer defense against race conditions:
         1. Redis locks prevent concurrent TOMAR
         2. Version tokens prevent data corruption from concurrent sheet updates
+        v3.0 Phase 4: Real-time events broadcast all state changes
     """
     return OccupationService(
         redis_lock_service=redis_lock_service,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository,
-        conflict_service=conflict_service
+        conflict_service=conflict_service,
+        redis_event_service=redis_event_service
     )
 
 

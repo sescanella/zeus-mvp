@@ -28,6 +28,7 @@ from tenacity import (
 
 from backend.services.redis_lock_service import RedisLockService
 from backend.services.conflict_service import ConflictService
+from backend.services.redis_event_service import RedisEventService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.occupation import (
@@ -65,7 +66,8 @@ class OccupationService:
         redis_lock_service: RedisLockService,
         sheets_repository: SheetsRepository,
         metadata_repository: MetadataRepository,
-        conflict_service: ConflictService
+        conflict_service: ConflictService,
+        redis_event_service: RedisEventService
     ):
         """
         Initialize occupation service with injected dependencies.
@@ -75,11 +77,13 @@ class OccupationService:
             sheets_repository: Repository for Sheets writes
             metadata_repository: Repository for audit logging
             conflict_service: Service for version conflict handling and retry
+            redis_event_service: Service for publishing real-time events
         """
         self.redis_lock_service = redis_lock_service
         self.sheets_repository = sheets_repository
         self.metadata_repository = metadata_repository
         self.conflict_service = conflict_service
+        self.redis_event_service = redis_event_service
         logger.info("OccupationService initialized with Redis lock + optimistic locking")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
@@ -205,6 +209,22 @@ class OccupationService:
                 # Best effort - log but don't fail operation
                 logger.warning(f"⚠️ Metadata logging failed (non-critical): {e}")
 
+            # Step 4.5: Publish real-time event (best effort)
+            try:
+                # Estado_Detalle will be built by StateService, use simple format for now
+                estado_detalle = f"Ocupado por {worker_nombre} - {operacion}"
+                await self.redis_event_service.publish_spool_update(
+                    event_type="TOMAR",
+                    tag_spool=tag_spool,
+                    worker_nombre=worker_nombre,
+                    estado_detalle=estado_detalle,
+                    additional_data={"operacion": operacion}
+                )
+                logger.info(f"✅ Real-time event published: TOMAR for {tag_spool}")
+            except Exception as e:
+                # Best effort - log but don't fail operation
+                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
+
             # Step 5: Return success
             message = f"Spool {tag_spool} tomado por {worker_nombre}"
             logger.info(f"✅ TOMAR completed successfully: {message}")
@@ -328,6 +348,20 @@ class OccupationService:
             except Exception as e:
                 logger.error(f"Failed to release lock for {tag_spool}: {e}")
                 # Continue - Sheets already updated, lock will expire naturally
+
+            # Step 4.5: Publish real-time event (best effort)
+            try:
+                await self.redis_event_service.publish_spool_update(
+                    event_type="PAUSAR",
+                    tag_spool=tag_spool,
+                    worker_nombre=None,  # No longer occupied
+                    estado_detalle=estado_pausado,
+                    additional_data={"operacion": operacion}
+                )
+                logger.info(f"✅ Real-time event published: PAUSAR for {tag_spool}")
+            except Exception as e:
+                # Best effort - log but don't fail operation
+                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
             # Step 5: Log to Metadata (best effort)
             try:
@@ -481,6 +515,22 @@ class OccupationService:
             except Exception as e:
                 logger.error(f"Failed to release lock for {tag_spool}: {e}")
                 # Continue - Sheets already updated, lock will expire naturally
+
+            # Step 4.5: Publish real-time event (best effort)
+            try:
+                # Build estado_detalle based on operation completed
+                estado_detalle = f"{operacion} completado - Disponible"
+                await self.redis_event_service.publish_spool_update(
+                    event_type="COMPLETAR",
+                    tag_spool=tag_spool,
+                    worker_nombre=worker_nombre,
+                    estado_detalle=estado_detalle,
+                    additional_data={"operacion": operacion, "fecha_operacion": fecha_str}
+                )
+                logger.info(f"✅ Real-time event published: COMPLETAR for {tag_spool}")
+            except Exception as e:
+                # Best effort - log but don't fail operation
+                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
             # Step 5: Log to Metadata (best effort)
             try:
