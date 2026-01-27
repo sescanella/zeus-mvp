@@ -91,13 +91,13 @@ Plans:
   2. "Who has what" dashboard shows all occupied spools with owner names updated in real-time
   3. SSE connection stays alive for 8-hour worker shift with auto-reconnect on network drops
   4. 30 concurrent workers generate less than 80 Google Sheets API requests per minute
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: Implement SSE endpoint with sse-starlette and Redis pub/sub
-- [ ] 04-02: Build frontend EventSource integration with React hooks
-- [ ] 04-03: Create "who has what" dashboard component
-- [ ] 04-04: Load test with 30 concurrent users (verify API quota, response times)
+- [ ] 04-01-PLAN.md — SSE backend infrastructure with Redis pub/sub
+- [ ] 04-02-PLAN.md — Event publishing integration into existing services
+- [ ] 04-03-PLAN.md — Frontend real-time integration with React hooks
+- [ ] 04-04-PLAN.md — Dashboard and load testing
 
 ### Phase 5: Metrología Workflow
 **Goal**: Metrología inspection completes instantly with binary result without occupation period
