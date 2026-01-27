@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 2 of 6 (Core Location Tracking) ✅ COMPLETE
-Plan: 6 of 6 (02-06-GAP-PLAN.md) ✓ All waves + gap closure complete
-Status: Phase 2 complete - Redis locking + testing + lifecycle + monitoring
-Last activity: 2026-01-27 — Completed 02-06-GAP: Integrate Redis lifecycle in FastAPI startup/shutdown
+Phase: 3 of 6 (State Machine & Collaboration) 🚧 IN PROGRESS
+Plan: 1 of 4 (03-01-PLAN.md) ✓ State machine foundation complete
+Status: Estado_Detalle column added + ARM/SOLD state machines created
+Last activity: 2026-01-27 — Completed 03-01: State machine foundation with guards
 
-Progress: [███████████] 100% Phase 2 - All 4 waves + 2 gap closures complete
+Progress: [████████████░░] 67% Phase 3 - 1/4 plans complete (State machine foundation done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
-- Average duration: 4.6 minutes
-- Total execution time: 1.19 hours
+- Total plans completed: 16
+- Average duration: 4.5 minutes
+- Total execution time: 1.24 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [███████████] 100% Phase 2 - All 4 waves + 2 gap
 |-------|-------|-------|----------|
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
+| 03    | 1/4 🚧 | 3 min  | 3.0 min    |
 
 **Recent Trend:**
-- Last 3 plans: 02-04 (6 min), 02-05-GAP (1 min), 02-06-GAP (2.6 min)
-- Trend: Phase 2 complete - averaged 3.7 minutes per plan (35% faster than Phase 1), gap plans very fast (avg 1.8 min)
+- Last 3 plans: 02-05-GAP (1 min), 02-06-GAP (2.6 min), 03-01 (3 min)
+- Trend: Phase 3 starting strong - 3 min for foundation (faster than Phase 1/2 averages)
 
 *Updated after each plan completion*
 
@@ -101,6 +102,10 @@ Recent decisions affecting current work:
 - Phase 2 (Orchestrator): SheetsRepository.get_spool_by_tag() implemented - missing method required by OccupationService
 - Phase 2 (Orchestrator): Dynamic column mapping with multi-format date parsing for robustness
 - Phase 2 (Orchestrator): Integration test validation requires test data - 404 responses confirm correct error handling
+- **Phase 3 (03-01):** Estado_Detalle column added at position 67 for combined state display (occupation + operation progress)
+- Phase 3 (03-01): Separate state machines per operation (ARM/SOLD) prevents state explosion (9 states instead of 27+)
+- Phase 3 (03-01): Guard + validator pattern for dependencies - guards control transitions, validators provide error messages
+- Phase 3 (03-01): python-statemachine==2.5.0 chosen for declarative state management with async support
 
 ### Pending Todos
 
@@ -126,6 +131,15 @@ None yet.
 - **Deferred to future:**
   - Estado_Ocupacion column for paused state marking
 
+**Phase 3 (IN PROGRESS):** 🚧 State Machine & Collaboration - 1/4 plans complete
+- ✅ Plan 03-01: State machine foundation (3 min)
+  - Estado_Detalle column added at position 67
+  - ARM state machine created (3 states, 3 transitions)
+  - SOLD state machine with ARM dependency guard
+  - python-statemachine==2.5.0 integrated
+- **Next:** Plan 03-02 - Add state machine callbacks for column updates
+- **Status:** Foundation ready, no blockers
+
 **Phase 4 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
 **Phase 5 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
@@ -133,34 +147,25 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 02-06-GAP-PLAN.md (Integrate Redis lifecycle in FastAPI startup/shutdown) ✅
+Stopped at: Completed 03-01-PLAN.md (State machine foundation) ✅
 Resume file: None
 
-**Phase 2 progress:**
-1. ✅ Plan 02-01 complete - Redis infrastructure deployed
-2. ✅ Plan 02-02 complete - OccupationService with TOMAR/PAUSAR/COMPLETAR
-3. ✅ Plan 02-03 complete - Optimistic locking with version tokens and retry
-4. ✅ Plan 02-04 complete - Race condition test suite (integration + unit)
-5. ✅ Plan 02-05-GAP complete - Fix Redis repository get_client method
-6. ✅ Plan 02-06-GAP complete - Integrate Redis lifecycle in FastAPI startup/shutdown
-7. ✅ Orchestrator fixes complete - datetime imports + get_spool_by_tag implementation
+**Phase 3 progress:**
+1. ✅ Plan 03-01 complete - State machine foundation with guards (3 min)
 
-**Phase 2 complete!**
-- 6/6 plans executed successfully (4 main + 2 gaps) + orchestrator fixes
-- Redis locking infrastructure deployed
-- Occupation operations implemented (TOMAR/PAUSAR/COMPLETAR)
-- Optimistic locking with version tokens and retry logic
-- Comprehensive test suite (40+ tests)
-- Dependency injection chain fixed (get_client method)
-- Redis lifecycle management (startup/shutdown events)
-- Redis health monitoring endpoint (/api/redis-health)
-- Orchestrator corrections: datetime imports + get_spool_by_tag method
+**Phase 3 Plan 03-01 complete!**
+- Estado_Detalle column added at position 67 in production sheet
+- ARM state machine created with 3 states (pendiente/en_progreso/completado)
+- SOLD state machine created with ARM dependency guard
+- BaseOperationStateMachine shared foundation
+- python-statemachine==2.5.0 library integrated
+- Guard + validator pattern for dependencies
 
 **Commits:**
-- cfe244f: fix(02-05): add missing datetime imports in metadata_repository
-- fe6e810: fix(orchestrator): add missing get_spool_by_tag method to SheetsRepository
+- 89cd263: feat(03-01): add Estado_Detalle column to Operaciones sheet
+- ee60eb1: feat(03-01): create ARM and SOLD state machines with guards
 
 **Next steps:**
-- Phase 3: State machine and hierarchical states
-- Design state machine diagram (< 15 states)
-- Define collaboration rules for multi-worker workflows
+- Plan 03-02: Add state machine callbacks for column updates (on_enter_*, after_transition)
+- Plan 03-03: StateService orchestration with hydration logic
+- Plan 03-04: Estado_Detalle builder and update logic
