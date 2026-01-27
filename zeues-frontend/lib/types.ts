@@ -87,3 +87,28 @@ export interface BatchActionResponse {
   fallidos: number;
   resultados: SpoolActionResult[];
 }
+
+// ==========================================
+// REAL-TIME SSE (v3.0)
+// ==========================================
+
+/**
+ * Evento SSE de actualización de spool
+ */
+export interface SSEEvent {
+  type: 'TOMAR' | 'PAUSAR' | 'COMPLETAR' | 'STATE_CHANGE';
+  tag_spool: string;
+  worker: string | null;
+  estado_detalle: string | null;
+  timestamp: string;
+}
+
+/**
+ * Opciones para useSSE hook
+ */
+export interface UseSSEOptions {
+  onMessage: (event: SSEEvent) => void;
+  onError?: (error: Event) => void;
+  onConnectionChange?: (connected: boolean) => void;
+  openWhenHidden?: boolean;  // Default: false
+}
