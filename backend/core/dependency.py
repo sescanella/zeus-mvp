@@ -33,6 +33,7 @@ from fastapi import Depends
 
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
+from backend.repositories.redis_repository import RedisRepository
 from backend.services.sheets_service import SheetsService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.services.validation_service import ValidationService
@@ -49,6 +50,7 @@ from backend.config import config
 
 _sheets_repo_singleton: Optional[SheetsRepository] = None
 _sheets_service_singleton: Optional[SheetsService] = None
+_redis_repo_singleton: Optional[RedisRepository] = None
 
 
 # ============================================================================
@@ -80,6 +82,35 @@ def get_sheets_repository() -> SheetsRepository:
         _sheets_repo_singleton = SheetsRepository()
 
     return _sheets_repo_singleton
+
+
+def get_redis_repository() -> RedisRepository:
+    """
+    Factory para RedisRepository (singleton).
+
+    Retorna la misma instancia de RedisRepository en todos los requests.
+    Lazy initialization: se crea solo al primer uso.
+
+    Razón del singleton:
+    - Una sola connection pool compartida por toda la aplicación
+    - Evita crear múltiples conexiones a Redis innecesariamente
+    - Singleton pattern ya implementado en RedisRepository.__new__
+
+    Returns:
+        Instancia singleton de RedisRepository.
+
+    Usage:
+        redis_repo: RedisRepository = Depends(get_redis_repository)
+
+    Note:
+        Connection lifecycle gestionado en app startup/shutdown events.
+    """
+    global _redis_repo_singleton
+
+    if _redis_repo_singleton is None:
+        _redis_repo_singleton = RedisRepository()
+
+    return _redis_repo_singleton
 
 
 def get_sheets_service(
@@ -307,8 +338,9 @@ def reset_singletons() -> None:
             reset_singletons()
             # Ahora los singletons se recrearán en el próximo uso
     """
-    global _sheets_repo_singleton, _sheets_service_singleton, _validation_service_singleton
+    global _sheets_repo_singleton, _sheets_service_singleton, _validation_service_singleton, _redis_repo_singleton
 
     _sheets_repo_singleton = None
     _sheets_service_singleton = None
     _validation_service_singleton = None
+    _redis_repo_singleton = None
