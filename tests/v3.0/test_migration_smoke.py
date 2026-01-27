@@ -6,7 +6,7 @@ These tests verify that:
 2. v3.0 columns accept writes
 3. Version token increments correctly
 4. v2.1 columns still work after migration
-5. Sheet has 68 total columns (65 v2.1 + 3 v3.0)
+5. Sheet has 66 total columns (63 v2.1 + 3 v3.0)
 """
 import pytest
 from backend.repositories.sheets_repository import SheetsRepository
@@ -106,7 +106,7 @@ def test_v21_columns_still_readable():
 @pytest.mark.smoke
 @pytest.mark.migration
 def test_sheet_has_68_columns():
-    """Verify schema expansion: 65 v2.1 columns + 3 v3.0 columns = 68 total."""
+    """Verify schema expansion: 63 v2.1 columns + 3 v3.0 columns = 66 total."""
     # Initialize repository
     repo = SheetsRepository(compatibility_mode="v3.0")
 
@@ -119,13 +119,13 @@ def test_sheet_has_68_columns():
     # Count columns
     column_count = len(headers)
 
-    # Verify we have 68 columns (after migration)
-    # Note: Before migration, this will be 63 or 65. This test validates migration succeeded.
-    # If test fails with less than 68, migration hasn't been run yet.
-    if column_count < 68:
-        pytest.skip(f"Migration not yet run - sheet has {column_count} columns (expected 68 after migration)")
+    # Verify we have 66 columns (after migration)
+    # Note: Before migration, this was 63. This test validates migration succeeded.
+    # If test fails with less than 66, migration hasn't been run yet.
+    if column_count < 66:
+        pytest.skip(f"Migration not yet run - sheet has {column_count} columns (expected 66 after migration)")
 
-    assert column_count == 68, f"Expected 68 columns after migration, got {column_count}"
+    assert column_count == 66, f"Expected 66 columns after migration, got {column_count}"
 
     # Verify v3.0 columns exist in headers
     assert "Ocupado_Por" in headers, "Ocupado_Por column not found"
@@ -145,10 +145,10 @@ def test_column_map_includes_v3_columns(mock_column_map_v3):
     assert "fechaocupacion" in column_map, "fechaocupacion not in column map"
     assert "version" in column_map, "version not in column map"
 
-    # Verify indices are at end (positions 64, 65, 66 - 0-indexed)
-    assert column_map["ocupadopor"] == 64, "Ocupado_Por should be at position 64"
-    assert column_map["fechaocupacion"] == 65, "Fecha_Ocupacion should be at position 65"
-    assert column_map["version"] == 66, "version should be at position 66"
+    # Verify indices are at end (positions 63, 64, 65 - 0-indexed)
+    assert column_map["ocupadopor"] == 63, "Ocupado_Por should be at position 63"
+    assert column_map["fechaocupacion"] == 64, "Fecha_Ocupacion should be at position 64"
+    assert column_map["version"] == 65, "version should be at position 65"
 
 
 @pytest.mark.v3
