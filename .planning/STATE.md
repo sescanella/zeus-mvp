@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 4 of 6 (Real-Time Visibility) 🔄 IN PROGRESS
-Plan: 2 of 3 (04-02-PLAN.md) ✓ Event integration & dashboard endpoint complete
-Status: Phase 4 - Services publish events, dashboard provides initial state
-Last activity: 2026-01-27 — Completed 04-02: Event publishing in services + dashboard REST endpoint
+Plan: 3 of 4 (04-03-PLAN.md) ✓ Frontend SSE client complete
+Status: Phase 4 - Real-time updates working end-to-end (backend + frontend)
+Last activity: 2026-01-27 — Completed 04-03: Frontend SSE client with EventSource + mobile lifecycle
 
-Progress: [██████████████████████░] 67% Phase 4 - 2 of 3 plans complete
+Progress: [██████████████████████████] 75% Phase 4 - 3 of 4 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
-- Average duration: 4.0 minutes
-- Total execution time: 1.73 hours
+- Total plans completed: 26
+- Average duration: 3.9 minutes
+- Total execution time: 1.77 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [██████████████████████░
 | 01    | 9/9 ✅ | 51 min | 5.7 min    |
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
-| 04    | 2/3 🔄 | 7 min  | 3.5 min    |
+| 04    | 3/4 🔄 | 10 min | 3.3 min    |
 
 **Recent Trend:**
-- Last 3 plans: 03-04 (6 min), 04-01 (4 min), 04-02 (3 min)
-- Trend: Phase 4 accelerating - 3 min for event integration (faster than phase average)
+- Last 3 plans: 04-01 (4 min), 04-02 (3 min), 04-03 (3 min)
+- Trend: Phase 4 consistently fast - 3.3 min average (fastest phase so far!)
 
 *Updated after each plan completion*
 
@@ -123,6 +123,10 @@ Recent decisions affecting current work:
 - Phase 4 (04-02): Dashboard REST + SSE pattern: REST for initial load, SSE for incremental updates
 - Phase 4 (04-02): STATE_CHANGE events separate from occupation events (different semantic meaning)
 - Phase 4 (04-02): Estado_detalle built before event publishing for client-side consistency
+- **Phase 4 (04-03):** EventSource with exponential backoff (1s-30s) and max 10 retries
+- Phase 4 (04-03): Page Visibility API closes connection on background, reconnects on foreground
+- Phase 4 (04-03): Race condition handled with friendly Spanish error message
+- Phase 4 (04-03): PAUSAR events trigger full list refresh for simplicity
 
 ### Pending Todos
 
@@ -168,7 +172,7 @@ None yet.
   - Integration tests verify multi-worker collaboration
 - **Status:** Phase 3 complete
 
-**Phase 4 (IN PROGRESS):** 🔄 Real-Time Visibility - 2 of 3 plans complete
+**Phase 4 (IN PROGRESS):** 🔄 Real-Time Visibility - 3 of 4 plans complete
 - ✅ Plan 04-01: SSE backend infrastructure (4 min)
   - GET /api/sse/stream endpoint with Redis pub/sub
   - RedisEventService publishes to spools:updates channel
@@ -181,10 +185,15 @@ None yet.
   - GET /api/dashboard/occupied endpoint returns occupied spools
   - Best-effort event delivery (logs errors, doesn't block)
   - Dynamic column mapping for robust sheet reading
-- 🔲 Plan 04-03: Frontend SSE client integration (pending)
-- **Status:** Phase 4 backend complete - Ready for frontend integration
+- ✅ Plan 04-03: Frontend SSE client integration (3 min)
+  - useSSE hook with EventSource and exponential backoff
+  - Page Visibility API for mobile lifecycle management
+  - ConnectionStatus component (green/red indicator)
+  - Real-time spool selection with TOMAR/PAUSAR/COMPLETAR/STATE_CHANGE handling
+- 🔲 Plan 04-04: Dashboard UI + load testing (pending)
+- **Status:** Phase 4 real-time updates end-to-end complete - Ready for dashboard UI
 
-**Phase 4 Next:** Build frontend SSE client with EventSource, handle real-time events, update dashboard UI
+**Phase 4 Next:** Build dashboard UI page with occupied spools list and real-time updates, load testing with 30 concurrent users
 
 **Phase 5 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
 
@@ -193,31 +202,32 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 04-02-PLAN.md (Event integration & dashboard endpoint) ✅
+Stopped at: Completed 04-03-PLAN.md (Frontend SSE client integration) ✅
 Resume file: None
 
 **Phase 4 IN PROGRESS:**
 1. ✅ Plan 04-01 complete - SSE backend infrastructure (4 min)
 2. ✅ Plan 04-02 complete - Event integration & dashboard endpoint (3 min)
+3. ✅ Plan 04-03 complete - Frontend SSE client integration (3 min)
 
-**Phase 4 Plan 04-02 complete!**
-- OccupationService publishes TOMAR/PAUSAR/COMPLETAR events after successful operations
-- StateService publishes STATE_CHANGE events on state machine transitions
-- GET /api/dashboard/occupied endpoint returns current occupied spools
-- Best-effort event delivery (try/catch wrapper, logs errors)
-- All events include complete data (tag_spool, worker_nombre, estado_detalle)
+**Phase 4 Plan 04-03 complete!**
+- useSSE React hook with EventSource, exponential backoff, max 10 retries
+- Page Visibility API closes connection on background, reconnects on foreground
+- ConnectionStatus component (green/red dot + text, top-right)
+- Real-time spool selection updates for TOMAR/PAUSAR/COMPLETAR/STATE_CHANGE
+- Race condition handling with friendly Spanish error message
 
 **Commits:**
-- 7a904d9: feat(04-02): integrate event publishing in OccupationService
-- 1de7a03: feat(04-02): add STATE_CHANGE event publishing to StateService
-- 855e800: feat(04-02): create dashboard REST endpoint for occupied spools
+- bc9afd0: feat(04-03): create useSSE hook with EventSource and mobile lifecycle
+- 2b98099: feat(04-03): create ConnectionStatus component
+- 87ffc13: feat(04-03): integrate SSE real-time updates in spool selection
 
-**Phase 4 Plan 04-02 - All Success Criteria Met:**
-- ✅ OccupationService publishes events on TOMAR/PAUSAR/COMPLETAR
-- ✅ StateService publishes STATE_CHANGE on transitions
-- ✅ Dashboard endpoint returns occupied spools with estado_detalle
-- ✅ Events contain complete data (no additional Sheets fetches needed)
-- ✅ No performance impact (best-effort delivery, non-blocking)
+**Phase 4 Plans 04-01 + 04-02 + 04-03 - Real-time Updates End-to-End:**
+- ✅ Backend publishes events on all state changes
+- ✅ Frontend receives events via SSE with auto-reconnect
+- ✅ Connection status visible to users
+- ✅ Spool selection updates in real-time (< 10s latency)
+- ✅ Mobile-optimized lifecycle (background/foreground handling)
 
 **Next steps:**
-- Plan 04-03: Frontend SSE client with EventSource, auto-reconnect, UI updates
+- Plan 04-04: Dashboard UI page + load testing (30 concurrent users)
