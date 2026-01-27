@@ -61,7 +61,24 @@ class RedisLockService:
         Initialize lock service with Redis client.
 
         Args:
-            redis_client: Connected async Redis client
+            redis_client: Connected async Redis client (from RedisRepository.get_client())
+
+        Note:
+            The redis_client should be obtained via RedisRepository.get_client() method,
+            typically through FastAPI dependency injection. The client must be connected
+            (not None) for lock operations to work properly. Connection is established
+            during FastAPI startup event lifecycle.
+
+        Usage in FastAPI:
+            ```python
+            # In dependency.py
+            redis_repo = RedisRepository()
+            lock_service = RedisLockService(redis_client=redis_repo.get_client())
+            ```
+
+        Warning:
+            If redis_client is None (not connected), all lock operations will fail.
+            Ensure FastAPI startup event has completed before making lock requests.
         """
         self.redis = redis_client
         self.default_ttl = config.REDIS_LOCK_TTL_SECONDS
