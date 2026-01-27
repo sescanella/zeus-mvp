@@ -8,6 +8,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        // Narrow screens (small tablets/large phones like 601x962px)
+        'narrow': {'max': '640px'},
+      },
       colors: {
         // Paleta ZEUES Soft Brutalism v2.0
         zeues: {

@@ -108,15 +108,15 @@ ZEUES v3.0 transforms the manufacturing traceability system from progress tracki
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| **Branch-based migration over dual-write** | v2.1 stability critical. Branch isolation eliminates synchronization complexity. Build v3.0 in separate branch, one-time cutover when ready, 1-week rollback window. | ✓ Decided (Phase 1 planning) |
 | **Server-Sent Events (SSE) over WebSockets** | Unidirectional updates only (server → client), HTTP-based simplicity, native browser support, auto-reconnect, lower resource usage for manufacturing floor scale | — Pending (Phase 2 implementation) |
 | **Redis cache + Google Sheets** | Google Sheets API limits (60 writes/min) require caching layer. Redis provides sub-50ms reads + atomic operations (SETNX) for race condition prevention. Reduces API calls 80-90%. | — Pending (Phase 1 architecture decision) |
 | **python-statemachine 2.5.0** | Async-native state machine library with 100% test coverage, actively maintained (2025 updates), expressive API integrates with Pydantic validation, prevents state explosion with hierarchical design | — Pending (Phase 1 implementation) |
 | **Optimistic locking with version tokens** | Google Sheets doesn't support row-level locks. Low contention environment (10-20 workers on 2,000 spools = 0.5% collision rate) makes optimistic locking viable. Standard web pattern with 3x retry. | — Pending (Phase 1 conflict resolution) |
 | **5-second polling + SSE streaming** | Google Drive webhooks batch every 3 minutes (too slow). Polling gives predictable updates, well under Google Sheets API quotas (300 reads/100s/user = 180 req/min for 30 workers = ~6 req/sec shared). Combined with SSE for push notifications. | — Pending (Phase 2 real-time architecture) |
 | **Hierarchical state machine (9 states, not 27)** | v3.0 naive approach: 3 operations × 3 occupation states × 3 progress states = 27 states (unmaintainable). Hierarchical model: Primary state (DISPONIBLE/OCUPADO/PAUSADO/COMPLETADO) + sub-state (ARM_PENDIENTE/ARM_PARCIAL/ARM_COMPLETO, SOLD_PENDIENTE/etc) + context (worker_id) = 9 manageable states. | — Pending (Phase 1 state machine design) |
-| **Expand-Migrate-Contract pattern** | Breaking v2.1 production is unacceptable (244 tests, real users). Add v3.0 columns without removing v2.1 columns, dual-write to both schemas during 2-4 week migration, gradual cutover with rollback capability if v3.0 fails. | — Pending (Phase 0 migration strategy) |
 | **Bounded reparación cycles (max 3)** | Infinite metrología → reparación loops could trap spools forever. Industry best practice: 3 attempts before supervisor escalation. After 3 failures, likely requires root cause analysis (design flaw, not execution error). | — Pending (Phase 5 implementation) |
 | **Metrología instant completion (no TOMAR)** | Metrología inspection takes seconds (visual check, measurements), not hours like ARM/SOLD. Occupying spool for inspection creates false "unavailable" signal. Instant COMPLETAR with result (APROBADO/RECHAZADO) matches workflow reality. | — Pending (Phase 4 special case handling) |
 
 ---
-*Last updated: 2026-01-26 after initialization*
+*Last updated: 2026-01-26 after Phase 1 planning*

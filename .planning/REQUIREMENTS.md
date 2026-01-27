@@ -47,8 +47,7 @@ Requirements for v3.0 real-time location tracking system. Each maps to roadmap p
 ### Backward Compatibility
 
 - [ ] **BC-01**: v2.1 data migrates to v3.0 schema without loss
-- [ ] **BC-02**: 244 existing tests continue passing during migration
-- [ ] **BC-03**: Dual-write period (2-4 weeks) supports gradual cutover
+- [ ] **BC-02**: 244 v2.1 tests pass before archiving and are preserved as reference
 
 ## v2.1 Requirements (Validated)
 
@@ -111,7 +110,6 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | BC-01 | Phase 1 | Pending |
 | BC-02 | Phase 1 | Pending |
-| BC-03 | Phase 1 | Pending |
 | LOC-01 | Phase 2 | Pending |
 | LOC-02 | Phase 2 | Pending |
 | LOC-03 | Phase 2 | Pending |
@@ -136,8 +134,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REPAR-04 | Phase 6 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 25 total
-- Mapped to phases: 25/25 (100%)
+- v3.0 requirements: 24 total
+- Mapped to phases: 24/24 (100%)
 - Unmapped: 0
 
 ---

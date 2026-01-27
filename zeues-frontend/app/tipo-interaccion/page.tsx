@@ -57,14 +57,14 @@ export default function TipoInteraccionPage() {
       </div>
 
       {/* Header */}
-      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 narrow:px-5 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4 mb-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
-          <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
+          <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
             {operationLabel}
           </h2>
         </div>
-        <p className="text-xl text-center text-white/70 font-mono tracking-[0.15em]">
+        <p className="text-xl narrow:text-lg text-center text-white/70 font-mono tracking-[0.15em]">
           ¿QUÉ ACCIÓN REALIZARÁS?
         </p>
       </div>
@@ -76,7 +76,7 @@ export default function TipoInteraccionPage() {
           {/* Left accent bar */}
           <div className="absolute inset-y-0 left-0 w-2 bg-zeues-orange"></div>
 
-          <div className="pl-8 pr-6 py-4">
+          <div className="pl-8 pr-6 py-4 narrow:pl-4 narrow:pr-4 narrow:py-3">
             {/* Top row */}
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-black text-white/50 font-mono tracking-[0.2em]">
@@ -96,7 +96,7 @@ export default function TipoInteraccionPage() {
             {/* Bottom row */}
             <div className="flex items-center gap-6">
               <div className="px-4 py-2 bg-zeues-orange border-2 border-zeues-orange">
-                <span className="text-3xl font-black text-white font-mono">
+                <span className="text-3xl narrow:text-2xl font-black text-white font-mono">
                   #{state.selectedWorker.id}
                 </span>
               </div>
@@ -104,10 +104,10 @@ export default function TipoInteraccionPage() {
               <div className="h-12 w-1 bg-white/30"></div>
 
               <div className="flex-1">
-                <h3 className="text-3xl font-black text-white tracking-[0.15em] font-mono leading-tight">
+                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.15em] font-mono leading-tight">
                   {state.selectedWorker.nombre}
                 </h3>
-                <h3 className="text-3xl font-black text-white tracking-[0.15em] font-mono leading-tight">
+                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.15em] font-mono leading-tight">
                   {state.selectedWorker.apellido}
                 </h3>
               </div>
@@ -122,7 +122,7 @@ export default function TipoInteraccionPage() {
             <button
               onClick={() => handleSelectTipo('iniciar')}
               className="
-                h-40
+                h-40 narrow:h-32
                 bg-transparent
                 border-4 border-white
                 flex flex-col items-center justify-center gap-4
@@ -142,7 +142,7 @@ export default function TipoInteraccionPage() {
             <button
               onClick={() => handleSelectTipo('completar')}
               className="
-                h-40
+                h-40 narrow:h-32
                 bg-transparent
                 border-4 border-white
                 flex flex-col items-center justify-center gap-4
@@ -163,7 +163,7 @@ export default function TipoInteraccionPage() {
           <button
             onClick={() => handleSelectTipo('cancelar')}
             className="
-              w-full h-24
+              w-full h-24 narrow:h-20
               bg-transparent
               border-4 border-red-500
               flex items-center justify-center gap-4
@@ -174,7 +174,7 @@ export default function TipoInteraccionPage() {
             "
           >
             <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
-            <h3 className="text-3xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
+            <h3 className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
               CANCELAR ACCIÓN
             </h3>
           </button>
@@ -182,11 +182,11 @@ export default function TipoInteraccionPage() {
 
         {/* Fixed Navigation Footer */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
-          <div className="flex gap-4 tablet:gap-3">
+          <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
             <button
               onClick={() => router.back()}
               className="
-                flex-1 h-16
+                flex-1 narrow:w-full h-16
                 bg-transparent
                 border-4 border-white
                 flex items-center justify-center gap-3
@@ -196,7 +196,7 @@ export default function TipoInteraccionPage() {
               "
             >
               <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+              <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
                 VOLVER
               </span>
             </button>
@@ -204,7 +204,7 @@ export default function TipoInteraccionPage() {
             <button
               onClick={() => router.push('/')}
               className="
-                flex-1 h-16
+                flex-1 narrow:w-full h-16
                 bg-transparent
                 border-4 border-red-500
                 flex items-center justify-center gap-3
@@ -214,7 +214,7 @@ export default function TipoInteraccionPage() {
               "
             >
               <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-              <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+              <span className="text-xl narrow:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
                 INICIO
               </span>
             </button>

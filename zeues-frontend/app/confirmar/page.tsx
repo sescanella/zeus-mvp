@@ -171,10 +171,10 @@ function ConfirmarContent() {
       </div>
 
       {/* Header */}
-      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 narrow:px-5 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
-          <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
+          <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
             {operationLabel} - {actionLabel}
           </h2>
         </div>
@@ -225,15 +225,15 @@ function ConfirmarContent() {
             <>
               <div className="border-4 border-white mb-8 tablet:mb-6">
                 {/* Header con count */}
-                <div className="border-b-4 border-white bg-white/5 p-5 flex items-center justify-between">
+                <div className="border-b-4 border-white bg-white/5 p-5 narrow:p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <Package size={40} strokeWidth={3} className="text-white" />
-                    <h3 className="text-2xl font-black text-white font-mono tracking-[0.2em]">
+                    <h3 className="text-2xl narrow:text-xl font-black text-white font-mono tracking-[0.2em]">
                       {isBatchMode ? 'SPOOLS SELECCIONADOS' : 'SPOOL SELECCIONADO'}
                     </h3>
                   </div>
                   <div className="w-16 h-16 bg-white/10 border-4 border-white flex items-center justify-center">
-                    <span className="text-3xl font-black text-white font-mono">{spoolCount}</span>
+                    <span className="text-3xl narrow:text-2xl font-black text-white font-mono">{spoolCount}</span>
                   </div>
                 </div>
 
@@ -247,7 +247,7 @@ function ConfirmarContent() {
                       <div className="w-12 h-12 bg-white/10 border-2 border-white flex items-center justify-center">
                         <span className="text-xl font-black text-white font-mono">{index + 1}</span>
                       </div>
-                      <span className="text-2xl font-black text-white font-mono flex-1">{tag}</span>
+                      <span className="text-2xl narrow:text-xl font-black text-white font-mono flex-1">{tag}</span>
                       <CheckCircle size={28} strokeWidth={3} className="text-green-500" />
                     </div>
                   ))}
@@ -269,7 +269,7 @@ function ConfirmarContent() {
                 className="w-full h-24 mb-6 tablet:mb-4 bg-zeues-orange border-4 border-zeues-orange flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange/80 transition-all disabled:opacity-50 group"
               >
                 <CheckCircle size={48} strokeWidth={3} className="text-white" />
-                <span className="text-3xl font-black text-white font-mono tracking-[0.25em]">
+                <span className="text-3xl narrow:text-2xl font-black text-white font-mono tracking-[0.25em]">
                   CONFIRMAR {spoolCount} SPOOL{spoolCount !== 1 ? 'S' : ''}
                 </span>
               </button>
@@ -278,22 +278,22 @@ function ConfirmarContent() {
 
           {/* Fixed Navigation Footer */}
           <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
-            <div className="flex gap-4 tablet:gap-3">
+            <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
               <button
                 onClick={() => router.back()}
-                className="flex-1 h-16 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
+                className="flex-1 narrow:w-full h-16 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
               >
                 <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-                <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
                   VOLVER
                 </span>
               </button>
               <button
                 onClick={handleCancel}
-                className="flex-1 h-16 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
+                className="flex-1 narrow:w-full h-16 bg-transparent border-4 border-red-500 flex items-center justify-center gap-3 active:bg-red-500 active:border-red-500 transition-all group"
               >
                 <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-                <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                <span className="text-xl narrow:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
                   INICIO
                 </span>
               </button>

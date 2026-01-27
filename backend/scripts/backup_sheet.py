@@ -71,6 +71,9 @@ def create_backup(
     """
     Create complete copy of Google Sheet with timestamp.
 
+    Uses Sheets API only (not Drive API copy) to avoid permission issues.
+    Creates new spreadsheet and copies all worksheets with data.
+
     Args:
         client: Authenticated gspread client
         sheet_id: ID of sheet to backup
@@ -96,40 +99,78 @@ def create_backup(
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{spreadsheet.title}_v2.1_backup_{timestamp}"
 
+        worksheets = spreadsheet.worksheets()
+        logger.info(f"Source has {len(worksheets)} worksheets")
+
         if dry_run:
             logger.info(f"[DRY RUN] Would create backup: {backup_name}")
             if backup_folder_id:
                 logger.info(f"[DRY RUN] Would store in folder: {backup_folder_id}")
             else:
                 logger.info(f"[DRY RUN] Would store in root Drive")
-            logger.info(f"[DRY RUN] Source has {len(spreadsheet.worksheets())} worksheets")
+            logger.info(f"[DRY RUN] Would copy {len(worksheets)} worksheets")
+            for ws in worksheets:
+                logger.info(f"[DRY RUN]   - {ws.title} ({ws.row_count} rows x {ws.col_count} cols)")
             return None
 
-        # Create copy
-        logger.info(f"Creating backup: {backup_name}")
-        backup = client.copy(
-            file_id=sheet_id,
-            title=backup_name,
-            copy_comments=False,  # Skip comments for faster backup
-            copy_permissions=False  # Don't copy share settings
-        )
-
+        # Create new spreadsheet using Sheets API only
+        logger.info(f"Creating backup spreadsheet: {backup_name}")
+        backup = client.create(backup_name)
         backup_id = backup.id
+        logger.info(f"✅ Backup spreadsheet created: {backup_id}")
+
+        # Copy each worksheet
+        for idx, source_ws in enumerate(worksheets):
+            logger.info(f"Copying worksheet {idx+1}/{len(worksheets)}: {source_ws.title}")
+
+            # Get all data from source worksheet
+            all_data = source_ws.get_all_values()
+            row_count = len(all_data)
+            col_count = len(all_data[0]) if all_data else 0
+
+            logger.info(f"  Reading {row_count} rows x {col_count} cols")
+
+            # Create or use worksheet in backup
+            if idx == 0:
+                # First worksheet already exists (Sheet1)
+                backup_ws = backup.sheet1
+                backup_ws.update_title(source_ws.title)
+            else:
+                # Add new worksheet
+                backup_ws = backup.add_worksheet(
+                    title=source_ws.title,
+                    rows=max(row_count, 100),
+                    cols=max(col_count, 26)
+                )
+
+            # Ensure worksheet has enough rows/cols
+            if backup_ws.row_count < row_count:
+                backup_ws.add_rows(row_count - backup_ws.row_count)
+            if backup_ws.col_count < col_count:
+                backup_ws.add_cols(col_count - backup_ws.col_count)
+
+            # Write data to backup worksheet
+            if all_data:
+                logger.info(f"  Writing data to backup worksheet...")
+                backup_ws.update(
+                    range_name='A1',
+                    values=all_data,
+                    value_input_option='RAW'
+                )
+                logger.info(f"  ✅ {source_ws.title} copied successfully")
+            else:
+                logger.info(f"  ⚠️  {source_ws.title} is empty, skipping data copy")
+
         logger.info(f"✅ Backup created: {backup_name}")
         logger.info(f"   Backup ID: {backup_id}")
         logger.info(f"   URL: https://docs.google.com/spreadsheets/d/{backup_id}")
 
-        # Move to backup folder if specified
+        # Note: Moving to folder would require Drive API v3
         if backup_folder_id:
-            try:
-                # Note: gspread doesn't have direct move method
-                # This would require Drive API v3 integration
-                logger.warning(
-                    f"Moving to folder {backup_folder_id} requires Drive API v3. "
-                    "Backup created in root Drive folder."
-                )
-            except Exception as e:
-                logger.warning(f"Failed to move to folder: {e}. Backup remains in root.")
+            logger.warning(
+                f"Moving to folder {backup_folder_id} requires Drive API v3. "
+                "Backup created in root Drive folder."
+            )
 
         return backup_id
 

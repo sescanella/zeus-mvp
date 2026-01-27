@@ -63,22 +63,22 @@ export default function ExitoPage() {
       </div>
 
       {/* Content - Centered */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-20">
+      <div className="flex-1 flex flex-col items-center justify-center px-8 narrow:px-5 gap-20">
         {/* Check - Verde para éxito, Amarillo para cancelar */}
         {isSuccess ? (
-          <CheckCircle size={160} strokeWidth={3} className="text-green-500" />
+          <CheckCircle size={160} strokeWidth={3} className="text-green-500 narrow:w-[120px] narrow:h-[120px]" />
         ) : (
-          <AlertCircle size={160} strokeWidth={3} className="text-yellow-500" />
+          <AlertCircle size={160} strokeWidth={3} className="text-yellow-500 narrow:w-[120px] narrow:h-[120px]" />
         )}
 
         {/* Mensaje */}
-        <h1 className="text-5xl sm:text-6xl md:text-7xl font-black text-white font-mono tracking-[0.3em] text-center">
+        <h1 className="text-5xl narrow:text-4xl sm:text-6xl md:text-7xl font-black text-white font-mono tracking-[0.3em] text-center">
           {mensaje}
         </h1>
 
         {/* Countdown con "SEGUNDOS" */}
         <div className="text-center">
-          <div className="text-6xl sm:text-7xl md:text-8xl font-black text-zeues-orange font-mono">{countdown}</div>
+          <div className="text-6xl narrow:text-5xl sm:text-7xl md:text-8xl font-black text-zeues-orange font-mono">{countdown}</div>
           <div className="text-xl sm:text-2xl font-black text-white/50 font-mono mt-4">SEGUNDOS</div>
         </div>
 
@@ -87,7 +87,7 @@ export default function ExitoPage() {
           onClick={handleFinish}
           className="w-full max-w-2xl h-24 border-4 border-white flex items-center justify-center active:bg-white active:text-[#001F3F] group"
         >
-          <span className="text-3xl font-black text-white font-mono group-active:text-[#001F3F]">
+          <span className="text-3xl narrow:text-2xl font-black text-white font-mono group-active:text-[#001F3F]">
             CONTINUAR
           </span>
         </button>

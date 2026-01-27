@@ -102,14 +102,14 @@ export default function TrabajadorSelectionPage() {
       </div>
 
       {/* Header con operación */}
-      <div className="px-10 tablet:px-6 py-6 tablet:py-4 border-b-4 border-white/30">
+      <div className="px-10 tablet:px-6 narrow:px-5 py-6 tablet:py-4 border-b-4 border-white/30">
         <div className="flex items-center justify-center gap-4 mb-4">
           <IconComponent size={48} strokeWidth={3} className="text-zeues-orange" />
-          <h2 className="text-3xl font-black text-white tracking-[0.25em] font-mono">
+          <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
             {operationNames[state.selectedOperation]}
           </h2>
         </div>
-        <p className="text-xl text-center text-white/70 font-mono tracking-[0.15em]">
+        <p className="text-xl narrow:text-lg text-center text-white/70 font-mono tracking-[0.15em]">
           {pageTitle.toUpperCase()}
         </p>
       </div>
@@ -158,7 +158,7 @@ export default function TrabajadorSelectionPage() {
                       h-24
                       bg-transparent
                       border-4 border-white
-                      flex items-center justify-between px-8
+                      flex items-center justify-between px-8 narrow:px-4
                       cursor-pointer
                       active:bg-zeues-orange active:border-zeues-orange
                       transition-all duration-200
@@ -175,7 +175,7 @@ export default function TrabajadorSelectionPage() {
                         <span className="text-xs font-black text-white/50 font-mono group-active:text-white/80">
                           ID
                         </span>
-                        <span className="text-3xl font-black text-white font-mono group-active:text-white">
+                        <span className="text-3xl narrow:text-2xl font-black text-white font-mono group-active:text-white">
                           {worker.id}
                         </span>
                       </div>
@@ -183,10 +183,10 @@ export default function TrabajadorSelectionPage() {
                       <div className="h-16 w-1 bg-white/30 group-active:bg-white"></div>
 
                       <div className="text-left">
-                        <h3 className="text-3xl font-black text-white tracking-[0.15em] font-mono group-active:text-white leading-tight">
+                        <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.15em] font-mono group-active:text-white leading-tight">
                           {worker.nombre}
                         </h3>
-                        <h3 className="text-3xl font-black text-white tracking-[0.15em] font-mono group-active:text-white leading-tight">
+                        <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.15em] font-mono group-active:text-white leading-tight">
                           {worker.apellido}
                         </h3>
                       </div>
@@ -209,11 +209,11 @@ export default function TrabajadorSelectionPage() {
 
             {/* Fixed Navigation Footer */}
             <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
-              <div className="flex gap-4 tablet:gap-3">
+              <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
                 <button
                   onClick={() => router.back()}
                   className="
-                    flex-1 h-16
+                    flex-1 narrow:w-full h-16
                     bg-transparent
                     border-4 border-white
                     flex items-center justify-center gap-3
@@ -223,7 +223,7 @@ export default function TrabajadorSelectionPage() {
                   "
                 >
                   <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-                  <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                  <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
                     VOLVER
                   </span>
                 </button>
@@ -231,7 +231,7 @@ export default function TrabajadorSelectionPage() {
                 <button
                   onClick={() => router.push('/')}
                   className="
-                    flex-1 h-16
+                    flex-1 narrow:w-full h-16
                     bg-transparent
                     border-4 border-red-500
                     flex items-center justify-center gap-3
@@ -241,7 +241,7 @@ export default function TrabajadorSelectionPage() {
                   "
                 >
                   <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-                  <span className="text-xl font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
+                  <span className="text-xl narrow:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
                     CANCELAR
                   </span>
                 </button>

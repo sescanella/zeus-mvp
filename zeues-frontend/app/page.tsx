@@ -100,18 +100,18 @@ export default function OperacionSelectionPage() {
         />
       </div>
 
-      <div className="px-10 py-6 border-b-4 border-white/30">
-        <h2 className="text-3xl font-black text-center text-white tracking-[0.25em] font-mono">
+      <div className="px-10 narrow:px-5 py-6 border-b-4 border-white/30">
+        <h2 className="text-3xl narrow:text-2xl font-black text-center text-white tracking-[0.25em] font-mono">
           SELECCIONA OPERACIÓN
         </h2>
       </div>
 
-      <div className="flex flex-col p-8 gap-6">
+      <div className="flex flex-col p-8 narrow:p-5 gap-6">
         {/* Card Armado */}
         <button
           onClick={() => handleSelectOperation('ARM')}
           className="
-            h-[20vh] w-full
+            h-[20vh] narrow:h-32 w-full
             bg-transparent
             border-4 border-white
             flex flex-col items-center justify-center gap-4 cursor-pointer
@@ -122,7 +122,7 @@ export default function OperacionSelectionPage() {
           "
         >
           <Puzzle size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
             ARMADO
           </h3>
         </button>
@@ -131,7 +131,7 @@ export default function OperacionSelectionPage() {
         <button
           onClick={() => handleSelectOperation('SOLD')}
           className="
-            h-[20vh] w-full
+            h-[20vh] narrow:h-32 w-full
             bg-transparent
             border-4 border-white
             flex flex-col items-center justify-center gap-4 cursor-pointer
@@ -142,7 +142,7 @@ export default function OperacionSelectionPage() {
           "
         >
           <Flame size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
             SOLDADURA
           </h3>
         </button>
@@ -151,7 +151,7 @@ export default function OperacionSelectionPage() {
         <button
           onClick={() => handleSelectOperation('METROLOGIA')}
           className="
-            h-[20vh] w-full
+            h-[20vh] narrow:h-32 w-full
             bg-transparent
             border-4 border-white
             flex flex-col items-center justify-center gap-4 cursor-pointer
@@ -162,7 +162,7 @@ export default function OperacionSelectionPage() {
           "
         >
           <SearchCheck size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
             METROLOGÍA
           </h3>
         </button>
