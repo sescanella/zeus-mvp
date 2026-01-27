@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck } from 'lucide-react';
+import Link from 'next/link';
+import { Puzzle, Flame, SearchCheck, Monitor } from 'lucide-react';
 import { Loading, ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
 import { getWorkers } from '@/lib/api';
@@ -89,8 +90,8 @@ export default function OperacionSelectionPage() {
         backgroundSize: '50px 50px'
       }}
     >
-      {/* Logo 200px */}
-      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+      {/* Logo 200px + Dashboard Link */}
+      <div className="relative flex justify-center pt-8 pb-6 border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
@@ -98,6 +99,17 @@ export default function OperacionSelectionPage() {
           height={80}
           priority
         />
+
+        {/* Dashboard Link - Top Right */}
+        <Link
+          href="/dashboard"
+          className="absolute right-8 top-8 flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group"
+        >
+          <Monitor size={24} strokeWidth={3} className="text-white group-active:text-white" />
+          <span className="text-sm font-black font-mono text-white tracking-wider group-active:text-white">
+            DASHBOARD
+          </span>
+        </Link>
       </div>
 
       <div className="px-10 narrow:px-5 py-6 border-b-4 border-white/30">
