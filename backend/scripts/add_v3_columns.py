@@ -110,6 +110,7 @@ def add_columns(
         # Calculate new column positions
         v3_names = [col["name"] for col in V3_COLUMNS]
         new_positions = list(range(current_count + 1, current_count + len(v3_names) + 1))
+        new_total_columns = current_count + len(v3_names)
 
         logger.info(f"Current columns: {current_count}")
         logger.info(f"New columns to add: {len(v3_names)}")
@@ -123,6 +124,13 @@ def add_columns(
         # Get worksheet for batch update
         spreadsheet = repo._get_spreadsheet()
         worksheet = spreadsheet.worksheet(sheet_name)
+
+        # First, expand the sheet's column count if needed
+        current_col_count = worksheet.col_count
+        if current_col_count < new_total_columns:
+            logger.info(f"Expanding sheet from {current_col_count} to {new_total_columns} columns...")
+            worksheet.resize(rows=worksheet.row_count, cols=new_total_columns)
+            logger.info(f"✅ Sheet expanded to {new_total_columns} columns")
 
         # Prepare batch update for headers
         # Add new column headers to row 1
