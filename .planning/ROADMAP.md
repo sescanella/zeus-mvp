@@ -111,13 +111,13 @@ Plans:
   2. Metrólogo can COMPLETAR metrología with RECHAZADO result and spool estado shows "Pendiente reparación"
   3. Metrología workflow skips TOMAR step (instant completion, no occupation)
   4. System blocks metrología attempt if ARM or SOLD not both COMPLETADO (prerequisite validation)
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 05-01: Design Metrología state machine (separate from ARM/SOLD occupation flow)
-- [ ] 05-02: Implement instant COMPLETAR endpoint with resultado (APROBADO/RECHAZADO)
-- [ ] 05-03: Add prerequisite validation (ARM + SOLD must be COMPLETADO)
-- [ ] 05-04: Create frontend Metrología flow (skip spool selection, direct completion)
+- [ ] 05-01-PLAN.md — Metrología state machine and service layer
+- [ ] 05-02-PLAN.md — REST endpoint and Estado_Detalle display
+- [ ] 05-03-PLAN.md — Frontend binary resultado flow
+- [ ] 05-04-PLAN.md — SSE integration and test suite
 
 ### Phase 6: Reparación Loops
 **Goal**: Rejected spools can be repaired and re-inspected with bounded cycles preventing infinite loops
@@ -147,7 +147,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2: Core Location Tracking | 6/6 ✓ | Complete | 2026-01-27 |
 | 3: State Machine & Collaboration | 4/4 ✓ | Complete | 2026-01-27 |
 | 4: Real-Time Visibility | 4/4 ✓ | Complete | 2026-01-27 |
-| 5: Metrología Workflow | 0/4 | Blocked (needs Phase 4) | — |
+| 5: Metrología Workflow | 0/4 | Ready for execution | — |
 | 6: Reparación Loops | 0/4 | Blocked (needs Phase 5) | — |
 
 **Overall:** 23/35 plans (66%)
@@ -165,22 +165,22 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 ## Next Actions
 
-**Immediate (Phase 2):**
-1. Execute plans: `/gsd:execute-phase 2`
-2. Deploy Redis instance (Railway addon or external)
-3. Implement atomic locking infrastructure
+**Immediate (Phase 5):**
+1. Execute plans: `/gsd:execute-phase 5`
+2. Implement 3-state machine (PENDIENTE → APROBADO/RECHAZADO)
+3. Create instant completion endpoint
 
-**Upcoming (Phase 3):**
-1. Design state machine diagram
-2. Review with team before implementation
-3. Plan collaboration flows
+**Upcoming (Phase 6):**
+1. Design reparación state transitions
+2. Plan cycle counting mechanism
+3. Define supervisor override flow
 
 ## Risk Register
 
 | Risk | Impact | Mitigation | Status |
 |------|--------|------------|--------|
-| Google Sheets API quotas | High | Redis caching, batch operations | Planned (Phase 2) |
-| Race conditions | High | Redis locks + version tokens | Planned (Phase 2) |
-| State explosion | Medium | Hierarchical state machine | Planned (Phase 3) |
-| Network latency | Medium | SSE + local state cache | Planned (Phase 4) |
+| Google Sheets API quotas | High | Redis caching, batch operations | Mitigated (Phase 2-4) |
+| Race conditions | High | Redis locks + version tokens | Mitigated (Phase 2) |
+| State explosion | Medium | Hierarchical state machine | Mitigated (Phase 3) |
+| Network latency | Medium | SSE + local state cache | Mitigated (Phase 4) |
 | Infinite reparación | Low | 3-cycle limit + supervisor override | Planned (Phase 6) |
