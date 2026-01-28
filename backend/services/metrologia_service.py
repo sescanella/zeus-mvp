@@ -154,15 +154,13 @@ class MetrologiaService:
 
         # Step 5: Build estado_detalle for SSE event
         from backend.services.estado_detalle_builder import EstadoDetalleBuilder
-        builder = EstadoDetalleBuilder(
-            armador=spool.armador,
-            soldador=spool.soldador,
-            fecha_armado=spool.fecha_armado,
-            fecha_soldadura=spool.fecha_soldadura,
+        builder = EstadoDetalleBuilder()
+        estado_detalle = builder.build(
             ocupado_por=spool.ocupado_por,
+            arm_state="completado",  # ARM always complete for metrología
+            sold_state="completado",  # SOLD always complete for metrología
             metrologia_state=metrologia_machine.get_state_id()
         )
-        estado_detalle = builder.build()
 
         # Step 6: Publish SSE event for dashboard (best-effort)
         try:
