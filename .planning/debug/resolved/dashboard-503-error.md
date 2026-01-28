@@ -1,72 +1,92 @@
 ---
 status: resolved
-trigger: "dashboard-503-error - Dashboard button on operations screen returns Error 503 (Service Unavailable)"
+trigger: "dashboard-503-error - Error 503 when accessing /dashboard page - SSE connection rapidly toggling true/false"
 created: 2026-01-28T00:00:00Z
-updated: 2026-01-28T00:06:00Z
+updated: 2026-01-28T00:20:00Z
 ---
 
 ## Current Focus
 
-hypothesis: CONFIRMED - Dashboard router bypasses SheetsRepository compatibility mode safety and directly calls headers.index() which fails when v3.0 columns don't exist
-test: Verify fix by adding compatibility check or try/except to handle missing columns gracefully
-expecting: Fix will either check for column existence or return empty list when columns missing
-next_action: Implement fix in dashboard_router.py to handle missing v3.0 columns
+hypothesis: CONFIRMED - dashboard_router.py calls worksheet.get_all_values() on list object instead of gspread Worksheet
+test: Fix dashboard_router.py to use the list returned by read_worksheet directly (no get_all_values call)
+expecting: Dashboard will load occupied spools without 503 error
+next_action: Fix dashboard_router.py line 73-76 to remove get_all_values() call
 
 ## Symptoms
 
-expected: Dashboard should display occupied spools in real-time (spools currently being worked on - ARM/SOLD in progress)
-actual: Dashboard page shows "Error 503:" message. Console shows multiple GET requests to https://zeues-backend-mvp-production.up.railway.app/api/dashboard/occupied returning "Service Unavailable" errors. SSE (Server-Sent Events) connection status toggling between true/false.
-errors: HTTP 503 Service Unavailable from endpoint /api/dashboard/occupied
-reproduction: Click "Dashboard" button from operations screen - happens every time (100% reproducible)
-started: Feature never worked - recently added but has never functioned correctly
+expected: Dashboard should display occupied spools with worker names, estado_detalle, and time occupied. Should show "No hay carretes ocupados actualmente" if no spools are occupied.
+
+actual: Page shows "Error 503" in red text. Browser console shows SSE connection status messages rapidly alternating between true and false (connection is unstable).
+
+errors:
+- Error 503 displayed on page
+- Frontend calls GET /api/dashboard/occupied (line 30 of zeues-frontend/app/dashboard/page.tsx)
+- SSE connection to /api/sse/stream is unstable (toggling connection status)
+
+reproduction:
+1. Navigate to https://zeues-frontend.vercel.app/dashboard
+2. Error 503 appears immediately
+3. Console shows rapid SSE connection status toggling
+
+started: Error has existed since the dashboard was first implemented. Never worked correctly. Backend is Railway production (https://zeues-backend-mvp-production.up.railway.app).
+
+additional_context:
+- Frontend code at zeues-frontend/app/dashboard/page.tsx calls:
+  - GET ${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/occupied (line 30)
+  - SSE stream at ${process.env.NEXT_PUBLIC_API_URL}/api/sse/stream (line 87)
+- Expected response: Array of OccupiedSpool objects with {tag_spool, worker_nombre, estado_detalle, fecha_ocupacion}
+- Dashboard uses SSE for real-time updates (useSSE hook)
+- ConnectionStatus component shows SSE connection state
 
 ## Eliminated
 
 ## Evidence
 
-- timestamp: 2026-01-28T00:01:00Z
-  checked: backend/routers/dashboard_router.py
-  found: Endpoint exists and is registered in main.py line 368. Code looks for columns: TAG_SPOOL, Ocupado_Por, Fecha_Ocupacion, Estado_Detalle
-  implication: Endpoint is deployed but may be failing due to missing columns in Operaciones sheet
-
-- timestamp: 2026-01-28T00:01:30Z
-  checked: dashboard_router.py lines 87-96
-  found: Code uses headers.index() to find columns - raises ValueError if column not found, which gets wrapped as HTTPException 503
-  implication: 503 error likely caused by missing column(s) in Operaciones sheet
-
-- timestamp: 2026-01-28T00:02:00Z
-  checked: backend/config.py lines 71-92
-  found: V3_COLUMNS defines Ocupado_Por, Fecha_Ocupacion, version, Estado_Detalle as v3.0 features. Codebase shows extensive use of these columns (occupation.py, state_service.py, reparacion_service.py)
-  implication: Dashboard endpoint is part of v3.0 feature set requiring migration
-
-- timestamp: 2026-01-28T00:02:30Z
-  checked: backend/scripts/verify_migration.py
-  found: Migration script expects 66 columns (63 v2.1 + 3 v3.0). Expected columns: Ocupado_Por, Fecha_Ocupacion, version
-  implication: Production sheet may still be on v2.1 schema without v3.0 columns
-
-- timestamp: 2026-01-28T00:03:00Z
-  checked: backend/core/dependency.py line 92, backend/repositories/sheets_repository.py lines 580-611
-  found: Backend runs in compatibility_mode="v3.0", BUT SheetsRepository has safety guards (return None/0 when columns missing in v2.1 mode). Dashboard router BYPASSES this by directly calling worksheet.get_all_values() and headers.index()
-  implication: ROOT CAUSE IDENTIFIED - dashboard_router.py lines 87-96 will throw ValueError if columns don't exist, wrapped as HTTPException 503
-
-- timestamp: 2026-01-28T00:03:30Z
-  checked: zeues-frontend/app/dashboard/page.tsx line 30
-  found: Frontend actively calls /api/dashboard/occupied endpoint
-  implication: This is not dead code - feature is being used but failing due to missing columns
-
 - timestamp: 2026-01-28T00:05:00Z
-  checked: Fixed dashboard_router.py lines 88-97
-  found: Added try/except to catch ValueError when v3.0 columns missing. Now returns empty list [] with warning log instead of raising HTTPException 503
-  implication: Endpoint will work on both v2.1 (returns []) and v3.0 (returns occupied spools) schemas
+  checked: Backend dashboard_router.py implementation (lines 69-145)
+  found: Endpoint exists and handles v3.0 columns (Ocupado_Por, Fecha_Ocupacion, Estado_Detalle). Returns empty array if v3.0 columns missing (line 87-97). Raises HTTPException 503 on any unexpected error (line 142-145).
+  implication: 503 error likely caused by either: (1) v3.0 columns don't exist in sheet (returns empty array, NOT 503), OR (2) unexpected exception during sheet read (line 140-145)
 
-- timestamp: 2026-01-28T00:05:30Z
-  checked: Tested ValueError behavior with Python
-  found: Confirmed headers.index() raises ValueError when column not in list. Fix catches this and returns empty list gracefully
-  implication: Fix is correct and will resolve 503 error
+- timestamp: 2026-01-28T00:06:00Z
+  checked: SSE router implementation (sse_router.py lines 50-100)
+  found: SSE endpoint /api/sse/stream requires Redis connection. get_redis() dependency raises HTTPException 503 if Redis is None (lines 40-45). SSE stream uses event_generator with keep-alive ping every 15s.
+  implication: SSE connection instability likely caused by Redis being unavailable or flaky on Railway production
+
+- timestamp: 2026-01-28T00:07:00Z
+  checked: Frontend useSSE hook (useSSE.ts)
+  found: Hook implements exponential backoff retry (max 10 retries, max 30s delay). onopen sets connected=true, onerror sets connected=false and retries. Page visibility API closes/reopens connection when page hidden/visible.
+  implication: Rapid toggling suggests SSE connection is repeatedly failing and retrying quickly (early in exponential backoff sequence)
+
+- timestamp: 2026-01-28T00:10:00Z
+  checked: Production endpoint curl test
+  found: GET /api/dashboard/occupied returns: {"detail":"Failed to read occupied spools: 'list' object has no attribute 'get_all_values'"}
+  implication: Root cause identified - dashboard_router.py is calling .get_all_values() on a list instead of a worksheet
+
+- timestamp: 2026-01-28T00:12:00Z
+  checked: sheets_repository.py read_worksheet method signature (line 158)
+  found: read_worksheet() returns list[list] directly (already calls get_all_values internally at line 188 and returns result at line 201)
+  implication: dashboard_router.py line 73 should NOT call worksheet.get_all_values() because worksheet IS already the list. Should use it directly as all_data.
 
 ## Resolution
 
-root_cause: Dashboard endpoint (backend/routers/dashboard_router.py) directly accesses worksheet headers with headers.index() without checking if v3.0 columns exist. When production sheet is still on v2.1 schema (missing Ocupado_Por, Fecha_Ocupacion, Estado_Detalle columns), headers.index() throws ValueError which gets wrapped as HTTPException 503. The endpoint bypasses SheetsRepository's compatibility mode safety guards.
-fix: Added try/except in dashboard router (lines 88-97) to catch ValueError when v3.0 columns missing. Returns empty list [] with warning/info logs instead of raising HTTPException 503. Maintains backwards compatibility with v2.1 schema while supporting v3.0.
-verification: Verified ValueError behavior with Python test. Fix allows endpoint to work on both v2.1 (returns empty list) and v3.0 (returns occupied spools) schemas. Frontend will no longer see 503 error - will see empty dashboard until v3.0 migration is run in production.
-files_changed: [backend/routers/dashboard_router.py]
+root_cause: dashboard_router.py line 73-76 incorrectly calls worksheet.get_all_values() on a list object. SheetsRepository.read_worksheet() already returns list[list] (calls get_all_values internally), so the router should use this list directly as all_data, not call get_all_values() again.
+
+fix: Removed .get_all_values() call on line 76. Changed from:
+  worksheet = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+  all_data = worksheet.get_all_values()
+To:
+  all_data = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+
+verification:
+- ✅ dashboard_router.py imports successfully (syntax check passed)
+- ✅ Endpoint /api/dashboard/occupied registered correctly
+- ⏳ Needs production deployment to verify 503 error resolved
+- ⏳ Needs verification that SSE connection stabilizes after dashboard loads
+
+files_changed:
+- backend/routers/dashboard_router.py (lines 72-76: removed intermediate worksheet variable and .get_all_values() call)
+
+root_cause:
+fix:
+verification:
+files_changed: []
