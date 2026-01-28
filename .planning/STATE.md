@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Real-time visibility of spool occupation - See EN VIVO who is working on which spool
-**Current focus:** Phase 4 - Real-Time Visibility
+**Current focus:** Phase 5 - Metrología Workflow
 
 ## Current Position
 
-Phase: 4 of 6 (Real-Time Visibility) ✅ COMPLETE
-Plan: 4 of 4 (04-04-PLAN.md) ✓ Dashboard and load testing complete
-Status: Phase 4 complete - Real-time SSE + Dashboard + Load testing operational
-Last activity: 2026-01-27 — Completed 04-04: Dashboard page with real-time SSE updates + Locust load test
+Phase: 5 of 6 (Metrología Workflow) 🚧 IN PROGRESS
+Plan: 1 of 3 (05-01-PLAN.md) ✅ State machine and service layer complete
+Status: Phase 5 started - Binary inspection backend ready
+Last activity: 2026-01-28 — Completed 05-01: METROLOGIA 3-state machine + instant completion service
 
-Progress: [██████████████] 100% Phase 4 - All 4 plans complete
+Progress: [███████████████░░] 33% Phase 5 - 1 of 3 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: 3.9 minutes
-- Total execution time: 1.75 hours
+- Total execution time: 1.85 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [██████████████] 100% Phase 4 - All 4 plan
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
+| 05    | 1/3 🚧 | 6 min  | 6.0 min    |
 
 **Recent Trend:**
-- Last 3 plans: 04-02 (3 min), 04-03 (3 min), 04-04 (5 min)
-- Trend: Phase 4 complete with 3.8 min average (fastest phase yet!)
+- Last 3 plans: 04-03 (3 min), 04-04 (5 min), 05-01 (6 min)
+- Trend: Phase 5 started - first plan took 6 min (state machine + service layer)
 
 *Updated after each plan completion*
 
@@ -127,6 +128,9 @@ Recent decisions affecting current work:
 - Phase 4 (04-03): Page Visibility API closes connection on background, reconnects on foreground
 - Phase 4 (04-03): Race condition handled with friendly Spanish error message
 - Phase 4 (04-03): PAUSAR events trigger full list refresh for simplicity
+- **Phase 5 (05-01):** Both APROBADO and RECHAZADO marked as final states to enforce reparación workflow (Phase 6)
+- Phase 5 (05-01): Skip TOMAR occupation entirely - inspection completes in single atomic operation
+- Phase 5 (05-01): Occupied spools blocked from inspection to prevent race conditions (ocupado_por == None filter)
 
 ### Pending Todos
 
@@ -172,7 +176,7 @@ None yet.
   - Integration tests verify multi-worker collaboration
 - **Status:** Phase 3 complete
 
-**Phase 4 (IN PROGRESS):** 🔄 Real-Time Visibility - 3 of 4 plans complete
+**Phase 4 (COMPLETE):** ✅ Real-Time Visibility - All 4 plans complete
 - ✅ Plan 04-01: SSE backend infrastructure (4 min)
   - GET /api/sse/stream endpoint with Redis pub/sub
   - RedisEventService publishes to spools:updates channel
@@ -190,44 +194,58 @@ None yet.
   - Page Visibility API for mobile lifecycle management
   - ConnectionStatus component (green/red indicator)
   - Real-time spool selection with TOMAR/PAUSAR/COMPLETAR/STATE_CHANGE handling
-- 🔲 Plan 04-04: Dashboard UI + load testing (pending)
-- **Status:** Phase 4 real-time updates end-to-end complete - Ready for dashboard UI
+- ✅ Plan 04-04: Dashboard UI + load testing (5 min)
+  - Dashboard page with occupied spools list
+  - Real-time updates via SSE
+  - Locust load test for 30 concurrent users
+- **Status:** Phase 4 complete
 
-**Phase 4 Next:** Build dashboard UI page with occupied spools list and real-time updates, load testing with 30 concurrent users
+**Phase 5 (IN PROGRESS):** 🚧 Metrología Workflow - 1 of 3 plans complete
+- ✅ Plan 05-01: State machine and service layer (6 min)
+  - MetrologiaStateMachine with 3 states (PENDIENTE → APROBADO/RECHAZADO)
+  - MetrologiaService for instant completion workflow
+  - validar_puede_completar_metrologia() with 4 prerequisite checks
+  - get_spools_for_metrologia() filtering method
+  - 21 unit tests passing
+- 🔲 Plan 05-02: Backend API endpoint (pending)
+- 🔲 Plan 05-03: Frontend metrología UI (pending)
+- **Status:** Backend state machine ready - Next: API endpoint integration
 
-**Phase 5 (Metrología):** Special case workflow requires research - instant COMPLETAR without occupation, how to handle in state machine (separate state machine or conditional guards)?
+**Phase 5 Next:** Create POST /api/metrologia/completar endpoint and integrate with router
 
 **Phase 6 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
 
 ## Session Continuity
 
-Last session: 2026-01-27
-Stopped at: Completed 04-03-PLAN.md (Frontend SSE client integration) ✅
+Last session: 2026-01-28
+Stopped at: Completed 05-01-PLAN.md (METROLOGIA state machine & service) ✅
 Resume file: None
 
-**Phase 4 IN PROGRESS:**
-1. ✅ Plan 04-01 complete - SSE backend infrastructure (4 min)
-2. ✅ Plan 04-02 complete - Event integration & dashboard endpoint (3 min)
-3. ✅ Plan 04-03 complete - Frontend SSE client integration (3 min)
+**Phase 5 IN PROGRESS:**
+1. ✅ Plan 05-01 complete - State machine and service layer (6 min)
+2. 🔲 Plan 05-02 pending - Backend API endpoint
+3. 🔲 Plan 05-03 pending - Frontend metrología UI
 
-**Phase 4 Plan 04-03 complete!**
-- useSSE React hook with EventSource, exponential backoff, max 10 retries
-- Page Visibility API closes connection on background, reconnects on foreground
-- ConnectionStatus component (green/red dot + text, top-right)
-- Real-time spool selection updates for TOMAR/PAUSAR/COMPLETAR/STATE_CHANGE
-- Race condition handling with friendly Spanish error message
+**Phase 5 Plan 05-01 complete!**
+- MetrologiaStateMachine with 3 states (PENDIENTE → APROBADO/RECHAZADO)
+- Both terminals marked final=True to enforce reparación workflow
+- MetrologiaService.completar() orchestrates instant inspection
+- validar_puede_completar_metrologia() checks ARM complete, SOLD complete, not inspected, not occupied
+- get_spools_for_metrologia() filters spools ready for inspection
+- 21 unit tests passing (9 state machine + 12 service)
 
 **Commits:**
-- bc9afd0: feat(04-03): create useSSE hook with EventSource and mobile lifecycle
-- 2b98099: feat(04-03): create ConnectionStatus component
-- 87ffc13: feat(04-03): integrate SSE real-time updates in spool selection
+- 2612806: feat(05-01): create METROLOGIA 3-state machine with binary outcomes
+- 350b028: feat(05-01): implement MetrologiaService for instant completion
+- ef26e7f: feat(05-01): add metrología spool filtering to repository
 
-**Phase 4 Plans 04-01 + 04-02 + 04-03 - Real-time Updates End-to-End:**
-- ✅ Backend publishes events on all state changes
-- ✅ Frontend receives events via SSE with auto-reconnect
-- ✅ Connection status visible to users
-- ✅ Spool selection updates in real-time (< 10s latency)
-- ✅ Mobile-optimized lifecycle (background/foreground handling)
+**Phase 5 Plan 05-01 - Backend Foundation Complete:**
+- ✅ State machine handles APROBADO/RECHAZADO transitions
+- ✅ Prerequisite validation prevents invalid inspections
+- ✅ Occupied spools filtered out (race prevention)
+- ✅ Metadata logging with resultado in metadata_json
+- ✅ SSE event publishing for dashboard
 
 **Next steps:**
-- Plan 04-04: Dashboard UI page + load testing (30 concurrent users)
+- Plan 05-02: Create POST /api/metrologia/completar endpoint
+- Plan 05-03: Build frontend metrología UI flow
