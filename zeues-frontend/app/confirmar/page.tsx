@@ -20,6 +20,22 @@ import type {
   BatchActionResponse
 } from '@/lib/types';
 
+/**
+ * Formatea una fecha en formato DD-MM-YYYY para el backend.
+ *
+ * @param date - Date object a formatear
+ * @returns String en formato DD-MM-YYYY (e.g., "28-01-2026")
+ *
+ * @example
+ * formatDateDDMMYYYY(new Date(2026, 0, 28)) // "28-01-2026"
+ */
+const formatDateDDMMYYYY = (date: Date): string => {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
 function ConfirmarContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,7 +80,7 @@ function ConfirmarContent() {
           batchResponse = await tomarOcupacionBatch(batchPayload);
         } else if (tipo === 'completar') {
           // v3.0: COMPLETAR requiere fecha_operacion por spool - llamar individualmente
-          const fecha_operacion = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+          const fecha_operacion = formatDateDDMMYYYY(new Date()); // DD-MM-YYYY format
           const results = await Promise.allSettled(
             state.selectedSpools.map(tag_spool =>
               completarOcupacion({
@@ -151,7 +167,7 @@ function ConfirmarContent() {
             tag_spool: state.selectedSpool!,
             worker_id: state.selectedWorker!.id,
             worker_nombre,
-            fecha_operacion: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
+            fecha_operacion: formatDateDDMMYYYY(new Date()), // DD-MM-YYYY format
           };
           await completarOcupacion(payload);
         } else {

@@ -48,6 +48,15 @@ pip freeze > requirements.txt
 **Data Source:** Google Sheets (single source of truth)
 **Auth:** Service Account (zeus-mvp@zeus-mvp.iam.gserviceaccount.com)
 
+## Date & Timezone Standards
+
+**Timezone:** America/Santiago (Chile) - Use `backend.utils.date_formatter` functions
+**Formats:**
+- Business dates: `DD-MM-YYYY` (e.g., `21-01-2026`) - Use `format_date_for_sheets(today_chile())`
+- Audit timestamps: `DD-MM-YYYY HH:MM:SS` (e.g., `21-01-2026 14:30:00`) - Use `format_datetime_for_sheets(now_chile())`
+- NEVER use `datetime.utcnow()`, `datetime.now()`, or `.isoformat()` for business data
+- Always import: `from backend.utils.date_formatter import now_chile, today_chile, format_date_for_sheets, format_datetime_for_sheets`
+
 ## Core Concepts
 
 **v1.0 MVP Scope (Production):** 2 operations

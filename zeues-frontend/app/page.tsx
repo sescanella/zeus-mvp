@@ -193,13 +193,13 @@ export default function OperacionSelectionPage() {
             bg-transparent
             border-4 border-white
             flex flex-col items-center justify-center gap-4 cursor-pointer
-            active:bg-yellow-600 active:text-white
+            active:bg-zeues-orange active:text-white
             transition-all duration-200
             relative
             group
           "
         >
-          <Wrench size={80} strokeWidth={3} className="text-yellow-600 group-active:text-white" />
+          <Wrench size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
           <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
             REPARACIÓN
           </h3>
