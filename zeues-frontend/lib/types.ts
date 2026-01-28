@@ -89,6 +89,84 @@ export interface BatchActionResponse {
 }
 
 // ==========================================
+// OCCUPATION v3.0 TYPES (Redis locks + State Machine)
+// ==========================================
+
+/**
+ * Request para TOMAR un spool (iniciar ocupación v3.0)
+ *
+ * Utilizado por endpoint POST /api/occupation/tomar
+ * Adquiere lock Redis y actualiza Ocupado_Por/Fecha_Ocupacion
+ */
+export interface TomarRequest {
+  tag_spool: string;
+  worker_id: number;
+  worker_nombre: string;  // Format: "INICIALES(ID)" e.g., "MR(93)"
+  operacion: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
+}
+
+/**
+ * Request para PAUSAR trabajo en un spool (v3.0)
+ *
+ * Utilizado por endpoint POST /api/occupation/pausar
+ * Marca como "parcial (pausado)" y libera lock
+ */
+export interface PausarRequest {
+  tag_spool: string;
+  worker_id: number;
+  worker_nombre: string;
+}
+
+/**
+ * Request para COMPLETAR trabajo en un spool (v3.0)
+ *
+ * Utilizado por endpoint POST /api/occupation/completar
+ * Actualiza fecha_armado/soldadura y libera lock
+ */
+export interface CompletarRequest {
+  tag_spool: string;
+  worker_id: number;
+  worker_nombre: string;
+  fecha_operacion: string;  // REQUIRED - Format: "YYYY-MM-DD" (e.g., "2026-01-28")
+}
+
+/**
+ * Request para TOMAR múltiples spools en batch (v3.0)
+ *
+ * Utilizado por endpoint POST /api/occupation/batch-tomar
+ * Máximo 50 spools por operación
+ */
+export interface BatchTomarRequest {
+  tag_spools: string[];  // Min 1, Max 50
+  worker_id: number;
+  worker_nombre: string;
+  operacion: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
+}
+
+/**
+ * Response para operaciones individuales v3.0 (TOMAR/PAUSAR/COMPLETAR)
+ *
+ * CRÍTICO: Backend retorna SOLO 3 campos (NO incluye ocupado_por, fecha_ocupacion, version, estado_detalle)
+ */
+export interface OccupationResponse {
+  success: boolean;
+  tag_spool: string;
+  message: string;
+}
+
+/**
+ * Response para operaciones batch v3.0
+ *
+ * IMPORTANTE: Usa nombres en inglés (succeeded/failed) NO español (exitosos/fallidos)
+ */
+export interface BatchOccupationResponse {
+  total: number;      // Total spools procesados
+  succeeded: number;  // Cantidad exitosa (English!)
+  failed: number;     // Cantidad fallida (English!)
+  details: OccupationResponse[];  // Resultados individuales
+}
+
+// ==========================================
 // REAL-TIME SSE (v3.0)
 // ==========================================
 

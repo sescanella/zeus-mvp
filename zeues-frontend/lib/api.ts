@@ -7,7 +7,13 @@ import {
   ActionPayload,
   ActionResponse,
   BatchActionRequest,
-  BatchActionResponse
+  BatchActionResponse,
+  TomarRequest,
+  PausarRequest,
+  CompletarRequest,
+  BatchTomarRequest,
+  OccupationResponse,
+  BatchOccupationResponse
 } from './types';
 
 // ============= CONSTANTS =============
@@ -123,6 +129,8 @@ export async function getSpoolsParaCompletar(
  * POST /api/iniciar-accion
  * Inicia una acción (marca V/W→0.1, guarda trabajador en BC/BE).
  *
+ * @deprecated Use tomarOcupacion() instead (v3.0 endpoint with Redis locks, optimistic versioning, and Estado_Detalle tracking)
+ *
  * @param payload - Datos de la acción (worker_id, operacion, tag_spool)
  * @returns Promise<ActionResponse> - Respuesta con detalles de la operación
  * @throws Error si trabajador/spool no encontrado, ya iniciada, o dependencias no satisfechas
@@ -136,6 +144,7 @@ export async function getSpoolsParaCompletar(
  * console.log(result.message); // "Acción ARM iniciada exitosamente..."
  */
 export async function iniciarAccion(payload: ActionPayload): Promise<ActionResponse> {
+  console.warn('⚠️ iniciarAccion() is deprecated. Migrate to tomarOcupacion() for v3.0 features (Redis locks, optimistic versioning, Estado_Detalle tracking).');
   try {
     const res = await fetch(`${API_URL}/api/iniciar-accion`, {
       method: 'POST',
@@ -154,6 +163,8 @@ export async function iniciarAccion(payload: ActionPayload): Promise<ActionRespo
 /**
  * POST /api/completar-accion
  * Completa una acción (marca V/W→1.0, guarda fecha en BB/BD).
+ *
+ * @deprecated Use completarOcupacion() instead (v3.0 endpoint with Redis lock release and Estado_Detalle updates)
  *
  * CRÍTICO: Solo quien inició (BC/BE) puede completar. Si otro trabajador intenta,
  * backend retorna 403 FORBIDDEN y esta función lanza error con mensaje específico.
@@ -184,6 +195,7 @@ export async function iniciarAccion(payload: ActionPayload): Promise<ActionRespo
  * }
  */
 export async function completarAccion(payload: ActionPayload): Promise<ActionResponse> {
+  console.warn('⚠️ completarAccion() is deprecated. Migrate to completarOcupacion() for v3.0 features (Redis lock release, Estado_Detalle updates).');
   try {
     const res = await fetch(`${API_URL}/api/completar-accion`, {
       method: 'POST',
@@ -299,6 +311,8 @@ export async function getSpoolsParaCancelar(
  * POST /api/cancelar-accion
  * Cancela una acción EN_PROGRESO (revierte estado 0.1 → 0, limpia worker asignado).
  *
+ * @deprecated Use pausarOcupacion() instead (v3.0 endpoint - semantic difference: PAUSAR marks as "parcial (pausado)", CANCELAR reverts to PENDIENTE)
+ *
  * CRÍTICO: Solo quien inició (BC/BE) puede cancelar. Si otro trabajador intenta,
  * backend retorna 403 FORBIDDEN. Solo spools con estado 0.1 pueden ser cancelados.
  *
@@ -351,6 +365,7 @@ export async function getSpoolsParaCancelar(
  * }
  */
 export async function cancelarAccion(payload: ActionPayload): Promise<ActionResponse> {
+  console.warn('⚠️ cancelarAccion() is deprecated. Migrate to pausarOcupacion() (v3.0 PAUSAR marks as "parcial (pausado)", CANCELAR reverts to PENDIENTE).');
   try {
     const res = await fetch(`${API_URL}/api/cancelar-accion`, {
       method: 'POST',
@@ -687,6 +702,8 @@ export async function cancelarReparacion(payload: {
  * POST /api/iniciar-accion-batch
  * Inicia múltiples acciones simultáneamente (hasta 50 spools).
  *
+ * @deprecated Use tomarOcupacionBatch() instead (v3.0 endpoint with Redis locks per spool and English response field names)
+ *
  * Procesa cada spool individualmente. Si algunos spools fallan, continúa
  * procesando los restantes (manejo de errores parciales).
  *
@@ -712,6 +729,7 @@ export async function cancelarReparacion(payload: {
 export async function iniciarAccionBatch(
   request: BatchActionRequest
 ): Promise<BatchActionResponse> {
+  console.warn('⚠️ iniciarAccionBatch() is deprecated. Migrate to tomarOcupacionBatch() for v3.0 features (Redis locks per spool, English response field names).');
   try {
     // Validación frontend
     if (request.tag_spools.length === 0) {
@@ -737,6 +755,8 @@ export async function iniciarAccionBatch(
 /**
  * POST /api/completar-accion-batch
  * Completa múltiples acciones EN_PROGRESO (hasta 50 spools).
+ *
+ * @deprecated Use individual completarOcupacion() calls with Promise.allSettled() instead (v3.0 requires fecha_operacion per spool)
  *
  * CRÍTICO: Valida ownership individualmente. Solo quien inició puede completar.
  * Si algunos spools fallan ownership validation, continúa con los restantes.
@@ -764,6 +784,7 @@ export async function iniciarAccionBatch(
 export async function completarAccionBatch(
   request: BatchActionRequest
 ): Promise<BatchActionResponse> {
+  console.warn('⚠️ completarAccionBatch() is deprecated. Migrate to individual completarOcupacion() calls with Promise.allSettled() (v3.0 requires fecha_operacion per spool).');
   try {
     // Validación frontend
     if (request.tag_spools.length === 0) {
@@ -789,6 +810,8 @@ export async function completarAccionBatch(
 /**
  * POST /api/cancelar-accion-batch
  * Cancela múltiples acciones EN_PROGRESO (hasta 50 spools).
+ *
+ * @deprecated Use individual pausarOcupacion() calls with Promise.allSettled() instead (v3.0 PAUSAR semantic: marks as "parcial (pausado)", not reverted to PENDIENTE)
  *
  * CRÍTICO: Valida ownership individualmente. Solo quien inició puede cancelar.
  * Revierte estado 0.1 → 0 (PENDIENTE) y limpia worker asignado.
@@ -816,6 +839,7 @@ export async function completarAccionBatch(
 export async function cancelarAccionBatch(
   request: BatchActionRequest
 ): Promise<BatchActionResponse> {
+  console.warn('⚠️ cancelarAccionBatch() is deprecated. Migrate to individual pausarOcupacion() calls with Promise.allSettled() (v3.0 PAUSAR marks as "parcial (pausado)", CANCELAR reverts to PENDIENTE).');
   try {
     // Validación frontend
     if (request.tag_spools.length === 0) {
@@ -834,6 +858,278 @@ export async function cancelarAccionBatch(
     return await handleResponse<BatchActionResponse>(res);
   } catch (error) {
     console.error('cancelarAccionBatch error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// OCCUPATION v3.0 OPERATIONS (Redis locks + State Machine)
+// ==========================================
+
+/**
+ * POST /api/occupation/tomar (v3.0)
+ * Toma un spool con lock Redis y actualiza columnas de ocupación.
+ *
+ * Atomically acquires Redis lock and updates Ocupado_Por/Fecha_Ocupacion/Version/Estado_Detalle
+ * in Operaciones sheet. Prevents concurrent TOMAR on same spool.
+ *
+ * NEW v3.0 features vs v2.1 iniciarAccion:
+ * - Redis lock with ownership token (prevents race conditions)
+ * - Optimistic locking with Version column
+ * - Estado_Detalle tracking ("ARM en progreso", etc.)
+ * - Requires worker_nombre in all requests (format: "INICIALES(ID)")
+ *
+ * @param request - TomarRequest with tag_spool, worker_id, worker_nombre, operacion
+ * @returns Promise<OccupationResponse> with success status (ONLY 3 fields)
+ * @throws Error if:
+ *   - 409 CONFLICT: Spool already occupied by another worker (LOC-04 requirement)
+ *   - 404 NOT FOUND: Spool not found
+ *   - 400 BAD REQUEST: Prerequisites not met (e.g., missing Fecha_Materiales)
+ *   - 503 SERVICE UNAVAILABLE: Sheets update failed
+ *
+ * @example
+ * const result = await tomarOcupacion({
+ *   tag_spool: 'MK-1335-CW-25238-011',
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)',
+ *   operacion: 'ARM'
+ * });
+ * console.log(result);
+ * // { success: true, tag_spool: "MK-1335-CW-25238-011", message: "Spool tomado por MR(93)" }
+ *
+ * @example
+ * // Error 409 CONFLICT (race condition)
+ * try {
+ *   await tomarOcupacion({
+ *     tag_spool: 'MK-123',
+ *     worker_id: 93,
+ *     worker_nombre: 'MR(93)',
+ *     operacion: 'ARM'
+ *   });
+ * } catch (error) {
+ *   console.error(error.message); // "Spool ocupado por otro trabajador: JP(94)"
+ * }
+ */
+export async function tomarOcupacion(request: TomarRequest): Promise<OccupationResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/occupation/tomar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+
+    // v3.0 specific error handling BEFORE generic handleResponse
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool ocupado por otro trabajador. Intenta más tarde.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Requisitos no cumplidos. Verifica el spool.');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool o trabajador no encontrado.');
+    }
+
+    if (res.status === 503) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Error al actualizar Google Sheets. Intenta nuevamente.');
+    }
+
+    return await handleResponse<OccupationResponse>(res);
+  } catch (error) {
+    console.error('tomarOcupacion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/occupation/pausar (v3.0)
+ * Pausa trabajo en un spool y libera el lock Redis.
+ *
+ * Verifies worker owns the lock, marks spool as "ARM parcial (pausado)"
+ * or "SOLD parcial (pausado)", clears occupation, and releases Redis lock.
+ *
+ * SEMANTIC DIFFERENCE vs v2.1 cancelarAccion:
+ * - PAUSAR (v3.0): Marks as "parcial (pausado)" - work can be resumed
+ * - CANCELAR (v2.1): Reverts to PENDIENTE - work is completely undone
+ *
+ * @param request - PausarRequest with tag_spool, worker_id, worker_nombre
+ * @returns Promise<OccupationResponse> with success status
+ * @throws Error if:
+ *   - 403 FORBIDDEN: Worker doesn't own the lock
+ *   - 404 NOT FOUND: Spool not found
+ *   - 410 GONE: Lock expired (worker took too long)
+ *   - 503 SERVICE UNAVAILABLE: Sheets update failed
+ *
+ * @example
+ * const result = await pausarOcupacion({
+ *   tag_spool: 'MK-1335-CW-25238-011',
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)'
+ * });
+ * console.log(result.message); // "Spool pausado exitosamente"
+ */
+export async function pausarOcupacion(request: PausarRequest): Promise<OccupationResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/occupation/pausar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+
+    // v3.0 specific error handling
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'No estás autorizado para pausar este spool. Solo quien lo tomó puede pausarlo.');
+    }
+
+    if (res.status === 410) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'La operación expiró. Por favor toma el spool nuevamente.');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool no encontrado.');
+    }
+
+    if (res.status === 503) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Error al actualizar Google Sheets. Intenta nuevamente.');
+    }
+
+    return await handleResponse<OccupationResponse>(res);
+  } catch (error) {
+    console.error('pausarOcupacion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/occupation/completar (v3.0)
+ * Completa trabajo en un spool y libera el lock Redis.
+ *
+ * Verifies worker owns the lock, updates fecha_armado or fecha_soldadura,
+ * clears occupation, and releases Redis lock.
+ *
+ * NEW v3.0 requirements vs v2.1 completarAccion:
+ * - fecha_operacion is REQUIRED (YYYY-MM-DD format)
+ * - v2.1 used timestamp (ISO 8601) - v3.0 uses date only
+ *
+ * @param request - CompletarRequest with tag_spool, worker_id, worker_nombre, fecha_operacion
+ * @returns Promise<OccupationResponse> with success status
+ * @throws Error if:
+ *   - 403 FORBIDDEN: Worker doesn't own the lock
+ *   - 404 NOT FOUND: Spool not found
+ *   - 410 GONE: Lock expired
+ *   - 503 SERVICE UNAVAILABLE: Sheets update failed
+ *
+ * @example
+ * const result = await completarOcupacion({
+ *   tag_spool: 'MK-1335-CW-25238-011',
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)',
+ *   fecha_operacion: '2026-01-28'  // YYYY-MM-DD format
+ * });
+ * console.log(result.message); // "Operación completada exitosamente"
+ */
+export async function completarOcupacion(request: CompletarRequest): Promise<OccupationResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/occupation/completar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+
+    // v3.0 specific error handling
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'No estás autorizado para completar este spool. Solo quien lo tomó puede completarlo.');
+    }
+
+    if (res.status === 410) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'La operación expiró. Por favor toma el spool nuevamente.');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool no encontrado.');
+    }
+
+    if (res.status === 503) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Error al actualizar Google Sheets. Intenta nuevamente.');
+    }
+
+    return await handleResponse<OccupationResponse>(res);
+  } catch (error) {
+    console.error('completarOcupacion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/occupation/batch-tomar (v3.0)
+ * Toma múltiples spools en batch (hasta 50).
+ *
+ * Processes each spool independently. Returns detailed results showing
+ * which spools succeeded and which failed.
+ *
+ * Partial success is allowed: If 7 of 10 spools succeed, the operation
+ * returns 200 OK with details about successes and failures.
+ *
+ * NEW v3.0 features:
+ * - Response uses English field names (succeeded/failed) NOT Spanish (exitosos/fallidos)
+ * - Each spool gets individual Redis lock + ownership token
+ * - Atomic operations with optimistic locking per spool
+ *
+ * @param request - BatchTomarRequest with tag_spools list (max 50)
+ * @returns Promise<BatchOccupationResponse> with total, succeeded, failed counts and details
+ * @throws Error if batch > 50, batch empty, or network error
+ *
+ * @example
+ * const result = await tomarOcupacionBatch({
+ *   tag_spools: ['MK-001', 'MK-002', 'MK-003'],
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)',
+ *   operacion: 'ARM'
+ * });
+ * console.log(result);
+ * // {
+ * //   total: 3,
+ * //   succeeded: 2,  // English!
+ * //   failed: 1,     // English!
+ * //   details: [
+ * //     { success: true, tag_spool: "MK-001", message: "Spool tomado exitosamente" },
+ * //     { success: true, tag_spool: "MK-002", message: "Spool tomado exitosamente" },
+ * //     { success: false, tag_spool: "MK-003", message: "Spool ocupado por JP(94)" }
+ * //   ]
+ * // }
+ */
+export async function tomarOcupacionBatch(request: BatchTomarRequest): Promise<BatchOccupationResponse> {
+  try {
+    // Validación frontend
+    if (request.tag_spools.length === 0) {
+      throw new Error('Debes seleccionar al menos 1 spool.');
+    }
+    if (request.tag_spools.length > 50) {
+      throw new Error('Máximo 50 spools por operación batch.');
+    }
+
+    const res = await fetch(`${API_URL}/api/occupation/batch-tomar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+
+    return await handleResponse<BatchOccupationResponse>(res);
+  } catch (error) {
+    console.error('tomarOcupacionBatch error:', error);
     throw error;
   }
 }

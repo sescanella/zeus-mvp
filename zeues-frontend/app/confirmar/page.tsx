@@ -6,14 +6,19 @@ import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import {
-  iniciarAccion,
-  completarAccion,
-  cancelarAccion,
-  iniciarAccionBatch,
-  completarAccionBatch,
-  cancelarAccionBatch
+  tomarOcupacion,
+  pausarOcupacion,
+  completarOcupacion,
+  tomarOcupacionBatch
 } from '@/lib/api';
-import type { ActionPayload, BatchActionRequest } from '@/lib/types';
+import type {
+  TomarRequest,
+  PausarRequest,
+  CompletarRequest,
+  BatchTomarRequest,
+  BatchOccupationResponse,
+  BatchActionResponse
+} from '@/lib/types';
 
 function ConfirmarContent() {
   const router = useRouter();
@@ -44,49 +49,120 @@ function ConfirmarContent() {
       setErrorType('generic');
 
       if (isBatchMode) {
-        // v2.0: Batch mode - procesar múltiples spools
-        const batchPayload: BatchActionRequest = {
-          worker_id: state.selectedWorker!.id,
-          operacion: state.selectedOperation as 'ARM' | 'SOLD',
-          tag_spools: state.selectedSpools,
-          // Solo incluir timestamp si es completar
-          ...(tipo === 'completar' && { timestamp: new Date().toISOString() }),
-        };
+        // v3.0: Batch mode - procesar múltiples spools
+        const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
+        let batchResponse: BatchOccupationResponse;
 
-        // Llamar API batch según tipo de acción
-        let batchResponse;
         if (tipo === 'iniciar') {
-          batchResponse = await iniciarAccionBatch(batchPayload);
+          // v3.0: INICIAR usa batch endpoint directo
+          const batchPayload: BatchTomarRequest = {
+            tag_spools: state.selectedSpools,
+            worker_id: state.selectedWorker!.id,
+            worker_nombre,
+            operacion: state.selectedOperation as 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION',
+          };
+          batchResponse = await tomarOcupacionBatch(batchPayload);
         } else if (tipo === 'completar') {
-          batchResponse = await completarAccionBatch(batchPayload);
+          // v3.0: COMPLETAR requiere fecha_operacion por spool - llamar individualmente
+          const fecha_operacion = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+          const results = await Promise.allSettled(
+            state.selectedSpools.map(tag_spool =>
+              completarOcupacion({
+                tag_spool,
+                worker_id: state.selectedWorker!.id,
+                worker_nombre,
+                fecha_operacion,
+              })
+            )
+          );
+          // Map Promise.allSettled results to BatchOccupationResponse format
+          batchResponse = {
+            total: results.length,
+            succeeded: results.filter(r => r.status === 'fulfilled').length,
+            failed: results.filter(r => r.status === 'rejected').length,
+            details: results.map((r, i) => ({
+              success: r.status === 'fulfilled',
+              tag_spool: state.selectedSpools[i],
+              message: r.status === 'fulfilled' ? r.value.message : (r.reason?.message || 'Error desconocido'),
+            })),
+          };
         } else {
-          // tipo === 'cancelar'
-          batchResponse = await cancelarAccionBatch(batchPayload);
+          // v3.0: CANCELAR → Use PAUSAR (semantic change: pausar != cancelar)
+          // PAUSAR: Marks as "parcial (pausado)" - work can be resumed
+          const results = await Promise.allSettled(
+            state.selectedSpools.map(tag_spool =>
+              pausarOcupacion({
+                tag_spool,
+                worker_id: state.selectedWorker!.id,
+                worker_nombre,
+              })
+            )
+          );
+          batchResponse = {
+            total: results.length,
+            succeeded: results.filter(r => r.status === 'fulfilled').length,
+            failed: results.filter(r => r.status === 'rejected').length,
+            details: results.map((r, i) => ({
+              success: r.status === 'fulfilled',
+              tag_spool: state.selectedSpools[i],
+              message: r.status === 'fulfilled' ? r.value.message : (r.reason?.message || 'Error desconocido'),
+            })),
+          };
         }
 
+        // Convert v3.0 BatchOccupationResponse to v2.1 BatchActionResponse format for context
+        // (Context expects Spanish field names: exitosos/fallidos, not English: succeeded/failed)
+        const convertedResponse: BatchActionResponse = {
+          success: batchResponse.succeeded > 0, // success if at least 1 succeeded
+          message: `${batchResponse.succeeded} de ${batchResponse.total} spools procesados exitosamente`,
+          total: batchResponse.total,
+          exitosos: batchResponse.succeeded, // v3.0 'succeeded' → v2.1 'exitosos'
+          fallidos: batchResponse.failed,     // v3.0 'failed' → v2.1 'fallidos'
+          resultados: batchResponse.details.map(detail => ({
+            tag_spool: detail.tag_spool,
+            success: detail.success,
+            message: detail.message,
+            evento_id: null, // v3.0 doesn't return evento_id
+            error_type: detail.success ? null : 'unknown',
+          })),
+        };
+
         // Guardar resultados en contexto para P6
-        setState({ batchResults: batchResponse });
+        setState({ batchResults: convertedResponse });
 
         // Navegar a página de éxito
         router.push('/exito');
       } else {
-        // Single mode - comportamiento original
-        const payload: ActionPayload = {
-          worker_id: state.selectedWorker!.id,
-          operacion: state.selectedOperation as 'ARM' | 'SOLD',
-          tag_spool: state.selectedSpool!,
-          // Solo incluir timestamp si es completar
-          ...(tipo === 'completar' && { timestamp: new Date().toISOString() }),
-        };
+        // v3.0: Single mode - usar endpoints v3.0 occupation
+        const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
 
-        // Llamar API según tipo de acción
         if (tipo === 'iniciar') {
-          await iniciarAccion(payload);
+          // v3.0: INICIAR → TOMAR
+          const payload: TomarRequest = {
+            tag_spool: state.selectedSpool!,
+            worker_id: state.selectedWorker!.id,
+            worker_nombre,
+            operacion: state.selectedOperation as 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION',
+          };
+          await tomarOcupacion(payload);
         } else if (tipo === 'completar') {
-          await completarAccion(payload);
+          // v3.0: COMPLETAR con fecha_operacion requerida
+          const payload: CompletarRequest = {
+            tag_spool: state.selectedSpool!,
+            worker_id: state.selectedWorker!.id,
+            worker_nombre,
+            fecha_operacion: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
+          };
+          await completarOcupacion(payload);
         } else {
-          // tipo === 'cancelar'
-          await cancelarAccion(payload);
+          // v3.0: CANCELAR → PAUSAR (semantic change)
+          // PAUSAR: Marks as "parcial (pausado)" - work can be resumed
+          const payload: PausarRequest = {
+            tag_spool: state.selectedSpool!,
+            worker_id: state.selectedWorker!.id,
+            worker_nombre,
+          };
+          await pausarOcupacion(payload);
         }
 
         // Clear batch results for single mode
@@ -96,16 +172,24 @@ function ConfirmarContent() {
         router.push('/exito');
       }
     } catch (err) {
-      // Manejar errores específicos según código HTTP
+      // v3.0: Manejar errores específicos según código HTTP (incluye nuevos códigos)
       const errorMessage = err instanceof Error ? err.message : 'Error al procesar acción';
 
       if (errorMessage.includes('red') || errorMessage.includes('conexión') || errorMessage.includes('Failed to fetch')) {
         setErrorType('network');
         setError('Error de conexión con el servidor. Verifica que el backend esté disponible.');
+      } else if (errorMessage.includes('ocupado') || errorMessage.includes('409')) {
+        // v3.0: 409 CONFLICT - Spool occupied by another worker (LOC-04 requirement)
+        setErrorType('forbidden');
+        setError('Este spool está siendo usado por otro trabajador. Intenta más tarde.');
+      } else if (errorMessage.includes('expiró') || errorMessage.includes('410')) {
+        // v3.0: 410 GONE - Lock expired (worker took too long)
+        setErrorType('validation');
+        setError('La operación tardó demasiado tiempo. Por favor vuelve a intentar.');
       } else if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
         setErrorType('not-found');
         setError(errorMessage);
-      } else if (errorMessage.includes('400') || errorMessage.includes('ya iniciada') || errorMessage.includes('ya completada') || errorMessage.includes('dependencias')) {
+      } else if (errorMessage.includes('400') || errorMessage.includes('ya iniciada') || errorMessage.includes('ya completada') || errorMessage.includes('dependencias') || errorMessage.includes('Requisitos')) {
         setErrorType('validation');
         setError(errorMessage);
       } else if (errorMessage.includes('403') || errorMessage.includes('autorizado') || errorMessage.includes('completar')) {
