@@ -181,3 +181,79 @@ class ValidationService:
             self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, operacion.value)
 
         logger.debug(f"[V2.1] ✅ {operacion.value} cancellation validation passed | {spool.tag_spool}")
+
+    def validar_puede_completar_metrologia(self, spool: Spool, worker_id: int) -> None:
+        """
+        Valida COMPLETAR METROLOGIA (v3.0 instant completion - no TOMAR phase).
+
+        Prerequisites (ALL must be true):
+        - ARM completado (fecha_armado != None)
+        - SOLD completado (fecha_soldadura != None)
+        - METROLOGIA no completada (fecha_qc_metrologia == None)
+        - Spool NO ocupado (ocupado_por == None) - prevents race conditions
+
+        Args:
+            spool: Spool to validate
+            worker_id: ID of worker attempting inspection
+
+        Raises:
+            DependenciasNoSatisfechasError: If ARM or SOLD not completed
+            OperacionYaCompletadaError: If metrología already completed
+            SpoolOccupiedError: If spool currently occupied by another worker
+            RolNoAutorizadoError: If worker lacks METROLOGIA role
+        """
+        logger.info(f"[V3.0] Validating METROLOGIA completion | Spool: {spool.tag_spool} | Worker: {worker_id}")
+
+        # Import here to avoid circular dependency
+        from backend.exceptions import SpoolOccupiedError
+
+        # 1. Check ARM completed (prerequisite)
+        if spool.fecha_armado is None:
+            raise DependenciasNoSatisfechasError(
+                tag_spool=spool.tag_spool,
+                operacion="METROLOGIA",
+                dependencia_faltante="ARM completado",
+                detalle="Armado debe finalizar antes de metrología"
+            )
+
+        # 2. Check SOLD completed (prerequisite)
+        if spool.fecha_soldadura is None:
+            raise DependenciasNoSatisfechasError(
+                tag_spool=spool.tag_spool,
+                operacion="METROLOGIA",
+                dependencia_faltante="SOLD completado",
+                detalle="Soldadura debe finalizar antes de metrología"
+            )
+
+        # 3. Check NOT already completed
+        if spool.fecha_qc_metrologia is not None:
+            raise OperacionYaCompletadaError(
+                tag_spool=spool.tag_spool,
+                operacion="METROLOGIA"
+            )
+
+        # 4. Check NOT occupied (CRITICAL for race condition prevention)
+        # Occupied spools cannot be inspected - worker might be actively modifying
+        if spool.ocupado_por is not None:
+            # Extract worker ID and name from ocupado_por format "INICIALES(ID)"
+            # Example: "MR(93)" -> ID: 93, Name: "MR(93)"
+            try:
+                owner_name = spool.ocupado_por
+                # Extract ID from format "XX(ID)"
+                owner_id = int(spool.ocupado_por.split('(')[1].rstrip(')'))
+            except (IndexError, ValueError):
+                # Fallback if format is unexpected
+                owner_id = 0
+                owner_name = spool.ocupado_por
+
+            raise SpoolOccupiedError(
+                tag_spool=spool.tag_spool,
+                owner_id=owner_id,
+                owner_name=owner_name
+            )
+
+        # 5. Validar rol (worker must have METROLOGIA role)
+        if self.role_service:
+            self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, "METROLOGIA")
+
+        logger.debug(f"[V3.0] ✅ METROLOGIA completion validation passed | {spool.tag_spool}")
