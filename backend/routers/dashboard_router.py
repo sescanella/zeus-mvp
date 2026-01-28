@@ -69,11 +69,8 @@ async def get_occupied_spools(
     try:
         logger.info("Dashboard: Fetching occupied spools")
 
-        # Read Operaciones sheet
-        worksheet = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
-
-        # Get all data as list of lists
-        all_data = worksheet.get_all_values()
+        # Read Operaciones sheet (returns list[list] directly)
+        all_data = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
 
         if not all_data or len(all_data) < 2:
             logger.warning("Dashboard: No data in Operaciones sheet")
