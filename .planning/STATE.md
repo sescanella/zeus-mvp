@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 6 of 6 (Reparación Loops) 🚧 IN PROGRESS
-Plan: 1 of 4 (06-01-PLAN.md) ✅ Reparación state machine complete
-Status: 4-state machine with TOMAR/PAUSAR/COMPLETAR actions - 22 tests passing
-Last activity: 2026-01-28 — Completed 06-01: REPARACIONStateMachine + ReparacionService with cycle tracking integration
+Phase: 6 of 6 (Reparación Loops) ✅ COMPLETE
+Plan: 4 of 4 (06-03-PLAN.md) ✅ REST endpoints + frontend integration complete
+Status: Full reparación workflow with REST API, BLOQUEADO display, and 4th operation UI
+Last activity: 2026-01-28 — Completed 06-03: REST endpoints + frontend integration with cycle info display and BLOQUEADO state
 
-Progress: [█████████████████████████████████░] 97% Phase 6 - 3 of 4 plans complete (33 of 34 total)
+Progress: [██████████████████████████████████] 100% Phase 6 - 4 of 4 plans complete (34 of 34 total)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33
-- Average duration: 4.3 minutes
-- Total execution time: 2.42 hours
+- Total plans completed: 34
+- Average duration: 4.5 minutes
+- Total execution time: 2.55 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████████████
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
 | 05    | 4/4 ✅ | 19.5 min  | 4.9 min    |
-| 06    | 3/4 🚧 | 17.1 min  | 5.7 min    |
+| 06    | 4/4 ✅ | 29 min  | 7.25 min    |
 
 **Recent Trend:**
-- Last 4 plans: 05-04 (6.5 min), 06-01 (4.7 min), 06-02 (4.7 min), 06-01 (7.7 min)
-- Trend: Phase 6 avg 5.7 min - state machine + service patterns with comprehensive tests
+- Last 4 plans: 06-01 (4.7 min), 06-02 (4.7 min), 06-01 (7.7 min), 06-03 (12 min)
+- Trend: Phase 6 complete - REST + frontend integration took longer (8 files modified)
 
 *Updated after each plan completion*
 
@@ -148,6 +148,9 @@ Recent decisions affecting current work:
 - **Phase 6 (06-01):** 4-state machine with occupation management (RECHAZADO → EN_REPARACION → REPARACION_PAUSADA → PENDIENTE_METROLOGIA)
 - Phase 6 (06-01): Cycle count preserved across all state transitions (increments only on metrología RECHAZADO)
 - Phase 6 (06-01): COMPLETAR automatically sets PENDIENTE_METROLOGIA (immediate re-queue for metrología inspection)
+- **Phase 6 (06-03):** REPARACIÓN as 4th operation with yellow styling (no role restriction - all workers)
+- Phase 6 (06-03): BLOQUEADO spools displayed with red styling, lock icon, disabled selection
+- Phase 6 (06-03): Cycle info displayed in spool selection ("Ciclo X/3" instead of NV column)
 
 ### Pending Todos
 
@@ -242,7 +245,7 @@ None yet.
   - 44 total metrología tests passing (21 existing + 23 new)
 - **Status:** Phase 5 complete - Real-time inspection workflow with comprehensive test coverage
 
-**Phase 6 (IN PROGRESS):** 🚧 Reparación Loops - 2 of 4 plans complete
+**Phase 6 (COMPLETE):** ✅ Reparación Loops - 4 of 4 plans complete
 - ✅ Plan 06-01: Research & context (4.7 min)
   - Researched manufacturing rework best practices (3-cycle limit standard)
   - Documented embedded cycle counting strategy (no new columns)
@@ -254,32 +257,41 @@ None yet.
   - SpoolBloqueadoError (HTTP 403) for blocked spools
   - validar_puede_tomar_reparacion() and validar_puede_cancelar_reparacion()
   - 47 passing tests (26 cycle counter + 21 validation)
-- **Status:** Cycle tracking complete - ready for ReparacionStateMachine in 06-03
+- ✅ Plan 06-03: REST endpoints + frontend integration (12 min)
+  - GET /api/spools/reparacion with CycleCounterService integration
+  - 4 POST endpoints: tomar, pausar, completar, cancelar reparación
+  - REPARACIÓN as 4th operation (yellow button, Wrench icon)
+  - Spool selection with BLOQUEADO display (red styling, lock icon)
+  - Cycle info display ("Ciclo X/3" in table column)
+  - 5 API functions with 'unknown' return type (no 'any')
+- **Status:** Phase 6 complete - Full reparación workflow operational
 
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 06-02-PLAN.md (Cycle counting logic with 47 tests) ✅
+Stopped at: Completed 06-03-PLAN.md (REST endpoints + frontend integration) ✅
 Resume file: None
 
-**Phase 6 Plan 06-02 complete!**
-- CycleCounterService: Parse/increment cycles from Estado_Detalle (regex pattern "Ciclo X/3")
-- MetrologiaStateMachine extended: Increment cycle on RECHAZADO, reset on APROBADO
-- SpoolBloqueadoError exception: HTTP 403 for spools blocked after 3 rejections
-- Validation methods: validar_puede_tomar_reparacion() and validar_puede_cancelar_reparacion()
-- 47 tests passing: 26 cycle counter + 21 validation
+**Phase 6 Plan 06-03 complete!**
+- REST endpoints: GET /spools/reparacion + 4 POST actions (tomar/pausar/completar/cancelar)
+- Frontend: REPARACIÓN as 4th operation with yellow button
+- UI: BLOQUEADO spools displayed with red styling, lock icon, disabled selection
+- Cycle display: "Ciclo X/3" shown in spool selection table
+- API functions: 5 new functions with type-safe 'unknown' return types
 
 **Commits:**
-- c0e44de: feat(06-02): create CycleCounterService for reparación cycle tracking
-- 22a928e: feat(06-02): extend metrología state machine for cycle counting
-- 6179f3e: feat(06-02): add reparación validation and BLOQUEADO exception
-- 934a38b: test(06-02): add comprehensive cycle counter and validation tests
+- fa49147: feat(06-03): add REST endpoints for reparación workflow
+- 1fbfd9b: feat(06-03): add REPARACIÓN as 4th operation in frontend
+- 5478026: feat(06-03): update spool selection for reparación workflow
+- cad8648: feat(06-03): add API functions for reparación workflow
 
-**Phase 6 Progress - Reparación Loops:**
+**Phase 6 Complete - Reparación Loops:**
 - ✅ Research & context (06-01): 4.7 min
+- ✅ State machine (06-01): 7.7 min - 22 tests
 - ✅ Cycle counting logic (06-02): 4.7 min - 47 tests
-- 🚧 ReparacionStateMachine (06-03): Next
-- 🚧 Frontend integration (06-04): TBD
+- ✅ REST endpoints + frontend (06-03): 12 min - 8 files
+- **Total:** 29 minutes for complete reparación workflow
 
 **Next steps:**
-- Plan 06-03: Create ReparacionStateMachine with TOMAR/PAUSAR/COMPLETAR workflow
+- All 6 phases complete! System ready for production deployment
+- Remaining work: Frontend tipo-interaccion + confirmar integration for REPARACION
