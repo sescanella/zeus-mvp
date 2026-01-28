@@ -125,7 +125,7 @@ async def completar_metrologia(
     # Delegate to MetrologiaService (orchestrator)
     # All validations performed in MetrologiaService
     # Exceptions propagate automatically to exception handler
-    result = metrologia_service.completar(
+    result = await metrologia_service.completar(
         tag_spool=request.tag_spool,
         worker_id=request.worker_id,
         worker_nombre=worker_nombre,

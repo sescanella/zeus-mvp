@@ -62,7 +62,7 @@ class MetrologiaService:
         self.redis_event_service = redis_event_service
         logger.info("MetrologiaService initialized with instant completion workflow")
 
-    def completar(
+    async def completar(
         self,
         tag_spool: str,
         worker_id: int,
@@ -152,20 +152,26 @@ class MetrologiaService:
         except Exception as e:
             logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
 
-        # Step 5: Publish SSE event for dashboard (best-effort)
+        # Step 5: Build estado_detalle for SSE event
+        from backend.services.estado_detalle_builder import EstadoDetalleBuilder
+        builder = EstadoDetalleBuilder(
+            armador=spool.armador,
+            soldador=spool.soldador,
+            fecha_armado=spool.fecha_armado,
+            fecha_soldadura=spool.fecha_soldadura,
+            ocupado_por=spool.ocupado_por,
+            metrologia_state=metrologia_machine.get_state_id()
+        )
+        estado_detalle = builder.build()
+
+        # Step 6: Publish SSE event for dashboard (best-effort)
         try:
-            event_data = {
-                "tag_spool": tag_spool,
-                "worker_id": worker_id,
-                "worker_nombre": worker_nombre,
-                "operacion": "METROLOGIA",
-                "accion": "COMPLETAR",
-                "resultado": resultado,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            }
-            self.redis_event_service.publish_state_change(
+            await self.redis_event_service.publish_spool_update(
                 event_type="COMPLETAR_METROLOGIA",
-                data=event_data
+                tag_spool=tag_spool,
+                worker_nombre=worker_nombre,
+                estado_detalle=estado_detalle,
+                additional_data={"resultado": resultado, "operacion": "METROLOGIA"}
             )
         except Exception as e:
             logger.warning(f"Failed to publish SSE event for {tag_spool}: {e}")
