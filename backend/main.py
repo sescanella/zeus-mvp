@@ -48,6 +48,8 @@ from backend.routers import history
 from backend.routers import sse_router
 # v3.0 Phase 4: Router DASHBOARD implementado (occupied spools for initial load)
 from backend.routers import dashboard_router
+# v3.0 Phase 5: Router METROLOGIA implementado (instant binary inspection)
+from backend.routers import metrologia
 
 
 # ============================================================================
@@ -361,6 +363,9 @@ app.include_router(sse_router.router, tags=["SSE"])
 
 # v3.0 Phase 4: Router DASHBOARD registrado (occupied spools for initial load)
 app.include_router(dashboard_router.router, tags=["Dashboard"])
+
+# v3.0 Phase 5: Router METROLOGIA registrado (instant binary inspection)
+app.include_router(metrologia.router, prefix="/api/metrologia", tags=["Metrologia"])
 
 
 # ============================================================================

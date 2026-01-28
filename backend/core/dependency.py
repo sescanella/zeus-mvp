@@ -47,6 +47,7 @@ from backend.services.occupation_service import OccupationService
 from backend.services.state_service import StateService
 from backend.services.history_service import HistoryService
 from backend.services.redis_event_service import RedisEventService
+from backend.services.metrologia_service import MetrologiaService
 from backend.config import config
 
 
@@ -529,6 +530,48 @@ def get_history_service(
     return HistoryService(
         metadata_repository=metadata_repository,
         sheets_repository=sheets_repo
+    )
+
+
+def get_metrologia_service(
+    validation_service: ValidationService = Depends(get_validation_service),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
+    redis_event_service: RedisEventService = Depends(get_redis_event_service)
+) -> MetrologiaService:
+    """
+    Factory para MetrologiaService (nueva instancia por request) - v3.0 PHASE 5.
+
+    v3.0 Phase 5: MetrologiaService implements instant binary inspection workflow.
+
+    MetrologiaService provides:
+    - Instant completion (no occupation phase, no TOMAR)
+    - Binary resultado (APROBADO/RECHAZADO) enforcement
+    - Prerequisite validation (ARM + SOLD complete, not occupied)
+    - Fecha_QC_Metrologia column updates
+    - Metadata audit logging with resultado
+    - Real-time SSE event publishing
+
+    Args:
+        validation_service: Service for prerequisite checks (injected).
+        sheets_repo: Repository for Sheets reads/writes (injected).
+        metadata_repository: Repository for audit logging (injected).
+        redis_event_service: Service for real-time event publishing (injected).
+
+    Returns:
+        Nueva instancia de MetrologiaService con todas las dependencias.
+
+    Usage:
+        metrologia_service: MetrologiaService = Depends(get_metrologia_service)
+
+    Note:
+        v3.0 Phase 5: Skips occupation workflow entirely - inspection completes atomically.
+    """
+    return MetrologiaService(
+        validation_service=validation_service,
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repository,
+        redis_event_service=redis_event_service
     )
 
 
