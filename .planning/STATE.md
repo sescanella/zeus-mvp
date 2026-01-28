@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 5 of 6 (Metrología Workflow) ✅ COMPLETE
-Plan: 4 of 4 (05-04-PLAN.md) ✅ SSE integration & comprehensive test suite complete
-Status: Phase 5 complete - Real-time updates with 44 comprehensive tests
-Last activity: 2026-01-27 — Completed 05-04: SSE integration with integration/unit/validation tests
+Phase: 6 of 6 (Reparación Loops) 🚧 IN PROGRESS
+Plan: 2 of 4 (06-02-PLAN.md) ✅ Cycle counting logic complete
+Status: Cycle tracking with 47 tests - embedded contador in Estado_Detalle
+Last activity: 2026-01-28 — Completed 06-02: CycleCounterService + validation with BLOQUEADO enforcement
 
-Progress: [████████████████████████████████] 100% Phase 5 - 4 of 4 plans complete
+Progress: [████████████████████████████████░░] 94% Phase 6 - 2 of 4 plans complete (32 of 34 total)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 31
-- Average duration: 3.9 minutes
-- Total execution time: 2.08 hours
+- Total plans completed: 32
+- Average duration: 4.0 minutes
+- Total execution time: 2.16 hours
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [███████████████████████
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
 | 05    | 4/4 ✅ | 19.5 min  | 4.9 min    |
+| 06    | 2/4 🚧 | 9.4 min  | 4.7 min    |
 
 **Recent Trend:**
-- Last 4 plans: 05-01 (6 min), 05-02 (3 min), 05-03 (4 min), 05-04 (6.5 min)
-- Trend: Phase 5 complete - Test-heavy plans slightly longer (6-7 min avg)
+- Last 4 plans: 05-03 (4 min), 05-04 (6.5 min), 06-01 (4.7 min), 06-02 (4.7 min)
+- Trend: Phase 6 avg 4.7 min - test-heavy plans consistent with Phase 5
 
 *Updated after each plan completion*
 
@@ -140,6 +141,10 @@ Recent decisions affecting current work:
 - **Phase 5 (05-04):** Async service pattern for SSE integration - MetrologiaService.completar() async enables real-time events
 - Phase 5 (05-04): Best-effort SSE publishing - inspection succeeds even if Redis fails (resilient to infrastructure issues)
 - Phase 5 (05-04): Role validation for METROLOGIA deferred - pattern established in ARM/SOLD, can be added when needed
+- **Phase 6 (06-02):** Cycle count embedded in Estado_Detalle string instead of dedicated column (avoids schema migration)
+- Phase 6 (06-02): Consecutive rejection tracking only - counter resets to 0 after APROBADO (allows recovery after bad batch)
+- Phase 6 (06-02): 3-cycle limit before blocking (industry standard, balances recovery vs escalation)
+- Phase 6 (06-02): SpoolBloqueadoError (HTTP 403) for blocked spools requiring supervisor intervention
 
 ### Pending Todos
 
@@ -234,38 +239,44 @@ None yet.
   - 44 total metrología tests passing (21 existing + 23 new)
 - **Status:** Phase 5 complete - Real-time inspection workflow with comprehensive test coverage
 
-**Phase 6 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
+**Phase 6 (IN PROGRESS):** 🚧 Reparación Loops - 2 of 4 plans complete
+- ✅ Plan 06-01: Research & context (4.7 min)
+  - Researched manufacturing rework best practices (3-cycle limit standard)
+  - Documented embedded cycle counting strategy (no new columns)
+  - Captured user decisions (REPARACIÓN as 4th operation, no role restriction)
+  - Created CONTEXT.md and RESEARCH.md with implementation patterns
+- ✅ Plan 06-02: Cycle counting logic (4.7 min)
+  - CycleCounterService for parsing/incrementing cycles from Estado_Detalle
+  - MetrologiaStateMachine extended with cycle tracking
+  - SpoolBloqueadoError (HTTP 403) for blocked spools
+  - validar_puede_tomar_reparacion() and validar_puede_cancelar_reparacion()
+  - 47 passing tests (26 cycle counter + 21 validation)
+- **Status:** Cycle tracking complete - ready for ReparacionStateMachine in 06-03
 
 ## Session Continuity
 
-Last session: 2026-01-27
-Stopped at: Completed 05-04-PLAN.md (SSE integration & comprehensive tests) ✅
+Last session: 2026-01-28
+Stopped at: Completed 06-02-PLAN.md (Cycle counting logic with 47 tests) ✅
 Resume file: None
 
-**Phase 5 COMPLETE:**
-1. ✅ Plan 05-01 complete - State machine and service layer (6 min)
-2. ✅ Plan 05-02 complete - REST endpoint & estado display (3 min)
-3. ✅ Plan 05-03 complete - Frontend binary resultado flow (4 min)
-
-**Phase 5 Plan 05-03 complete!**
-- Operation-specific routing: METROLOGIA skips tipo-interaccion
-- Binary resultado selection page: /resultado-metrologia with APROBADO/RECHAZADO buttons
-- completarMetrologia API function with 409/404/403/400/422 error handling
-- Single-spool workflow (no batch multiselect in Phase 5)
-- Mobile-first design: h-32 buttons, green/red color coding
-- Instant submission without confirmation screen
+**Phase 6 Plan 06-02 complete!**
+- CycleCounterService: Parse/increment cycles from Estado_Detalle (regex pattern "Ciclo X/3")
+- MetrologiaStateMachine extended: Increment cycle on RECHAZADO, reset on APROBADO
+- SpoolBloqueadoError exception: HTTP 403 for spools blocked after 3 rejections
+- Validation methods: validar_puede_tomar_reparacion() and validar_puede_cancelar_reparacion()
+- 47 tests passing: 26 cycle counter + 21 validation
 
 **Commits:**
-- bde77ac: feat(05-03): route METROLOGIA to spool selection, skip tipo-interaccion
-- c65be32: feat(05-03): create resultado-metrologia binary selection page
-- 17d797a: feat(05-03): add completarMetrologia API function
+- c0e44de: feat(06-02): create CycleCounterService for reparación cycle tracking
+- 22a928e: feat(06-02): extend metrología state machine for cycle counting
+- 6179f3e: feat(06-02): add reparación validation and BLOQUEADO exception
+- 934a38b: test(06-02): add comprehensive cycle counter and validation tests
 
-**Phase 5 Complete - Metrología Workflow:**
-- ✅ 3-state machine (PENDIENTE → APROBADO/RECHAZADO)
-- ✅ Instant completion workflow (no TOMAR occupation)
-- ✅ Binary resultado validation (Pydantic enum)
-- ✅ Frontend UI with mobile-first design
-- ✅ Operation-specific routing (2 fewer navigation steps)
+**Phase 6 Progress - Reparación Loops:**
+- ✅ Research & context (06-01): 4.7 min
+- ✅ Cycle counting logic (06-02): 4.7 min - 47 tests
+- 🚧 ReparacionStateMachine (06-03): Next
+- 🚧 Frontend integration (06-04): TBD
 
 **Next steps:**
-- Phase 6: Reparación workflow for RECHAZADO spools
+- Plan 06-03: Create ReparacionStateMachine with TOMAR/PAUSAR/COMPLETAR workflow
