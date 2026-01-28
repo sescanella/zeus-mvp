@@ -13,7 +13,7 @@ const OPERATION_TO_ROLES: Record<string, string[]> = {
   'ARM': ['Armador', 'Ayudante'],
   'SOLD': ['Soldador', 'Ayudante'],
   'METROLOGIA': ['Metrologia'],
-  'REPARACION': [],  // No role restriction - all active workers can access REPARACIÓN
+  'REPARACION': ['Armador', 'Soldador'],  // Union of Armador + Soldador roles for repairs
 };
 
 // Iconos por operación (Lucide)
