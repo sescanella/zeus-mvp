@@ -15,7 +15,9 @@ from backend.exceptions import (
     DependenciasNoSatisfechasError,
     OperacionNoIniciadaError,
     NoAutorizadoError,
-    RolNoAutorizadoError
+    RolNoAutorizadoError,
+    SpoolBloqueadoError,
+    OperacionNoDisponibleError
 )
 
 logger = logging.getLogger(__name__)
@@ -257,3 +259,99 @@ class ValidationService:
             self.role_service.validar_worker_tiene_rol_para_operacion(worker_id, "METROLOGIA")
 
         logger.debug(f"[V3.0] ✅ METROLOGIA completion validation passed | {spool.tag_spool}")
+
+    def validar_puede_tomar_reparacion(self, spool: Spool, worker_id: int) -> None:
+        """
+        Validate worker can TOMAR spool for reparación (Phase 6).
+
+        Prerequisites (ALL must be true):
+        - Estado_Detalle contains "RECHAZADO" (not BLOQUEADO)
+        - Spool NOT occupied (ocupado_por == None)
+        - Worker has appropriate role (no role restriction per user decision)
+
+        Args:
+            spool: Spool to validate
+            worker_id: ID of worker attempting to take spool for repair
+
+        Raises:
+            SpoolBloqueadoError: If spool is BLOQUEADO (needs supervisor intervention)
+            OperacionNoDisponibleError: If spool not RECHAZADO
+            SpoolOccupiedError: If spool currently occupied
+        """
+        logger.info(f"[V3.0 Phase 6] Validating REPARACION TOMAR | Spool: {spool.tag_spool} | Worker: {worker_id}")
+
+        # Import here to avoid circular dependency
+        from backend.exceptions import SpoolOccupiedError
+
+        # 1. Check NOT BLOQUEADO (cannot repair blocked spools)
+        if spool.estado_detalle and "BLOQUEADO" in spool.estado_detalle:
+            raise SpoolBloqueadoError(
+                tag_spool=spool.tag_spool,
+                mensaje="Spool bloqueado después de 3 rechazos. Contactar supervisor."
+            )
+
+        # 2. Check RECHAZADO (can only repair rejected spools)
+        if not spool.estado_detalle or "RECHAZADO" not in spool.estado_detalle:
+            raise OperacionNoDisponibleError(
+                tag_spool=spool.tag_spool,
+                operacion="REPARACION",
+                mensaje="Solo spools RECHAZADOS pueden ser reparados"
+            )
+
+        # 3. Check NOT occupied
+        if spool.ocupado_por is not None:
+            # Extract worker ID and name from ocupado_por format "INICIALES(ID)"
+            try:
+                owner_name = spool.ocupado_por
+                owner_id = int(spool.ocupado_por.split('(')[1].rstrip(')'))
+            except (IndexError, ValueError):
+                owner_id = 0
+                owner_name = spool.ocupado_por
+
+            raise SpoolOccupiedError(
+                tag_spool=spool.tag_spool,
+                owner_id=owner_id,
+                owner_name=owner_name
+            )
+
+        # 4. No role restriction for REPARACION per user decision
+        # Any active worker can repair (no specific role check needed)
+
+        logger.debug(f"[V3.0 Phase 6] ✅ REPARACION TOMAR validation passed | {spool.tag_spool}")
+
+    def validar_puede_cancelar_reparacion(
+        self,
+        spool: Spool,
+        worker_nombre: str,
+        worker_id: int
+    ) -> None:
+        """
+        Validate worker can CANCELAR reparación (Phase 6).
+
+        Prerequisites:
+        - Estado_Detalle contains "EN_REPARACION" or "REPARACION_PAUSADA"
+
+        Args:
+            spool: Spool to validate
+            worker_nombre: Name of worker attempting to cancel
+            worker_id: ID of worker attempting to cancel
+
+        Raises:
+            OperacionNoIniciadaError: If reparación not in progress
+        """
+        logger.info(f"[V3.0 Phase 6] Validating REPARACION CANCELAR | Spool: {spool.tag_spool} | Worker: {worker_nombre}")
+
+        # Check if EN_REPARACION or REPARACION_PAUSADA
+        if not spool.estado_detalle or (
+            "EN_REPARACION" not in spool.estado_detalle and
+            "REPARACION_PAUSADA" not in spool.estado_detalle
+        ):
+            raise OperacionNoIniciadaError(
+                tag_spool=spool.tag_spool,
+                operacion="REPARACION"
+            )
+
+        # No ownership check for CANCELAR per existing pattern
+        # Any worker with appropriate role can cancel
+
+        logger.debug(f"[V3.0 Phase 6] ✅ REPARACION CANCELAR validation passed | {spool.tag_spool}")
