@@ -127,7 +127,7 @@ export interface CompletarRequest {
   tag_spool: string;
   worker_id: number;
   worker_nombre: string;
-  fecha_operacion: string;  // REQUIRED - Format: "YYYY-MM-DD" (e.g., "2026-01-28")
+  fecha_operacion: string;  // REQUIRED - Format: "DD-MM-YYYY" (e.g., "28-01-2026")
 }
 
 /**

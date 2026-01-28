@@ -1017,7 +1017,7 @@ export async function pausarOcupacion(request: PausarRequest): Promise<Occupatio
  * clears occupation, and releases Redis lock.
  *
  * NEW v3.0 requirements vs v2.1 completarAccion:
- * - fecha_operacion is REQUIRED (YYYY-MM-DD format)
+ * - fecha_operacion is REQUIRED (DD-MM-YYYY format)
  * - v2.1 used timestamp (ISO 8601) - v3.0 uses date only
  *
  * @param request - CompletarRequest with tag_spool, worker_id, worker_nombre, fecha_operacion
@@ -1033,7 +1033,7 @@ export async function pausarOcupacion(request: PausarRequest): Promise<Occupatio
  *   tag_spool: 'MK-1335-CW-25238-011',
  *   worker_id: 93,
  *   worker_nombre: 'MR(93)',
- *   fecha_operacion: '2026-01-28'  // YYYY-MM-DD format
+ *   fecha_operacion: '28-01-2026'  // DD-MM-YYYY format
  * });
  * console.log(result.message); // "Operación completada exitosamente"
  */
