@@ -83,17 +83,18 @@ async def get_occupied_spools(
         headers = all_data[0]
 
         # Build column index mapping
+        # v3.0 columns (Ocupado_Por, Fecha_Ocupacion, Estado_Detalle) may not exist in v2.1 schema
+        # Return empty list gracefully if columns missing (backwards compatibility)
         try:
             tag_spool_idx = headers.index("TAG_SPOOL")
             ocupado_por_idx = headers.index("Ocupado_Por")
             fecha_ocupacion_idx = headers.index("Fecha_Ocupacion")
             estado_detalle_idx = headers.index("Estado_Detalle")
         except ValueError as e:
-            logger.error(f"Dashboard: Missing required column: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail=f"Sheet structure error: {str(e)}"
-            )
+            # v3.0 columns don't exist yet (sheet still on v2.1 schema)
+            logger.warning(f"Dashboard: v3.0 columns not found (sheet may be v2.1 schema): {e}")
+            logger.info("Dashboard: Returning empty list (no occupied spools on v2.1 schema)")
+            return []
 
         # Parse occupied spools (rows where Ocupado_Por is not empty)
         occupied_spools = []
