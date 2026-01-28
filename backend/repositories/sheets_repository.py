@@ -945,13 +945,117 @@ class SheetsRepository:
                 fecha_materiales=parse_date(get_col_value("Fecha_Materiales")),
                 fecha_armado=parse_date(get_col_value("Fecha_Armado")),
                 fecha_soldadura=parse_date(get_col_value("Fecha_Soldadura")),
+                fecha_qc_metrologia=parse_date(get_col_value("Fecha_QC_Metrología")),
                 armador=get_col_value("Armador"),
                 soldador=get_col_value("Soldador"),
+                ocupado_por=get_col_value("Ocupado_Por") if self._compatibility_mode == "v3.0" else None,
+                fecha_ocupacion=get_col_value("Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
+                version=int(get_col_value("version") or 0) if self._compatibility_mode == "v3.0" else 0,
             )
             return spool
         except Exception as e:
             self.logger.error(f"Error constructing Spool object for {tag_spool}: {e}")
             return None
+
+    def get_spools_for_metrologia(self) -> list['Spool']:
+        """
+        Get spools ready for metrología inspection.
+
+        Filter criteria (ALL must be true):
+        - fecha_armado != None (ARM completed)
+        - fecha_soldadura != None (SOLD completed)
+        - fecha_qc_metrologia == None (METROLOGIA not done)
+        - ocupado_por == None (not occupied - prevents race conditions)
+
+        Returns:
+            List of Spool objects ready for inspection (may be empty)
+
+        Raises:
+            SheetsConnectionError: On Google Sheets API errors
+        """
+        from backend.models.spool import Spool
+        from backend.config import config
+        from datetime import datetime
+
+        # Read all rows from Operaciones sheet
+        all_rows = self.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        if not all_rows or len(all_rows) < 2:  # Need at least header + 1 data row
+            return []
+
+        # Get column map for dynamic column access
+        column_map = self._get_column_map(config.HOJA_OPERACIONES_NOMBRE)
+
+        def get_col_value(row_data: list, col_name: str) -> Optional[str]:
+            """Helper to safely get column value by name."""
+            if col_name not in column_map:
+                return None
+            col_index = column_map[col_name] - 1  # Convert 1-indexed to 0-indexed
+            if col_index < len(row_data):
+                value = row_data[col_index]
+                return value if value and value.strip() else None
+            return None
+
+        def parse_date(date_str: Optional[str]) -> Optional[date]:
+            """Helper to parse date string to date object."""
+            if not date_str:
+                return None
+            try:
+                # Try YYYY-MM-DD format first
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                try:
+                    # Try DD/MM/YYYY format (Google Sheets default)
+                    return datetime.strptime(date_str, "%d/%m/%Y").date()
+                except ValueError:
+                    try:
+                        # Try DD-MM-YYYY format
+                        return datetime.strptime(date_str, "%d-%m-%Y").date()
+                    except ValueError:
+                        return None
+
+        # Filter spools
+        ready_spools = []
+        for row_data in all_rows[1:]:  # Skip header row
+            try:
+                # Get key fields for filtering
+                tag_spool = get_col_value(row_data, "TAG_SPOOL")
+                if not tag_spool:
+                    continue  # Skip rows without TAG_SPOOL
+
+                fecha_armado = parse_date(get_col_value(row_data, "Fecha_Armado"))
+                fecha_soldadura = parse_date(get_col_value(row_data, "Fecha_Soldadura"))
+                fecha_qc_metrologia = parse_date(get_col_value(row_data, "Fecha_QC_Metrología"))
+                ocupado_por = get_col_value(row_data, "Ocupado_Por") if self._compatibility_mode == "v3.0" else None
+
+                # Apply filter criteria
+                if (
+                    fecha_armado is not None and
+                    fecha_soldadura is not None and
+                    fecha_qc_metrologia is None and
+                    ocupado_por is None
+                ):
+                    # Build Spool object for filtered row
+                    spool = Spool(
+                        tag_spool=tag_spool,
+                        nv=get_col_value(row_data, "NV"),
+                        fecha_materiales=parse_date(get_col_value(row_data, "Fecha_Materiales")),
+                        fecha_armado=fecha_armado,
+                        fecha_soldadura=fecha_soldadura,
+                        fecha_qc_metrologia=fecha_qc_metrologia,
+                        armador=get_col_value(row_data, "Armador"),
+                        soldador=get_col_value(row_data, "Soldador"),
+                        ocupado_por=ocupado_por,
+                        fecha_ocupacion=get_col_value(row_data, "Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
+                        version=int(get_col_value(row_data, "version") or 0) if self._compatibility_mode == "v3.0" else 0,
+                    )
+                    ready_spools.append(spool)
+            except Exception as e:
+                # Log error but continue processing other rows
+                self.logger.warning(f"Error processing row for metrología filter: {e}")
+                continue
+
+        self.logger.info(f"get_spools_for_metrologia: {len(ready_spools)} spools ready")
+        return ready_spools
 
     @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def update_spool_with_version(
