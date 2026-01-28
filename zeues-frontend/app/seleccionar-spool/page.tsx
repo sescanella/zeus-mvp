@@ -3,9 +3,9 @@
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
-import { getSpoolsParaIniciar, getSpoolsParaCompletar, getSpoolsParaCancelar } from '@/lib/api';
+import { getSpoolsParaIniciar, getSpoolsParaCompletar, getSpoolsParaCancelar, getSpoolsReparacion } from '@/lib/api';
 import type { Spool, SSEEvent } from '@/lib/types';
 import { useSSE } from '@/lib/hooks/useSSE';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -13,7 +13,7 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 function SeleccionarSpoolContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar' | 'metrologia';
+  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion';
   const { state, setState } = useAppState();
 
   const [loading, setLoading] = useState(true);
@@ -88,6 +88,9 @@ function SeleccionarSpoolContent() {
       // METROLOGIA uses 'metrologia' tipo
       if (tipo === 'metrologia') {
         fetchedSpools = await getSpoolsParaIniciar('METROLOGIA' as 'ARM' | 'SOLD');
+      } else if (tipo === 'reparacion') {
+        // REPARACION uses dedicated endpoint
+        fetchedSpools = await getSpoolsReparacion();
       } else if (tipo === 'iniciar') {
         fetchedSpools = await getSpoolsParaIniciar(selectedOperation as 'ARM' | 'SOLD');
       } else if (tipo === 'completar') {
@@ -199,6 +202,19 @@ function SeleccionarSpoolContent() {
       return;
     }
 
+    // REPARACION: Navigate to tipo-interaccion page (single spool only for Phase 6 simplicity)
+    if (tipo === 'reparacion') {
+      if (selectedCount === 1) {
+        setState({
+          selectedSpool: state.selectedSpools[0],
+          selectedSpools: [],
+          batchMode: false
+        });
+        router.push('/tipo-interaccion');
+      }
+      return;
+    }
+
     // ARM/SOLD: Normal flow to confirmar page
     if (selectedCount === 1) {
       setState({
@@ -220,12 +236,15 @@ function SeleccionarSpoolContent() {
 
   const actionLabel = tipo === 'iniciar' ? 'INICIAR' :
                       tipo === 'completar' ? 'COMPLETAR' :
-                      tipo === 'metrologia' ? 'INSPECCIONAR' : 'CANCELAR';
+                      tipo === 'metrologia' ? 'INSPECCIONAR' :
+                      tipo === 'reparacion' ? 'REPARAR' : 'CANCELAR';
   const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
-                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
+                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
+                        state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' : 'REPARACIÓN';
 
   const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
-                        state.selectedOperation === 'SOLD' ? Flame : SearchCheck;
+                        state.selectedOperation === 'SOLD' ? Flame :
+                        state.selectedOperation === 'METROLOGIA' ? SearchCheck : Wrench;
 
   const selectedCount = (state.selectedSpools || []).length;
 
@@ -372,7 +391,7 @@ function SeleccionarSpoolContent() {
                     <tr>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">SEL</th>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">TAG SPOOL</th>
-                      <th className="p-3 text-left text-xs font-black text-white/70 font-mono">NV</th>
+                      <th className="p-3 text-left text-xs font-black text-white/70 font-mono">{tipo === 'reparacion' ? 'CICLO/ESTADO' : 'NV'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -380,26 +399,51 @@ function SeleccionarSpoolContent() {
                     {spoolsFiltrados.map((spool, index) => {
                       console.log(`[RENDER v2.1.3] Row ${index}:`, spool.tag_spool);
                       const isSelected = (state.selectedSpools || []).includes(spool.tag_spool);
+                      const isBloqueado = tipo === 'reparacion' && (spool as unknown as { bloqueado?: boolean }).bloqueado;
+                      const cycle = tipo === 'reparacion' ? (spool as unknown as { cycle?: number }).cycle : null;
+
                       return (
                         <tr
                           key={spool.tag_spool}
-                          onClick={() => toggleSelect(spool.tag_spool)}
-                          className={`border-t-2 border-white/30 cursor-pointer transition-colors ${
-                            isSelected ? 'bg-zeues-orange/20' : 'hover:bg-white/5'
+                          onClick={() => !isBloqueado && toggleSelect(spool.tag_spool)}
+                          className={`border-t-2 border-white/30 transition-colors ${
+                            isBloqueado
+                              ? 'bg-red-500/20 border-red-500 cursor-not-allowed'
+                              : isSelected
+                              ? 'bg-zeues-orange/20 cursor-pointer'
+                              : 'hover:bg-white/5 cursor-pointer'
                           }`}
                         >
                           <td className="p-3 border-r-2 border-white/30">
-                            {isSelected ? (
+                            {isBloqueado ? (
+                              <Lock size={24} className="text-red-500" strokeWidth={3} />
+                            ) : isSelected ? (
                               <CheckSquare size={24} className="text-zeues-orange" strokeWidth={3} />
                             ) : (
                               <Square size={24} className="text-white/50" strokeWidth={3} />
                             )}
                           </td>
                           <td className="p-3 border-r-2 border-white/30">
-                            <span className="text-lg font-black text-white font-mono">{spool.tag_spool}</span>
+                            <span className={`text-lg font-black font-mono ${isBloqueado ? 'text-red-500' : 'text-white'}`}>
+                              {spool.tag_spool}
+                            </span>
                           </td>
                           <td className="p-3">
-                            <span className="text-sm font-black text-white/70 font-mono">{spool.nv}</span>
+                            {tipo === 'reparacion' ? (
+                              <div className="flex items-center gap-2">
+                                {isBloqueado ? (
+                                  <span className="text-sm font-black text-red-500 font-mono">
+                                    BLOQUEADO - Supervisor
+                                  </span>
+                                ) : (
+                                  <span className="text-sm font-black text-yellow-500 font-mono">
+                                    Ciclo {cycle}/3
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm font-black text-white/70 font-mono">{spool.nv}</span>
+                            )}
                           </td>
                         </tr>
                       );
