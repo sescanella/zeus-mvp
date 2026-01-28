@@ -893,11 +893,41 @@ class SheetsRepository:
         from backend.models.spool import Spool
         from backend.config import config
         from datetime import datetime
+        from backend.core.column_map_cache import ColumnMapCache
+
+        # Get column map for dynamic column lookup
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
+
+        # Normalize column name helper
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+        # Try to find TAG_SPOOL column (could be named "TAG_SPOOL" or "SPLIT" in the sheet)
+        tag_column_index = None
+        tag_column_names_to_try = ["TAG_SPOOL", "SPLIT", "tag_spool"]
+
+        for col_name in tag_column_names_to_try:
+            normalized = normalize(col_name)
+            if normalized in column_map:
+                tag_column_index = column_map[normalized]
+                self.logger.debug(f"Found TAG column as '{col_name}' at index {tag_column_index}")
+                break
+
+        if tag_column_index is None:
+            # Fallback to hardcoded G (column 7, 1-indexed) if dynamic lookup fails
+            self.logger.warning(
+                f"TAG_SPOOL column not found in column map, falling back to column G. "
+                f"Available columns: {list(column_map.keys())[:10]}..."
+            )
+            tag_column_index = 7  # Column G is index 7 (1-indexed)
+
+        # Convert column index to letter
+        column_letter = self._index_to_column_letter(tag_column_index)
 
         # Find spool row by TAG_SPOOL column
         row_num = self.find_row_by_column_value(
             sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-            column_letter="G",  # TAG_SPOOL column (hardcoded for stability)
+            column_letter=column_letter,
             value=tag_spool
         )
 
