@@ -66,7 +66,7 @@ class SpoolServiceV2:
 
         # Validar columnas críticas
         critical_columns = [
-            "TAG_SPOOL",
+            "SPLIT",  # Spool identifier (actual column name in Sheet, NOT TAG_SPOOL)
             "Fecha_Materiales",
             "Fecha_Armado",
             "Armador",

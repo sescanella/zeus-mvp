@@ -397,7 +397,7 @@ class SheetsService:
             logger.debug(f"Fila corta rellenada a 68 columnas (original: {len(row) - (68 - len(row))})")
 
         # 1. Obtener índices usando mapeo dinámico
-        idx_tag_spool = self._get_col_idx("TAG_SPOOL", fallback_idx=6)
+        idx_tag_spool = self._get_col_idx("SPLIT", fallback_idx=5)  # Real column name in Sheet
         idx_nv = self._get_col_idx("NV", fallback_idx=1)
         idx_fecha_materiales = self._get_col_idx("Fecha_Materiales", fallback_idx=32)
         idx_fecha_armado = self._get_col_idx("Fecha_Armado", fallback_idx=33)
@@ -411,10 +411,10 @@ class SheetsService:
         idx_version = self._get_col_idx("version", fallback_idx=66)
         idx_estado_detalle = self._get_col_idx("Estado_Detalle", fallback_idx=67)
 
-        # 2. Parsear TAG_SPOOL (obligatorio)
+        # 2. Parsear SPLIT (spool identifier - obligatorio)
         tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None
         if not tag_spool:
-            raise ValueError("TAG_SPOOL vacío en fila")
+            raise ValueError("SPLIT (spool identifier) vacío en fila")
 
         # 3. Parsear NV (v2.0 - opcional para filtrado multidimensional)
         nv = row[idx_nv].strip() if idx_nv < len(row) and row[idx_nv] else None

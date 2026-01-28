@@ -289,7 +289,7 @@ async def startup_event():
 
         # Validar columnas críticas para operaciones ARM/SOLD
         critical_columns = [
-            "TAG_SPOOL",
+            "SPLIT",  # Spool identifier (actual column name, NOT TAG_SPOOL)
             "Fecha_Materiales",
             "Fecha_Armado",
             "Armador",
