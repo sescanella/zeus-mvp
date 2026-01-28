@@ -13,10 +13,12 @@ class ActionType(str, Enum):
     ARM: Armado de spool
     SOLD: Soldado de spool
     METROLOGIA: Metrología/QC de spool
+    REPARACION: Reparación de spool rechazado
     """
     ARM = "ARM"
     SOLD = "SOLD"
     METROLOGIA = "METROLOGIA"
+    REPARACION = "REPARACION"
 
 
 class ActionStatus(str, Enum):
@@ -44,6 +46,12 @@ class EventoTipo(str, Enum):
     Eventos v3.0:
     - TOMAR_SPOOL: Worker ocupa un spool (marca inicio de trabajo)
     - PAUSAR_SPOOL: Worker pausa trabajo en spool (libera recurso)
+
+    Eventos Phase 6 (Reparación):
+    - TOMAR_REPARACION: Worker takes rejected spool for repair
+    - PAUSAR_REPARACION: Worker pauses repair work
+    - COMPLETAR_REPARACION: Worker completes repair (returns to metrología queue)
+    - CANCELAR_REPARACION: Worker cancels repair (returns to RECHAZADO)
     """
     # v2.1 Events (legacy)
     INICIAR_ARM = "INICIAR_ARM"
@@ -58,6 +66,12 @@ class EventoTipo(str, Enum):
     # v3.0 Events (new)
     TOMAR_SPOOL = "TOMAR_SPOOL"
     PAUSAR_SPOOL = "PAUSAR_SPOOL"
+
+    # Phase 6 Events (Reparación)
+    TOMAR_REPARACION = "TOMAR_REPARACION"
+    PAUSAR_REPARACION = "PAUSAR_REPARACION"
+    COMPLETAR_REPARACION = "COMPLETAR_REPARACION"
+    CANCELAR_REPARACION = "CANCELAR_REPARACION"
 
 
 class EstadoOcupacion(str, Enum):
