@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 from .enums import ActionType
+from backend.utils.date_formatter import now_chile
 
 
 class ActionRequest(BaseModel):
@@ -166,8 +167,8 @@ class BatchActionRequest(BaseModel):
     @field_validator('timestamp', mode='before')
     @classmethod
     def set_timestamp_default(cls, v):
-        """Si no se provee timestamp, usar datetime.now()."""
-        return v or datetime.now()
+        """Si no se provee timestamp, usar now_chile()."""
+        return v or now_chile()
 
     @field_validator('tag_spools')
     @classmethod

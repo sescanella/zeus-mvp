@@ -10,6 +10,7 @@ from functools import wraps
 import time
 from datetime import date, datetime
 
+from backend.utils.date_formatter import now_chile
 from backend.config import config
 from backend.models.metadata import MetadataEvent, EventoTipo, Accion
 from backend.exceptions import SheetsConnectionError, SheetsUpdateError
@@ -370,7 +371,7 @@ class MetadataRepository:
         # Create MetadataEvent
         event = MetadataEvent(
             id=event_id,
-            timestamp=datetime.now(),
+            timestamp=now_chile(),
             evento_tipo=EventoTipo(evento_tipo),
             tag_spool=tag_spool,
             worker_id=worker_id,

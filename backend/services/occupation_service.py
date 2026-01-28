@@ -18,6 +18,8 @@ import json
 from typing import Optional
 from datetime import date, datetime
 from redis.exceptions import RedisError
+
+from backend.utils.date_formatter import format_date_for_sheets, today_chile
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -149,7 +151,7 @@ class OccupationService:
             # Step 3: Update Operaciones sheet with occupation data (with version retry)
             try:
                 # Write Ocupado_Por (column 64) and Fecha_Ocupacion (column 65)
-                fecha_ocupacion_str = date.today().isoformat()
+                fecha_ocupacion_str = format_date_for_sheets(today_chile())
 
                 # Use ConflictService for version-aware update with automatic retry
                 updates_dict = {
@@ -465,7 +467,7 @@ class OccupationService:
 
             # Step 3: Update Sheets - set fecha and clear occupation (with version retry)
             try:
-                fecha_str = fecha_operacion.isoformat()
+                fecha_str = format_date_for_sheets(fecha_operacion)
 
                 # Determine which fecha column to update
                 if operacion == "ARM":

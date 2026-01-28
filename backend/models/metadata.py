@@ -9,6 +9,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 import uuid
+import pytz
+from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
 
 
 class EventoTipo(str, Enum):
@@ -44,9 +46,9 @@ class MetadataEvent(BaseModel):
         examples=["550e8400-e29b-41d4-a716-446655440000"]
     )
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Timestamp UTC del evento (ISO 8601)",
-        examples=["2025-12-10T14:30:00Z"]
+        default_factory=now_chile,
+        description="Timestamp del evento en timezone Santiago (DD-MM-YYYY HH:MM:SS)",
+        examples=["10-12-2025 14:30:00"]
     )
     evento_tipo: EventoTipo = Field(
         ...,
@@ -100,14 +102,14 @@ class MetadataEvent(BaseModel):
         json_schema_extra={
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
-                "timestamp": "2025-12-10T14:30:00Z",
+                "timestamp": "10-12-2025 14:30:00",
                 "evento_tipo": "INICIAR_ARM",
                 "tag_spool": "MK-1335-CW-25238-011",
                 "worker_id": 93,
                 "worker_nombre": "MR(93)",
                 "operacion": "ARM",
                 "accion": "INICIAR",
-                "fecha_operacion": "2025-12-10",
+                "fecha_operacion": "10-12-2025",
                 "metadata_json": '{"device": "tablet-01"}'
             }
         }
@@ -122,7 +124,7 @@ class MetadataEvent(BaseModel):
         """
         return [
             self.id,
-            self.timestamp.isoformat() + "Z",  # ISO 8601 con Z
+            format_datetime_for_sheets(self.timestamp),  # DD-MM-YYYY HH:MM:SS
             self.evento_tipo.value,
             self.tag_spool,
             str(self.worker_id),
@@ -144,9 +146,18 @@ class MetadataEvent(BaseModel):
         Returns:
             MetadataEvent: Instancia del evento
         """
+        # Parse timestamp with backward compatibility
+        timestamp_str = row[1]
+        try:
+            # Try new format DD-MM-YYYY HH:MM:SS
+            timestamp = datetime.strptime(timestamp_str, "%d-%m-%Y %H:%M:%S").replace(tzinfo=pytz.timezone('America/Santiago'))
+        except ValueError:
+            # Fallback to old ISO 8601 format
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+
         return cls(
             id=row[0],
-            timestamp=datetime.fromisoformat(row[1].replace("Z", "+00:00")),
+            timestamp=timestamp,
             evento_tipo=EventoTipo(row[2]),
             tag_spool=row[3],
             worker_id=int(row[4]),

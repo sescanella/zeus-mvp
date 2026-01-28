@@ -17,6 +17,7 @@ import json
 from datetime import date, datetime
 from typing import Literal
 
+from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile
 from backend.domain.state_machines.metrologia_machine import MetrologiaStateMachine
 from backend.services.validation_service import ValidationService
 from backend.repositories.sheets_repository import SheetsRepository
@@ -132,14 +133,14 @@ class MetrologiaService:
 
         metadata_event = {
             "id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": format_datetime_for_sheets(now_chile()),
             "evento_tipo": evento_tipo,
             "tag_spool": tag_spool,
             "worker_id": worker_id,
             "worker_nombre": worker_nombre,
             "operacion": "METROLOGIA",
             "accion": "COMPLETAR",
-            "fecha_operacion": fecha_operacion.isoformat(),
+            "fecha_operacion": format_date_for_sheets(fecha_operacion),
             "metadata_json": json.dumps({
                 "resultado": resultado,
                 "state": metrologia_machine.get_state_id()
@@ -180,5 +181,5 @@ class MetrologiaService:
             "message": f"Metrología {resultado.lower()} para spool {tag_spool}",
             "resultado": resultado,
             "tag_spool": tag_spool,
-            "fecha_operacion": fecha_operacion.isoformat()
+            "fecha_operacion": format_date_for_sheets(fecha_operacion)
         }

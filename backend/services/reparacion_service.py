@@ -17,6 +17,7 @@ import uuid
 import json
 from datetime import date, datetime
 
+from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile, today_chile
 from backend.services.state_machines.reparacion_state_machine import REPARACIONStateMachine
 from backend.services.validation_service import ValidationService
 from backend.services.cycle_counter_service import CycleCounterService
@@ -139,14 +140,14 @@ class ReparacionService:
 
         metadata_event = {
             "id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": format_datetime_for_sheets(now_chile()),
             "evento_tipo": evento_tipo,
             "tag_spool": tag_spool,
             "worker_id": worker_id,
             "worker_nombre": worker_nombre,
             "operacion": "REPARACION",
             "accion": "TOMAR",
-            "fecha_operacion": date.today().isoformat(),
+            "fecha_operacion": format_date_for_sheets(today_chile()),
             "metadata_json": json.dumps({
                 "cycle": current_cycle,
                 "max_cycles": self.cycle_counter.MAX_CYCLES,
@@ -253,14 +254,14 @@ class ReparacionService:
 
         metadata_event = {
             "id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": format_datetime_for_sheets(now_chile()),
             "evento_tipo": evento_tipo,
             "tag_spool": tag_spool,
             "worker_id": worker_id,
             "worker_nombre": spool.ocupado_por,  # Current worker name
             "operacion": "REPARACION",
             "accion": "PAUSAR",
-            "fecha_operacion": date.today().isoformat(),
+            "fecha_operacion": format_date_for_sheets(today_chile()),
             "metadata_json": json.dumps({
                 "cycle": current_cycle,
                 "max_cycles": self.cycle_counter.MAX_CYCLES,
@@ -366,14 +367,14 @@ class ReparacionService:
 
         metadata_event = {
             "id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": format_datetime_for_sheets(now_chile()),
             "evento_tipo": evento_tipo,
             "tag_spool": tag_spool,
             "worker_id": worker_id,
             "worker_nombre": worker_nombre,
             "operacion": "REPARACION",
             "accion": "COMPLETAR",
-            "fecha_operacion": date.today().isoformat(),
+            "fecha_operacion": format_date_for_sheets(today_chile()),
             "metadata_json": json.dumps({
                 "cycle": current_cycle,
                 "max_cycles": self.cycle_counter.MAX_CYCLES,
@@ -473,14 +474,14 @@ class ReparacionService:
 
         metadata_event = {
             "id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": format_datetime_for_sheets(now_chile()),
             "evento_tipo": evento_tipo,
             "tag_spool": tag_spool,
             "worker_id": worker_id,
             "worker_nombre": spool.ocupado_por or "Unknown",
             "operacion": "REPARACION",
             "accion": "CANCELAR",
-            "fecha_operacion": date.today().isoformat(),
+            "fecha_operacion": format_date_for_sheets(today_chile()),
             "metadata_json": json.dumps({
                 "cycle": current_cycle,
                 "max_cycles": self.cycle_counter.MAX_CYCLES,

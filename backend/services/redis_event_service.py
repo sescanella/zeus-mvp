@@ -18,6 +18,8 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
+
+from backend.utils.date_formatter import format_datetime_for_sheets, now_chile
 from redis import asyncio as aioredis
 from redis.exceptions import RedisError
 
@@ -89,7 +91,7 @@ class RedisEventService:
                 "tag_spool": tag_spool,
                 "worker_nombre": worker_nombre,
                 "estado_detalle": estado_detalle,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": format_datetime_for_sheets(now_chile())
             }
 
             # Merge additional data if provided

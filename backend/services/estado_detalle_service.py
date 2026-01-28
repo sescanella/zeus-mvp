@@ -16,6 +16,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
+from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile, today_chile
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.enums import EventoTipo
@@ -120,20 +121,20 @@ class EstadoDetalleService:
                 metadata_json = json.dumps({
                     "previous_estado": last_estado,
                     "new_estado": current_estado,
-                    "detection_timestamp": datetime.utcnow().isoformat() + "Z",
+                    "detection_timestamp": format_datetime_for_sheets(now_chile()),
                     "override_type": "BLOQUEADO_TO_RECHAZADO"
                 })
 
                 metadata_event = {
                     "id": event_id,
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": format_datetime_for_sheets(now_chile()),
                     "evento_tipo": "SUPERVISOR_OVERRIDE",  # New event type
                     "tag_spool": tag_spool,
                     "worker_id": 0,  # System event
                     "worker_nombre": "SYSTEM",
                     "operacion": "REPARACION",
                     "accion": "OVERRIDE",
-                    "fecha_operacion": datetime.utcnow().date().isoformat(),
+                    "fecha_operacion": format_date_for_sheets(today_chile()),
                     "metadata_json": metadata_json
                 }
 
