@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 5 of 6 (Metrología Workflow) 🚧 IN PROGRESS
-Plan: 1 of 3 (05-01-PLAN.md) ✅ State machine and service layer complete
-Status: Phase 5 started - Binary inspection backend ready
-Last activity: 2026-01-28 — Completed 05-01: METROLOGIA 3-state machine + instant completion service
+Plan: 2 of 3 (05-02-PLAN.md) ✅ REST endpoint & estado display complete
+Status: Phase 5 Wave 2 complete - API endpoint with binary resultado validation
+Last activity: 2026-01-27 — Completed 05-02: POST /api/metrologia/completar endpoint + Estado_Detalle display
 
-Progress: [███████████████░░] 33% Phase 5 - 1 of 3 plans complete
+Progress: [███████████████████████░░░░░░] 67% Phase 5 - 2 of 3 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 3.9 minutes
-- Total execution time: 1.85 hours
+- Total execution time: 1.90 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [███████████████░░] 33% Phase 5 - 1 
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
-| 05    | 1/3 🚧 | 6 min  | 6.0 min    |
+| 05    | 2/3 🚧 | 9 min  | 4.5 min    |
 
 **Recent Trend:**
-- Last 3 plans: 04-03 (3 min), 04-04 (5 min), 05-01 (6 min)
-- Trend: Phase 5 started - first plan took 6 min (state machine + service layer)
+- Last 3 plans: 04-04 (5 min), 05-01 (6 min), 05-02 (3 min)
+- Trend: Phase 5 maintaining pace - API integration under 3 min
 
 *Updated after each plan completion*
 
@@ -131,6 +131,9 @@ Recent decisions affecting current work:
 - **Phase 5 (05-01):** Both APROBADO and RECHAZADO marked as final states to enforce reparación workflow (Phase 6)
 - Phase 5 (05-01): Skip TOMAR occupation entirely - inspection completes in single atomic operation
 - Phase 5 (05-01): Occupied spools blocked from inspection to prevent race conditions (ocupado_por == None filter)
+- **Phase 5 (05-02):** Pydantic ResultadoEnum enforces binary valores (APROBADO/RECHAZADO) at API boundary
+- Phase 5 (05-02): EstadoDetalleBuilder extended with optional metrologia_state parameter for backward compatibility
+- Phase 5 (05-02): Display formats - APROBADO: "METROLOGIA APROBADO ✓", RECHAZADO: "METROLOGIA RECHAZADO - Pendiente reparación"
 
 ### Pending Todos
 
@@ -200,52 +203,54 @@ None yet.
   - Locust load test for 30 concurrent users
 - **Status:** Phase 4 complete
 
-**Phase 5 (IN PROGRESS):** 🚧 Metrología Workflow - 1 of 3 plans complete
+**Phase 5 (IN PROGRESS):** 🚧 Metrología Workflow - 2 of 3 plans complete
 - ✅ Plan 05-01: State machine and service layer (6 min)
   - MetrologiaStateMachine with 3 states (PENDIENTE → APROBADO/RECHAZADO)
   - MetrologiaService for instant completion workflow
   - validar_puede_completar_metrologia() with 4 prerequisite checks
   - get_spools_for_metrologia() filtering method
   - 21 unit tests passing
-- 🔲 Plan 05-02: Backend API endpoint (pending)
+- ✅ Plan 05-02: REST endpoint & estado display (3 min)
+  - POST /api/metrologia/completar endpoint with binary resultado
+  - Pydantic models: CompletarMetrologiaRequest/Response, ResultadoEnum
+  - EstadoDetalleBuilder extended for metrología states
+  - Error handling: 404, 400, 409, 403, 422
 - 🔲 Plan 05-03: Frontend metrología UI (pending)
-- **Status:** Backend state machine ready - Next: API endpoint integration
+- **Status:** Backend API complete - Next: Frontend binary resultado flow
 
-**Phase 5 Next:** Create POST /api/metrologia/completar endpoint and integrate with router
+**Phase 5 Next:** Build frontend /metrologia page with APROBADO/RECHAZADO buttons
 
 **Phase 6 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
 
 ## Session Continuity
 
-Last session: 2026-01-28
-Stopped at: Completed 05-01-PLAN.md (METROLOGIA state machine & service) ✅
+Last session: 2026-01-27
+Stopped at: Completed 05-02-PLAN.md (REST endpoint & estado display) ✅
 Resume file: None
 
 **Phase 5 IN PROGRESS:**
 1. ✅ Plan 05-01 complete - State machine and service layer (6 min)
-2. 🔲 Plan 05-02 pending - Backend API endpoint
+2. ✅ Plan 05-02 complete - REST endpoint & estado display (3 min)
 3. 🔲 Plan 05-03 pending - Frontend metrología UI
 
-**Phase 5 Plan 05-01 complete!**
-- MetrologiaStateMachine with 3 states (PENDIENTE → APROBADO/RECHAZADO)
-- Both terminals marked final=True to enforce reparación workflow
-- MetrologiaService.completar() orchestrates instant inspection
-- validar_puede_completar_metrologia() checks ARM complete, SOLD complete, not inspected, not occupied
-- get_spools_for_metrologia() filters spools ready for inspection
-- 21 unit tests passing (9 state machine + 12 service)
+**Phase 5 Plan 05-02 complete!**
+- POST /api/metrologia/completar endpoint with binary resultado validation
+- Pydantic models: CompletarMetrologiaRequest, CompletarMetrologiaResponse, ResultadoEnum
+- EstadoDetalleBuilder extended with optional metrologia_state parameter
+- MetrologiaService factory added to dependency injection
+- Router registered with prefix /api/metrologia
+- Error handling: 404 (not found), 400 (validation), 409 (occupied), 403 (unauthorized), 422 (invalid resultado)
 
 **Commits:**
-- 2612806: feat(05-01): create METROLOGIA 3-state machine with binary outcomes
-- 350b028: feat(05-01): implement MetrologiaService for instant completion
-- ef26e7f: feat(05-01): add metrología spool filtering to repository
+- 0d9ed59: feat(05-02): create Pydantic models for metrología instant completion
+- 1a05e7c: feat(05-02): implement POST /api/metrologia/completar endpoint
+- 6f74f8f: feat(05-02): extend EstadoDetalleBuilder for metrología states
 
-**Phase 5 Plan 05-01 - Backend Foundation Complete:**
-- ✅ State machine handles APROBADO/RECHAZADO transitions
-- ✅ Prerequisite validation prevents invalid inspections
-- ✅ Occupied spools filtered out (race prevention)
-- ✅ Metadata logging with resultado in metadata_json
-- ✅ SSE event publishing for dashboard
+**Phase 5 Plan 05-02 - API Layer Complete:**
+- ✅ Binary resultado enforced via Pydantic enum (APROBADO/RECHAZADO)
+- ✅ Estado_Detalle displays inspection results with next-action guidance
+- ✅ Router integrated in main.py with /api/metrologia prefix
+- ✅ All verification tests passed (6/6)
 
 **Next steps:**
-- Plan 05-02: Create POST /api/metrologia/completar endpoint
-- Plan 05-03: Build frontend metrología UI flow
+- Plan 05-03: Build frontend /metrologia page with binary resultado buttons
