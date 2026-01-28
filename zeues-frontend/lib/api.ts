@@ -381,6 +381,97 @@ export async function cancelarAccion(payload: ActionPayload): Promise<ActionResp
 }
 
 // ==========================================
+// METROLOGIA OPERATIONS (Phase 5)
+// ==========================================
+
+/**
+ * POST /api/metrologia/completar
+ * Completes metrología inspection with binary resultado (APROBADO/RECHAZADO).
+ *
+ * Instant completion workflow - no occupation phase. Validates prerequisites:
+ * - ARM and SOLD must be completed (fecha_armado != None AND fecha_soldadura != None)
+ * - Spool must not be occupied (ocupado_por = None)
+ * - Metrología must be PENDIENTE (not already completed)
+ *
+ * @param tagSpool - TAG_SPOOL identifier
+ * @param workerId - ID numérico del trabajador
+ * @param resultado - Binary resultado: 'APROBADO' or 'RECHAZADO'
+ * @returns Promise<{message: string, tag_spool: string, resultado: string}>
+ * @throws Error if:
+ *   - 404: Spool or worker not found
+ *   - 400: Invalid data or prerequisites not met
+ *   - 409: Spool is occupied by another worker
+ *   - 403: Worker not authorized (missing Metrologia role)
+ *   - 422: Invalid resultado value
+ *
+ * @example
+ * // Successful approval
+ * const result = await completarMetrologia('MK-123', 95, 'APROBADO');
+ * console.log(result.message); // "Metrología completada: APROBADO"
+ *
+ * @example
+ * // Rejection
+ * const result = await completarMetrologia('MK-456', 95, 'RECHAZADO');
+ * console.log(result.message); // "Metrología completada: RECHAZADO - Pendiente reparación"
+ *
+ * @example
+ * // Error 409 - occupied spool
+ * try {
+ *   await completarMetrologia('MK-789', 95, 'APROBADO');
+ * } catch (error) {
+ *   console.error(error.message); // "Spool ocupado por otro trabajador"
+ * }
+ */
+export async function completarMetrologia(
+  tagSpool: string,
+  workerId: number,
+  resultado: 'APROBADO' | 'RECHAZADO'
+): Promise<{ message: string; tag_spool: string; resultado: string }> {
+  try {
+    const res = await fetch(`${API_URL}/api/metrologia/completar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag_spool: tagSpool,
+        worker_id: workerId,
+        resultado: resultado
+      })
+    });
+
+    // Handle specific error codes
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool ocupado por otro trabajador. Intenta más tarde.');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool o trabajador no encontrado.');
+    }
+
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'No tienes autorización para realizar metrología.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
+    }
+
+    if (res.status === 422) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Resultado inválido. Debe ser APROBADO o RECHAZADO.');
+    }
+
+    return await handleResponse<{ message: string; tag_spool: string; resultado: string }>(res);
+  } catch (error) {
+    console.error('completarMetrologia error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
 // BATCH OPERATIONS (v2.0 Multiselect)
 // ==========================================
 
