@@ -9,26 +9,26 @@ Requirements for v3.0 real-time location tracking system. Each maps to roadmap p
 
 ### Location Tracking
 
-- [ ] **LOC-01**: Worker can TOMAR available spool (occupation constraint enforced)
-- [ ] **LOC-02**: Worker can PAUSAR spool without completing (→ DISPONIBLE)
-- [ ] **LOC-03**: Worker can COMPLETAR spool (finish + → DISPONIBLE)
-- [ ] **LOC-04**: System prevents 2 workers TOMAR same spool (race condition protection)
-- [ ] **LOC-05**: Worker can see real-time list of DISPONIBLE spools (< 10s refresh)
-- [ ] **LOC-06**: Worker can see real-time list of OCUPADO spools with owner
+- [x] **LOC-01**: Worker can TOMAR available spool (occupation constraint enforced)
+- [x] **LOC-02**: Worker can PAUSAR spool without completing (→ DISPONIBLE)
+- [x] **LOC-03**: Worker can COMPLETAR spool (finish + → DISPONIBLE)
+- [x] **LOC-04**: System prevents 2 workers TOMAR same spool (race condition protection)
+- [x] **LOC-05**: Worker can see real-time list of DISPONIBLE spools (< 10s refresh)
+- [x] **LOC-06**: Worker can see real-time list of OCUPADO spools with owner
 
 ### State Management
 
-- [ ] **STATE-01**: System displays combined state (occupation + ARM progress + SOLD progress)
-- [ ] **STATE-02**: Metadata logs all TOMAR/PAUSAR/COMPLETAR events (audit trail)
-- [ ] **STATE-03**: Estado_Detalle shows "Armando: Juan (93) - ARM parcial, SOLD pendiente"
-- [ ] **STATE-04**: System uses hierarchical state machine (< 15 states, not 27+)
+- [x] **STATE-01**: System displays combined state (occupation + ARM progress + SOLD progress)
+- [x] **STATE-02**: Metadata logs all TOMAR/PAUSAR/COMPLETAR events (audit trail)
+- [x] **STATE-03**: Estado_Detalle shows "Armando: Juan (93) - ARM parcial, SOLD pendiente"
+- [x] **STATE-04**: System uses hierarchical state machine (< 15 states, not 27+)
 
 ### Collaborative Work
 
-- [ ] **COLLAB-01**: Any worker with correct role can continue partially-completed work
-- [ ] **COLLAB-02**: System enforces operation dependencies (SOLD requires ARM initiated)
-- [ ] **COLLAB-03**: System tracks multiple workers on same spool sequentially
-- [ ] **COLLAB-04**: Worker can view occupation history per spool
+- [x] **COLLAB-01**: Any worker with correct role can continue partially-completed work
+- [x] **COLLAB-02**: System enforces operation dependencies (SOLD requires ARM initiated)
+- [x] **COLLAB-03**: System tracks multiple workers on same spool sequentially
+- [x] **COLLAB-04**: Worker can view occupation history per spool
 
 ### Metrología
 
@@ -39,10 +39,10 @@ Requirements for v3.0 real-time location tracking system. Each maps to roadmap p
 
 ### Reparación
 
-- [ ] **REPAR-01**: Worker can TOMAR spool RECHAZADO for reparación
-- [ ] **REPAR-02**: Reparación specifies responsible role (Armador/Soldador)
-- [ ] **REPAR-03**: COMPLETAR reparación returns spool to metrología queue
-- [ ] **REPAR-04**: System limits reparación cycles (max 3 loops)
+- [x] **REPAR-01**: Worker can TOMAR spool RECHAZADO for reparación
+- [x] **REPAR-02**: Reparación specifies responsible role (Armador/Soldador)
+- [x] **REPAR-03**: COMPLETAR reparación returns spool to metrología queue
+- [x] **REPAR-04**: System limits reparación cycles (max 3 loops)
 
 ### Backward Compatibility
 
@@ -122,16 +122,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COLLAB-02 | Phase 3 | Complete |
 | COLLAB-03 | Phase 3 | Complete |
 | COLLAB-04 | Phase 3 | Complete |
-| LOC-05 | Phase 4 | Pending |
-| LOC-06 | Phase 4 | Pending |
-| METRO-01 | Phase 5 | Pending |
-| METRO-02 | Phase 5 | Pending |
-| METRO-03 | Phase 5 | Pending |
-| METRO-04 | Phase 5 | Pending |
-| REPAR-01 | Phase 6 | Pending |
-| REPAR-02 | Phase 6 | Pending |
-| REPAR-03 | Phase 6 | Pending |
-| REPAR-04 | Phase 6 | Pending |
+| LOC-05 | Phase 4 | Complete |
+| LOC-06 | Phase 4 | Complete |
+| METRO-01 | Phase 5 | Complete |
+| METRO-02 | Phase 5 | Complete |
+| METRO-03 | Phase 5 | Complete |
+| METRO-04 | Phase 5 | Complete |
+| REPAR-01 | Phase 6 | Complete |
+| REPAR-02 | Phase 6 | Complete |
+| REPAR-03 | Phase 6 | Complete |
+| REPAR-04 | Phase 6 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 24 total
@@ -140,4 +140,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-27 after Phase 3 completion*
+*Last updated: 2026-01-28 after v3.0 milestone completion (all 24 requirements complete)*
