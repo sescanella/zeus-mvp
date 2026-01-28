@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, ArrowLeft, X } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Wrench, ArrowLeft, X } from 'lucide-react';
 import { ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
 import type { Worker } from '@/lib/types';
@@ -13,6 +13,7 @@ const OPERATION_TO_ROLES: Record<string, string[]> = {
   'ARM': ['Armador', 'Ayudante'],
   'SOLD': ['Soldador', 'Ayudante'],
   'METROLOGIA': ['Metrologia'],
+  'REPARACION': [],  // No role restriction - all active workers can access REPARACIÓN
 };
 
 // Iconos por operación (Lucide)
@@ -20,6 +21,7 @@ const OPERATION_ICONS = {
   'ARM': Puzzle,
   'SOLD': Flame,
   'METROLOGIA': SearchCheck,
+  'REPARACION': Wrench,
 };
 
 // Títulos dinámicos por operación
@@ -27,6 +29,7 @@ const OPERATION_TITLES: Record<string, string> = {
   'ARM': '¿Quién va a armar?',
   'SOLD': '¿Quién va a soldar?',
   'METROLOGIA': '¿Quién va a medir?',
+  'REPARACION': '¿Quién va a reparar?',
 };
 
 export default function TrabajadorSelectionPage() {
@@ -64,9 +67,11 @@ export default function TrabajadorSelectionPage() {
   const handleSelectWorker = (worker: Worker) => {
     setState({ selectedWorker: worker });
 
-    // METROLOGIA skips tipo-interaccion and goes directly to spool selection
+    // METROLOGIA and REPARACION skip tipo-interaccion and go directly to spool selection
     if (state.selectedOperation === 'METROLOGIA') {
       router.push('/seleccionar-spool?tipo=metrologia');
+    } else if (state.selectedOperation === 'REPARACION') {
+      router.push('/seleccionar-spool?tipo=reparacion');
     } else {
       router.push('/tipo-interaccion');
     }
@@ -82,7 +87,8 @@ export default function TrabajadorSelectionPage() {
   const operationNames: Record<string, string> = {
     'ARM': 'ARMADO',
     'SOLD': 'SOLDADURA',
-    'METROLOGIA': 'METROLOGÍA'
+    'METROLOGIA': 'METROLOGÍA',
+    'REPARACION': 'REPARACIÓN'
   };
 
   return (

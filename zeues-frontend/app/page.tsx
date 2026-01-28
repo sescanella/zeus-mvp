@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Puzzle, Flame, SearchCheck, Monitor } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Monitor, Wrench } from 'lucide-react';
 import { Loading, ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
 import { getWorkers } from '@/lib/api';
@@ -38,11 +38,11 @@ export default function OperacionSelectionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Solo ejecutar una vez al montar
 
-  const handleSelectOperation = (operacion: 'ARM' | 'SOLD' | 'METROLOGIA') => {
+  const handleSelectOperation = (operacion: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION') => {
     setState({ selectedOperation: operacion });
 
-    // METROLOGIA skips tipo-interaccion and goes directly to worker selection
-    if (operacion === 'METROLOGIA') {
+    // METROLOGIA and REPARACION skip tipo-interaccion and go directly to worker selection
+    if (operacion === 'METROLOGIA' || operacion === 'REPARACION') {
       router.push('/operacion');
     } else {
       router.push('/operacion');
@@ -182,6 +182,26 @@ export default function OperacionSelectionPage() {
           <SearchCheck size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
           <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
             METROLOGÍA
+          </h3>
+        </button>
+
+        {/* Card Reparación */}
+        <button
+          onClick={() => handleSelectOperation('REPARACION')}
+          className="
+            h-[20vh] narrow:h-32 w-full
+            bg-transparent
+            border-4 border-white
+            flex flex-col items-center justify-center gap-4 cursor-pointer
+            active:bg-yellow-600 active:text-white
+            transition-all duration-200
+            relative
+            group
+          "
+        >
+          <Wrench size={80} strokeWidth={3} className="text-yellow-600 group-active:text-white" />
+          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+            REPARACIÓN
           </h3>
         </button>
       </div>
