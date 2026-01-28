@@ -409,6 +409,7 @@ class SheetsService:
         idx_ocupado_por = self._get_col_idx("Ocupado_Por", fallback_idx=64)
         idx_fecha_ocupacion = self._get_col_idx("Fecha_Ocupacion", fallback_idx=65)
         idx_version = self._get_col_idx("version", fallback_idx=66)
+        idx_estado_detalle = self._get_col_idx("Estado_Detalle", fallback_idx=67)
 
         # 2. Parsear TAG_SPOOL (obligatorio)
         tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None
@@ -457,6 +458,11 @@ class SheetsService:
                 logger.warning(f"Invalid version value '{row[idx_version]}' for {tag_spool}, defaulting to 0")
                 version = 0
 
+        # Estado_Detalle (v3.0)
+        estado_detalle = row[idx_estado_detalle].strip() if idx_estado_detalle < len(row) and row[idx_estado_detalle] else None
+        if estado_detalle == '':
+            estado_detalle = None
+
         # 8. Crear objeto Spool con datos base
         # NOTA: Los estados reales se reconstruyen en ValidationService desde MetadataRepository
         return Spool(
@@ -473,7 +479,8 @@ class SheetsService:
             # v3.0: Campos de ocupación
             ocupado_por=ocupado_por,
             fecha_ocupacion=fecha_ocupacion,
-            version=version
+            version=version,
+            estado_detalle=estado_detalle
         )
 
 

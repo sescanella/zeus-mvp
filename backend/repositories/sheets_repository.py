@@ -911,13 +911,19 @@ class SheetsRepository:
         row_data = all_rows[row_num - 1]  # Convert 1-indexed to 0-indexed
 
         # Get column map for dynamic column access
-        column_map = self._get_column_map(config.HOJA_OPERACIONES_NOMBRE)
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
+
+        def normalize(name: str) -> str:
+            """Normalize column name to match ColumnMapCache format."""
+            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
 
         def get_col_value(col_name: str) -> Optional[str]:
             """Helper to safely get column value by name."""
-            if col_name not in column_map:
+            normalized = normalize(col_name)
+            if normalized not in column_map:
                 return None
-            col_index = column_map[col_name] - 1  # Convert 1-indexed to 0-indexed
+            col_index = column_map[normalized] - 1  # Convert 1-indexed to 0-indexed
             if col_index < len(row_data):
                 value = row_data[col_index]
                 return value if value and value.strip() else None
@@ -951,6 +957,7 @@ class SheetsRepository:
                 ocupado_por=get_col_value("Ocupado_Por") if self._compatibility_mode == "v3.0" else None,
                 fecha_ocupacion=get_col_value("Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
                 version=int(get_col_value("version") or 0) if self._compatibility_mode == "v3.0" else 0,
+                estado_detalle=get_col_value("Estado_Detalle") if self._compatibility_mode == "v3.0" else None,
             )
             return spool
         except Exception as e:
@@ -983,13 +990,19 @@ class SheetsRepository:
             return []
 
         # Get column map for dynamic column access
-        column_map = self._get_column_map(config.HOJA_OPERACIONES_NOMBRE)
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
+
+        def normalize(name: str) -> str:
+            """Normalize column name to match ColumnMapCache format."""
+            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
 
         def get_col_value(row_data: list, col_name: str) -> Optional[str]:
             """Helper to safely get column value by name."""
-            if col_name not in column_map:
+            normalized = normalize(col_name)
+            if normalized not in column_map:
                 return None
-            col_index = column_map[col_name] - 1  # Convert 1-indexed to 0-indexed
+            col_index = column_map[normalized] - 1  # Convert 1-indexed to 0-indexed
             if col_index < len(row_data):
                 value = row_data[col_index]
                 return value if value and value.strip() else None
@@ -1047,6 +1060,7 @@ class SheetsRepository:
                         ocupado_por=ocupado_por,
                         fecha_ocupacion=get_col_value(row_data, "Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
                         version=int(get_col_value(row_data, "version") or 0) if self._compatibility_mode == "v3.0" else 0,
+                        estado_detalle=get_col_value(row_data, "Estado_Detalle") if self._compatibility_mode == "v3.0" else None,
                     )
                     ready_spools.append(spool)
             except Exception as e:
@@ -1056,6 +1070,90 @@ class SheetsRepository:
 
         self.logger.info(f"get_spools_for_metrologia: {len(ready_spools)} spools ready")
         return ready_spools
+
+    def get_all_spools(self) -> list['Spool']:
+        """
+        Get ALL spools from Operaciones sheet (v3.0).
+
+        Used by reparacion endpoint to filter RECHAZADO/BLOQUEADO spools.
+        Returns all spools with v3.0 fields (ocupado_por, estado_detalle).
+
+        Returns:
+            list[Spool]: All spools from sheet
+
+        Raises:
+            SheetsConnectionError: On Google Sheets API errors
+        """
+        from backend.models.spool import Spool
+        from backend.config import config
+        from datetime import datetime, date
+
+        # Read all rows
+        all_rows = self.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        if not all_rows or len(all_rows) < 2:
+            self.logger.warning("No data rows found in Operaciones sheet")
+            return []
+
+        # Get column map using ColumnMapCache
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
+
+        def normalize(name: str) -> str:
+            """Normalize column name to match ColumnMapCache format."""
+            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+        def get_col_value(row_data: list, col_name: str) -> Optional[str]:
+            """Helper to safely get column value by name."""
+            normalized = normalize(col_name)
+            if normalized not in column_map:
+                return None
+            col_index = column_map[normalized] - 1  # Convert 1-indexed to 0-indexed
+            if col_index < len(row_data):
+                value = row_data[col_index]
+                return value if value and str(value).strip() else None
+            return None
+
+        def parse_date(date_str: Optional[str]) -> Optional[date]:
+            """Helper to parse date string to date object."""
+            if not date_str:
+                return None
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                try:
+                    return datetime.strptime(date_str, "%d/%m/%Y").date()
+                except ValueError:
+                    return None
+
+        spools = []
+        # Skip header (row 0)
+        for row_data in all_rows[1:]:
+            try:
+                tag_spool = get_col_value(row_data, "TAG_SPOOL")
+                if not tag_spool:
+                    continue  # Skip rows without TAG_SPOOL
+
+                spool = Spool(
+                    tag_spool=tag_spool,
+                    nv=get_col_value(row_data, "NV"),
+                    fecha_materiales=parse_date(get_col_value(row_data, "Fecha_Materiales")),
+                    fecha_armado=parse_date(get_col_value(row_data, "Fecha_Armado")),
+                    fecha_soldadura=parse_date(get_col_value(row_data, "Fecha_Soldadura")),
+                    fecha_qc_metrologia=parse_date(get_col_value(row_data, "Fecha_QC_Metrología")),
+                    armador=get_col_value(row_data, "Armador"),
+                    soldador=get_col_value(row_data, "Soldador"),
+                    ocupado_por=get_col_value(row_data, "Ocupado_Por") if self._compatibility_mode == "v3.0" else None,
+                    fecha_ocupacion=get_col_value(row_data, "Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
+                    version=int(get_col_value(row_data, "version") or 0) if self._compatibility_mode == "v3.0" else 0,
+                    estado_detalle=get_col_value(row_data, "Estado_Detalle") if self._compatibility_mode == "v3.0" else None,
+                )
+                spools.append(spool)
+            except Exception as e:
+                self.logger.warning(f"Error processing row for all spools: {e}")
+                continue
+
+        self.logger.info(f"get_all_spools: {len(spools)} spools fetched")
+        return spools
 
     @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def update_spool_with_version(

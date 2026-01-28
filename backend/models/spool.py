@@ -97,6 +97,13 @@ class Spool(BaseModel):
         ge=0
     )
 
+    # v3.0: Estado detallado
+    estado_detalle: Optional[str] = Field(
+        None,
+        description="Estado detallado del spool con información de ciclos y progreso (columna 67 'Estado_Detalle')",
+        examples=["RECHAZADO (Ciclo 2/3) - Pendiente reparación", "BLOQUEADO - Contactar supervisor", "EN_REPARACION (Ciclo 1/3) - Ocupado: MR(93)"]
+    )
+
     model_config = ConfigDict(
         frozen=True,  # Inmutable
         str_strip_whitespace=True,

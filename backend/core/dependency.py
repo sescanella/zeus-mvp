@@ -88,7 +88,8 @@ def get_sheets_repository() -> SheetsRepository:
     global _sheets_repo_singleton
 
     if _sheets_repo_singleton is None:
-        _sheets_repo_singleton = SheetsRepository()
+        # v3.0 mode enabled to support reparacion features (estado_detalle, ocupado_por)
+        _sheets_repo_singleton = SheetsRepository(compatibility_mode="v3.0")
 
     return _sheets_repo_singleton
 
