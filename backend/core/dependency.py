@@ -48,6 +48,8 @@ from backend.services.state_service import StateService
 from backend.services.history_service import HistoryService
 from backend.services.redis_event_service import RedisEventService
 from backend.services.metrologia_service import MetrologiaService
+from backend.services.reparacion_service import ReparacionService
+from backend.services.cycle_counter_service import CycleCounterService
 from backend.config import config
 
 
@@ -569,6 +571,49 @@ def get_metrologia_service(
     """
     return MetrologiaService(
         validation_service=validation_service,
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repository,
+        redis_event_service=redis_event_service
+    )
+
+
+def get_reparacion_service(
+    validation_service: ValidationService = Depends(get_validation_service),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
+    redis_event_service: RedisEventService = Depends(get_redis_event_service)
+) -> ReparacionService:
+    """
+    Factory para ReparacionService (nueva instancia por request) - v3.0 PHASE 6.
+
+    v3.0 Phase 6: ReparacionService implements reparación workflow with cycle tracking.
+
+    ReparacionService provides:
+    - TOMAR/PAUSAR/COMPLETAR/CANCELAR operations for RECHAZADO spools
+    - Cycle tracking with embedded cycle counter (no dedicated column)
+    - BLOQUEADO enforcement after 3 consecutive rejections (HTTP 403)
+    - Multi-worker access (no role restriction)
+    - Automatic return to PENDIENTE_METROLOGIA after completion
+
+    Args:
+        validation_service: Service for prerequisite checks (injected).
+        sheets_repo: Repository for Sheets reads/writes (injected).
+        metadata_repository: Repository for audit logging (injected).
+        redis_event_service: Service for real-time event publishing (injected).
+
+    Returns:
+        Nueva instancia de ReparacionService con todas las dependencias.
+
+    Usage:
+        reparacion_service: ReparacionService = Depends(get_reparacion_service)
+
+    Note:
+        v3.0 Phase 6: Cycle tracking embedded in Estado_Detalle (no schema changes).
+    """
+    cycle_counter = CycleCounterService()
+    return ReparacionService(
+        validation_service=validation_service,
+        cycle_counter_service=cycle_counter,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository,
         redis_event_service=redis_event_service

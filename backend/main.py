@@ -174,6 +174,9 @@ async def zeus_exception_handler(request: Request, exc: ZEUSException):
         # 410 GONE (v3.0 - lock expired)
         "LOCK_EXPIRED": status.HTTP_410_GONE,
 
+        # 403 FORBIDDEN (v3.0 Phase 6 - spool blocked after 3 rejections)
+        "SPOOL_BLOQUEADO": status.HTTP_403_FORBIDDEN,
+
         # 429 TOO MANY REQUESTS
         "SHEETS_RATE_LIMIT": status.HTTP_429_TOO_MANY_REQUESTS,
 
