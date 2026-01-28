@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 6 of 6 (Reparación Loops) 🚧 IN PROGRESS
-Plan: 2 of 4 (06-02-PLAN.md) ✅ Cycle counting logic complete
-Status: Cycle tracking with 47 tests - embedded contador in Estado_Detalle
-Last activity: 2026-01-28 — Completed 06-02: CycleCounterService + validation with BLOQUEADO enforcement
+Plan: 1 of 4 (06-01-PLAN.md) ✅ Reparación state machine complete
+Status: 4-state machine with TOMAR/PAUSAR/COMPLETAR actions - 22 tests passing
+Last activity: 2026-01-28 — Completed 06-01: REPARACIONStateMachine + ReparacionService with cycle tracking integration
 
-Progress: [████████████████████████████████░░] 94% Phase 6 - 2 of 4 plans complete (32 of 34 total)
+Progress: [█████████████████████████████████░] 97% Phase 6 - 3 of 4 plans complete (33 of 34 total)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 32
-- Average duration: 4.0 minutes
-- Total execution time: 2.16 hours
+- Total plans completed: 33
+- Average duration: 4.3 minutes
+- Total execution time: 2.42 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████████████
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
 | 05    | 4/4 ✅ | 19.5 min  | 4.9 min    |
-| 06    | 2/4 🚧 | 9.4 min  | 4.7 min    |
+| 06    | 3/4 🚧 | 17.1 min  | 5.7 min    |
 
 **Recent Trend:**
-- Last 4 plans: 05-03 (4 min), 05-04 (6.5 min), 06-01 (4.7 min), 06-02 (4.7 min)
-- Trend: Phase 6 avg 4.7 min - test-heavy plans consistent with Phase 5
+- Last 4 plans: 05-04 (6.5 min), 06-01 (4.7 min), 06-02 (4.7 min), 06-01 (7.7 min)
+- Trend: Phase 6 avg 5.7 min - state machine + service patterns with comprehensive tests
 
 *Updated after each plan completion*
 
@@ -145,6 +145,9 @@ Recent decisions affecting current work:
 - Phase 6 (06-02): Consecutive rejection tracking only - counter resets to 0 after APROBADO (allows recovery after bad batch)
 - Phase 6 (06-02): 3-cycle limit before blocking (industry standard, balances recovery vs escalation)
 - Phase 6 (06-02): SpoolBloqueadoError (HTTP 403) for blocked spools requiring supervisor intervention
+- **Phase 6 (06-01):** 4-state machine with occupation management (RECHAZADO → EN_REPARACION → REPARACION_PAUSADA → PENDIENTE_METROLOGIA)
+- Phase 6 (06-01): Cycle count preserved across all state transitions (increments only on metrología RECHAZADO)
+- Phase 6 (06-01): COMPLETAR automatically sets PENDIENTE_METROLOGIA (immediate re-queue for metrología inspection)
 
 ### Pending Todos
 
