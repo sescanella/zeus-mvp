@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 5 of 6 (Metrología Workflow) 🚧 IN PROGRESS
-Plan: 2 of 3 (05-02-PLAN.md) ✅ REST endpoint & estado display complete
-Status: Phase 5 Wave 2 complete - API endpoint with binary resultado validation
-Last activity: 2026-01-27 — Completed 05-02: POST /api/metrologia/completar endpoint + Estado_Detalle display
+Phase: 5 of 6 (Metrología Workflow) ✅ COMPLETE
+Plan: 3 of 3 (05-03-PLAN.md) ✅ Frontend binary resultado flow complete
+Status: Phase 5 complete - Frontend UI with APROBADO/RECHAZADO selection
+Last activity: 2026-01-28 — Completed 05-03: Frontend metrología UI with binary resultado flow
 
-Progress: [███████████████████████░░░░░░] 67% Phase 5 - 2 of 3 plans complete
+Progress: [████████████████████████████████] 100% Phase 5 - 3 of 3 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 29
+- Total plans completed: 30
 - Average duration: 3.9 minutes
-- Total execution time: 1.90 hours
+- Total execution time: 1.97 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [███████████████████████
 | 02    | 6/6 ✅  | 22 min  | 3.7 min    |
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
-| 05    | 2/3 🚧 | 9 min  | 4.5 min    |
+| 05    | 3/3 ✅ | 13 min  | 4.3 min    |
 
 **Recent Trend:**
-- Last 3 plans: 04-04 (5 min), 05-01 (6 min), 05-02 (3 min)
-- Trend: Phase 5 maintaining pace - API integration under 3 min
+- Last 3 plans: 05-01 (6 min), 05-02 (3 min), 05-03 (4 min)
+- Trend: Phase 5 complete - Consistent pace, frontend under 4 min
 
 *Updated after each plan completion*
 
@@ -134,6 +134,9 @@ Recent decisions affecting current work:
 - **Phase 5 (05-02):** Pydantic ResultadoEnum enforces binary valores (APROBADO/RECHAZADO) at API boundary
 - Phase 5 (05-02): EstadoDetalleBuilder extended with optional metrologia_state parameter for backward compatibility
 - Phase 5 (05-02): Display formats - APROBADO: "METROLOGIA APROBADO ✓", RECHAZADO: "METROLOGIA RECHAZADO - Pendiente reparación"
+- **Phase 5 (05-03):** Operation-specific routing skips tipo-interaccion for METROLOGIA (instant completion only)
+- Phase 5 (05-03): Single-spool workflow (no batch multiselect) deferred for Phase 5 simplicity
+- Phase 5 (05-03): Instant submission on resultado selection (no confirmation screen) for faster workflow
 
 ### Pending Todos
 
@@ -203,7 +206,7 @@ None yet.
   - Locust load test for 30 concurrent users
 - **Status:** Phase 4 complete
 
-**Phase 5 (IN PROGRESS):** 🚧 Metrología Workflow - 2 of 3 plans complete
+**Phase 5 (COMPLETE):** ✅ Metrología Workflow - 3 of 3 plans complete
 - ✅ Plan 05-01: State machine and service layer (6 min)
   - MetrologiaStateMachine with 3 states (PENDIENTE → APROBADO/RECHAZADO)
   - MetrologiaService for instant completion workflow
@@ -215,42 +218,45 @@ None yet.
   - Pydantic models: CompletarMetrologiaRequest/Response, ResultadoEnum
   - EstadoDetalleBuilder extended for metrología states
   - Error handling: 404, 400, 409, 403, 422
-- 🔲 Plan 05-03: Frontend metrología UI (pending)
-- **Status:** Backend API complete - Next: Frontend binary resultado flow
-
-**Phase 5 Next:** Build frontend /metrologia page with APROBADO/RECHAZADO buttons
+- ✅ Plan 05-03: Frontend binary resultado flow (4 min)
+  - Operation-specific routing (skip tipo-interaccion for METROLOGIA)
+  - Binary resultado selection page with APROBADO/RECHAZADO buttons
+  - completarMetrologia API function with error handling
+  - Single-spool workflow (no batch multiselect)
+- **Status:** Phase 5 complete - Instant inspection workflow fully functional
 
 **Phase 6 (Reparación):** Manufacturing rework best practices need validation - typical max cycles, supervisor escalation rules, quality department workflows.
 
 ## Session Continuity
 
-Last session: 2026-01-27
-Stopped at: Completed 05-02-PLAN.md (REST endpoint & estado display) ✅
+Last session: 2026-01-28
+Stopped at: Completed 05-03-PLAN.md (Frontend binary resultado flow) ✅
 Resume file: None
 
-**Phase 5 IN PROGRESS:**
+**Phase 5 COMPLETE:**
 1. ✅ Plan 05-01 complete - State machine and service layer (6 min)
 2. ✅ Plan 05-02 complete - REST endpoint & estado display (3 min)
-3. 🔲 Plan 05-03 pending - Frontend metrología UI
+3. ✅ Plan 05-03 complete - Frontend binary resultado flow (4 min)
 
-**Phase 5 Plan 05-02 complete!**
-- POST /api/metrologia/completar endpoint with binary resultado validation
-- Pydantic models: CompletarMetrologiaRequest, CompletarMetrologiaResponse, ResultadoEnum
-- EstadoDetalleBuilder extended with optional metrologia_state parameter
-- MetrologiaService factory added to dependency injection
-- Router registered with prefix /api/metrologia
-- Error handling: 404 (not found), 400 (validation), 409 (occupied), 403 (unauthorized), 422 (invalid resultado)
+**Phase 5 Plan 05-03 complete!**
+- Operation-specific routing: METROLOGIA skips tipo-interaccion
+- Binary resultado selection page: /resultado-metrologia with APROBADO/RECHAZADO buttons
+- completarMetrologia API function with 409/404/403/400/422 error handling
+- Single-spool workflow (no batch multiselect in Phase 5)
+- Mobile-first design: h-32 buttons, green/red color coding
+- Instant submission without confirmation screen
 
 **Commits:**
-- 0d9ed59: feat(05-02): create Pydantic models for metrología instant completion
-- 1a05e7c: feat(05-02): implement POST /api/metrologia/completar endpoint
-- 6f74f8f: feat(05-02): extend EstadoDetalleBuilder for metrología states
+- bde77ac: feat(05-03): route METROLOGIA to spool selection, skip tipo-interaccion
+- c65be32: feat(05-03): create resultado-metrologia binary selection page
+- 17d797a: feat(05-03): add completarMetrologia API function
 
-**Phase 5 Plan 05-02 - API Layer Complete:**
-- ✅ Binary resultado enforced via Pydantic enum (APROBADO/RECHAZADO)
-- ✅ Estado_Detalle displays inspection results with next-action guidance
-- ✅ Router integrated in main.py with /api/metrologia prefix
-- ✅ All verification tests passed (6/6)
+**Phase 5 Complete - Metrología Workflow:**
+- ✅ 3-state machine (PENDIENTE → APROBADO/RECHAZADO)
+- ✅ Instant completion workflow (no TOMAR occupation)
+- ✅ Binary resultado validation (Pydantic enum)
+- ✅ Frontend UI with mobile-first design
+- ✅ Operation-specific routing (2 fewer navigation steps)
 
 **Next steps:**
-- Plan 05-03: Build frontend /metrologia page with binary resultado buttons
+- Phase 6: Reparación workflow for RECHAZADO spools
