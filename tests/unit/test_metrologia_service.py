@@ -38,8 +38,9 @@ def mock_metadata_repo():
 @pytest.fixture
 def mock_redis_event_service():
     """Mock RedisEventService."""
-    service = Mock()
-    service.publish_state_change = Mock()
+    from unittest.mock import AsyncMock
+    service = AsyncMock()
+    service.publish_spool_update = AsyncMock(return_value=True)
     return service
 
 
@@ -150,11 +151,12 @@ def test_validar_puede_completar_metrologia_spool_occupied(validation_service):
     assert "MR(93)" in str(exc.value)
 
 
-def test_completar_aprobado_success(metrologia_service, mock_sheets_repo, ready_spool):
+@pytest.mark.asyncio
+async def test_completar_aprobado_success(metrologia_service, mock_sheets_repo, ready_spool):
     """Test successful APROBADO completion."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
 
-    result = metrologia_service.completar(
+    result = await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,
         worker_nombre="CP(95)",
@@ -170,11 +172,12 @@ def test_completar_aprobado_success(metrologia_service, mock_sheets_repo, ready_
     mock_sheets_repo.update_cell_by_column_name.assert_called_once()
 
 
-def test_completar_rechazado_success(metrologia_service, mock_sheets_repo, ready_spool):
+@pytest.mark.asyncio
+async def test_completar_rechazado_success(metrologia_service, mock_sheets_repo, ready_spool):
     """Test successful RECHAZADO completion."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
 
-    result = metrologia_service.completar(
+    result = await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,
         worker_nombre="CP(95)",
@@ -190,12 +193,13 @@ def test_completar_rechazado_success(metrologia_service, mock_sheets_repo, ready
     mock_sheets_repo.update_cell_by_column_name.assert_called_once()
 
 
-def test_completar_spool_not_found(metrologia_service, mock_sheets_repo):
+@pytest.mark.asyncio
+async def test_completar_spool_not_found(metrologia_service, mock_sheets_repo):
     """Test error when spool doesn't exist."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=None)
 
     with pytest.raises(SpoolNoEncontradoError):
-        metrologia_service.completar(
+        await metrologia_service.completar(
             tag_spool="INVALID",
             worker_id=95,
             worker_nombre="CP(95)",
@@ -203,11 +207,12 @@ def test_completar_spool_not_found(metrologia_service, mock_sheets_repo):
         )
 
 
-def test_completar_logs_metadata_event(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
+@pytest.mark.asyncio
+async def test_completar_logs_metadata_event(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
     """Test that metadata event is logged on completion."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
 
-    metrologia_service.completar(
+    await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,
         worker_nombre="CP(95)",
@@ -223,11 +228,12 @@ def test_completar_logs_metadata_event(metrologia_service, mock_sheets_repo, moc
     assert "APROBADO" in event["metadata_json"]
 
 
-def test_completar_publishes_sse_event(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
+@pytest.mark.asyncio
+async def test_completar_publishes_sse_event(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
     """Test that SSE event is published on completion."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
 
-    metrologia_service.completar(
+    await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,
         worker_nombre="CP(95)",
@@ -235,18 +241,19 @@ def test_completar_publishes_sse_event(metrologia_service, mock_sheets_repo, moc
     )
 
     # Verify SSE event was published
-    mock_redis_event_service.publish_state_change.assert_called_once()
-    call_args = mock_redis_event_service.publish_state_change.call_args
-    assert call_args[1]["data"]["resultado"] == "RECHAZADO"
+    mock_redis_event_service.publish_spool_update.assert_called_once()
+    call_args = mock_redis_event_service.publish_spool_update.call_args
+    assert call_args[1]["additional_data"]["resultado"] == "RECHAZADO"
 
 
-def test_completar_continues_on_metadata_failure(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
+@pytest.mark.asyncio
+async def test_completar_continues_on_metadata_failure(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
     """Test that operation continues even if metadata logging fails (best-effort)."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
     mock_metadata_repo.append_event = Mock(side_effect=Exception("Metadata API error"))
 
     # Should still succeed despite metadata failure
-    result = metrologia_service.completar(
+    result = await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,
         worker_nombre="CP(95)",
@@ -256,13 +263,15 @@ def test_completar_continues_on_metadata_failure(metrologia_service, mock_sheets
     assert result["success"] is True
 
 
-def test_completar_continues_on_sse_failure(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
+@pytest.mark.asyncio
+async def test_completar_continues_on_sse_failure(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
     """Test that operation continues even if SSE publishing fails (best-effort)."""
+    from unittest.mock import AsyncMock
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
-    mock_redis_event_service.publish_state_change = Mock(side_effect=Exception("Redis error"))
+    mock_redis_event_service.publish_spool_update = AsyncMock(side_effect=Exception("Redis error"))
 
     # Should still succeed despite SSE failure
-    result = metrologia_service.completar(
+    result = await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,
         worker_nombre="CP(95)",
