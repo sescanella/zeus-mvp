@@ -472,6 +472,214 @@ export async function completarMetrologia(
 }
 
 // ==========================================
+// REPARACION OPERATIONS (Phase 6)
+// ==========================================
+
+/**
+ * GET /api/spools/reparacion
+ * Obtiene spools RECHAZADO disponibles para reparación.
+ *
+ * Returns spools where estado_detalle contains "RECHAZADO" or "BLOQUEADO".
+ * Skips occupied spools (ocupado_por != None).
+ * For each spool:
+ * - Parses cycle count from Estado_Detalle
+ * - Checks if blocked (cycle >= 3)
+ * - Includes fecha_rechazo (from Fecha_QC_Metrologia)
+ *
+ * @returns Promise with:
+ *   - spools: Array of RECHAZADO/BLOQUEADO spools
+ *   - total: Total count
+ *   - bloqueados: Count of BLOQUEADO spools
+ *   - filtro_aplicado: Description
+ * @throws Error si falla request
+ *
+ * @example
+ * const result = await getSpoolsReparacion();
+ * console.log(result);
+ * // {
+ * //   spools: [
+ * //     { tag_spool: "MK-123", cycle: 2, bloqueado: false, ... },
+ * //     { tag_spool: "MK-456", cycle: 3, bloqueado: true, ... }
+ * //   ],
+ * //   total: 2,
+ * //   bloqueados: 1
+ * // }
+ */
+export async function getSpoolsReparacion(): Promise<{
+  spools: Array<{
+    tag_spool: string;
+    estado_detalle: string;
+    fecha_rechazo: string;
+    cycle: number;
+    bloqueado: boolean;
+  }>;
+  total: number;
+  bloqueados: number;
+  filtro_aplicado: string;
+}> {
+  try {
+    const url = `${API_URL}/api/spools/reparacion`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    return await handleResponse<{
+      spools: Array<{
+        tag_spool: string;
+        estado_detalle: string;
+        fecha_rechazo: string;
+        cycle: number;
+        bloqueado: boolean;
+      }>;
+      total: number;
+      bloqueados: number;
+      filtro_aplicado: string;
+    }>(res);
+  } catch (error) {
+    console.error('getSpoolsReparacion error:', error);
+    throw new Error('No se pudieron cargar spools para reparación.');
+  }
+}
+
+/**
+ * POST /api/completar-reparacion
+ * Completes repair work and returns spool to metrología queue.
+ *
+ * Validates:
+ * - Spool exists and is EN_REPARACION
+ * - Worker owns the spool (ownership validation)
+ *
+ * Updates:
+ * - Ocupado_Por = None
+ * - Fecha_Ocupacion = None
+ * - Estado_Detalle = "PENDIENTE_METROLOGIA"
+ *
+ * @param payload - Datos de la acción (worker_id, tag_spool)
+ * @returns Promise with success message and estado_detalle
+ * @throws Error if:
+ *   - 404: Spool not found
+ *   - 400: Spool not EN_REPARACION
+ *   - 403: Worker doesn't own the spool or spool is BLOQUEADO
+ *
+ * @example
+ * const result = await completarReparacion({
+ *   worker_id: 93,
+ *   operacion: 'REPARACION',
+ *   tag_spool: 'MK-123'
+ * });
+ * console.log(result.message); // "Reparación completada para spool MK-123 - devuelto a metrología"
+ */
+export async function completarReparacion(payload: {
+  tag_spool: string;
+  worker_id: number;
+  worker_nombre?: string;
+}): Promise<unknown> {
+  try {
+    const res = await fetch(`${API_URL}/api/completar-reparacion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool bloqueado - contactar supervisor');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool no encontrado.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
+    }
+
+    return await handleResponse<unknown>(res);
+  } catch (error) {
+    console.error('completarReparacion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/tomar-reparacion
+ * Worker takes RECHAZADO spool for repair.
+ *
+ * @param payload - Datos de la acción (worker_id, tag_spool)
+ * @returns Promise with success message
+ * @throws Error if spool BLOQUEADO (HTTP 403) or not available
+ */
+export async function tomarReparacion(payload: {
+  tag_spool: string;
+  worker_id: number;
+}): Promise<unknown> {
+  try {
+    const res = await fetch(`${API_URL}/api/tomar-reparacion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool bloqueado - contactar supervisor');
+    }
+
+    return await handleResponse<unknown>(res);
+  } catch (error) {
+    console.error('tomarReparacion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/pausar-reparacion
+ * Worker pauses repair work and releases occupation.
+ */
+export async function pausarReparacion(payload: {
+  tag_spool: string;
+  worker_id: number;
+}): Promise<unknown> {
+  try {
+    const res = await fetch(`${API_URL}/api/pausar-reparacion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    return await handleResponse<unknown>(res);
+  } catch (error) {
+    console.error('pausarReparacion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/cancelar-reparacion
+ * Worker cancels repair work and returns spool to RECHAZADO.
+ */
+export async function cancelarReparacion(payload: {
+  tag_spool: string;
+  worker_id: number;
+}): Promise<unknown> {
+  try {
+    const res = await fetch(`${API_URL}/api/cancelar-reparacion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    return await handleResponse<unknown>(res);
+  } catch (error) {
+    console.error('cancelarReparacion error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
 // BATCH OPERATIONS (v2.0 Multiselect)
 // ==========================================
 
