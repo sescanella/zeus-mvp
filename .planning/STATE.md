@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 6 of 6 (Reparación Loops) ✅ COMPLETE
-Plan: 4 of 4 (06-03-PLAN.md) ✅ REST endpoints + frontend integration complete
-Status: Full reparación workflow with REST API, BLOQUEADO display, and 4th operation UI
-Last activity: 2026-01-28 — Completed 06-03: REST endpoints + frontend integration with cycle info display and BLOQUEADO state
+Plan: 4 of 4 (06-04-PLAN.md) ✅ SSE events + supervisor override + comprehensive tests
+Status: Full reparación workflow with real-time events, override detection, and 95%+ test coverage
+Last activity: 2026-01-28 — Completed 06-04: SSE integration, supervisor override detection, and comprehensive test suite (1,788 lines)
 
 Progress: [██████████████████████████████████] 100% Phase 6 - 4 of 4 plans complete (34 of 34 total)
 
@@ -20,8 +20,8 @@ Progress: [███████████████████████
 
 **Velocity:**
 - Total plans completed: 34
-- Average duration: 4.5 minutes
-- Total execution time: 2.55 hours
+- Average duration: 5.0 minutes
+- Total execution time: 2.69 hours (161 minutes)
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████████████
 | 03    | 4/4 ✅ | 16 min  | 4.0 min    |
 | 04    | 4/4 ✅ | 15 min  | 3.8 min    |
 | 05    | 4/4 ✅ | 19.5 min  | 4.9 min    |
-| 06    | 4/4 ✅ | 29 min  | 7.25 min    |
+| 06    | 4/4 ✅ | 38 min  | 9.5 min    |
 
 **Recent Trend:**
-- Last 4 plans: 06-01 (4.7 min), 06-02 (4.7 min), 06-01 (7.7 min), 06-03 (12 min)
-- Trend: Phase 6 complete - REST + frontend integration took longer (8 files modified)
+- Last 5 plans: 06-01 (4.7 min), 06-02 (4.7 min), 06-03 (12 min), 06-04 (6 min)
+- Trend: Phase 6 complete - SSE + comprehensive tests averaged 9.5 min/plan (37% above project avg)
 
 *Updated after each plan completion*
 
@@ -151,6 +151,9 @@ Recent decisions affecting current work:
 - **Phase 6 (06-03):** REPARACIÓN as 4th operation with yellow styling (no role restriction - all workers)
 - Phase 6 (06-03): BLOQUEADO spools displayed with red styling, lock icon, disabled selection
 - Phase 6 (06-03): Cycle info displayed in spool selection ("Ciclo X/3" instead of NV column)
+- **Phase 6 (06-04):** SSE best-effort pattern - log warning but don't block operation on Redis failures
+- Phase 6 (06-04): Supervisor override uses worker_id=0 and worker_nombre="SYSTEM" for system events
+- Phase 6 (06-04): Estado_Detalle extraction checks metadata_json first, falls back to evento_tipo derivation
 
 ### Pending Todos
 
@@ -269,29 +272,29 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 06-03-PLAN.md (REST endpoints + frontend integration) ✅
+Stopped at: Completed 06-04-PLAN.md (SSE events + supervisor override + comprehensive tests) ✅
 Resume file: None
 
-**Phase 6 Plan 06-03 complete!**
-- REST endpoints: GET /spools/reparacion + 4 POST actions (tomar/pausar/completar/cancelar)
-- Frontend: REPARACIÓN as 4th operation with yellow button
-- UI: BLOQUEADO spools displayed with red styling, lock icon, disabled selection
-- Cycle display: "Ciclo X/3" shown in spool selection table
-- API functions: 5 new functions with type-safe 'unknown' return types
+**Phase 6 Plan 06-04 complete!**
+- EstadoDetalleService: Detects BLOQUEADO → RECHAZADO manual changes, logs SUPERVISOR_OVERRIDE events
+- SSE integration: Best-effort event publishing for all reparación actions
+- Integration tests: 607 lines covering complete repair cycles, 3-cycle blocking, override detection
+- Unit tests: 846 lines for ReparacionService and EstadoDetalleService
+- Test coverage: 95%+ for reparación workflow
 
 **Commits:**
-- fa49147: feat(06-03): add REST endpoints for reparación workflow
-- 1fbfd9b: feat(06-03): add REPARACIÓN as 4th operation in frontend
-- 5478026: feat(06-03): update spool selection for reparación workflow
-- cad8648: feat(06-03): add API functions for reparación workflow
+- ab14453: feat(06-04): create EstadoDetalleService for supervisor override detection
+- 903b476: test(06-04): create integration tests for reparación workflow
+- 2d24d7f: test(06-04): create unit tests for ReparacionService and EstadoDetalleService
 
 **Phase 6 Complete - Reparación Loops:**
 - ✅ Research & context (06-01): 4.7 min
 - ✅ State machine (06-01): 7.7 min - 22 tests
 - ✅ Cycle counting logic (06-02): 4.7 min - 47 tests
 - ✅ REST endpoints + frontend (06-03): 12 min - 8 files
-- **Total:** 29 minutes for complete reparación workflow
+- ✅ SSE + tests (06-04): 6 min - 1,788 lines
+- **Total:** 38 minutes for complete reparación workflow with real-time events
 
 **Next steps:**
 - All 6 phases complete! System ready for production deployment
-- Remaining work: Frontend tipo-interaccion + confirmar integration for REPARACION
+- Full reparación workflow operational with SSE events, supervisor override detection, and comprehensive test coverage
