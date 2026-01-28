@@ -131,13 +131,13 @@ Plans:
   2. Reparación UI shows responsible role (Armador for ARM defects, Soldador for SOLD defects)
   3. COMPLETAR reparación returns spool to metrología queue automatically
   4. After 3 reparación cycles, spool becomes BLOQUEADO and requires supervisor override
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: Implement reparación state transitions (RECHAZADO → REPARACION → METROLOGIA)
-- [ ] 06-02: Add reparacion_count column and cycle limit validation (max 3)
-- [ ] 06-03: Create supervisor override endpoint for 4th repair attempt
-- [ ] 06-04: Build reparación frontend flow with role specification
+- [ ] 06-01-PLAN.md — Implement reparación state machine with 4 states
+- [ ] 06-02-PLAN.md — Add cycle counting logic and validation services
+- [ ] 06-03-PLAN.md — Create REST endpoints and frontend integration
+- [ ] 06-04-PLAN.md — Add SSE events and comprehensive test suite
 
 ## Progress
 
@@ -169,10 +169,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 ## Next Actions
 
 **Immediate (Phase 6):**
-1. Plan phase: `/gsd:plan-phase 6`
-2. Design reparación state transitions (RECHAZADO → REPARACION → METROLOGIA)
-3. Implement cycle counting mechanism (max 3 cycles)
-4. Create supervisor override flow for 4th repair attempt
+1. Execute phase: `/gsd:execute-phase 6`
+2. Implement reparación state machine (RECHAZADO → EN_REPARACION → PENDIENTE_METROLOGIA)
+3. Add cycle counting in Estado_Detalle field (no new columns)
+4. Create supervisor override detection (manual Google Sheets edit)
 
 **Upcoming (Milestone Complete):**
 1. Audit milestone completion
