@@ -6,7 +6,7 @@ import { Worker, BatchActionResponse } from './types';
 interface AppState {
   allWorkers: Worker[];  // v2.0: Cache de todos los trabajadores (fetch en P1, filtrar en P2)
   selectedWorker: Worker | null;
-  selectedOperation: 'ARM' | 'SOLD' | 'METROLOGIA' | null;  // v2.0: +METROLOGIA
+  selectedOperation: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION' | null;  // v3.0: +REPARACION
   selectedTipo: 'iniciar' | 'completar' | 'cancelar' | null;  // v2.0: Añadido 'cancelar'
   selectedSpool: string | null;  // Single-select (backward compat)
   selectedSpools: string[];  // v2.0: Multiselect batch (array de TAGs)

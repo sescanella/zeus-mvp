@@ -89,8 +89,9 @@ function SeleccionarSpoolContent() {
       if (tipo === 'metrologia') {
         fetchedSpools = await getSpoolsParaIniciar('METROLOGIA' as 'ARM' | 'SOLD');
       } else if (tipo === 'reparacion') {
-        // REPARACION uses dedicated endpoint
-        fetchedSpools = await getSpoolsReparacion();
+        // REPARACION uses dedicated endpoint - returns object with spools array
+        const reparacionResponse = await getSpoolsReparacion();
+        fetchedSpools = reparacionResponse.spools as unknown as Spool[];
       } else if (tipo === 'iniciar') {
         fetchedSpools = await getSpoolsParaIniciar(selectedOperation as 'ARM' | 'SOLD');
       } else if (tipo === 'completar') {
