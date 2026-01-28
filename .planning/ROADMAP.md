@@ -114,10 +114,13 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Metrología state machine and service layer
-- [ ] 05-02-PLAN.md — REST endpoint and Estado_Detalle display
-- [ ] 05-03-PLAN.md — Frontend binary resultado flow
-- [ ] 05-04-PLAN.md — SSE integration and test suite
+- [x] 05-01-PLAN.md — Metrología state machine and service layer (6 min)
+- [x] 05-02-PLAN.md — REST endpoint and Estado_Detalle display (3 min)
+- [x] 05-03-PLAN.md — Frontend binary resultado flow (4 min)
+- [x] 05-04-PLAN.md — SSE integration and test suite (6.5 min)
+
+**Status:** Complete (19.5 min total)
+**Completed:** 2026-01-27
 
 ### Phase 6: Reparación Loops
 **Goal**: Rejected spools can be repaired and re-inspected with bounded cycles preventing infinite loops
@@ -147,10 +150,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2: Core Location Tracking | 6/6 ✓ | Complete | 2026-01-27 |
 | 3: State Machine & Collaboration | 4/4 ✓ | Complete | 2026-01-27 |
 | 4: Real-Time Visibility | 4/4 ✓ | Complete | 2026-01-27 |
-| 5: Metrología Workflow | 0/4 | Ready for execution | — |
-| 6: Reparación Loops | 0/4 | Blocked (needs Phase 5) | — |
+| 5: Metrología Workflow | 4/4 ✓ | Complete | 2026-01-27 |
+| 6: Reparación Loops | 0/4 | Ready for execution | — |
 
-**Overall:** 23/35 plans (66%)
+**Overall:** 27/31 plans (87%)
 
 ## Decision Log
 
@@ -165,15 +168,16 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 ## Next Actions
 
-**Immediate (Phase 5):**
-1. Execute plans: `/gsd:execute-phase 5`
-2. Implement 3-state machine (PENDIENTE → APROBADO/RECHAZADO)
-3. Create instant completion endpoint
+**Immediate (Phase 6):**
+1. Plan phase: `/gsd:plan-phase 6`
+2. Design reparación state transitions (RECHAZADO → REPARACION → METROLOGIA)
+3. Implement cycle counting mechanism (max 3 cycles)
+4. Create supervisor override flow for 4th repair attempt
 
-**Upcoming (Phase 6):**
-1. Design reparación state transitions
-2. Plan cycle counting mechanism
-3. Define supervisor override flow
+**Upcoming (Milestone Complete):**
+1. Audit milestone completion
+2. Archive milestone artifacts
+3. Plan next milestone features
 
 ## Risk Register
 

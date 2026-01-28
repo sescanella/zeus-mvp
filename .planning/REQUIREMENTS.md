@@ -32,10 +32,10 @@ Requirements for v3.0 real-time location tracking system. Each maps to roadmap p
 
 ### Metrología
 
-- [ ] **METRO-01**: Metrólogo can COMPLETAR with result (APROBADO / RECHAZADO)
-- [ ] **METRO-02**: Metrología workflow skips TOMAR (instant completion)
-- [ ] **METRO-03**: RECHAZADO triggers estado "Pendiente reparación"
-- [ ] **METRO-04**: Metrología requires ARM + SOLD both COMPLETADO
+- [x] **METRO-01**: Metrólogo can COMPLETAR with result (APROBADO / RECHAZADO)
+- [x] **METRO-02**: Metrología workflow skips TOMAR (instant completion)
+- [x] **METRO-03**: RECHAZADO triggers estado "Pendiente reparación"
+- [x] **METRO-04**: Metrología requires ARM + SOLD both COMPLETADO
 
 ### Reparación
 
