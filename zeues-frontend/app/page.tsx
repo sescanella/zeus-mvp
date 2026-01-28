@@ -40,7 +40,13 @@ export default function OperacionSelectionPage() {
 
   const handleSelectOperation = (operacion: 'ARM' | 'SOLD' | 'METROLOGIA') => {
     setState({ selectedOperation: operacion });
-    router.push('/operacion');
+
+    // METROLOGIA skips tipo-interaccion and goes directly to worker selection
+    if (operacion === 'METROLOGIA') {
+      router.push('/operacion');
+    } else {
+      router.push('/operacion');
+    }
   };
 
   // Si está cargando o hay error, mostrar en diseño Blueprint Industrial

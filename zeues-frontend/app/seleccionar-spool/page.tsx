@@ -13,7 +13,7 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 function SeleccionarSpoolContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar';
+  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar' | 'metrologia';
   const { state, setState } = useAppState();
 
   const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ function SeleccionarSpoolContent() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const handleSSEMessage = useCallback((event: SSEEvent) => {
-    const { type, tag_spool, worker, estado_detalle } = event;
+    const { type, tag_spool, estado_detalle } = event;
 
     switch (type) {
       case 'TOMAR':
@@ -85,7 +85,10 @@ function SeleccionarSpoolContent() {
 
       let fetchedSpools: Spool[];
 
-      if (tipo === 'iniciar') {
+      // METROLOGIA uses 'metrologia' tipo
+      if (tipo === 'metrologia') {
+        fetchedSpools = await getSpoolsParaIniciar('METROLOGIA' as 'ARM' | 'SOLD');
+      } else if (tipo === 'iniciar') {
         fetchedSpools = await getSpoolsParaIniciar(selectedOperation as 'ARM' | 'SOLD');
       } else if (tipo === 'completar') {
         if (!selectedWorker) {
@@ -183,6 +186,20 @@ function SeleccionarSpoolContent() {
 
     if (selectedCount === 0) return;
 
+    // METROLOGIA: Navigate to resultado page (single spool only)
+    if (tipo === 'metrologia') {
+      if (selectedCount === 1) {
+        setState({
+          selectedSpool: state.selectedSpools[0],
+          selectedSpools: [],
+          batchMode: false
+        });
+        router.push('/resultado-metrologia');
+      }
+      return;
+    }
+
+    // ARM/SOLD: Normal flow to confirmar page
     if (selectedCount === 1) {
       setState({
         selectedSpool: state.selectedSpools[0],
@@ -201,7 +218,9 @@ function SeleccionarSpoolContent() {
 
   if (!state.selectedWorker || !state.selectedOperation) return null;
 
-  const actionLabel = tipo === 'iniciar' ? 'INICIAR' : tipo === 'completar' ? 'COMPLETAR' : 'CANCELAR';
+  const actionLabel = tipo === 'iniciar' ? 'INICIAR' :
+                      tipo === 'completar' ? 'COMPLETAR' :
+                      tipo === 'metrologia' ? 'INSPECCIONAR' : 'CANCELAR';
   const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
                         state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
 

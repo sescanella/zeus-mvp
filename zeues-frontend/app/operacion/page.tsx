@@ -63,7 +63,13 @@ export default function TrabajadorSelectionPage() {
 
   const handleSelectWorker = (worker: Worker) => {
     setState({ selectedWorker: worker });
-    router.push('/tipo-interaccion');
+
+    // METROLOGIA skips tipo-interaccion and goes directly to spool selection
+    if (state.selectedOperation === 'METROLOGIA') {
+      router.push('/seleccionar-spool?tipo=metrologia');
+    } else {
+      router.push('/tipo-interaccion');
+    }
   };
 
   if (!state.selectedOperation) return null;
