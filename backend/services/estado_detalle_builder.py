@@ -28,7 +28,8 @@ class EstadoDetalleBuilder:
         arm_state: str,
         sold_state: str,
         operacion_actual: Optional[str] = None,
-        metrologia_state: Optional[str] = None
+        metrologia_state: Optional[str] = None,
+        cycle: Optional[int] = None
     ) -> str:
         """
         Build Estado_Detalle display string.
@@ -39,6 +40,7 @@ class EstadoDetalleBuilder:
             sold_state: SOLD state (pendiente/en_progreso/completado)
             operacion_actual: Current operation being worked (ARM/SOLD)
             metrologia_state: METROLOGIA state (pendiente/aprobado/rechazado) - v3.0 Phase 5
+            cycle: Reparación cycle count (1-3) - v3.0 Phase 6
 
         Returns:
             Formatted display string
@@ -51,8 +53,8 @@ class EstadoDetalleBuilder:
             'Disponible - ARM completado, SOLD pendiente'
             >>> builder.build(None, "completado", "completado", metrologia_state="aprobado")
             'Disponible - ARM completado, SOLD completado, METROLOGIA APROBADO ✓'
-            >>> builder.build(None, "completado", "completado", metrologia_state="rechazado")
-            'Disponible - ARM completado, SOLD completado, METROLOGIA RECHAZADO - Pendiente reparación'
+            >>> builder.build(None, "completado", "completado", metrologia_state="rechazado", cycle=2)
+            'Disponible - ARM completado, SOLD completado, RECHAZADO (Ciclo 2/3) - Pendiente reparación'
         """
         arm_display = self._state_to_display(arm_state)
         sold_display = self._state_to_display(sold_state)
@@ -67,7 +69,7 @@ class EstadoDetalleBuilder:
 
         # Append metrología state if provided (v3.0 Phase 5)
         if metrologia_state:
-            metrologia_suffix = self._metrologia_to_display(metrologia_state)
+            metrologia_suffix = self._metrologia_to_display(metrologia_state, cycle)
             return f"{base}, {metrologia_suffix}"
 
         return base
@@ -89,14 +91,16 @@ class EstadoDetalleBuilder:
         }
         return mapping.get(state, state)
 
-    def _metrologia_to_display(self, metrologia_state: str) -> str:
+    def _metrologia_to_display(self, metrologia_state: str, cycle: Optional[int] = None) -> str:
         """
         Convert metrología state to display string with next-action guidance.
 
         v3.0 Phase 5: Format metrología results with clear next steps.
+        v3.0 Phase 6: Add cycle count for RECHAZADO states.
 
         Args:
             metrologia_state: State (pendiente/aprobado/rechazado)
+            cycle: Reparación cycle count (1-3) for RECHAZADO states
 
         Returns:
             Formatted display string with actionable guidance
@@ -105,14 +109,22 @@ class EstadoDetalleBuilder:
             >>> builder = EstadoDetalleBuilder()
             >>> builder._metrologia_to_display("aprobado")
             'METROLOGIA APROBADO ✓'
+            >>> builder._metrologia_to_display("rechazado", cycle=2)
+            'RECHAZADO (Ciclo 2/3) - Pendiente reparación'
             >>> builder._metrologia_to_display("rechazado")
             'METROLOGIA RECHAZADO - Pendiente reparación'
             >>> builder._metrologia_to_display("pendiente")
             'Metrología pendiente'
         """
-        mapping = {
-            "aprobado": "METROLOGIA APROBADO ✓",
-            "rechazado": "METROLOGIA RECHAZADO - Pendiente reparación",
-            "pendiente": "Metrología pendiente"
-        }
-        return mapping.get(metrologia_state, f"METROLOGIA {metrologia_state}")
+        if metrologia_state == "aprobado":
+            return "METROLOGIA APROBADO ✓"
+
+        if metrologia_state == "rechazado":
+            if cycle is not None and cycle > 0:
+                return f"RECHAZADO (Ciclo {cycle}/3) - Pendiente reparación"
+            return "METROLOGIA RECHAZADO - Pendiente reparación"
+
+        if metrologia_state == "pendiente":
+            return "Metrología pendiente"
+
+        return f"METROLOGIA {metrologia_state}"
