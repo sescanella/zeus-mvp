@@ -942,7 +942,11 @@ class SheetsRepository:
                     # Try DD/MM/YYYY format (Google Sheets default)
                     return datetime.strptime(date_str, "%d/%m/%Y").date()
                 except ValueError:
-                    return None
+                    try:
+                        # Try DD-MM-YYYY format
+                        return datetime.strptime(date_str, "%d-%m-%Y").date()
+                    except ValueError:
+                        return None
 
         # Build Spool object
         try:
@@ -1124,7 +1128,10 @@ class SheetsRepository:
                 try:
                     return datetime.strptime(date_str, "%d/%m/%Y").date()
                 except ValueError:
-                    return None
+                    try:
+                        return datetime.strptime(date_str, "%d-%m-%Y").date()
+                    except ValueError:
+                        return None
 
         spools = []
         # Skip header (row 0)
