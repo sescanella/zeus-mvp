@@ -7,6 +7,7 @@ incluyendo autenticación, lectura y escritura de datos.
 import gspread
 from google.oauth2.service_account import Credentials
 from typing import Optional
+from datetime import datetime, date
 import logging
 from functools import wraps
 import time
