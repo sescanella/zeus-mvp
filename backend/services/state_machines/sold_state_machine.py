@@ -88,28 +88,28 @@ class SOLDStateMachine(BaseOperationStateMachine):
                 detalle="SOLD no puede iniciarse sin ARM iniciado"
             )
 
-    def before_iniciar(self, event_data):
+    def before_iniciar(self, **kwargs):
         """
         Before iniciar transition: Validate ARM dependency.
 
         Args:
-            event_data: Transition event data
+            **kwargs: Event arguments (ignored)
 
         Raises:
             DependenciasNoSatisfechasError: If ARM not initiated
         """
         self.validate_arm_initiated()
 
-    async def on_enter_en_progreso(self, event_data):
+    async def on_enter_en_progreso(self, worker_nombre: str = None, **kwargs):
         """
         Callback when SOLD work starts.
 
         Updates Soldador column with worker name.
 
         Args:
-            event_data: Transition event data with kwargs containing worker_nombre
+            worker_nombre: Worker name assigned to this spool (injected by dependency injection)
+            **kwargs: Other event arguments (ignored)
         """
-        worker_nombre = event_data.kwargs.get('worker_nombre')
         if worker_nombre and self.sheets_repo:
             # Find row for this spool
             row_num = self.sheets_repo.find_row_by_column_value(
@@ -127,16 +127,17 @@ class SOLDStateMachine(BaseOperationStateMachine):
                     value=worker_nombre
                 )
 
-    async def on_enter_completado(self, event_data):
+    async def on_enter_completado(self, fecha_operacion: date = None, **kwargs):
         """
         Callback when SOLD work completes.
 
         Updates Fecha_Soldadura column with completion date.
 
         Args:
-            event_data: Transition event data with kwargs containing fecha_operacion
+            fecha_operacion: Completion date (injected by dependency injection)
+            **kwargs: Other event arguments (ignored)
         """
-        fecha = event_data.kwargs.get('fecha_operacion', date.today())
+        fecha = fecha_operacion if fecha_operacion else date.today()
         if self.sheets_repo:
             # Find row for this spool
             row_num = self.sheets_repo.find_row_by_column_value(
@@ -157,17 +158,18 @@ class SOLDStateMachine(BaseOperationStateMachine):
                     value=fecha_str
                 )
 
-    async def on_enter_pendiente(self, event_data):
+    async def on_enter_pendiente(self, source: 'State' = None, **kwargs):
         """
         Callback when returning to pendiente state (CANCELAR).
 
         Clears Soldador column to revert the spool to unassigned state.
 
         Args:
-            event_data: Transition event data
+            source: Source state from transition (injected by dependency injection)
+            **kwargs: Other event arguments (ignored)
         """
         # Only clear if coming from EN_PROGRESO (CANCELAR transition)
-        if event_data.transition.source == self.en_progreso and self.sheets_repo:
+        if source and source.id == 'en_progreso' and self.sheets_repo:
             # Find row for this spool
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
