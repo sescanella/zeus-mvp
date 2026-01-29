@@ -363,26 +363,42 @@ async def test_spool_constructor(
                     except ValueError:
                         return None
 
-        # Try to construct Spool WITH date parsing (same as get_spool_by_tag)
+        # Get ALL fields that get_spool_by_tag uses
+        all_values = {
+            **values,
+            "fecha_qc_metrologia_raw": get_col_value("Fecha_QC_Metrología"),
+            "ocupado_por": get_col_value("Ocupado_Por"),
+            "fecha_ocupacion": get_col_value("Fecha_Ocupacion"),
+            "version": get_col_value("version"),
+            "estado_detalle": get_col_value("Estado_Detalle"),
+        }
+
+        # Try to construct Spool EXACTLY like get_spool_by_tag (v2.1 mode)
         try:
             spool = Spool(
                 tag_spool="TEST-02",
-                nv=values["nv"],
-                fecha_materiales=parse_date(values["fecha_materiales_raw"]),
-                fecha_armado=parse_date(values["fecha_armado_raw"]),
-                fecha_soldadura=parse_date(values["fecha_soldadura_raw"]),
-                armador=values["armador"],
-                soldador=values["soldador"],
+                nv=all_values["nv"],
+                fecha_materiales=parse_date(all_values["fecha_materiales_raw"]),
+                fecha_armado=parse_date(all_values["fecha_armado_raw"]),
+                fecha_soldadura=parse_date(all_values["fecha_soldadura_raw"]),
+                fecha_qc_metrologia=parse_date(all_values["fecha_qc_metrologia_raw"]),
+                armador=all_values["armador"],
+                soldador=all_values["soldador"],
+                ocupado_por=None,  # v2.1 mode
+                fecha_ocupacion=None,  # v2.1 mode
+                version=0,  # v2.1 mode
+                estado_detalle=None,  # v2.1 mode
             )
             return {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "status": "success",
                 "row_number": row_num,
-                "extracted_values": values,
+                "extracted_values": all_values,
                 "parsed_dates": {
-                    "fecha_materiales": str(parse_date(values["fecha_materiales_raw"])),
-                    "fecha_armado": str(parse_date(values["fecha_armado_raw"])),
-                    "fecha_soldadura": str(parse_date(values["fecha_soldadura_raw"])),
+                    "fecha_materiales": str(parse_date(all_values["fecha_materiales_raw"])),
+                    "fecha_armado": str(parse_date(all_values["fecha_armado_raw"])),
+                    "fecha_soldadura": str(parse_date(all_values["fecha_soldadura_raw"])),
+                    "fecha_qc_metrologia": str(parse_date(all_values["fecha_qc_metrologia_raw"])),
                 },
                 "spool_created": True,
                 "spool_data": {
@@ -390,7 +406,9 @@ async def test_spool_constructor(
                     "nv": spool.nv,
                     "armador": spool.armador,
                     "soldador": spool.soldador,
-                    "fecha_materiales": str(spool.fecha_materiales) if spool.fecha_materiales else None
+                    "fecha_materiales": str(spool.fecha_materiales) if spool.fecha_materiales else None,
+                    "ocupado_por": spool.ocupado_por,
+                    "version": spool.version
                 }
             }
         except Exception as e:
@@ -399,7 +417,7 @@ async def test_spool_constructor(
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "status": "error",
                 "row_number": row_num,
-                "extracted_values": values,
+                "extracted_values": all_values,
                 "spool_created": False,
                 "error": str(e),
                 "error_type": type(e).__name__,
