@@ -285,6 +285,99 @@ async def column_map_debug(
         }
 
 
+@router.get("/health/test-get-spool-flow", status_code=status.HTTP_200_OK)
+async def test_get_spool_flow(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+):
+    """
+    TEMPORARY DEBUG ENDPOINT - Simulates complete get_spool_by_tag flow.
+
+    This reproduces the EXACT flow to diagnose why get_spool_by_tag returns None.
+    """
+    logger.info("get_spool_by_tag flow test requested")
+
+    try:
+        from backend.core.column_map_cache import ColumnMapCache
+        from backend.config import config
+
+        # STEP 1: Get column map
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, sheets_repo)
+
+        # STEP 2: Find TAG column
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+        tag_column_names_to_try = ["TAG_SPOOL", "SPLIT", "tag_spool"]
+        tag_column_index = None
+        tag_column_used = None
+
+        for col_name in tag_column_names_to_try:
+            normalized = normalize(col_name)
+            if normalized in column_map:
+                tag_column_index = column_map[normalized]
+                tag_column_used = col_name
+                break
+
+        if tag_column_index is None:
+            tag_column_index = 6
+            tag_column_used = "FALLBACK"
+
+        # STEP 3: Convert index to letter
+        column_letter = sheets_repo._index_to_column_letter(tag_column_index)
+
+        # STEP 4: Find row (FIRST read_worksheet call)
+        row_num = sheets_repo.find_row_by_column_value(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            column_letter=column_letter,
+            value="TEST-02"
+        )
+
+        if row_num is None:
+            return {
+                "status": "error",
+                "message": "find_row_by_column_value returned None",
+                "tag_column_index": tag_column_index,
+                "column_letter": column_letter
+            }
+
+        # STEP 5: Read worksheet AGAIN (SECOND read_worksheet call - THIS IS THE BUG AREA)
+        all_rows_second = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+
+        # STEP 6: Check the condition
+        condition_check = {
+            "all_rows_is_none": all_rows_second is None,
+            "all_rows_length": len(all_rows_second) if all_rows_second else 0,
+            "row_num": row_num,
+            "row_num_greater_than_length": row_num > len(all_rows_second) if all_rows_second else True,
+            "will_return_none": (not all_rows_second) or (row_num > len(all_rows_second))
+        }
+
+        if not all_rows_second or row_num > len(all_rows_second):
+            return {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "status": "bug_found",
+                "message": "FOUND THE BUG: row_num > len(all_rows) condition triggered",
+                **condition_check
+            }
+
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "status": "no_bug",
+            "message": "Condition check passed, spool should be found",
+            **condition_check
+        }
+
+    except Exception as e:
+        import traceback
+        logger.error(f"get_spool flow test failed: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.get("/health/test-spool-constructor", status_code=status.HTTP_200_OK)
 async def test_spool_constructor(
     sheets_repo: SheetsRepository = Depends(get_sheets_repository)
