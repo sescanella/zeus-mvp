@@ -966,7 +966,13 @@ class SheetsRepository:
 
         # Read the entire row
         all_rows = self.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        self.logger.info(
+            f"get_spool_by_tag: Found row_num={row_num}, all_rows has {len(all_rows)} rows"
+        )
         if not all_rows or row_num > len(all_rows):
+            self.logger.warning(
+                f"get_spool_by_tag: Returning None - row_num={row_num} > len(all_rows)={len(all_rows) if all_rows else 0}"
+            )
             return None
 
         row_data = all_rows[row_num - 1]  # Convert 1-indexed to 0-indexed
