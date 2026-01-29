@@ -966,17 +966,10 @@ class SheetsRepository:
 
         # Read the entire row
         all_rows = self.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
-        self.logger.info(
-            f"get_spool_by_tag: Found row_num={row_num}, all_rows has {len(all_rows)} rows"
-        )
         if not all_rows or row_num > len(all_rows):
-            self.logger.warning(
-                f"get_spool_by_tag: Returning None - row_num={row_num} > len(all_rows)={len(all_rows) if all_rows else 0}"
-            )
             return None
 
         row_data = all_rows[row_num - 1]  # Convert 1-indexed to 0-indexed
-        self.logger.info(f"get_spool_by_tag: About to construct Spool for {tag_spool}, row_data length={len(row_data)}")
 
         # Get column map for dynamic column access
         from backend.core.column_map_cache import ColumnMapCache
@@ -1016,8 +1009,23 @@ class SheetsRepository:
                         return None
 
         # Build Spool object
-        self.logger.info(f"get_spool_by_tag: Entering try block for Spool construction")
         try:
+            # v3.0 fields: only read and parse if in v3.0 mode
+            if self._compatibility_mode == "v3.0":
+                version_raw = get_col_value("version")
+                try:
+                    version_value = int(version_raw) if version_raw else 0
+                except (ValueError, TypeError):
+                    version_value = 0
+                ocupado_por_value = get_col_value("Ocupado_Por")
+                fecha_ocupacion_value = get_col_value("Fecha_Ocupacion")
+                estado_detalle_value = get_col_value("Estado_Detalle")
+            else:
+                version_value = 0
+                ocupado_por_value = None
+                fecha_ocupacion_value = None
+                estado_detalle_value = None
+
             spool = Spool(
                 tag_spool=tag_spool,
                 nv=get_col_value("NV"),
@@ -1027,28 +1035,18 @@ class SheetsRepository:
                 fecha_qc_metrologia=parse_date(get_col_value("Fecha_QC_Metrología")),
                 armador=get_col_value("Armador"),
                 soldador=get_col_value("Soldador"),
-                ocupado_por=get_col_value("Ocupado_Por") if self._compatibility_mode == "v3.0" else None,
-                fecha_ocupacion=get_col_value("Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
-                version=int(get_col_value("version") or 0) if self._compatibility_mode == "v3.0" else 0,
-                estado_detalle=get_col_value("Estado_Detalle") if self._compatibility_mode == "v3.0" else None,
+                ocupado_por=ocupado_por_value,
+                fecha_ocupacion=fecha_ocupacion_value,
+                version=version_value,
+                estado_detalle=estado_detalle_value,
             )
             return spool
         except Exception as e:
             self.logger.error(
                 f"Error constructing Spool object for {tag_spool}: {e}",
-                exc_info=True,
-                extra={
-                    "tag_spool": tag_spool,
-                    "row_num": row_num,
-                    "nv": get_col_value("NV"),
-                    "armador": get_col_value("Armador"),
-                    "soldador": get_col_value("Soldador"),
-                    "fecha_materiales": get_col_value("Fecha_Materiales"),
-                    "row_data_length": len(row_data)
-                }
+                exc_info=True
             )
-            # TEMPORARY: Re-raise to debug in production
-            raise
+            return None
 
     def get_spools_for_metrologia(self) -> list['Spool']:
         """
