@@ -344,11 +344,33 @@ async def test_spool_constructor(
             "fecha_soldadura_raw": get_col_value("Fecha_Soldadura"),
         }
 
-        # Try to construct Spool
+        # Parse dates
+        def parse_date(date_str):
+            if not date_str:
+                return None
+            try:
+                from datetime import datetime as dt
+                # Try YYYY-MM-DD
+                return dt.strptime(str(date_str), "%Y-%m-%d").date()
+            except ValueError:
+                try:
+                    # Try DD/MM/YYYY
+                    return dt.strptime(str(date_str), "%d/%m/%Y").date()
+                except ValueError:
+                    try:
+                        # Try DD-MM-YYYY
+                        return dt.strptime(str(date_str), "%d-%m-%Y").date()
+                    except ValueError:
+                        return None
+
+        # Try to construct Spool WITH date parsing (same as get_spool_by_tag)
         try:
             spool = Spool(
                 tag_spool="TEST-02",
                 nv=values["nv"],
+                fecha_materiales=parse_date(values["fecha_materiales_raw"]),
+                fecha_armado=parse_date(values["fecha_armado_raw"]),
+                fecha_soldadura=parse_date(values["fecha_soldadura_raw"]),
                 armador=values["armador"],
                 soldador=values["soldador"],
             )
@@ -357,12 +379,18 @@ async def test_spool_constructor(
                 "status": "success",
                 "row_number": row_num,
                 "extracted_values": values,
+                "parsed_dates": {
+                    "fecha_materiales": str(parse_date(values["fecha_materiales_raw"])),
+                    "fecha_armado": str(parse_date(values["fecha_armado_raw"])),
+                    "fecha_soldadura": str(parse_date(values["fecha_soldadura_raw"])),
+                },
                 "spool_created": True,
                 "spool_data": {
                     "tag_spool": spool.tag_spool,
                     "nv": spool.nv,
                     "armador": spool.armador,
-                    "soldador": spool.soldador
+                    "soldador": spool.soldador,
+                    "fecha_materiales": str(spool.fecha_materiales) if spool.fecha_materiales else None
                 }
             }
         except Exception as e:
