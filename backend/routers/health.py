@@ -170,6 +170,66 @@ async def diagnostic_check(
     return diagnostic_info
 
 
+@router.get("/health/column-map", status_code=status.HTTP_200_OK)
+async def column_map_debug(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+):
+    """
+    TEMPORARY DEBUG ENDPOINT - Shows column mapping for Operaciones sheet.
+
+    This helps diagnose column index issues in production.
+    """
+    logger.info("Column map debug requested")
+
+    try:
+        from backend.core.column_map_cache import ColumnMapCache
+        from backend.config import config
+
+        # Get column map
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, sheets_repo)
+
+        # Find TAG_SPOOL column specifically
+        tag_spool_index = column_map.get("tagspool") or column_map.get("split")
+
+        # Get first few rows for context
+        all_rows = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        header = all_rows[0] if all_rows else []
+
+        # Search for TEST-02 specifically
+        test_spool_search = None
+        if len(all_rows) > 1:
+            for row_idx, row_data in enumerate(all_rows[1:], start=2):
+                if tag_spool_index is not None and tag_spool_index < len(row_data):
+                    if row_data[tag_spool_index] == "TEST-02":
+                        test_spool_search = {
+                            "found": True,
+                            "row_number": row_idx,
+                            "tag_column_index": tag_spool_index,
+                            "tag_value": row_data[tag_spool_index]
+                        }
+                        break
+
+        if test_spool_search is None:
+            test_spool_search = {"found": False, "tag_column_index": tag_spool_index}
+
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "total_columns": len(column_map),
+            "tag_spool_column_index": tag_spool_index,
+            "tag_spool_normalized_keys": [k for k in column_map.keys() if "tag" in k or "split" in k],
+            "header_sample": header[:15],  # First 15 column headers
+            "test_02_search": test_spool_search,
+            "column_map_sample": {k: v for k, v in list(column_map.items())[:20]}
+        }
+
+    except Exception as e:
+        logger.error(f"Column map debug failed: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 @router.get("/redis-health", status_code=status.HTTP_200_OK)
 async def redis_health():
     """
