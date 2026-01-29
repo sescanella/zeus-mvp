@@ -1045,7 +1045,8 @@ class SheetsRepository:
                     "row_data_length": len(row_data)
                 }
             )
-            return None
+            # TEMPORARY: Re-raise to debug in production
+            raise
 
     def get_spools_for_metrologia(self) -> list['Spool']:
         """
