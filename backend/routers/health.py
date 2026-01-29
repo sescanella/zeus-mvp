@@ -212,11 +212,46 @@ async def column_map_debug(
         if test_spool_search is None:
             test_spool_search = {"found": False, "tag_column_index": tag_spool_index}
 
-        # Now test get_spool_by_tag directly
+        # Now test get_spool_by_tag directly with detailed logging
         try:
+            # Manual simulation of get_spool_by_tag logic
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+            tag_column_names_to_try = ["TAG_SPOOL", "SPLIT", "tag_spool"]
+            tag_column_index = None
+            tag_column_used = None
+
+            for col_name in tag_column_names_to_try:
+                normalized = normalize(col_name)
+                if normalized in column_map:
+                    tag_column_index = column_map[normalized]
+                    tag_column_used = col_name
+                    break
+
+            if tag_column_index is None:
+                tag_column_index = 6  # Fallback
+                tag_column_used = "FALLBACK_G"
+
+            # Convert index to column letter
+            column_letter = sheets_repo._index_to_column_letter(tag_column_index)
+
+            # Try find_row_by_column_value
+            row_num = sheets_repo.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter=column_letter,
+                value="TEST-02"
+            )
+
+            # Now actually call get_spool_by_tag
             spool_result = sheets_repo.get_spool_by_tag("TEST-02")
+
             get_spool_status = {
                 "success": spool_result is not None,
+                "tag_column_used": tag_column_used,
+                "tag_column_index": tag_column_index,
+                "column_letter": column_letter,
+                "find_row_result": row_num,
                 "spool_data": {
                     "tag_spool": spool_result.tag_spool if spool_result else None,
                     "armador": spool_result.armador if spool_result else None,
@@ -224,6 +259,7 @@ async def column_map_debug(
                 } if spool_result else None
             }
         except Exception as e:
+            logger.error(f"get_spool_by_tag test failed: {e}", exc_info=True)
             get_spool_status = {
                 "success": False,
                 "error": str(e),
