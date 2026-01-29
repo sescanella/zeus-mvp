@@ -212,6 +212,24 @@ async def column_map_debug(
         if test_spool_search is None:
             test_spool_search = {"found": False, "tag_column_index": tag_spool_index}
 
+        # Now test get_spool_by_tag directly
+        try:
+            spool_result = sheets_repo.get_spool_by_tag("TEST-02")
+            get_spool_status = {
+                "success": spool_result is not None,
+                "spool_data": {
+                    "tag_spool": spool_result.tag_spool if spool_result else None,
+                    "armador": spool_result.armador if spool_result else None,
+                    "soldador": spool_result.soldador if spool_result else None
+                } if spool_result else None
+            }
+        except Exception as e:
+            get_spool_status = {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+
         return {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "total_columns": len(column_map),
@@ -219,6 +237,7 @@ async def column_map_debug(
             "tag_spool_normalized_keys": [k for k in column_map.keys() if "tag" in k or "split" in k],
             "header_sample": header[:15],  # First 15 column headers
             "test_02_search": test_spool_search,
+            "get_spool_by_tag_test": get_spool_status,
             "column_map_sample": {k: v for k, v in list(column_map.items())[:20]}
         }
 
