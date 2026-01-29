@@ -360,11 +360,30 @@ async def test_get_spool_flow(
                 **condition_check
             }
 
+        # STEP 7: Call actual get_spool_by_tag and capture result
+        try:
+            actual_spool = sheets_repo.get_spool_by_tag("TEST-02")
+            spool_result = {
+                "get_spool_returned": actual_spool is not None,
+                "spool_data": {
+                    "tag": actual_spool.tag_spool if actual_spool else None,
+                    "nv": actual_spool.nv if actual_spool else None
+                } if actual_spool else None
+            }
+        except Exception as e:
+            import traceback
+            spool_result = {
+                "get_spool_error": str(e),
+                "error_type": type(e).__name__,
+                "traceback_short": traceback.format_exc().split("\n")[-5:]
+            }
+
         return {
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "status": "no_bug",
-            "message": "Condition check passed, spool should be found",
-            **condition_check
+            "status": "no_bug_in_condition",
+            "message": "Condition check passed, testing actual get_spool_by_tag call",
+            **condition_check,
+            **spool_result
         }
 
     except Exception as e:
