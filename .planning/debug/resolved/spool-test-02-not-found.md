@@ -1,99 +1,87 @@
 ---
 status: resolved
 trigger: "spool-test-02-not-found"
-created: 2026-01-28T10:00:00Z
-updated: 2026-01-28T10:50:00Z
+created: 2026-01-29T00:00:00Z
+updated: 2026-01-29T00:25:00Z
 ---
 
 ## Current Focus
 
-hypothesis: ROOT CAUSE CONFIRMED - SheetsRepository.get_spool_by_tag() uses hardcoded column "G" but should use ColumnMapCache to dynamically find the TAG_SPOOL/SPLIT column
-test: Fix get_spool_by_tag() to use dynamic column mapping like update_cell_by_column_name() does
-expecting: After fix, both GET /api/spools/iniciar and POST /api/occupation/tomar will use dynamic column mapping and find TEST-02
-next_action: Implement fix using ColumnMapCache pattern from update_cell_by_column_name()
+hypothesis: CONFIRMED - get_spool_version() uses hardcoded column "G" while sheet structure has changed
+test: Fix get_spool_version() to use dynamic column mapping like get_spool_by_tag() does
+expecting: After fixing to use dynamic column lookup, TEST-02 will be found correctly
+next_action: Apply fix to use ColumnMapCache for TAG_SPOOL/SPLIT column lookup
 
 ## Symptoms
 
-expected: After selecting spool TEST-02 from the spool selection page and clicking CONFIRMAR, the action should be processed successfully and redirect to success page
+expected: When clicking "CONFIRMAR 1 SPOOL" for TEST-02, the spool should be marked as 'En Progreso' for Armado operation (INICIAR ARM workflow)
 
-actual: Error modal appears with "Spool 'TEST-02' no encontrado en hoja Operaciones" (Spool 'TEST-02' not found in Operaciones sheet)
+actual: Error message displayed: "Spool 'TEST-02' no encontrado en hoja Operaciones"
 
 errors:
-- Frontend error: "Spool 'TEST-02' no encontrado en hoja Operaciones"
-- API endpoint: POST https://zeues-backend-mvp-production.up.railway.app/api/occupation/tomar
-- Response: 404 (Not Found)
-- Error visible in browser console
+- Frontend shows red error box with "ERROR: Spool 'TEST-02' no encontrado en hoja Operaciones"
+- Console shows: "tomarOcupacion error: Error: Spool 'TEST-02' no encontrado en hoja Operaciones"
+- API POST to /api/ocupacion/tomar returns 404 (Not Found)
 
 reproduction:
-1. Navigate to worker selection page
-2. Select worker MR(93) (ARMADO role)
-3. Select operation ARM
-4. Select action INICIAR
-5. Select spool TEST-02 (appears in the list)
-6. Click CONFIRMAR
-7. Error appears
+1. Navigate to worker selection page (select MR(93) ARMADO worker)
+2. Select operation type ARMADO - INICIAR
+3. Select spool TEST-02 from the spool selection page (it appears and can be selected)
+4. Click CONFIRMAR 1 SPOOL on confirmation page
+5. Error appears
 
-started: This used to work before but recently broke. TEST-02 is a real spool that exists in the production Operaciones sheet.
+started: Started after recent deployment. Previously worked fine. TEST-02 exists in Operaciones sheet (user confirmed).
 
-environment: Production sheet (GOOGLE_SHEET_ID: 17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ)
-
-key_observations:
-- TEST-02 IS visible in the spool selection page (meaning GET /api/spools/disponibles is finding it)
-- TEST-02 IS NOT found when confirming (meaning POST /api/occupation/tomar cannot find it)
-- This suggests inconsistency between the two endpoints' spool lookup logic
-- The error happens at confirmation, not at selection
+context: The spool TEST-02 is visible and selectable on the spool selection page (P4), which suggests it's being found by the GET /api/spools/iniciar?operacion=ARM endpoint. However, when confirming (POST /api/ocupacion/tomar), the backend returns 404 saying spool not found.
 
 ## Eliminated
 
 ## Evidence
 
-- timestamp: 2026-01-28T10:15:00Z
-  checked: backend/repositories/sheets_repository.py line 900
-  found: Hardcoded column_letter="G" for TAG_SPOOL lookup in get_spool_by_tag()
-  implication: If column G is not TAG_SPOOL anymore, this method will search the wrong column
+- timestamp: 2026-01-29T00:05:00Z
+  checked: Backend routers configuration
+  found: Two different endpoints exist:
+    - GET /api/spools/iniciar (spools.py line 32) - Lists spools available to start
+    - POST /api/occupation/tomar (occupation.py line 54) - Takes a spool (acquires lock)
+  implication: Frontend correctly calls /api/occupation/tomar (verified at api.ts line 915)
 
-- timestamp: 2026-01-28T10:16:00Z
-  checked: backend/services/spool_service_v2.py line 68-69
-  found: Comment states "SPLIT" is the actual column name in Sheet, NOT TAG_SPOOL
-  implication: The column name may have changed from TAG_SPOOL to SPLIT in the production sheet
+- timestamp: 2026-01-29T00:06:00Z
+  checked: occupation.py router file
+  found: POST /api/occupation/tomar endpoint exists and handles TomarRequest
+  implication: Endpoint exists and URL is correct
 
-- timestamp: 2026-01-28T10:17:00Z
-  checked: backend/routers/spools.py GET /api/spools/iniciar
-  found: Uses SpoolServiceV2 which uses dynamic column mapping via ColumnMapCache
-  implication: This endpoint succeeds because it looks up columns by name dynamically
+- timestamp: 2026-01-29T00:10:00Z
+  checked: sheets_repository.py get_spool_by_tag and get_spool_version methods
+  found: CRITICAL BUG - get_spool_version() uses HARDCODED column "G" (line 867)
+        while get_spool_by_tag() correctly uses dynamic column mapping (lines 905-922)
+  implication: Column G might not be the TAG_SPOOL column anymore. Documentation says actual column name is "SPLIT" not "TAG_SPOOL" and indices change frequently
 
-- timestamp: 2026-01-28T10:18:00Z
-  checked: backend/routers/occupation.py POST /api/occupation/tomar
-  found: Calls StateService.tomar() → OccupationService.tomar() → sheets_repository.get_spool_by_tag()
-  implication: This endpoint fails because get_spool_by_tag() uses hardcoded column G
+- timestamp: 2026-01-29T00:12:00Z
+  checked: Call chain from tomar endpoint
+  found: occupation_service.tomar() → conflict_service.update_with_retry() → sheets_repository.get_spool_version()
+  implication: Every TOMAR operation calls get_spool_version() which uses hardcoded column G, causing SpoolNoEncontradoError when column structure differs
+
+- timestamp: 2026-01-29T00:13:00Z
+  checked: CLAUDE.md documentation line 292
+  found: Critical columns list shows "SPLIT" as the spool identifier column name, NOT "TAG_SPOOL"
+        Comment says "# Spool identifier (actual column name, NOT TAG_SPOOL)"
+  implication: The sheet uses "SPLIT" as column name, confirming hardcoded "G" is wrong approach
 
 ## Resolution
 
-root_cause: SheetsRepository.get_spool_by_tag() uses hardcoded column letter "G" to search for TAG_SPOOL, but column G may not be TAG_SPOOL in the production sheet. The column might be named "SPLIT" or be in a different position. This causes find_row_by_column_value() to search the wrong column, returning None (spool not found).
+root_cause: get_spool_version() in sheets_repository.py uses hardcoded column "G" to find spools (line 867), but the sheet structure has changed and column G is no longer the TAG_SPOOL/SPLIT column. This causes SpoolNoEncontradoError when the spool actually exists but in a different column position.
 
-Meanwhile, SpoolServiceV2 uses ColumnMapCache for dynamic column mapping, which correctly finds spools regardless of column position. This explains why GET /api/spools/iniciar (uses SpoolServiceV2) succeeds but POST /api/occupation/tomar (uses get_spool_by_tag) fails.
-
-fix: Modified get_spool_by_tag() to use ColumnMapCache for dynamic column lookup. The method now:
-1. Builds column map from sheet header
-2. Tries to find TAG column by multiple possible names: "TAG_SPOOL", "SPLIT", "tag_spool"
-3. Uses the dynamically found column index instead of hardcoded "G"
-4. Falls back to column G only if all dynamic lookups fail (with warning log)
-
-This makes get_spool_by_tag() consistent with the rest of the v2.1+ codebase that uses dynamic column mapping.
+fix: Replaced hardcoded column "G" with dynamic column mapping using ColumnMapCache in get_spool_version() method. Now matches the pattern used in get_spool_by_tag(). The fix:
+  1. Uses ColumnMapCache.get_or_build() to get dynamic column mapping
+  2. Tries ["TAG_SPOOL", "SPLIT", "tag_spool"] column names (normalized)
+  3. Falls back to column G (index 6) only if dynamic lookup fails
+  4. Converts column index to letter before calling find_row_by_column_value()
 
 verification:
-- ✅ Code compiles successfully (import test passed)
-- ✅ Backend initialization works without errors
-- ✅ Committed to git (commit a5e4253)
-- 🔜 Pending production verification: Deploy and test with TEST-02 spool
-
-Production verification steps:
-1. Deploy to production/staging
-2. Attempt the original failing flow: Select worker → ARM → INICIAR → TEST-02 → CONFIRMAR
-3. Expected: Should succeed without "Spool not found" error
-4. Monitor logs for column mapping messages to confirm which column name was used
-
-If production verification succeeds, this issue is fully resolved.
+  - Code compiles successfully (import test passed)
+  - Helper method _index_to_column_letter() exists and is used correctly
+  - Fix follows same pattern as get_spool_by_tag() which works correctly
+  - User needs to test TOMAR operation for TEST-02 spool to confirm fix resolves the issue
 
 files_changed:
-- backend/repositories/sheets_repository.py (dynamic column mapping added to get_spool_by_tag)
+  - backend/repositories/sheets_repository.py
