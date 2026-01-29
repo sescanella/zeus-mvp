@@ -285,6 +285,44 @@ async def column_map_debug(
         }
 
 
+@router.get("/health/clear-cache", status_code=status.HTTP_200_OK)
+async def clear_cache():
+    """
+    TEMPORARY DEBUG ENDPOINT - Clears the column map cache.
+
+    Forces a rebuild of column mapping on next request.
+    """
+    logger.info("Cache clear requested")
+
+    try:
+        from backend.core.column_map_cache import ColumnMapCache
+
+        # Get cached sheets before clearing
+        cached_before = ColumnMapCache.get_cached_sheets()
+
+        # Clear all caches
+        ColumnMapCache.clear_all()
+
+        # Get cached sheets after clearing (should be empty)
+        cached_after = ColumnMapCache.get_cached_sheets()
+
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "status": "success",
+            "cached_sheets_before": cached_before,
+            "cached_sheets_after": cached_after,
+            "message": "Column map cache cleared. Next API call will rebuild cache."
+        }
+
+    except Exception as e:
+        logger.error(f"Cache clear failed: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 @router.get("/redis-health", status_code=status.HTTP_200_OK)
 async def redis_health():
     """

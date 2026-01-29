@@ -1026,7 +1026,19 @@ class SheetsRepository:
             )
             return spool
         except Exception as e:
-            self.logger.error(f"Error constructing Spool object for {tag_spool}: {e}")
+            self.logger.error(
+                f"Error constructing Spool object for {tag_spool}: {e}",
+                exc_info=True,
+                extra={
+                    "tag_spool": tag_spool,
+                    "row_num": row_num,
+                    "nv": get_col_value("NV"),
+                    "armador": get_col_value("Armador"),
+                    "soldador": get_col_value("Soldador"),
+                    "fecha_materiales": get_col_value("Fecha_Materiales"),
+                    "row_data_length": len(row_data)
+                }
+            )
             return None
 
     def get_spools_for_metrologia(self) -> list['Spool']:
