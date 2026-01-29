@@ -211,7 +211,7 @@ class RedisLockService:
             logger.warning(f"Redis error acquiring lock for {tag_spool}: {e}")
             raise
 
-    async def release_lock(self, tag_spool: str, lock_token: str) -> bool:
+    async def release_lock(self, tag_spool: str, worker_id: int, lock_token: str) -> bool:
         """
         Release lock safely using Lua script with ownership verification.
 
@@ -220,6 +220,7 @@ class RedisLockService:
 
         Args:
             tag_spool: Spool identifier
+            worker_id: Worker ID who owns the lock (for reconstructing lock_value)
             lock_token: Token returned from acquire_lock
 
         Returns:
@@ -230,25 +231,30 @@ class RedisLockService:
         """
         lock_key = self._lock_key(tag_spool)
 
+        # Reconstruct full lock_value: "worker_id:token"
+        # This matches the format stored by acquire_lock()
+        lock_value = f"{worker_id}:{lock_token}"
+
         try:
             # Execute Lua script atomically
-            # KEYS[1] = lock_key, ARGV[1] = expected lock value
+            # KEYS[1] = lock_key, ARGV[1] = expected lock value (worker_id:token)
             result = await self.redis.eval(
                 RELEASE_SCRIPT,
                 1,  # Number of keys
                 lock_key,
-                lock_token
+                lock_value
             )
 
             released = result == 1
 
             if released:
                 logger.info(
-                    f"✅ Lock released: {tag_spool} (token: {lock_token[:8]}...)"
+                    f"✅ Lock released: {tag_spool} by worker {worker_id} "
+                    f"(token: {lock_token[:8]}...)"
                 )
             else:
                 logger.warning(
-                    f"⚠️ Lock not released: {tag_spool} - not owned by us "
+                    f"⚠️ Lock not released: {tag_spool} - not owned by worker {worker_id} "
                     f"(token: {lock_token[:8]}...)"
                 )
 

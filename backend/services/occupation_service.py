@@ -175,12 +175,12 @@ class OccupationService:
                 logger.error(
                     f"Version conflict persists after retries, rolling back Redis lock: {e}"
                 )
-                await self.redis_lock_service.release_lock(tag_spool, lock_token)
+                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
                 raise
             except Exception as e:
                 # Rollback: release Redis lock if Sheets update fails
                 logger.error(f"Sheets update failed, rolling back Redis lock: {e}")
-                await self.redis_lock_service.release_lock(tag_spool, lock_token)
+                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
                 raise SheetsUpdateError(
                     f"Failed to update occupation in Sheets: {e}",
                     updates={"ocupado_por": worker_nombre, "fecha_ocupacion": fecha_ocupacion_str}
@@ -341,7 +341,7 @@ class OccupationService:
 
             # Step 4: Release Redis lock
             try:
-                released = await self.redis_lock_service.release_lock(tag_spool, lock_token)
+                released = await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
                 if not released:
                     logger.warning(
                         f"⚠️ Lock release returned False for {tag_spool} "
@@ -508,7 +508,7 @@ class OccupationService:
 
             # Step 4: Release Redis lock
             try:
-                released = await self.redis_lock_service.release_lock(tag_spool, lock_token)
+                released = await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
                 if not released:
                     logger.warning(
                         f"⚠️ Lock release returned False for {tag_spool} "
