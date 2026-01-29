@@ -976,6 +976,7 @@ class SheetsRepository:
             return None
 
         row_data = all_rows[row_num - 1]  # Convert 1-indexed to 0-indexed
+        self.logger.info(f"get_spool_by_tag: About to construct Spool for {tag_spool}, row_data length={len(row_data)}")
 
         # Get column map for dynamic column access
         from backend.core.column_map_cache import ColumnMapCache
@@ -1015,6 +1016,7 @@ class SheetsRepository:
                         return None
 
         # Build Spool object
+        self.logger.info(f"get_spool_by_tag: Entering try block for Spool construction")
         try:
             spool = Spool(
                 tag_spool=tag_spool,
