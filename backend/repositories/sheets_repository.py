@@ -914,12 +914,12 @@ class SheetsRepository:
                 break
 
         if tag_column_index is None:
-            # Fallback to hardcoded G (column 7, 1-indexed) if dynamic lookup fails
+            # Fallback to hardcoded G (column index 6, 0-indexed) if dynamic lookup fails
             self.logger.warning(
                 f"TAG_SPOOL column not found in column map, falling back to column G. "
                 f"Available columns: {list(column_map.keys())[:10]}..."
             )
-            tag_column_index = 7  # Column G is index 7 (1-indexed)
+            tag_column_index = 6  # Column G is index 6 (0-indexed: A=0, B=1, ..., G=6)
 
         # Convert column index to letter
         column_letter = self._index_to_column_letter(tag_column_index)
