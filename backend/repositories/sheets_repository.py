@@ -984,7 +984,7 @@ class SheetsRepository:
             normalized = normalize(col_name)
             if normalized not in column_map:
                 return None
-            col_index = column_map[normalized] - 1  # Convert 1-indexed to 0-indexed
+            col_index = column_map[normalized]  # Already 0-indexed from build_column_map
             if col_index < len(row_data):
                 value = row_data[col_index]
                 return value if value and value.strip() else None
@@ -1067,7 +1067,7 @@ class SheetsRepository:
             normalized = normalize(col_name)
             if normalized not in column_map:
                 return None
-            col_index = column_map[normalized] - 1  # Convert 1-indexed to 0-indexed
+            col_index = column_map[normalized]  # Already 0-indexed from build_column_map
             if col_index < len(row_data):
                 value = row_data[col_index]
                 return value if value and value.strip() else None
@@ -1172,7 +1172,7 @@ class SheetsRepository:
             normalized = normalize(col_name)
             if normalized not in column_map:
                 return None
-            col_index = column_map[normalized] - 1  # Convert 1-indexed to 0-indexed
+            col_index = column_map[normalized]  # Already 0-indexed from build_column_map
             if col_index < len(row_data):
                 value = row_data[col_index]
                 return value if value and str(value).strip() else None
