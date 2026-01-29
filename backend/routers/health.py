@@ -285,6 +285,110 @@ async def column_map_debug(
         }
 
 
+@router.get("/health/test-spool-constructor", status_code=status.HTTP_200_OK)
+async def test_spool_constructor(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+):
+    """
+    TEMPORARY DEBUG ENDPOINT - Tests Spool constructor with TEST-02 data.
+
+    This helps diagnose why Spool construction is failing.
+    """
+    logger.info("Spool constructor test requested")
+
+    try:
+        from backend.models.spool import Spool
+        from backend.core.column_map_cache import ColumnMapCache
+        from backend.config import config
+        from datetime import datetime
+
+        # Get row data for TEST-02
+        all_rows = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, sheets_repo)
+
+        # Find TEST-02
+        tag_index = column_map.get("tagspool", 6)
+        row_data = None
+        row_num = None
+        for idx, row in enumerate(all_rows[1:], start=2):
+            if tag_index < len(row) and row[tag_index] == "TEST-02":
+                row_data = row
+                row_num = idx
+                break
+
+        if not row_data:
+            return {"error": "TEST-02 not found in sheet"}
+
+        # Helper functions
+        def normalize(name: str) -> str:
+            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+        def get_col_value(col_name: str):
+            normalized = normalize(col_name)
+            if normalized not in column_map:
+                return None
+            col_index = column_map[normalized]
+            if col_index < len(row_data):
+                value = row_data[col_index]
+                return value if value and str(value).strip() else None
+            return None
+
+        # Extract values
+        values = {
+            "tag_spool": "TEST-02",
+            "nv": get_col_value("NV"),
+            "armador": get_col_value("Armador"),
+            "soldador": get_col_value("Soldador"),
+            "fecha_materiales_raw": get_col_value("Fecha_Materiales"),
+            "fecha_armado_raw": get_col_value("Fecha_Armado"),
+            "fecha_soldadura_raw": get_col_value("Fecha_Soldadura"),
+        }
+
+        # Try to construct Spool
+        try:
+            spool = Spool(
+                tag_spool="TEST-02",
+                nv=values["nv"],
+                armador=values["armador"],
+                soldador=values["soldador"],
+            )
+            return {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "status": "success",
+                "row_number": row_num,
+                "extracted_values": values,
+                "spool_created": True,
+                "spool_data": {
+                    "tag_spool": spool.tag_spool,
+                    "nv": spool.nv,
+                    "armador": spool.armador,
+                    "soldador": spool.soldador
+                }
+            }
+        except Exception as e:
+            import traceback
+            return {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "status": "error",
+                "row_number": row_num,
+                "extracted_values": values,
+                "spool_created": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": traceback.format_exc()
+            }
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Spool constructor test failed: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.get("/health/clear-cache", status_code=status.HTTP_200_OK)
 async def clear_cache():
     """
