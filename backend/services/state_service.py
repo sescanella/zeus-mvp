@@ -105,17 +105,21 @@ class StateService:
         arm_machine = self._hydrate_arm_machine(spool)
         sold_machine = self._hydrate_sold_machine(spool)
 
+        # Activate initial state for async context (required by python-statemachine 2.5.0)
+        await arm_machine.activate_initial_state()
+        await sold_machine.activate_initial_state()
+
         # Step 4: Trigger state transition
         if operacion == ActionType.ARM:
-            # Trigger ARM iniciar transition
-            arm_machine.iniciar(
+            # Trigger ARM iniciar transition (await for async callbacks)
+            await arm_machine.iniciar(
                 worker_nombre=request.worker_nombre,
                 fecha_operacion=date.today()
             )
             logger.info(f"ARM state machine transitioned to {arm_machine.get_state_id()}")
         elif operacion == ActionType.SOLD:
             # Trigger SOLD iniciar transition (will validate ARM dependency)
-            sold_machine.iniciar(
+            await sold_machine.iniciar(
                 worker_nombre=request.worker_nombre,
                 fecha_operacion=date.today()
             )
@@ -166,6 +170,10 @@ class StateService:
             arm_machine = self._hydrate_arm_machine(spool)
             sold_machine = self._hydrate_sold_machine(spool)
 
+            # Activate initial state for async context
+            await arm_machine.activate_initial_state()
+            await sold_machine.activate_initial_state()
+
             # Update Estado_Detalle with "Disponible - ARM X, SOLD Y" format
             self._update_estado_detalle(
                 tag_spool=tag_spool,
@@ -214,15 +222,19 @@ class StateService:
         arm_machine = self._hydrate_arm_machine(spool)
         sold_machine = self._hydrate_sold_machine(spool)
 
-        # Trigger completar transition based on operation
+        # Activate initial state for async context
+        await arm_machine.activate_initial_state()
+        await sold_machine.activate_initial_state()
+
+        # Trigger completar transition based on operation (await for async callbacks)
         if operacion == ActionType.ARM:
-            arm_machine.completar(
+            await arm_machine.completar(
                 worker_nombre=request.worker_nombre,
                 fecha_operacion=request.fecha_operacion
             )
             logger.info(f"ARM state machine transitioned to {arm_machine.get_state_id()}")
         elif operacion == ActionType.SOLD:
-            sold_machine.completar(
+            await sold_machine.completar(
                 worker_nombre=request.worker_nombre,
                 fecha_operacion=request.fecha_operacion
             )
