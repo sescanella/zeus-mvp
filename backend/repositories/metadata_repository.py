@@ -10,7 +10,7 @@ from functools import wraps
 import time
 from datetime import date, datetime
 
-from backend.utils.date_formatter import now_chile
+from backend.utils.date_formatter import now_chile, format_date_for_sheets
 from backend.config import config
 from backend.models.metadata import MetadataEvent, EventoTipo, Accion
 from backend.exceptions import SheetsConnectionError, SheetsUpdateError
@@ -368,6 +368,12 @@ class MetadataRepository:
         if fecha_operacion is None:
             fecha_operacion = date_class.today()
 
+        # Convert date to string format (DD-MM-YYYY) as expected by MetadataEvent model
+        if isinstance(fecha_operacion, date_class):
+            fecha_operacion_str = format_date_for_sheets(fecha_operacion)
+        else:
+            fecha_operacion_str = fecha_operacion
+
         # Create MetadataEvent
         event = MetadataEvent(
             id=event_id,
@@ -378,7 +384,7 @@ class MetadataRepository:
             worker_nombre=worker_nombre,
             operacion=operacion,
             accion=Accion(accion),
-            fecha_operacion=fecha_operacion,
+            fecha_operacion=fecha_operacion_str,
             metadata_json=metadata_json or "{}"
         )
 
