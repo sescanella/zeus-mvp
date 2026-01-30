@@ -80,20 +80,28 @@ class ARMStateMachine(BaseOperationStateMachine):
                 return
 
             # Initial start: Update Armador column
-            row_num = self.sheets_repo.find_row_by_column_value(
-                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
-                value=self.tag_spool
-            )
-
-            if row_num:
-                self.sheets_repo.update_cell_by_column_name(
+            try:
+                row_num = self.sheets_repo.find_row_by_column_value(
                     sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                    row=row_num,
-                    column_name="Armador",
-                    value=worker_nombre
+                    column_letter="G",  # TAG_SPOOL column
+                    value=self.tag_spool
                 )
-                logger.info(f"ARM started for {self.tag_spool}, Armador set to {worker_nombre}")
+
+                if row_num:
+                    self.sheets_repo.update_cell_by_column_name(
+                        sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                        row=row_num,
+                        column_name="Armador",
+                        value=worker_nombre
+                    )
+                    logger.info(f"ARM started for {self.tag_spool}, Armador set to {worker_nombre}")
+                else:
+                    logger.error(f"❌ CRITICAL: Could not find row for {self.tag_spool} to update Armador")
+                    raise ValueError(f"Spool {self.tag_spool} not found in sheet")
+            except Exception as e:
+                logger.error(f"❌ CRITICAL: Failed to update Armador for {self.tag_spool}: {e}", exc_info=True)
+                # Re-raise to fail the TOMAR operation - we cannot proceed with inconsistent state
+                raise
 
     async def on_enter_pausado(self, **kwargs):
         """

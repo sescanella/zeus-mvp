@@ -43,7 +43,8 @@ from backend.exceptions import (
     NoAutorizadoError,
     LockExpiredError,
     DependenciasNoSatisfechasError,
-    SheetsUpdateError
+    SheetsUpdateError,
+    InvalidStateTransitionError
 )
 import logging
 
@@ -208,6 +209,13 @@ async def pausar_spool(
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail=e.message
+        )
+
+    except InvalidStateTransitionError as e:
+        logger.warning(f"Invalid state transition: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
 
     except SheetsUpdateError as e:

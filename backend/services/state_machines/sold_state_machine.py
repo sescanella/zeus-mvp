@@ -124,26 +124,32 @@ class SOLDStateMachine(BaseOperationStateMachine):
             # Check if resuming from pausado state
             if source and source.id == 'pausado':
                 # Resume: Do not modify Soldador (preserve original worker)
-
                 logger.info(f"SOLD resumed for {self.tag_spool}, Soldador unchanged")
                 return
 
             # Initial start: Update Soldador column
-            row_num = self.sheets_repo.find_row_by_column_value(
-                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
-                value=self.tag_spool
-            )
-
-            if row_num:
-                self.sheets_repo.update_cell_by_column_name(
+            try:
+                row_num = self.sheets_repo.find_row_by_column_value(
                     sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                    row=row_num,
-                    column_name="Soldador",
-                    value=worker_nombre
+                    column_letter="G",  # TAG_SPOOL column
+                    value=self.tag_spool
                 )
 
-                logger.info(f"SOLD started for {self.tag_spool}, Soldador set to {worker_nombre}")
+                if row_num:
+                    self.sheets_repo.update_cell_by_column_name(
+                        sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                        row=row_num,
+                        column_name="Soldador",
+                        value=worker_nombre
+                    )
+                    logger.info(f"SOLD started for {self.tag_spool}, Soldador set to {worker_nombre}")
+                else:
+                    logger.error(f"❌ CRITICAL: Could not find row for {self.tag_spool} to update Soldador")
+                    raise ValueError(f"Spool {self.tag_spool} not found in sheet")
+            except Exception as e:
+                logger.error(f"❌ CRITICAL: Failed to update Soldador for {self.tag_spool}: {e}", exc_info=True)
+                # Re-raise to fail the TOMAR operation - we cannot proceed with inconsistent state
+                raise
 
     async def on_enter_pausado(self, **kwargs):
         """

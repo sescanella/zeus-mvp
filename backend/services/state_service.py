@@ -96,121 +96,165 @@ class StateService:
         # Step 1: Delegate to OccupationService (Redis lock + Ocupado_Por)
         response = await self.occupation_service.tomar(request)
 
-        # Step 2: Fetch current spool state
-        spool = self.sheets_repo.get_spool_by_tag(tag_spool)
-        if not spool:
-            raise SpoolNoEncontradoError(tag_spool)
+        try:
+            # Step 2: Fetch current spool state
+            spool = self.sheets_repo.get_spool_by_tag(tag_spool)
+            if not spool:
+                raise SpoolNoEncontradoError(tag_spool)
 
-        # Step 3: Hydrate state machines
-        arm_machine = self._hydrate_arm_machine(spool)
-        sold_machine = self._hydrate_sold_machine(spool)
+            # Step 3: Hydrate state machines
+            arm_machine = self._hydrate_arm_machine(spool)
+            sold_machine = self._hydrate_sold_machine(spool)
 
-        # Activate initial state for async context (required by python-statemachine 2.5.0)
-        await arm_machine.activate_initial_state()
-        await sold_machine.activate_initial_state()
+            # Activate initial state for async context (required by python-statemachine 2.5.0)
+            await arm_machine.activate_initial_state()
+            await sold_machine.activate_initial_state()
 
-        # Step 4: Trigger state transition (iniciar or reanudar based on current state)
-        if operacion == ActionType.ARM:
-            current_arm_state = arm_machine.get_state_id()
+            # Step 4: Trigger state transition (iniciar or reanudar based on current state)
+            if operacion == ActionType.ARM:
+                current_arm_state = arm_machine.get_state_id()
 
-            if current_arm_state == "pausado":
-                # Resume paused work
-                await arm_machine.reanudar(worker_nombre=request.worker_nombre)
-                logger.info(f"ARM state: pausado → en_progreso for {tag_spool} (resumed by {request.worker_nombre})")
+                if current_arm_state == "pausado":
+                    # Resume paused work
+                    await arm_machine.reanudar(worker_nombre=request.worker_nombre)
+                    logger.info(f"ARM state: pausado → en_progreso for {tag_spool} (resumed by {request.worker_nombre})")
 
-            elif current_arm_state == "pendiente":
-                # Start new work
-                await arm_machine.iniciar(
-                    worker_nombre=request.worker_nombre,
-                    fecha_operacion=date.today()
-                )
-                logger.info(f"ARM state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
+                elif current_arm_state == "pendiente":
+                    # Start new work
+                    await arm_machine.iniciar(
+                        worker_nombre=request.worker_nombre,
+                        fecha_operacion=date.today()
+                    )
+                    logger.info(f"ARM state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
 
-            elif current_arm_state == "en_progreso":
-                # Already in progress - should not happen (occupation lock prevents it)
-                logger.error(f"ARM already en_progreso for {tag_spool}, occupation lock validation failed")
-                raise InvalidStateTransitionError(
-                    f"Spool {tag_spool} is already occupied (ARM en_progreso)",
+                elif current_arm_state == "en_progreso":
+                    # Already in progress - should not happen (occupation lock prevents it)
+                    logger.error(f"ARM already en_progreso for {tag_spool}, occupation lock validation failed")
+                    raise InvalidStateTransitionError(
+                        f"Spool {tag_spool} is already occupied (ARM en_progreso)",
+                        tag_spool=tag_spool,
+                        current_state=current_arm_state,
+                        attempted_transition="iniciar"
+                    )
+
+                elif current_arm_state == "completado":
+                    # Cannot restart completed work
+                    raise InvalidStateTransitionError(
+                        f"Cannot TOMAR ARM - operation already completed",
+                        tag_spool=tag_spool,
+                        current_state=current_arm_state,
+                        attempted_transition="iniciar"
+                    )
+
+                else:
+                    # Unknown state - should never happen
+                    logger.error(f"Unknown ARM state '{current_arm_state}' for {tag_spool}")
+                    raise InvalidStateTransitionError(
+                        f"Unknown ARM state '{current_arm_state}'",
+                        tag_spool=tag_spool,
+                        current_state=current_arm_state,
+                        attempted_transition="iniciar"
+                    )
+
+            elif operacion == ActionType.SOLD:
+                current_sold_state = sold_machine.get_state_id()
+
+                if current_sold_state == "pausado":
+                    # Resume paused work
+                    await sold_machine.reanudar(worker_nombre=request.worker_nombre)
+                    logger.info(f"SOLD state: pausado → en_progreso for {tag_spool} (resumed by {request.worker_nombre})")
+
+                elif current_sold_state == "pendiente":
+                    # Start new work (will validate ARM dependency)
+                    await sold_machine.iniciar(
+                        worker_nombre=request.worker_nombre,
+                        fecha_operacion=date.today()
+                    )
+                    logger.info(f"SOLD state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
+
+                elif current_sold_state == "en_progreso":
+                    # Already in progress - should not happen (occupation lock prevents it)
+                    logger.error(f"SOLD already en_progreso for {tag_spool}, occupation lock validation failed")
+                    raise InvalidStateTransitionError(
+                        f"Spool {tag_spool} is already occupied (SOLD en_progreso)",
+                        tag_spool=tag_spool,
+                        current_state=current_sold_state,
+                        attempted_transition="iniciar"
+                    )
+
+                elif current_sold_state == "completado":
+                    # Cannot restart completed work
+                    raise InvalidStateTransitionError(
+                        f"Cannot TOMAR SOLD - operation already completed",
+                        tag_spool=tag_spool,
+                        current_state=current_sold_state,
+                        attempted_transition="iniciar"
+                    )
+
+                else:
+                    # Unknown state - should never happen
+                    logger.error(f"Unknown SOLD state '{current_sold_state}' for {tag_spool}")
+                    raise InvalidStateTransitionError(
+                        f"Unknown SOLD state '{current_sold_state}'",
+                        tag_spool=tag_spool,
+                        current_state=current_sold_state,
+                        attempted_transition="iniciar"
+                    )
+
+            # Step 5: Update Estado_Detalle
+            self._update_estado_detalle(
+                tag_spool=tag_spool,
+                ocupado_por=request.worker_nombre,
+                arm_state=arm_machine.get_state_id(),
+                sold_state=sold_machine.get_state_id(),
+                operacion_actual=operacion.value
+            )
+
+            logger.info(f"✅ StateService.tomar completed for {tag_spool}")
+            return response
+
+        except Exception as e:
+            # CRITICAL: State machine transition failed after OccupationService wrote Ocupado_Por
+            # We must rollback: clear Ocupado_Por and release Redis lock
+            logger.error(
+                f"❌ CRITICAL: State machine transition failed for {tag_spool}, rolling back occupation: {e}",
+                exc_info=True
+            )
+
+            try:
+                # Rollback: Clear Ocupado_Por and Fecha_Ocupacion
+                from backend.services.conflict_service import ConflictService
+                from backend.repositories.metadata_repository import MetadataRepository
+
+                # Use existing conflict_service from occupation_service
+                conflict_service = self.occupation_service.conflict_service
+
+                await conflict_service.update_with_retry(
                     tag_spool=tag_spool,
-                    current_state=current_arm_state,
-                    attempted_transition="iniciar"
+                    updates={
+                        "Ocupado_Por": "",
+                        "Fecha_Ocupacion": ""
+                    },
+                    operation="ROLLBACK_TOMAR"
                 )
 
-            elif current_arm_state == "completado":
-                # Cannot restart completed work
-                raise InvalidStateTransitionError(
-                    f"Cannot TOMAR ARM - operation already completed",
-                    tag_spool=tag_spool,
-                    current_state=current_arm_state,
-                    attempted_transition="iniciar"
+                # Release Redis lock
+                from backend.services.redis_lock_service import RedisLockService
+                redis_lock = self.occupation_service.redis_lock_service
+                await redis_lock.release_lock(tag_spool, request.worker_id, None)  # None = ignore token check
+
+                logger.info(f"✅ Rollback successful: cleared occupation for {tag_spool}")
+
+            except Exception as rollback_error:
+                logger.error(
+                    f"❌ CRITICAL: Rollback failed for {tag_spool}: {rollback_error}. "
+                    f"Spool may be in inconsistent state (has Ocupado_Por but no Armador/Soldador). "
+                    f"Manual intervention may be required.",
+                    exc_info=True
                 )
 
-            else:
-                # Unknown state - should never happen
-                logger.error(f"Unknown ARM state '{current_arm_state}' for {tag_spool}")
-                raise InvalidStateTransitionError(
-                    f"Unknown ARM state '{current_arm_state}'",
-                    tag_spool=tag_spool,
-                    current_state=current_arm_state,
-                    attempted_transition="iniciar"
-                )
-
-        elif operacion == ActionType.SOLD:
-            current_sold_state = sold_machine.get_state_id()
-
-            if current_sold_state == "pausado":
-                # Resume paused work
-                await sold_machine.reanudar(worker_nombre=request.worker_nombre)
-                logger.info(f"SOLD state: pausado → en_progreso for {tag_spool} (resumed by {request.worker_nombre})")
-
-            elif current_sold_state == "pendiente":
-                # Start new work (will validate ARM dependency)
-                await sold_machine.iniciar(
-                    worker_nombre=request.worker_nombre,
-                    fecha_operacion=date.today()
-                )
-                logger.info(f"SOLD state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
-
-            elif current_sold_state == "en_progreso":
-                # Already in progress - should not happen (occupation lock prevents it)
-                logger.error(f"SOLD already en_progreso for {tag_spool}, occupation lock validation failed")
-                raise InvalidStateTransitionError(
-                    f"Spool {tag_spool} is already occupied (SOLD en_progreso)",
-                    tag_spool=tag_spool,
-                    current_state=current_sold_state,
-                    attempted_transition="iniciar"
-                )
-
-            elif current_sold_state == "completado":
-                # Cannot restart completed work
-                raise InvalidStateTransitionError(
-                    f"Cannot TOMAR SOLD - operation already completed",
-                    tag_spool=tag_spool,
-                    current_state=current_sold_state,
-                    attempted_transition="iniciar"
-                )
-
-            else:
-                # Unknown state - should never happen
-                logger.error(f"Unknown SOLD state '{current_sold_state}' for {tag_spool}")
-                raise InvalidStateTransitionError(
-                    f"Unknown SOLD state '{current_sold_state}'",
-                    tag_spool=tag_spool,
-                    current_state=current_sold_state,
-                    attempted_transition="iniciar"
-                )
-
-        # Step 5: Update Estado_Detalle
-        self._update_estado_detalle(
-            tag_spool=tag_spool,
-            ocupado_por=request.worker_nombre,
-            arm_state=arm_machine.get_state_id(),
-            sold_state=sold_machine.get_state_id(),
-            operacion_actual=operacion.value
-        )
-
-        logger.info(f"✅ StateService.tomar completed for {tag_spool}")
-        return response
+            # Re-raise original exception to fail the TOMAR request
+            raise
 
     async def pausar(self, request: PausarRequest) -> OccupationResponse:
         """
