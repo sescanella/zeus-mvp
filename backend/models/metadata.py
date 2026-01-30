@@ -11,31 +11,8 @@ from typing import Optional
 import uuid
 import pytz
 from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
-
-
-class EventoTipo(str, Enum):
-    """Tipos de eventos que se registran en Metadata."""
-    # v2.1 Events (legacy - INICIAR/COMPLETAR)
-    INICIAR_ARM = "INICIAR_ARM"
-    COMPLETAR_ARM = "COMPLETAR_ARM"
-    CANCELAR_ARM = "CANCELAR_ARM"  # v2.0: Revertir EN_PROGRESO a PENDIENTE
-    INICIAR_SOLD = "INICIAR_SOLD"
-    COMPLETAR_SOLD = "COMPLETAR_SOLD"
-    CANCELAR_SOLD = "CANCELAR_SOLD"  # v2.0: Revertir EN_PROGRESO a PENDIENTE
-    INICIAR_METROLOGIA = "INICIAR_METROLOGIA"
-    COMPLETAR_METROLOGIA = "COMPLETAR_METROLOGIA"
-    CANCELAR_METROLOGIA = "CANCELAR_METROLOGIA"  # v2.0: Revertir EN_PROGRESO a PENDIENTE
-
-    # v3.0 Events (new - TOMAR/PAUSAR/COMPLETAR occupation tracking)
-    TOMAR_ARM = "TOMAR_ARM"
-    TOMAR_SOLD = "TOMAR_SOLD"
-    TOMAR_METROLOGIA = "TOMAR_METROLOGIA"
-    PAUSAR_ARM = "PAUSAR_ARM"
-    PAUSAR_SOLD = "PAUSAR_SOLD"
-    PAUSAR_METROLOGIA = "PAUSAR_METROLOGIA"
-    COMPLETAR_OCUPACION_ARM = "COMPLETAR_OCUPACION_ARM"
-    COMPLETAR_OCUPACION_SOLD = "COMPLETAR_OCUPACION_SOLD"
-    COMPLETAR_OCUPACION_METROLOGIA = "COMPLETAR_OCUPACION_METROLOGIA"
+# Import EventoTipo from central enums.py (single source of truth)
+from backend.models.enums import EventoTipo
 
 
 class Accion(str, Enum):

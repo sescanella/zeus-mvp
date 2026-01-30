@@ -4,16 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ZEUES v2.0** - Manufacturing Traceability System for Pipe Spools
+**ZEUES v3.0** - Real-Time Location Tracking System for Pipe Spools
 
-Mobile-first web app for tracking manufacturing actions (Assembly/Welding/Metrology) on tablets with **JWT authentication**, **role-based access control**, **Event Sourcing auditing**, and **batch operations** using Google Sheets as source of truth.
+**Current Status:** v3.0 SHIPPED ✅ (2026-01-28)
+- Core Value: "WHO has WHICH spool right now?" (real-time occupation tracking)
+- Tech: FastAPI + Next.js + Google Sheets + Redis
+- Stats: 491K LOC | 1,852 tests | 24/24 requirements | 158 commits
+- Next: Planning v3.1/v4.0 milestone
 
-**Current Status:** v2.1 Development (Branch: `v2.0-dev`)
-- ✅ v1.0 MVP in Production (2 operations: ARM/SOLD)
-- ✅ v2.0 Backend Complete: Roles + CANCELAR + Batch (244/244 tests passing)
-- 🚧 v2.1 Architecture: Direct Read/Write (migrated from Event Sourcing)
-- 📅 Current Focus: Frontend multiselect + Deploy
-- 📊 Progress: Backend 87% | Frontend 50% | Deploy 20%
+**Key Features v3.0:**
+- TOMAR/PAUSAR/COMPLETAR workflows (Redis locks, 1-hour TTL)
+- SSE streaming (<10s latency for real-time updates)
+- Metrología instant inspection (APROBADO/RECHAZADO)
+- Reparación bounded cycles (max 3 before BLOQUEADO)
+- Hierarchical state machines (6 states, not 27)
+
+**See `.planning/PROJECT.md` for complete v3.0 requirements and architecture details.**
 
 ## CRITICAL: Python Virtual Environment
 
@@ -23,649 +29,294 @@ Mobile-first web app for tracking manufacturing actions (Assembly/Welding/Metrol
 # Activate BEFORE any work
 source venv/bin/activate
 
-# Install ANY new package inside venv
+# Install packages inside venv
 pip install <package-name>
 
-# Always update requirements after installing
+# Always update requirements
 pip freeze > requirements.txt
 ```
 
 **RULES:**
 - NEVER install packages outside venv
-- ALWAYS activate venv before running Python code
-- ALWAYS activate venv before installing dependencies
+- ALWAYS activate venv before running Python
 - ALL Python work must be done with venv activated
-
-**Production URLs:**
-- Frontend: https://zeues-frontend.vercel.app
-- Backend API: https://zeues-backend-mvp-production.up.railway.app
-- API Docs: https://zeues-backend-mvp-production.up.railway.app/docs
 
 ## Tech Stack
 
-**Backend:** Python + FastAPI + gspread (Google Sheets API)
-**Frontend:** React/Next.js + Tailwind CSS
-**Data Source:** Google Sheets (single source of truth)
-**Auth:** Service Account (zeus-mvp@zeus-mvp.iam.gserviceaccount.com)
+- **Backend:** Python 3.11 + FastAPI + gspread + python-statemachine==2.5.0 + redis==5.0.1
+- **Frontend:** Next.js 14 + TypeScript + Tailwind CSS
+- **Data:** Google Sheets (source of truth) + Redis (locks + pub/sub)
+- **Deploy:** Railway (backend) + Vercel (frontend)
 
-## Date & Timezone Standards
-
-**Timezone:** America/Santiago (Chile) - Use `backend.utils.date_formatter` functions
-**Formats:**
-- Business dates: `DD-MM-YYYY` (e.g., `21-01-2026`) - Use `format_date_for_sheets(today_chile())`
-- Audit timestamps: `DD-MM-YYYY HH:MM:SS` (e.g., `21-01-2026 14:30:00`) - Use `format_datetime_for_sheets(now_chile())`
-- NEVER use `datetime.utcnow()`, `datetime.now()`, or `.isoformat()` for business data
-- Always import: `from backend.utils.date_formatter import now_chile, today_chile, format_date_for_sheets, format_datetime_for_sheets`
-
-## Core Concepts
-
-**v1.0 MVP Scope (Production):** 2 operations
-- ARM: Armado (Assembly)
-- SOLD: Soldado (Welding)
-
-**v2.1 Scope (Development):** 3 operations + Roles + Batch + Auditing
-- ARM: Armado (Assembly)
-- SOLD: Soldado (Welding)
-- METROLOGIA: Metrología (Quality Inspection) 🟡 Nice-to-have
-- **Multi-Role System:** Workers with multiple operational roles (Armador/Soldador/Metrologia) ✅
-- **Batch Operations:** Multiselect up to 50 spools simultaneously ✅
-- **Metadata Auditing:** All actions logged to Metadata sheet (append-only audit trail) ✅
-- **Direct Read/Write:** v2.1 architecture - read from Operaciones, write to Metadata ✅
-
-**Data Model v2.1:**
-- **Spools** - Operaciones sheet (READ-ONLY): TAG_SPOOL, Fecha_Materiales, Armador, Soldador, Fecha_Armado, Fecha_Soldadura
-- **Workers** - Trabajadores sheet (READ-ONLY): Id, Nombre, Apellido, Activo (4 columns, Rol column removed)
-- **Roles** - Roles sheet (READ-ONLY): Id, Rol, Activo (multi-role support: one worker can have multiple roles)
-- **Metadata** - Audit log (APPEND-ONLY): 10 columns (id, timestamp, evento_tipo, tag_spool, worker_id, worker_nombre, operacion, accion, fecha_operacion, metadata_json)
-- **State determination v2.1:** Direct Read from columns (armador/soldador presence + fecha_armado/soldadura presence)
-
-**User Flow v2.1:**
-Operation Select (ARM/SOLD/METROLOGIA) → Worker Select (filtered by role) → INICIAR/COMPLETAR/CANCELAR → Spool(s) Multiselect → Confirm Batch → Success + Metadata Log (< 30 sec)
-
-## Development Commands
+## Essential Commands
 
 ### Backend (FastAPI + Python)
 
-**Always activate venv first:**
 ```bash
-cd backend
-source venv/bin/activate  # macOS/Linux
-# venv\Scripts\activate   # Windows
-```
-
-**Run development server:**
-```bash
-# From project root (with venv activated)
+# Run dev server (from project root with venv active)
+source venv/bin/activate
 uvicorn main:app --reload --port 8000
-# API available at: http://localhost:8000
-# Docs at: http://localhost:8000/api/docs
-```
+# API: http://localhost:8000
+# Docs: http://localhost:8000/api/docs
 
-**Testing:**
-```bash
-# Run all tests (from project root with venv active)
-pytest
+# Testing
+PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest
+pytest tests/unit/ -v --tb=short
+pytest tests/integration/ -v
 
-# Run with coverage
-pytest --cov=backend
-
-# Run specific test file
-pytest tests/unit/test_validation_service.py
-
-# Run single test
-pytest tests/unit/test_validation_service.py::test_validar_puede_iniciar_arm_success -v
-
-# Run tests by category
-pytest tests/unit/          # Unit tests only
-pytest tests/e2e/           # E2E integration tests
-pytest tests/unit/ -v --tb=short  # Verbose with short traceback
-
-# Check test status
-pytest --collect-only      # List all tests without running
-```
-
-**Package management:**
-```bash
-# Install new package (venv must be active)
-pip install <package-name>
-
-# ALWAYS update requirements after installing
+# Package management
+pip install <package>
 pip freeze > requirements.txt
 ```
 
 ### Frontend (Next.js + TypeScript)
 
-**Run development server:**
-```bash
-cd zeues-frontend
-npm run dev
-# App available at: http://localhost:3000
-```
-
-**Build and type checking:**
 ```bash
 cd zeues-frontend
 
-# TypeScript compilation check (MUST pass)
-npx tsc --noEmit
+# Run dev server
+npm run dev  # http://localhost:3000
 
-# ESLint (MUST pass - no warnings, no errors)
-npm run lint
+# Quality checks (MUST pass before commit)
+npx tsc --noEmit  # TypeScript
+npm run lint      # ESLint
+npm run build     # Production build
 
-# Production build (MUST pass)
-npm run build
-
-# Run production build locally
-npm run start
-```
-
-**Testing (Playwright E2E):**
-```bash
-cd zeues-frontend
-
-# Run all E2E tests (headless)
+# E2E tests
 npx playwright test
-
-# Run with UI mode (interactive)
-npx playwright test --ui
-
-# Run in headed mode (see browser)
-npx playwright test --headed
-
-# Slow motion demo mode
-SLOW_MO=2000 npx playwright test --headed --workers=1 --max-failures=1
-
-# Show test report
 npx playwright show-report
 ```
 
-## Architecture Overview
+## GSD Workflow Commands
 
-### Backend Structure (Clean Architecture)
+**Start here when beginning work:**
 
-**Layered Architecture:**
+```bash
+/gsd:progress              # Check current state, get next action
+/gsd:new-milestone         # Start new milestone (v3.1/v4.0)
+/gsd:plan-phase 1          # Create execution plan for phase
+/gsd:execute-phase 1       # Execute with atomic commits
+/gsd:verify-work           # Conversational UAT
+/gsd:audit-milestone       # Pre-archive audit
 ```
-main.py                      # FastAPI app, CORS, exception handlers
-├── routers/                 # API endpoints (thin layer)
-│   ├── health.py           # GET /api/health
-│   ├── workers.py          # GET /api/workers
-│   ├── spools.py           # POST /api/spools/iniciar, /completar
-│   └── actions.py          # POST /api/iniciar-accion, /completar-accion (CRITICAL)
-├── services/                # Business logic (orchestration)
-│   ├── action_service.py   # Orchestrates validation + repository
-│   └── validation_service.py # Pure business rules (CRITICAL ownership)
-├── repositories/            # Data access layer
-│   └── sheets_repository.py # Google Sheets CRUD (gspread)
-├── models/                  # Pydantic schemas
-│   ├── worker.py
-│   ├── spool.py
-│   ├── action.py
-│   └── enums.py            # ActionType, ActionStatus
-├── exceptions.py            # 10+ custom exceptions (ZEUSException)
-└── config.py               # Environment variables
+
+**Important Files:**
+- `.planning/PROJECT.md` - Current requirements & architecture
+- `.planning/STATE.md` - Current milestone state
+- `.planning/MILESTONES.md` - Milestone history
+
+## Architecture Quick Reference
+
+### Backend (Clean Architecture)
+
+```
+main.py
+├── routers/           # API endpoints (occupation, sse, history, metrologia)
+├── services/          # Business logic (state, occupation, validation)
+├── repositories/      # Data access (sheets, redis, metadata)
+├── state_machines/    # ARM, SOLD, Metrologia, Reparacion
+├── models/            # Pydantic schemas
+└── exceptions.py      # Custom exceptions
 ```
 
 **Key Patterns:**
-- **Service Layer Pattern**: ActionService orchestrates ValidationService + SheetsRepository
-- **Repository Pattern**: SheetsRepository abstracts Google Sheets API (gspread)
-- **Custom Exceptions**: All business errors use ZEUSException subclasses → HTTP status in main.py
-- **Dependency Injection**: FastAPI Depends() for service instantiation
+- Service Layer + Repository Pattern
+- Hierarchical State Machines (python-statemachine 2.5.0)
+- Optimistic Locking (UUID4 version tokens)
+- SSE Streaming (sse-starlette)
+- Event Sourcing (Metadata sheet)
 
-**CRITICAL: Ownership Validation (v2.1 Direct Read)**
-```python
-# backend/services/validation_service.py
-def validar_puede_completar_arm(self, spool: Spool, worker_nombre: str, worker_id: int) -> None:
-    """
-    v2.1: Read armador directly from Operaciones sheet column.
-    - If armador = None → OperacionNoIniciadaError (not started)
-    - If armador != worker_nombre → NoAutorizadoError (ownership violation)
-    - If fecha_armado != None → OperacionYaCompletadaError (already completed)
-    """
+### Frontend (Next.js App Router)
+
 ```
+app/                   # 7-page linear flow
+├── page.tsx          # P1: Worker identification
+├── operacion/        # P2: Operation selection
+├── tipo-interaccion/ # P3: Action type (TOMAR/PAUSAR/COMPLETAR)
+├── seleccionar-spool/# P4: Spool selection
+├── confirmar/        # P5: Confirmation
+└── exito/            # P6: Success
 
-**Worker Name Format v2.1:**
-- `Worker.nombre_completo` now returns format `"INICIALES(ID)"`
-- Examples: "Mauricio Rodriguez" id=93 → `"MR(93)"`, "Juan Pérez" id=94 → `"JP(94)"`
-- Columns Armador/Soldador store this new format
-
-### Frontend Structure (Next.js App Router)
-
-**7-Page Linear Flow:**
-```
-app/
-├── page.tsx                        # P1: Worker identification
-├── operacion/page.tsx             # P2: Operation selection (ARM/SOLD)
-├── tipo-interaccion/page.tsx      # P3: Action type (INICIAR/COMPLETAR)
-├── seleccionar-spool/page.tsx     # P4: Spool selection (filtered by API)
-├── confirmar/page.tsx             # P5: Confirmation summary
-└── exito/page.tsx                 # P6: Success (5sec timeout → P1)
-
-components/
-├── Button.tsx                      # Reusable button (Tailwind inline)
-├── Card.tsx                        # Worker/spool cards
-└── ...
-
+components/            # Button, Card, etc.
 lib/
-├── api.ts                          # 6 API functions (native fetch, NO axios)
-├── types.ts                        # TypeScript interfaces
-└── context.tsx                     # React Context (shared state)
+├── api.ts            # Native fetch (NO axios)
+├── types.ts          # TypeScript interfaces
+└── context.tsx       # React Context (state management)
 ```
 
-**State Management:**
-- **React Context API** (lib/context.tsx) for cross-page state
-- NO Redux/Zustand (keeping MVP simple)
-- State: worker, operacion, tipoInteraccion, selectedSpool
+## Google Sheets Data Model v3.0
 
-**Navigation:**
-- Standard Next.js routing (`useRouter()`)
-- "Volver" button on each page (go back one step)
-- "Cancelar" button (red) resets to P1
-- Auto-redirect to P1 after 5 seconds on success page
+**Operaciones Sheet (67 columns):**
+- v2.1 columns (63): TAG_SPOOL, Armador, Soldador, Fecha_Armado, Fecha_Soldadura, etc.
+- v3.0 NEW (4):
+  - `Ocupado_Por` (64): Current worker (format: "MR(93)" or null)
+  - `Fecha_Ocupacion` (65): Timestamp (DD-MM-YYYY HH:MM:SS)
+  - `version` (66): UUID4 for optimistic locking
+  - `Estado_Detalle` (67): Human-readable state display
 
-**API Integration:**
-- Native `fetch()` only (NO axios)
-- Simple try/catch error handling
-- API functions in `lib/api.ts`:
-  - `getWorkers()`
-  - `getSpoolsIniciar(operacion)`
-  - `getSpoolsCompletar(operacion, workerNombre)`
-  - `iniciarAccion(payload)`
-  - `completarAccion(payload)`
+**Other Sheets:**
+- Trabajadores (4 cols): Id, Nombre, Apellido, Activo
+- Roles (3 cols): Id, Rol, Activo (multi-role support)
+- Metadata (10 cols): Event Sourcing audit trail
 
-## Important Files
+**Redis:**
+- Occupation locks: `spool:{tag}:lock` (1-hour TTL)
+- Pub/sub: Real-time SSE updates
 
-**Project Documentation v2.1:** 🆕
-- `proyecto-v2.md` - **v2.0/v2.1 ROADMAP** - Vision, features, timeline, breaking changes
-- `proyecto-v2-backend.md` - **v2.1 BACKEND DOCS (LLM-FIRST)** - Direct Read architecture, Roles, Metadata auditing, Batch operations, 244 tests
-- `proyecto-v2-frontend.md` - **v2.0 FRONTEND DOCS (LLM-FIRST)** - Multiselect, Role filtering, Operation-first UX, Tests
-
-**CRITICAL: Actualización de Documentos v2.0**
-
-**Archivos Activos (actualizar SIEMPRE en esta etapa):**
-- `proyecto-v2.md` - **SIEMPRE** después de avanzar en roadmap (completar días, features, cambios estado)
-- `proyecto-v2-backend.md` - **SIEMPRE** después de modificar backend (código, tests, arquitectura, endpoints) - **v2.1 CURRENT**
-- `proyecto-v2-frontend.md` - **SIEMPRE** después de modificar frontend (componentes, páginas, API client, types)
-- `CLAUDE.md` - Este archivo - Actualizar después de cambios arquitectónicos mayores (como v2.0→v2.1)
-
-**Archivos Historial (NO actualizar - solo referencia v1.0):**
-- `proyecto.md`, `proyecto-backend.md`, `proyecto-frontend.md`, `proyecto-frontend-ui.md` - Base v1.0 completada
-
-**Cuándo actualizar cada archivo:**
-- `proyecto-v2.md` → Después de completar días del roadmap, cambiar estado progreso, añadir features, identificar blockers
-- `proyecto-v2-backend.md` → Después de implementar servicios, endpoints, modelos, tests, cambios arquitectura
-- `proyecto-v2-frontend.md` → Después de implementar componentes, páginas, hooks, API integration, tests E2E
-
-**Cómo actualizar:**
-1. **Comando directo:**
-   - `"actualiza proyecto-v2.md"` → Actualiza roadmap y estado general
-   - `"actualiza proyecto-v2-backend.md"` → Actualiza docs técnicas backend
-   - `"actualiza proyecto-v2-frontend.md"` → Actualiza docs técnicas frontend
-2. **Seguir guía interna:** Cada archivo técnico (backend/frontend) tiene sección "🔧 Guía de Mantenimiento LLM-First"
-3. **Formato obligatorio:**
-   - Actualizar Quick Reference/Estado PRIMERO (progreso, tests, archivos, deadline)
-   - Usar tablas > código (NO bloques > 20 líneas en archivos técnicos)
-   - Mantener límites: proyecto-v2.md (~780 líneas) / backend (~1,000) / frontend (~800)
-
-**Ejemplo workflow completo:**
-```bash
-# Después de completar DÍA 2 Backend Batch
-"actualiza proyecto-v2-backend.md"  # Añade métricas batch, tests, performance
-"actualiza proyecto-v2.md"           # Marca DÍA 2 Backend ✅, actualiza progreso 80%→90%
+**CRITICAL:** Use dynamic header mapping - NEVER hardcode column indices
+```python
+headers["TAG_SPOOL"]  # ✅ Good
+row[0]                # ❌ Bad - indices change
 ```
 
-**Project Documentation v1.0 (Base):**
-- `proyecto.md` - **v1.0 MVP SPECIFICATION** - Complete v1.0 project details, user stories, technical architecture
-- `proyecto-backend.md` - v1.0 backend technical docs (architecture, models, services, API)
-- `proyecto-frontend.md` - v1.0 frontend architecture (structure, pages, components)
-- `proyecto-frontend-ui.md` - v1.0 UI implementation details (components, styles, validations)
-- `CLAUDE.md` - This file - Quick reference guide for Claude Code
+## Date & Timezone Standards
 
-**Google Resources:**
-- `docs/GOOGLE-RESOURCES.md` - **GOOGLE CONFIGURATION** - URLs for Drive and Sheets (Testing & Production), Service Account details, environment variables, and security guidelines
+**Timezone:** America/Santiago (Chile)
 
-**Credentials (NEVER commit to Git):**
-- `credenciales/` - Contains Google Cloud Service Account JSON files
-  - `zeus-mvp-81282fb07109.json` - Service Account credentials for API access
-  - Files in this directory are in `.gitignore` for security
+**ALWAYS use:**
+```python
+from backend.utils.date_formatter import now_chile, today_chile, format_date_for_sheets, format_datetime_for_sheets
 
-**Data & Environment:**
-- `plantilla.xlsx` - Data structure template (reference copy)
-- `venv/` - Python virtual environment
-- `.env.local` - Environment variables (NEVER commit)
-- `backend/requirements.txt` - Python dependencies
+# Business dates
+format_date_for_sheets(today_chile())  # "21-01-2026"
 
-**Key Dependencies:**
-- Backend: `fastapi`, `gspread`, `pydantic`, `pytest`, `uvicorn`
-- Frontend: `next@14`, `react@18`, `typescript`, `tailwindcss`, `@playwright/test`
+# Audit timestamps
+format_datetime_for_sheets(now_chile())  # "21-01-2026 14:30:00"
+```
 
-## Google Sheets Integration
+**NEVER use:** `datetime.utcnow()`, `datetime.now()`, `.isoformat()`
 
-**Data Source:** Google Sheets is the single source of truth (no database)
-
-**v2.1 Architecture - Direct Read/Write:** ✅ **CURRENT**
-- **Operaciones** sheet: **READ-ONLY** - State read from columns (Armador, Soldador, Fecha_Armado, Fecha_Soldadura)
-- **Metadata** sheet: **APPEND-ONLY** - All events logged here (audit trail, NOT for state reconstruction)
-- State determination: Direct Read from Operaciones columns (e.g., armador != None means ARM in progress)
-- **Key change from v2.0:** v2.1 reads state from Operaciones columns directly, not from Metadata events
-
-**Sheets Structure v2.1:**
-- **Operaciones** sheet (READ-WRITE in v2.1): Spools base data (65 columns)
-  - **CRITICAL:** Use dynamic header mapping - column indices change frequently
-  - Access by name: `headers["TAG_SPOOL"]`, `headers["Armador"]`, NOT by index
-  - Key columns (⚠️ indices are VOLATILE):
-    - "TAG_SPOOL": Código de barra (identifier)
-    - "Fecha_Materiales": Prerequisite for ARM INICIAR
-    - "Armador": Worker assigned to ARM (format: "INICIALES(ID)" e.g., "MR(93)")
-    - "Fecha_Armado": Completion date for ARM
-    - "Soldador": Worker assigned to SOLD (format: "INICIALES(ID)")
-    - "Fecha_Soldadura": Completion date for SOLD
-
-- **Trabajadores** sheet (READ-ONLY): Workers list (4 columns A-D) ✅ v2.1
-  - Column A: Id (numeric, e.g., 93, 94, 95)
-  - Column B: Nombre
-  - Column C: Apellido
-  - Column D: Activo (TRUE/FALSE)
-  - **REMOVED in v2.1:** Column D "Rol" (moved to separate Roles sheet)
-
-- **Roles** sheet (READ-ONLY): Multi-role support (3 columns A-C) ✅ v2.1
-  - Column A: Id (FK to Trabajadores, allows duplicates)
-  - Column B: Rol (Armador, Soldador, Ayudante, Metrologia, etc.)
-  - Column C: Activo (TRUE/FALSE)
-  - **Multi-role:** One worker can have multiple rows (e.g., Id=93 has Armador + Soldador)
-
-- **Metadata** sheet (WRITE-ONLY - Event Sourcing): 10 columns 🆕
-  - Column A: id (UUID v4)
-  - Column B: timestamp (ISO 8601: 2025-12-10T14:30:00Z)
-  - Column C: evento_tipo (INICIAR_ARM, COMPLETAR_ARM, INICIAR_SOLD, COMPLETAR_SOLD, INICIAR_METROLOGIA, COMPLETAR_METROLOGIA)
-  - Column D: tag_spool
-  - Column E: worker_id (numeric: 93, 94, 95...)
-  - Column F: worker_nombre
-  - Column G: operacion (ARM, SOLD, METROLOGIA)
-  - Column H: accion (INICIAR, COMPLETAR)
-  - Column I: fecha_operacion (YYYY-MM-DD)
-  - Column J: metadata_json (JSON string with additional data)
-
-- **Roles** sheet (pending): Authentication 🆕
-  - Column A: email
-  - Column B: nombre_completo
-  - Column C: rol (TRABAJADOR, SUPERVISOR, ADMINISTRADOR)
-  - Column D: activo
-  - Column E: fecha_creacion
-  - Column F: ultima_modificacion
-
-**State Determination v2.1 (Direct Read):**
-- **ARM PENDIENTE:** armador = None (not started)
-- **ARM EN_PROGRESO:** armador != None AND fecha_armado = None (in progress)
-- **ARM COMPLETADO:** fecha_armado != None (completed)
-- Same pattern applies for SOLD (soldador, fecha_soldadura)
-
-**Workflow v2.1 (Direct Read/Write):**
-1. **INICIAR**: Write armador/soldador to Operaciones (col AL/AN) + Log event to Metadata
-2. **COMPLETAR**: Write fecha_armado/soldadura to Operaciones (col AK/AM) + Log event to Metadata
-3. **CANCELAR**: Clear armador/soldador + fecha in Operaciones + Log event to Metadata
-4. **State Query**: Read directly from Operaciones columns (NOT from Metadata)
-
-**Environment Variables (see docs/GOOGLE-RESOURCES.md):**
-- `GOOGLE_SHEET_ID` - **PRODUCTION (ACTIVE):** `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ` ✅
-- `HOJA_METADATA_NOMBRE` - `Metadata` (Event Sourcing log) 🆕
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL` - zeus-mvp@zeus-mvp.iam.gserviceaccount.com
-- `GOOGLE_PRIVATE_KEY` - From Service Account JSON (keep secret)
-
-**Sheet TESTING (deprecated):**
-- ID: `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM` ⚠️ (v1.0 only - historical reference)
-
-## CRITICAL: v2.1 Architecture Changes (Jan 2026)
-
-**Migration from Event Sourcing v2.0 → Direct Read/Write v2.1**
-
-The project underwent a major architectural shift in January 2026:
-
-**v2.0 (DEPRECATED):**
-- State reconstructed from Metadata events
-- Read Metadata to determine if ARM is PENDIENTE/EN_PROGRESO/COMPLETADO
-- Complex event sourcing logic
-
-**v2.1 (CURRENT):**
-- State read directly from Operaciones sheet columns
-- `armador = None` → ARM PENDIENTE
-- `armador != None AND fecha_armado = None` → ARM EN_PROGRESO
-- `fecha_armado != None` → ARM COMPLETADO
-- Metadata used ONLY for audit trail, NOT for state determination
-
-**Key Implications:**
-1. ValidationService reads Operaciones columns directly (NOT Metadata events)
-2. SheetsService must implement dynamic column mapping by header name (NEVER hardcoded indices)
-3. Worker names stored as "INICIALES(ID)" format (e.g., "MR(93)")
-4. All 244 tests updated to reflect Direct Read architecture
-
-## Key Constraints
-
-1. Google Sheets is source of truth (preserve existing workflow)
-2. Mobile-first design (large buttons, high contrast)
-3. Speed critical (< 30 seconds per registration)
-4. Simple UI (minimal typing, immediate feedback)
-5. **Column mapping MUST be dynamic** - NEVER use hardcoded indices (sheet structure changes frequently)
-
-## TypeScript & Code Quality Rules
+## TypeScript Rules
 
 **CRITICAL: NEVER use `any` type**
 
-**TypeScript Best Practices:**
-- ❌ NEVER use `any` - ESLint will fail with `@typescript-eslint/no-explicit-any`
-- ✅ ALWAYS use `unknown` for dynamic/uncertain types
-- ✅ ALWAYS use explicit types for function parameters and return values
-- ✅ Use `Record<string, unknown>` instead of `Record<string, any>`
-- ✅ Prefer union types (`'ARM' | 'SOLD'`) over string when values are known
-- ✅ Use optional chaining (`?.`) and nullish coalescing (`??`) for safety
-
-**Examples:**
 ```typescript
 // ❌ BAD - ESLint error
-interface Response {
-  metadata: Record<string, any>;  // ERROR
-  data: any;  // ERROR
-}
+data: any
 
-// ✅ GOOD - ESLint passes
-interface Response {
-  metadata: Record<string, unknown>;  // OK
-  data: unknown;  // OK - if truly dynamic
-  // OR better - be specific:
-  data: {
-    tag_spool: string;
-    operacion: 'ARM' | 'SOLD';
-  };
-}
-
-// ❌ BAD - implicit any
-function fetchData(url) {  // ERROR - implicit any on 'url'
-  return fetch(url);
-}
-
-// ✅ GOOD - explicit types
-function fetchData(url: string): Promise<Response> {
-  return fetch(url);
-}
+// ✅ GOOD
+data: unknown  // for dynamic data
+data: { tag_spool: string; operacion: 'ARM' | 'SOLD' }  // for known structure
 ```
 
-**Validation Commands (Must pass before any commit):**
+**Validation Commands:**
 ```bash
-# TypeScript compilation - MUST pass
-npx tsc --noEmit
-
-# ESLint - MUST pass (no warnings, no errors)
-npm run lint
-
-# Build production - MUST pass
-npm run build
+npx tsc --noEmit  # MUST pass
+npm run lint      # MUST pass (no warnings)
+npm run build     # MUST pass
 ```
 
-**When to use `unknown` vs specific types:**
-- Use `unknown` for truly dynamic data from external sources (APIs, JSON parsing)
-- Cast `unknown` to specific types after validation/type guards
-- Prefer specific interfaces over `unknown` whenever structure is known
+## Environment Variables
 
-**Type Guards Example:**
-```typescript
-// Dynamic data from API
-const data: unknown = await response.json();
+**Backend (.env):**
+```env
+GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
+HOJA_METADATA_NOMBRE=Metadata
+GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
-// Type guard before using
-if (isValidWorker(data)) {
-  // Now TypeScript knows data is Worker type
-  console.log(data.nombre);
-}
-
-function isValidWorker(obj: unknown): obj is Worker {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    'nombre' in obj &&
-    'activo' in obj
-  );
-}
+# v3.0 Redis
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
+OCCUPATION_LOCK_TTL=3600
 ```
 
-## Specialized Agents
+**Frontend (.env.local):**
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000  # Dev
+# NEXT_PUBLIC_API_URL=https://zeues-backend-mvp-production.up.railway.app  # Prod
+```
 
-### Project-Specific Agents (ZEUES Backend)
+## Debugging
 
-**backend-architect** - Use for architectural design and planning
-- When: Before implementing new features, restructuring code, defining data models
-- Purpose: Design backend architecture, service interfaces, error handling patterns
-- Example: "Design the architecture for worker authentication" or "Plan the caching strategy for Sheets data"
+### v3.0 Endpoints
 
-**google-sheets-specialist** - Use for Google Sheets API integration
-- When: Implementing/modifying SheetsService, handling API errors, optimizing performance
-- Purpose: CRUD operations, authentication, rate limiting, retry logic, batch operations
-- Example: "Implement batch read for spools" or "Fix 429 rate limit errors"
-
-**service-developer** - Use for business logic implementation
-- When: Implementing ValidationService, ActionService, or orchestration workflows
-- Purpose: Business rules, validation logic, service layer coordination
-- Example: "Implement validation for assembly prerequisites" or "Create action workflow orchestration"
-
-**api-builder** - Use for FastAPI endpoints
-- When: Creating/modifying REST endpoints, adding validations, API documentation
-- Purpose: Routers, Pydantic schemas, request/response models, endpoint documentation
-- Example: "Create POST /api/iniciar-accion endpoint" or "Add validation for operation types"
-
-### Project-Specific Agents (ZEUES Frontend MVP)
-
-**frontend-architect** - Use for frontend structure and architecture (MVP simple)
-- When: Before starting frontend development, defining folder structure, planning pages/components
-- Purpose: Design simple folder structure, define 7 pages, list 3-5 components max, establish naming conventions
-- Example: "Design frontend structure for 7 screens" or "Define component architecture for MVP"
-- Time: 1-2 hours (DAY 1)
-- Philosophy: NO over-architecture, keep it SIMPLE
-
-**ui-builder-mvp** - Use for implementing UI components and pages (3-in-1: UI + UX + Validation)
-- When: Creating React components, implementing pages, applying styles, adding basic validations
-- Purpose: Build Button/Card/List components, implement 7 pages with Tailwind inline, mobile-first design (h-16 buttons), basic inline validations
-- Example: "Implement P1 Identification page with worker grid" or "Create Button component with Tailwind"
-- Time: 4-5 days (DAY 2-6)
-- Philosophy: Simple functional components, NO complex animations, inline styles, basic validations
-- **TypeScript:** Explicit prop types, NEVER use `any`, type all component props and state
-
-**api-integrator** (frontend) - Use for connecting frontend with backend API
-- When: Integrating with backend endpoints, handling API calls, error handling
-- Purpose: Create /lib/api.ts with 6 fetch functions, use native fetch (NO axios), basic error handling
-- Example: "Integrate GET /api/workers endpoint" or "Create iniciarAccion API function"
-- Time: 2-3 hours (DAY 4)
-- Philosophy: Native fetch only, simple try/catch, NO complex libraries
-- **TypeScript:** NEVER use `any` - use `unknown` for dynamic data, explicit types for all functions
-
-**navigation-orchestrator** - Use for connecting navigation flow between pages
-- When: Setting up routing, implementing navigation between 7 screens, state management
-- Purpose: Implement Next.js routing, Context API for shared state, Volver/Cancelar buttons, 5sec timeout to home
-- Example: "Connect navigation flow INICIAR" or "Implement Context API for state sharing"
-- Time: 2-3 hours (DAY 6)
-- Philosophy: Simple routing, basic Context (NO Redux/Zustand), functional navigation
-
-**Frontend MVP Workflow (6 days):**
-- DAY 1: frontend-architect → structure
-- DAY 2-3: ui-builder-mvp → components + P1, P2, P3
-- DAY 4: api-integrator + ui-builder-mvp → API + P4A, P5A
-- DAY 5: ui-builder-mvp → P4B, P5B, P6
-- DAY 6: navigation-orchestrator → complete flow + deploy
-
-### Project Management Agents
-
-**project-architect** - Use for project documentation and planning
-- When: Updating proyecto.md, refining strategy, documenting implementations, reviewing project state
-- Purpose: Transform ideas into structured projects, maintain up-to-date documentation
-- Example: "@actualizar-docs" after implementation or "Review MVP gaps"
-
-**Explore** - Use for codebase exploration
-- When: Finding files by patterns, searching for keywords, understanding architecture
-- Purpose: Fast exploration with thoroughness levels (quick/medium/very thorough)
-- Example: "Find all API endpoints" or "How does error handling work?"
-
-**Plan** - Use for planning and strategy
-- When: Similar to Explore but for planning implementation steps
-- Purpose: Fast planning with thoroughness configuration
-- Example: Planning feature implementation approach
-
-### Personal/General Agents
-
-**linkedin-post-pillars** - Generate LinkedIn content ideation framework
-- When: Creating LinkedIn content strategy, brainstorming post ideas
-- Purpose: 50 unique post pillars combining objectives and core messages
-- Example: "Generate LinkedIn content ideas for tech leadership"
-
-**linkedin-seo-keyword-generator** - LinkedIn SEO optimization
-- When: Optimizing LinkedIn profile, finding hashtags, developing content strategy
-- Purpose: Bilingual (EN/ES) keyword research, hashtags, profile optimization
-- Example: "Optimize my LinkedIn profile for software architect"
-
-**google-seo-keyword-generator** - Google SEO strategy
-- When: Website optimization, keyword research, content marketing for search engines
-- Purpose: Bilingual SEO strategy, technical optimization, keyword research
-- Example: "SEO strategy for tech blog"
-
-**audience-strategist** - Define and analyze target audiences
-- When: Starting new projects, after user research, planning content strategy
-- Purpose: Audience segmentation, persona creation, market analysis
-- Example: "Define target audience for SaaS product"
-
-**research-reporter** - Internet research with detailed reports
-- When: Need comprehensive research on any topic with documentation
-- Purpose: Market research, technology investigation, competitive analysis
-- Example: "Research best practices for FastAPI authentication"
-
-### Usage Guidelines
-
-- **Proactive use:** Use agents without explicit user request when task matches agent purpose
-- **Parallel execution:** Launch multiple agents simultaneously when possible for efficiency
-- **Stateless:** Each agent invocation is independent, provide complete context in prompt
-- **Results:** Agent returns one final message with results, no back-and-forth
-
-## Custom Commands
-
-### /actualizar-docs
-Updates project documentation after implementation work.
-
-**Updates (v2.1):**
-- `proyecto-v2.md` - Roadmap and general progress (max 1000 lines)
-- `proyecto-v2-backend.md` - Backend technical docs v2.1 Direct Read architecture (max 1000 lines)
-- `proyecto-v2-frontend.md` - Frontend technical docs (max 800 lines)
-
-**Usage:** Run after completing features, fixing bugs, or making architectural changes.
-
-**What it captures:**
-- Project state changes (v2.0 → v2.1 migration)
-- Technical decisions (Event Sourcing → Direct Read)
-- Blockers identified/resolved
-- Implementation progress (244/244 tests)
-- Roadmap updates
-- Architecture changes
-
-**Example:**
 ```bash
-# After implementing a new feature or architectural change
-/actualizar-docs
+# Occupation
+POST /api/occupation/tomar
+POST /api/occupation/pausar
+POST /api/occupation/completar
+GET  /api/occupation/diagnostic/{tag}
+
+# SSE Streaming
+GET /api/sse/disponible?operacion=ARM
+GET /api/sse/quien-tiene-que
+
+# History
+GET /api/history/{tag_spool}
+
+# Cache
+POST /api/cache/clear
 ```
 
-The command uses the `project-architect` agent to extract relevant information from the conversation and update documentation files while preserving critical information and compacting less important details if needed.
+### Redis Debugging
 
-**Note:** v1.0 docs (`proyecto.md`, `proyecto-backend.md`, `proyecto-frontend.md`) are now historical reference only.
+```bash
+# Check lock
+redis-cli GET "spool:TEST-01:lock"
+
+# Check TTL
+redis-cli TTL "spool:TEST-01:lock"
+
+# List all locks
+redis-cli KEYS "spool:*:lock"
+
+# Emergency release (use with caution)
+redis-cli DEL "spool:TEST-01:lock"
+```
+
+### Common Issues
+
+**ImportError:**
+```bash
+source venv/bin/activate
+PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest
+```
+
+**Redis connection:**
+```bash
+redis-cli ping  # Should return PONG
+python -c "import redis; r = redis.from_url('redis://localhost:6379'); print(r.ping())"
+```
+
+**SSE streaming test:**
+```bash
+curl -N http://localhost:8000/api/sse/disponible?operacion=ARM
+```
+
+## v3.0 Technical Debt (Non-Blocking)
+
+From milestone audit (2026-01-28):
+- Phase 4 missing formal VERIFICATION.md
+- Frontend metrología/reparación integration unverified
+- No dedicated reparación router
+- No E2E SSE test with real infrastructure
+- 7-day rollback window expires 2026-02-02
+
+## Production URLs
+
+- Frontend: https://zeues-frontend.vercel.app
+- Backend API: https://zeues-backend-mvp-production.up.railway.app
+- API Docs: https://zeues-backend-mvp-production.up.railway.app/docs
+
+## Git Workflow
+
+- **Current Branch:** `main` (v3.0 in production)
+- **Git Tag:** `v3.0` (2026-01-28)
+- **Commits:** 158 commits in v3.0 milestone
+
+**GSD creates atomic commits automatically per plan.**
+
+## Key Constraints
+
+- Google Sheets is source of truth (no database migration)
+- Mobile-first UI (large buttons h-16/h-20, touch-friendly)
+- Google Sheets limits: 60 writes/min/user, 200-500ms latency
+- Manufacturing scale: 30-50 workers, 2,000+ spools, 10-15 req/sec
+- Regulatory: Metadata audit trail mandatory (append-only, immutable)
+
+---
+
+**For detailed v3.0 architecture, requirements, and technical decisions, see `.planning/PROJECT.md`**
+
+**Last updated:** 2026-01-29 (optimized to ~2.5K tokens)
