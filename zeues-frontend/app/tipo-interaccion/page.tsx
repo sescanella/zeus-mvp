@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Play, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 
 export default function TipoInteraccionPage() {
@@ -11,12 +11,19 @@ export default function TipoInteraccionPage() {
   const { state, setState } = useAppState();
 
   useEffect(() => {
+    // Redirect check
     if (!state.selectedWorker || !state.selectedOperation) {
       router.push('/');
+      return;
+    }
+
+    // METROLOGÍA bypass - skip P3, go directly to resultado
+    if (state.selectedOperation === 'METROLOGIA') {
+      router.push('/resultado-metrologia');
     }
   }, [state, router]);
 
-  const handleSelectTipo = (tipo: 'iniciar' | 'completar' | 'cancelar') => {
+  const handleSelectTipo = (tipo: 'tomar' | 'pausar' | 'completar' | 'cancelar') => {
     setState({ selectedTipo: tipo });
     router.push(`/seleccionar-spool?tipo=${tipo}`);
   };
@@ -116,11 +123,11 @@ export default function TipoInteraccionPage() {
         </div>
 
         <div className="mb-6 tablet:mb-4">
-          {/* Grid 2 columnas */}
-          <div className="grid grid-cols-2 gap-4 tablet:gap-3 mb-4">
-            {/* INICIAR */}
+          {/* Grid 3 columnas - TOMAR/PAUSAR/COMPLETAR */}
+          <div className="grid grid-cols-3 gap-4 tablet:gap-3 mb-4">
+            {/* TOMAR */}
             <button
-              onClick={() => handleSelectTipo('iniciar')}
+              onClick={() => handleSelectTipo('tomar')}
               className="
                 h-40 narrow:h-32
                 bg-transparent
@@ -134,7 +141,27 @@ export default function TipoInteraccionPage() {
             >
               <Play size={56} strokeWidth={3} className="text-white group-active:text-white" />
               <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                INICIAR
+                TOMAR
+              </h3>
+            </button>
+
+            {/* PAUSAR */}
+            <button
+              onClick={() => handleSelectTipo('pausar')}
+              className="
+                h-40 narrow:h-32
+                bg-transparent
+                border-4 border-white
+                flex flex-col items-center justify-center gap-4
+                cursor-pointer
+                active:bg-yellow-500 active:border-yellow-500
+                transition-all duration-200
+                group
+              "
+            >
+              <Pause size={56} strokeWidth={3} className="text-white group-active:text-white" />
+              <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+                PAUSAR
               </h3>
             </button>
 
@@ -159,25 +186,27 @@ export default function TipoInteraccionPage() {
             </button>
           </div>
 
-          {/* CANCELAR - full width */}
-          <button
-            onClick={() => handleSelectTipo('cancelar')}
-            className="
-              w-full h-24 narrow:h-20
-              bg-transparent
-              border-4 border-red-500
-              flex items-center justify-center gap-4
-              cursor-pointer
-              active:bg-red-500 active:border-red-500
-              transition-all duration-200
-              group
-            "
-          >
-            <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
-            <h3 className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
-              CANCELAR ACCIÓN
-            </h3>
-          </button>
+          {/* CANCELAR - full width (REPARACIÓN only) */}
+          {state.selectedOperation === 'REPARACION' && (
+            <button
+              onClick={() => handleSelectTipo('cancelar')}
+              className="
+                w-full h-24 narrow:h-20
+                bg-transparent
+                border-4 border-red-500
+                flex items-center justify-center gap-4
+                cursor-pointer
+                active:bg-red-500 active:border-red-500
+                transition-all duration-200
+                group
+              "
+            >
+              <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
+              <h3 className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
+                CANCELAR REPARACIÓN
+              </h3>
+            </button>
+          )}
         </div>
 
         {/* Fixed Navigation Footer */}

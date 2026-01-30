@@ -7,7 +7,7 @@ interface AppState {
   allWorkers: Worker[];  // v2.0: Cache de todos los trabajadores (fetch en P1, filtrar en P2)
   selectedWorker: Worker | null;
   selectedOperation: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION' | null;  // v3.0: +REPARACION
-  selectedTipo: 'iniciar' | 'completar' | 'cancelar' | null;  // v2.0: Añadido 'cancelar'
+  selectedTipo: 'tomar' | 'pausar' | 'completar' | 'cancelar' | null;  // v3.0: TOMAR/PAUSAR/COMPLETAR workflow
   selectedSpool: string | null;  // Single-select (backward compat)
   selectedSpools: string[];  // v2.0: Multiselect batch (array de TAGs)
   batchMode: boolean;  // v2.0: Flag si operación es batch

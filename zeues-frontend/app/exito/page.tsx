@@ -37,7 +37,8 @@ export default function ExitoPage() {
   // Determinar mensaje y color según tipo
   const isCancelAction = tipo === 'cancelar';
   const isSuccess = !isCancelAction;
-  const mensaje = tipo === 'iniciar' ? 'INICIADO' :
+  const mensaje = tipo === 'tomar' ? 'TOMADO' :
+                  tipo === 'pausar' ? 'PAUSADO' :
                   tipo === 'completar' ? 'COMPLETADO' : 'CANCELADO';
 
   return (
