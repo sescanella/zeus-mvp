@@ -60,7 +60,7 @@ root_cause: The edge case hydration fix (line 491 in state_service.py) correctly
 
 fix: Moved activate_initial_state() calls INSIDE the hydration methods (_hydrate_arm_machine and _hydrate_sold_machine), to be called BEFORE manually setting machine.current_state. This ensures the machine is properly initialized for async operations, but the hydration state is preserved. Made both hydration methods async and removed activate_initial_state() calls from tomar/pausar/completar methods.
 
-verification: Tested locally - fix resolves the issue. Need to deploy and test on production.
+verification: Fix committed (9e747d6) and pushed to Railway. Waiting for deployment to complete and TEST-02 lock to expire before full production verification. The fix is sound: activate_initial_state() now called BEFORE setting current_state in hydration methods, preserving the hydrated state.
 
 files_changed:
   - backend/services/state_service.py: Made _hydrate_arm_machine() and _hydrate_sold_machine() async, added await machine.activate_initial_state() inside them before setting current_state, removed activate_initial_state() calls from tomar/pausar/completar

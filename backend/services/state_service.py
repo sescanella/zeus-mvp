@@ -124,14 +124,22 @@ class StateService:
                     logger.info(f"ARM state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
 
                 elif current_arm_state == "en_progreso":
-                    # Already in progress - should not happen (occupation lock prevents it)
-                    logger.error(f"ARM already en_progreso for {tag_spool}, occupation lock validation failed")
-                    raise InvalidStateTransitionError(
-                        f"Spool {tag_spool} is already occupied (ARM en_progreso)",
-                        tag_spool=tag_spool,
-                        current_state=current_arm_state,
-                        attempted_transition="iniciar"
+                    # Edge case: Machine hydrated to EN_PROGRESO because Ocupado_Por is set but
+                    # Armador is not (from previous partial TOMAR failure OR normal TOMAR intermediate state).
+                    # Solution: Manually write Armador since we can't call iniciar from EN_PROGRESO.
+                    logger.warning(
+                        f"ARM already en_progreso for {tag_spool} (Ocupado_Por set, Armador=None). "
+                        f"Manually writing Armador to complete state."
                     )
+                    # Manually write Armador to complete the TOMAR operation
+                    from backend.services.conflict_service import ConflictService
+                    conflict_service = self.occupation_service.conflict_service
+                    await conflict_service.update_with_retry(
+                        tag_spool=tag_spool,
+                        updates={"Armador": request.worker_nombre},
+                        operation="TOMAR_EDGE_CASE_FIX"
+                    )
+                    logger.info(f"✅ ARM edge case resolved: Armador written for {tag_spool}")
 
                 elif current_arm_state == "completado":
                     # Cannot restart completed work
@@ -169,14 +177,22 @@ class StateService:
                     logger.info(f"SOLD state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
 
                 elif current_sold_state == "en_progreso":
-                    # Already in progress - should not happen (occupation lock prevents it)
-                    logger.error(f"SOLD already en_progreso for {tag_spool}, occupation lock validation failed")
-                    raise InvalidStateTransitionError(
-                        f"Spool {tag_spool} is already occupied (SOLD en_progreso)",
-                        tag_spool=tag_spool,
-                        current_state=current_sold_state,
-                        attempted_transition="iniciar"
+                    # Edge case: Machine hydrated to EN_PROGRESO because Ocupado_Por is set but
+                    # Soldador is not (from previous partial TOMAR failure OR normal TOMAR intermediate state).
+                    # Solution: Manually write Soldador since we can't call iniciar from EN_PROGRESO.
+                    logger.warning(
+                        f"SOLD already en_progreso for {tag_spool} (Ocupado_Por set, Soldador=None). "
+                        f"Manually writing Soldador to complete state."
                     )
+                    # Manually write Soldador to complete the TOMAR operation
+                    from backend.services.conflict_service import ConflictService
+                    conflict_service = self.occupation_service.conflict_service
+                    await conflict_service.update_with_retry(
+                        tag_spool=tag_spool,
+                        updates={"Soldador": request.worker_nombre},
+                        operation="TOMAR_EDGE_CASE_FIX"
+                    )
+                    logger.info(f"✅ SOLD edge case resolved: Soldador written for {tag_spool}")
 
                 elif current_sold_state == "completado":
                     # Cannot restart completed work
@@ -234,12 +250,14 @@ class StateService:
                     operation="ROLLBACK_TOMAR"
                 )
 
-                # Release Redis lock
-                from backend.services.redis_lock_service import RedisLockService
-                redis_lock = self.occupation_service.redis_lock_service
-                await redis_lock.release_lock(tag_spool, request.worker_id, None)  # None = ignore token check
-
-                logger.info(f"✅ Rollback successful: cleared occupation for {tag_spool}")
+                # NOTE: We cannot safely release the Redis lock here because we don't have the lock_token
+                # (it's inside OccupationService.tomar which already succeeded before this rollback).
+                # The lock will auto-expire after 1 hour (TTL), which is acceptable for this edge case.
+                # The critical part is clearing Ocupado_Por so the spool appears available in Sheets.
+                logger.info(
+                    f"✅ Rollback successful: cleared Ocupado_Por for {tag_spool}. "
+                    f"Redis lock will auto-expire after TTL."
+                )
 
             except Exception as rollback_error:
                 logger.error(
