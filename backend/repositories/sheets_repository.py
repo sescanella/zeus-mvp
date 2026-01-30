@@ -416,6 +416,12 @@ class SheetsRepository:
                 f"✅ Actualizada celda '{column_name}' (idx={column_index}) fila {row} = {value} en '{sheet_name}'"
             )
 
+            # Invalidate cache to ensure fresh data on next read
+            # CRITICAL: State machine callbacks (ARM/SOLD iniciar) use this method to write Armador/Soldador
+            # Without cache invalidation, subsequent reads (like PAUSAR hydration) get stale data
+            cache_key = f"worksheet:{sheet_name}"
+            self._cache.invalidate(cache_key)
+
         except ValueError:
             raise
         except Exception as e:
