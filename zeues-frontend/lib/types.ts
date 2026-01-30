@@ -115,6 +115,7 @@ export interface PausarRequest {
   tag_spool: string;
   worker_id: number;
   worker_nombre: string;
+  operacion: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
 }
 
 /**

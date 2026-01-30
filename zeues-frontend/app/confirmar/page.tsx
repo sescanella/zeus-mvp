@@ -141,6 +141,7 @@ function ConfirmarContent() {
                   tag_spool,
                   worker_id,
                   worker_nombre,
+                  operacion,
                 })
               )
             );
@@ -289,6 +290,7 @@ function ConfirmarContent() {
               tag_spool,
               worker_id,
               worker_nombre,
+              operacion,
             };
             await pausarOcupacion(payload);
           }
