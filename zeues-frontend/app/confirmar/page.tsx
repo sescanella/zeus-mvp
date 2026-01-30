@@ -9,7 +9,11 @@ import {
   tomarOcupacion,
   pausarOcupacion,
   completarOcupacion,
-  tomarOcupacionBatch
+  tomarOcupacionBatch,
+  tomarReparacion,
+  pausarReparacion,
+  completarReparacion,
+  cancelarReparacion
 } from '@/lib/api';
 import type {
   TomarRequest,
@@ -39,8 +43,12 @@ const formatDateDDMMYYYY = (date: Date): string => {
 function ConfirmarContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar';
+  // v3.0: Use selectedTipo from context instead of query param (legacy support: map 'iniciar' → 'tomar')
+  const queryTipo = searchParams.get('tipo') as 'iniciar' | 'tomar' | 'pausar' | 'completar' | 'cancelar' | null;
   const { state, resetState, setState } = useAppState();
+
+  // Map legacy 'iniciar' to v3.0 'tomar' (backward compatibility)
+  const tipo = queryTipo === 'iniciar' ? 'tomar' : (state.selectedTipo || queryTipo) as 'tomar' | 'pausar' | 'completar' | 'cancelar' | null;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,7 +57,7 @@ function ConfirmarContent() {
   const isBatchMode = state.batchMode && state.selectedSpools.length > 0;
 
   useEffect(() => {
-    // Validar flujo: debe tener worker, operación, y al menos un spool (single o batch)
+    // Validar flujo: debe tener worker, operación, tipo, y al menos un spool (single o batch)
     const hasSingleSpool = state.selectedSpool !== null;
     const hasBatchSpools = state.selectedSpools.length > 0;
 
@@ -67,31 +75,145 @@ function ConfirmarContent() {
       if (isBatchMode) {
         // v3.0: Batch mode - procesar múltiples spools
         const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
+        const worker_id = state.selectedWorker!.id;
+        const operacion = state.selectedOperation as 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
         let batchResponse: BatchOccupationResponse;
 
-        if (tipo === 'iniciar') {
-          // v3.0: INICIAR usa batch endpoint directo
-          const batchPayload: BatchTomarRequest = {
-            tag_spools: state.selectedSpools,
-            worker_id: state.selectedWorker!.id,
-            worker_nombre,
-            operacion: state.selectedOperation as 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION',
-          };
-          batchResponse = await tomarOcupacionBatch(batchPayload);
+        if (tipo === 'tomar') {
+          // v3.0: TOMAR
+          if (operacion === 'REPARACION') {
+            // REPARACION: Use individual reparación endpoints (no batch endpoint exists)
+            const results = await Promise.allSettled(
+              state.selectedSpools.map(tag_spool =>
+                tomarReparacion({
+                  tag_spool,
+                  worker_id,
+                })
+              )
+            );
+            batchResponse = {
+              total: results.length,
+              succeeded: results.filter(r => r.status === 'fulfilled').length,
+              failed: results.filter(r => r.status === 'rejected').length,
+              details: results.map((r, i) => ({
+                success: r.status === 'fulfilled',
+                tag_spool: state.selectedSpools[i],
+                message: r.status === 'fulfilled' ? 'Spool tomado exitosamente' : (r.reason?.message || 'Error desconocido'),
+              })),
+            };
+          } else {
+            // ARM/SOLD/METROLOGIA: Use batch endpoint
+            const batchPayload: BatchTomarRequest = {
+              tag_spools: state.selectedSpools,
+              worker_id,
+              worker_nombre,
+              operacion,
+            };
+            batchResponse = await tomarOcupacionBatch(batchPayload);
+          }
+        } else if (tipo === 'pausar') {
+          // v3.0: PAUSAR
+          if (operacion === 'REPARACION') {
+            // REPARACION: Use reparación-specific endpoint
+            const results = await Promise.allSettled(
+              state.selectedSpools.map(tag_spool =>
+                pausarReparacion({
+                  tag_spool,
+                  worker_id,
+                })
+              )
+            );
+            batchResponse = {
+              total: results.length,
+              succeeded: results.filter(r => r.status === 'fulfilled').length,
+              failed: results.filter(r => r.status === 'rejected').length,
+              details: results.map((r, i) => ({
+                success: r.status === 'fulfilled',
+                tag_spool: state.selectedSpools[i],
+                message: r.status === 'fulfilled' ? 'Spool pausado exitosamente' : (r.reason?.message || 'Error desconocido'),
+              })),
+            };
+          } else {
+            // ARM/SOLD: Use general pausar endpoint
+            const results = await Promise.allSettled(
+              state.selectedSpools.map(tag_spool =>
+                pausarOcupacion({
+                  tag_spool,
+                  worker_id,
+                  worker_nombre,
+                })
+              )
+            );
+            batchResponse = {
+              total: results.length,
+              succeeded: results.filter(r => r.status === 'fulfilled').length,
+              failed: results.filter(r => r.status === 'rejected').length,
+              details: results.map((r, i) => ({
+                success: r.status === 'fulfilled',
+                tag_spool: state.selectedSpools[i],
+                message: r.status === 'fulfilled' ? r.value.message : (r.reason?.message || 'Error desconocido'),
+              })),
+            };
+          }
         } else if (tipo === 'completar') {
-          // v3.0: COMPLETAR requiere fecha_operacion por spool - llamar individualmente
-          const fecha_operacion = formatDateDDMMYYYY(new Date()); // DD-MM-YYYY format
+          // v3.0: COMPLETAR
+          if (operacion === 'REPARACION') {
+            // REPARACION: Use reparación-specific endpoint
+            const results = await Promise.allSettled(
+              state.selectedSpools.map(tag_spool =>
+                completarReparacion({
+                  tag_spool,
+                  worker_id,
+                })
+              )
+            );
+            batchResponse = {
+              total: results.length,
+              succeeded: results.filter(r => r.status === 'fulfilled').length,
+              failed: results.filter(r => r.status === 'rejected').length,
+              details: results.map((r, i) => ({
+                success: r.status === 'fulfilled',
+                tag_spool: state.selectedSpools[i],
+                message: r.status === 'fulfilled' ? 'Reparación completada exitosamente' : (r.reason?.message || 'Error desconocido'),
+              })),
+            };
+          } else {
+            // ARM/SOLD: COMPLETAR requiere fecha_operacion - llamar individualmente
+            const fecha_operacion = formatDateDDMMYYYY(new Date()); // DD-MM-YYYY format
+            const results = await Promise.allSettled(
+              state.selectedSpools.map(tag_spool =>
+                completarOcupacion({
+                  tag_spool,
+                  worker_id,
+                  worker_nombre,
+                  fecha_operacion,
+                })
+              )
+            );
+            batchResponse = {
+              total: results.length,
+              succeeded: results.filter(r => r.status === 'fulfilled').length,
+              failed: results.filter(r => r.status === 'rejected').length,
+              details: results.map((r, i) => ({
+                success: r.status === 'fulfilled',
+                tag_spool: state.selectedSpools[i],
+                message: r.status === 'fulfilled' ? r.value.message : (r.reason?.message || 'Error desconocido'),
+              })),
+            };
+          }
+        } else if (tipo === 'cancelar') {
+          // v3.0: CANCELAR (REPARACION only)
+          if (operacion !== 'REPARACION') {
+            throw new Error('CANCELAR solo está disponible para REPARACIÓN');
+          }
           const results = await Promise.allSettled(
             state.selectedSpools.map(tag_spool =>
-              completarOcupacion({
+              cancelarReparacion({
                 tag_spool,
-                worker_id: state.selectedWorker!.id,
-                worker_nombre,
-                fecha_operacion,
+                worker_id,
               })
             )
           );
-          // Map Promise.allSettled results to BatchOccupationResponse format
           batchResponse = {
             total: results.length,
             succeeded: results.filter(r => r.status === 'fulfilled').length,
@@ -99,31 +221,11 @@ function ConfirmarContent() {
             details: results.map((r, i) => ({
               success: r.status === 'fulfilled',
               tag_spool: state.selectedSpools[i],
-              message: r.status === 'fulfilled' ? r.value.message : (r.reason?.message || 'Error desconocido'),
+              message: r.status === 'fulfilled' ? 'Reparación cancelada exitosamente' : (r.reason?.message || 'Error desconocido'),
             })),
           };
         } else {
-          // v3.0: CANCELAR → Use PAUSAR (semantic change: pausar != cancelar)
-          // PAUSAR: Marks as "parcial (pausado)" - work can be resumed
-          const results = await Promise.allSettled(
-            state.selectedSpools.map(tag_spool =>
-              pausarOcupacion({
-                tag_spool,
-                worker_id: state.selectedWorker!.id,
-                worker_nombre,
-              })
-            )
-          );
-          batchResponse = {
-            total: results.length,
-            succeeded: results.filter(r => r.status === 'fulfilled').length,
-            failed: results.filter(r => r.status === 'rejected').length,
-            details: results.map((r, i) => ({
-              success: r.status === 'fulfilled',
-              tag_spool: state.selectedSpools[i],
-              message: r.status === 'fulfilled' ? r.value.message : (r.reason?.message || 'Error desconocido'),
-            })),
-          };
+          throw new Error('Tipo de acción no soportado');
         }
 
         // Convert v3.0 BatchOccupationResponse to v2.1 BatchActionResponse format for context
@@ -151,34 +253,74 @@ function ConfirmarContent() {
       } else {
         // v3.0: Single mode - usar endpoints v3.0 occupation
         const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
+        const worker_id = state.selectedWorker!.id;
+        const tag_spool = state.selectedSpool!;
+        const operacion = state.selectedOperation as 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
 
-        if (tipo === 'iniciar') {
-          // v3.0: INICIAR → TOMAR
-          const payload: TomarRequest = {
-            tag_spool: state.selectedSpool!,
-            worker_id: state.selectedWorker!.id,
-            worker_nombre,
-            operacion: state.selectedOperation as 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION',
-          };
-          await tomarOcupacion(payload);
+        if (tipo === 'tomar') {
+          // v3.0: TOMAR
+          if (operacion === 'REPARACION') {
+            // REPARACION: Use reparación-specific endpoint
+            await tomarReparacion({
+              tag_spool,
+              worker_id,
+            });
+          } else {
+            // ARM/SOLD/METROLOGIA: Use general occupation endpoint
+            const payload: TomarRequest = {
+              tag_spool,
+              worker_id,
+              worker_nombre,
+              operacion,
+            };
+            await tomarOcupacion(payload);
+          }
+        } else if (tipo === 'pausar') {
+          // v3.0: PAUSAR
+          if (operacion === 'REPARACION') {
+            // REPARACION: Use reparación-specific endpoint
+            await pausarReparacion({
+              tag_spool,
+              worker_id,
+            });
+          } else {
+            // ARM/SOLD: Use general pausar endpoint
+            const payload: PausarRequest = {
+              tag_spool,
+              worker_id,
+              worker_nombre,
+            };
+            await pausarOcupacion(payload);
+          }
         } else if (tipo === 'completar') {
-          // v3.0: COMPLETAR con fecha_operacion requerida
-          const payload: CompletarRequest = {
-            tag_spool: state.selectedSpool!,
-            worker_id: state.selectedWorker!.id,
-            worker_nombre,
-            fecha_operacion: formatDateDDMMYYYY(new Date()), // DD-MM-YYYY format
-          };
-          await completarOcupacion(payload);
+          // v3.0: COMPLETAR
+          if (operacion === 'REPARACION') {
+            // REPARACION: Use reparación-specific endpoint
+            await completarReparacion({
+              tag_spool,
+              worker_id,
+            });
+          } else {
+            // ARM/SOLD: COMPLETAR con fecha_operacion requerida
+            const payload: CompletarRequest = {
+              tag_spool,
+              worker_id,
+              worker_nombre,
+              fecha_operacion: formatDateDDMMYYYY(new Date()), // DD-MM-YYYY format
+            };
+            await completarOcupacion(payload);
+          }
+        } else if (tipo === 'cancelar') {
+          // v3.0: CANCELAR (REPARACION only)
+          if (operacion !== 'REPARACION') {
+            throw new Error('CANCELAR solo está disponible para REPARACIÓN');
+          }
+          await cancelarReparacion({
+            tag_spool,
+            worker_id,
+          });
         } else {
-          // v3.0: CANCELAR → PAUSAR (semantic change)
-          // PAUSAR: Marks as "parcial (pausado)" - work can be resumed
-          const payload: PausarRequest = {
-            tag_spool: state.selectedSpool!,
-            worker_id: state.selectedWorker!.id,
-            worker_nombre,
-          };
-          await pausarOcupacion(payload);
+          throw new Error('Tipo de acción no soportado');
         }
 
         // Clear batch results for single mode
@@ -238,9 +380,18 @@ function ConfirmarContent() {
     return null;
   }
 
-  const actionLabel = tipo === 'iniciar' ? 'INICIAR' : tipo === 'completar' ? 'COMPLETAR' : 'CANCELAR';
-  const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
-                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
+  // v3.0: Action labels for UI
+  const actionLabel =
+    tipo === 'tomar' ? 'TOMAR' :
+    tipo === 'pausar' ? 'PAUSAR' :
+    tipo === 'completar' ? 'COMPLETAR' :
+    tipo === 'cancelar' ? 'CANCELAR' : 'ACCIÓN';
+
+  const operationLabel =
+    state.selectedOperation === 'ARM' ? 'ARMADO' :
+    state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
+    state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' :
+    state.selectedOperation === 'REPARACION' ? 'REPARACIÓN' : 'OPERACIÓN';
 
   const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
                         state.selectedOperation === 'SOLD' ? Flame : SearchCheck;

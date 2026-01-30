@@ -271,6 +271,80 @@ export async function getWorkerRoles(workerId: number): Promise<string[]> {
 }
 
 /**
+ * GET /api/spools/disponible?operacion={ARM|SOLD|REPARACION} (v3.0)
+ * Obtiene spools DISPONIBLES para TOMAR (no ocupados, prerequisitos cumplidos).
+ *
+ * Usado por P4 cuando tipo=tomar. Muestra spools que el trabajador puede tomar.
+ *
+ * @param operacion - Tipo de operación ("ARM", "SOLD", or "REPARACION")
+ * @returns Promise<Spool[]> - Array de spools disponibles para tomar
+ * @throws Error si operación inválida o falla request
+ *
+ * @example
+ * const spools = await getSpoolsDisponible('ARM');
+ * console.log(spools); // [{tag_spool: "MK-123", arm: 0, armador: null, ...}]
+ */
+export async function getSpoolsDisponible(
+  operacion: 'ARM' | 'SOLD' | 'REPARACION'
+): Promise<Spool[]> {
+  try {
+    // For ARM/SOLD, use existing /iniciar endpoint (same logic as disponible)
+    // For REPARACION, use dedicated endpoint
+    if (operacion === 'REPARACION') {
+      const reparacionResponse = await getSpoolsReparacion();
+      return reparacionResponse.spools as unknown as Spool[];
+    }
+
+    // ARM/SOLD use /iniciar endpoint (shows spools available to start)
+    return await getSpoolsParaIniciar(operacion);
+  } catch (error) {
+    console.error('getSpoolsDisponible error:', error);
+    throw new Error(`No se pudieron cargar spools disponibles de ${operacion}.`);
+  }
+}
+
+/**
+ * GET /api/spools/ocupados?worker_id={id}&operacion={ARM|SOLD|REPARACION} (v3.0)
+ * Obtiene spools OCUPADOS por el trabajador (para PAUSAR/COMPLETAR).
+ *
+ * Usado por P4 cuando tipo=pausar/completar/cancelar. Muestra spools que el trabajador
+ * actualmente tiene tomados.
+ *
+ * @param workerId - ID numérico del trabajador
+ * @param operacion - Tipo de operación ("ARM", "SOLD", or "REPARACION")
+ * @returns Promise<Spool[]> - Array de spools ocupados por el trabajador
+ * @throws Error si worker no encontrado o falla request
+ *
+ * @example
+ * const spools = await getSpoolsOcupados(93, 'ARM');
+ * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "JP(93)", ...}]
+ */
+export async function getSpoolsOcupados(
+  workerId: number,
+  operacion: 'ARM' | 'SOLD' | 'REPARACION'
+): Promise<Spool[]> {
+  try {
+    // Use existing /completar endpoint (returns spools owned by worker)
+    // This works for PAUSAR/COMPLETAR because both need worker's occupied spools
+    if (operacion === 'REPARACION') {
+      // For REPARACION, no dedicated "ocupados" endpoint yet
+      // Use /reparacion and filter client-side (or backend creates one)
+      // For now, return empty - backend should create GET /api/spools/ocupados endpoint
+      throw new Error('getSpoolsOcupados for REPARACION not yet implemented by backend');
+    }
+
+    // For ARM/SOLD, use /completar endpoint (filters by worker ownership)
+    // We need worker nombre_completo for the API call
+    // Since we only have workerId, we'll use /cancelar endpoint instead
+    // which accepts worker_id directly
+    return await getSpoolsParaCancelar(operacion, workerId);
+  } catch (error) {
+    console.error('getSpoolsOcupados error:', error);
+    throw new Error(`No se pudieron cargar tus spools de ${operacion}.`);
+  }
+}
+
+/**
  * GET /api/spools/cancelar?operacion={ARM|SOLD}&worker_id={id}
  * Obtiene spools EN_PROGRESO (estado=0.1) del trabajador para CANCELAR.
  *

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
-import { getSpoolsParaIniciar, getSpoolsParaCompletar, getSpoolsParaCancelar, getSpoolsReparacion } from '@/lib/api';
+import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion } from '@/lib/api';
 import type { Spool, SSEEvent } from '@/lib/types';
 import { useSSE } from '@/lib/hooks/useSSE';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -13,7 +13,7 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 function SeleccionarSpoolContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tipo = searchParams.get('tipo') as 'iniciar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion';
+  const tipo = searchParams.get('tipo') as 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion';
   const { state, setState } = useAppState();
 
   const [loading, setLoading] = useState(true);
@@ -92,22 +92,36 @@ function SeleccionarSpoolContent() {
         // REPARACION uses dedicated endpoint - returns object with spools array
         const reparacionResponse = await getSpoolsReparacion();
         fetchedSpools = reparacionResponse.spools as unknown as Spool[];
-      } else if (tipo === 'iniciar') {
-        fetchedSpools = await getSpoolsParaIniciar(selectedOperation as 'ARM' | 'SOLD');
-      } else if (tipo === 'completar') {
+      } else if (tipo === 'tomar') {
+        // v3.0: TOMAR shows available spools for the operation
+        fetchedSpools = await getSpoolsDisponible(selectedOperation as 'ARM' | 'SOLD' | 'REPARACION');
+      } else if (tipo === 'pausar' || tipo === 'completar') {
+        // v3.0: PAUSAR/COMPLETAR show spools occupied by current worker
         if (!selectedWorker) {
           setError('No se ha seleccionado un trabajador');
           setLoading(false);
           return;
         }
-        fetchedSpools = await getSpoolsParaCompletar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.nombre_completo);
+        fetchedSpools = await getSpoolsOcupados(selectedWorker.id, selectedOperation as 'ARM' | 'SOLD' | 'REPARACION');
+      } else if (tipo === 'cancelar') {
+        // v3.0: CANCELAR shows reparación spools occupied by current worker
+        if (!selectedWorker) {
+          setError('No se ha seleccionado un trabajador');
+          setLoading(false);
+          return;
+        }
+        // CANCELAR is only for REPARACION in v3.0
+        if (selectedOperation === 'REPARACION') {
+          fetchedSpools = await getSpoolsOcupados(selectedWorker.id, 'REPARACION');
+        } else {
+          // For ARM/SOLD, CANCELAR uses cancelar endpoint
+          fetchedSpools = await getSpoolsParaCancelar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.id);
+        }
       } else {
-        if (!selectedWorker) {
-          setError('No se ha seleccionado un trabajador');
-          setLoading(false);
-          return;
-        }
-        fetchedSpools = await getSpoolsParaCancelar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.id);
+        // Fallback for any legacy tipo values
+        setError('Tipo de acción no válido');
+        setLoading(false);
+        return;
       }
 
       setSpools(fetchedSpools);
@@ -235,13 +249,60 @@ function SeleccionarSpoolContent() {
 
   if (!state.selectedWorker || !state.selectedOperation) return null;
 
-  const actionLabel = tipo === 'iniciar' ? 'INICIAR' :
+  // v3.0: Updated action labels for new tipo values
+  const actionLabel = tipo === 'tomar' ? 'TOMAR' :
+                      tipo === 'pausar' ? 'PAUSAR' :
                       tipo === 'completar' ? 'COMPLETAR' :
+                      tipo === 'cancelar' ? 'CANCELAR' :
                       tipo === 'metrologia' ? 'INSPECCIONAR' :
-                      tipo === 'reparacion' ? 'REPARAR' : 'CANCELAR';
+                      tipo === 'reparacion' ? 'REPARAR' : 'SELECCIONAR';
   const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
                         state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
                         state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' : 'REPARACIÓN';
+
+  // v3.0: Dynamic page title based on tipo
+  const getPageTitle = () => {
+    switch (tipo) {
+      case 'tomar':
+        return `SELECCIONAR SPOOL PARA TOMAR - ${operationLabel}`;
+      case 'pausar':
+        return `SELECCIONAR SPOOL PARA PAUSAR - ${operationLabel}`;
+      case 'completar':
+        return `SELECCIONAR SPOOL PARA COMPLETAR - ${operationLabel}`;
+      case 'cancelar':
+        return state.selectedOperation === 'REPARACION'
+          ? 'SELECCIONAR REPARACIÓN PARA CANCELAR'
+          : `SELECCIONAR SPOOL PARA CANCELAR - ${operationLabel}`;
+      case 'metrologia':
+        return 'SELECCIONAR SPOOL PARA INSPECCIÓN';
+      case 'reparacion':
+        return 'SELECCIONAR SPOOL PARA REPARAR';
+      default:
+        return `${operationLabel} - ${actionLabel}`;
+    }
+  };
+
+  // v3.0: Dynamic empty state message based on tipo
+  const getEmptyMessage = () => {
+    switch (tipo) {
+      case 'tomar':
+        return `No hay spools disponibles para ${operationLabel}`;
+      case 'pausar':
+        return 'No tienes spools en progreso para pausar';
+      case 'completar':
+        return 'No tienes spools en progreso para completar';
+      case 'cancelar':
+        return state.selectedOperation === 'REPARACION'
+          ? 'No tienes reparaciones en progreso para cancelar'
+          : 'No tienes spools en progreso para cancelar';
+      case 'metrologia':
+        return 'No hay spools disponibles para inspección de metrología';
+      case 'reparacion':
+        return 'No hay spools rechazados disponibles para reparación';
+      default:
+        return 'No hay spools disponibles';
+    }
+  };
 
   const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
                         state.selectedOperation === 'SOLD' ? Flame :
@@ -279,7 +340,7 @@ function SeleccionarSpoolContent() {
         <div className="flex items-center justify-center gap-4 mb-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
           <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
-            {operationLabel} - {actionLabel}
+            {getPageTitle()}
           </h2>
         </div>
       </div>
@@ -331,8 +392,19 @@ function SeleccionarSpoolContent() {
           </div>
         )}
 
+        {/* Empty State - No spools available */}
+        {!loading && !error && spools.length === 0 && (
+          <div className="border-4 border-white/50 p-8 mb-6 bg-white/5">
+            <div className="flex items-center gap-4 mb-4">
+              <AlertCircle size={48} className="text-white/70" strokeWidth={3} />
+              <h3 className="text-2xl font-black text-white/70 font-mono">SIN SPOOLS</h3>
+            </div>
+            <p className="text-lg text-white/70 font-mono">{getEmptyMessage()}</p>
+          </div>
+        )}
+
         {/* Main Content - VAR-1 Table */}
-        {!loading && !error && (
+        {!loading && !error && spools.length > 0 && (
           <>
             <div className="mb-6 tablet:mb-4">
               <div className="border-4 border-white p-6 tablet:p-4 narrow:p-4 mb-4">
@@ -457,22 +529,24 @@ function SeleccionarSpoolContent() {
         )}
       </div>
 
-      {/* Fixed Navigation Footer with Continuar Button */}
+      {/* Fixed Navigation Footer */}
       {!loading && !error && (
         <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
           <div className="flex flex-col gap-4 tablet:gap-3">
-            {/* Botón Continuar - Primera fila */}
-            <button
-              onClick={handleContinueWithBatch}
-              disabled={selectedCount === 0}
-              className="w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
-            >
-              <span className="text-xl tablet:text-lg narrow:text-lg font-black text-white font-mono tracking-[0.2em] group-active:text-white">
-                CONTINUAR CON {selectedCount} SPOOL{selectedCount !== 1 ? 'S' : ''}
-              </span>
-            </button>
+            {/* Botón Continuar - Primera fila (only show if spools available) */}
+            {spools.length > 0 && (
+              <button
+                onClick={handleContinueWithBatch}
+                disabled={selectedCount === 0}
+                className="w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange active:border-zeues-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
+              >
+                <span className="text-xl tablet:text-lg narrow:text-lg font-black text-white font-mono tracking-[0.2em] group-active:text-white">
+                  CONTINUAR CON {selectedCount} SPOOL{selectedCount !== 1 ? 'S' : ''}
+                </span>
+              </button>
+            )}
 
-            {/* Botones Volver/Inicio - Segunda fila */}
+            {/* Botones Volver/Inicio - Always show */}
             <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
               <button
                 onClick={() => router.back()}
