@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 7 of 13 (Data Model Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-01-30 — v4.0 roadmap created with 7 phases (7-13), 63 requirements mapped
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-01-30 — Completed 07-01-PLAN.md (schema extension)
 
-Progress: [██████░░░░░░░░] 46% (6 of 13 phases complete from v3.0)
+Progress: [██████░░░░░░░░] 46% (6 of 13 phases complete from v3.0, Phase 7 in progress)
 
 ## Performance Metrics
 
@@ -34,9 +34,15 @@ Progress: [██████░░░░░░░░] 46% (6 of 13 phases compl
 | 5. Metrología | 4 | 22 min | 5.5 min |
 | 6. Reparación | 4 | 22 min | 5.5 min |
 
+**v4.0 Progress:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 7. Data Model Foundation | 1 | 1 min | 1.0 min |
+
 **Recent Trend:**
-- Last 5 plans: [5.2, 5.3, 5.5, 5.6, 5.4] min
-- Trend: Stable
+- Last 5 plans: [5.3, 5.5, 5.6, 5.4, 1.0] min
+- Trend: v4.0 Phase 7 starting (schema-only work is fast)
 
 *Updated after each plan completion*
 
@@ -54,6 +60,8 @@ Recent decisions affecting v4.0 work:
 - **D5 (v4.0)**: ARM-before-SOLD validation with partial completion support
 - **D6 (v4.0)**: Metrología/Reparación stay at spool level (defer union-level granularity to v4.1)
 - **D7 (v4.0)**: Trigger automatic metrología when SOLD 100% complete
+- **D8 (07-01)**: Use batch_update() for schema migrations (single API call for all columns + defaults)
+- **D9 (07-01)**: Call ColumnMapCache.invalidate() after schema changes to force cache rebuild
 
 ### Pending Todos
 
@@ -64,6 +72,7 @@ None yet.
 **v4.0 Pre-Deployment:**
 - Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy
 - v3.0 7-day rollback window expires 2026-02-02 (v2.1 backup will be archived)
+- Schema migration script (07-01) verified in dry-run only - must execute against production sheet before Phase 07-02
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -74,5 +83,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: v4.0 roadmap and STATE.md created with 7 phases (7-13), 63 requirements mapped
+Stopped at: Completed 07-01-PLAN.md (schema extension with 5 new columns, 1 min duration)
 Resume file: None
