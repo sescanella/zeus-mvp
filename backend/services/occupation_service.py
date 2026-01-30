@@ -190,7 +190,8 @@ class OccupationService:
 
             # Step 4: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
-                evento_tipo = f"TOMAR_{operacion}"
+                # v3.0: Use operation-agnostic TOMAR_SPOOL event type
+                evento_tipo = EventoTipo.TOMAR_SPOOL.value
                 metadata_json = json.dumps({
                     "lock_token": lock_token,
                     "fecha_ocupacion": fecha_ocupacion_str
@@ -203,7 +204,7 @@ class OccupationService:
                     worker_nombre=worker_nombre,
                     operacion=operacion,
                     accion="TOMAR",
-                    fecha_operacion=date.today(),
+                    fecha_operacion=format_date_for_sheets(today_chile()),
                     metadata_json=metadata_json
                 )
 
@@ -375,7 +376,8 @@ class OccupationService:
 
             # Step 5: Log to Metadata (best effort)
             try:
-                evento_tipo = f"PAUSAR_{operacion}"
+                # v3.0: Use operation-agnostic PAUSAR_SPOOL event type
+                evento_tipo = EventoTipo.PAUSAR_SPOOL.value
                 metadata_json = json.dumps({
                     "estado": estado_pausado,
                     "lock_released": True
@@ -544,7 +546,19 @@ class OccupationService:
 
             # Step 5: Log to Metadata (best effort)
             try:
-                evento_tipo = f"COMPLETAR_{operacion}"
+                # v3.0: COMPLETAR uses operation-specific event types (COMPLETAR_ARM, COMPLETAR_SOLD)
+                # Build evento_tipo string and validate against enum
+                evento_tipo_str = f"COMPLETAR_{operacion}"
+
+                # Validate that enum value exists
+                try:
+                    evento_tipo_enum = EventoTipo(evento_tipo_str)
+                    evento_tipo = evento_tipo_enum.value
+                except ValueError:
+                    # Fallback: Use legacy enum values if new format not available
+                    logger.warning(f"EventoTipo '{evento_tipo_str}' not found in enum, using string directly")
+                    evento_tipo = evento_tipo_str
+
                 metadata_json = json.dumps({
                     "fecha_operacion": fecha_str,
                     "completed": True

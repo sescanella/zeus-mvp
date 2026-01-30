@@ -359,19 +359,21 @@ class MetadataRepository:
             SheetsConnectionError: If logging fails
         """
         import uuid
-        from datetime import datetime, date as date_class
 
         # Generate event UUID
         event_id = str(uuid.uuid4())
 
-        # Use today if fecha_operacion not provided
+        # Convert fecha_operacion to string format (DD-MM-YYYY)
+        # CRITICAL: MetadataEvent expects string, not date object
         if fecha_operacion is None:
-            fecha_operacion = date_class.today()
-
-        # Convert date to string format (DD-MM-YYYY) as expected by MetadataEvent model
-        if isinstance(fecha_operacion, date_class):
+            # Use Chile timezone for default date
+            from backend.utils.date_formatter import today_chile
+            fecha_operacion_str = format_date_for_sheets(today_chile())
+        elif isinstance(fecha_operacion, date):
+            # Convert date object to formatted string
             fecha_operacion_str = format_date_for_sheets(fecha_operacion)
         else:
+            # Already a string, use as-is
             fecha_operacion_str = fecha_operacion
 
         # Create MetadataEvent
