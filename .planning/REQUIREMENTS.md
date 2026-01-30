@@ -154,13 +154,86 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | - | - |
+| DATA-01 | Phase 7 | Pending |
+| DATA-02 | Phase 7 | Pending |
+| DATA-03 | Phase 7 | Pending |
+| DATA-04 | Phase 7 | Pending |
+| DATA-05 | Phase 7 | Pending |
+| REPO-01 | Phase 8 | Pending |
+| REPO-02 | Phase 8 | Pending |
+| REPO-03 | Phase 8 | Pending |
+| REPO-04 | Phase 8 | Pending |
+| REPO-05 | Phase 8 | Pending |
+| REPO-06 | Phase 8 | Pending |
+| REPO-07 | Phase 8 | Pending |
+| REPO-08 | Phase 8 | Pending |
+| REPO-09 | Phase 8 | Pending |
+| REDIS-01 | Phase 9 | Pending |
+| REDIS-02 | Phase 9 | Pending |
+| REDIS-03 | Phase 9 | Pending |
+| REDIS-04 | Phase 9 | Pending |
+| REDIS-05 | Phase 9 | Pending |
+| VER-01 | Phase 9 | Pending |
+| VER-02 | Phase 9 | Pending |
+| VER-03 | Phase 9 | Pending |
+| SVC-01 | Phase 10 | Pending |
+| SVC-02 | Phase 10 | Pending |
+| SVC-03 | Phase 10 | Pending |
+| SVC-04 | Phase 10 | Pending |
+| SVC-05 | Phase 10 | Pending |
+| SVC-06 | Phase 10 | Pending |
+| SVC-07 | Phase 10 | Pending |
+| SVC-08 | Phase 10 | Pending |
+| VAL-01 | Phase 10 | Pending |
+| VAL-02 | Phase 10 | Pending |
+| VAL-03 | Phase 10 | Pending |
+| VAL-04 | Phase 10 | Pending |
+| VAL-05 | Phase 10 | Pending |
+| VAL-06 | Phase 10 | Pending |
+| VAL-07 | Phase 10 | Pending |
+| API-01 | Phase 11 | Pending |
+| API-02 | Phase 11 | Pending |
+| API-03 | Phase 11 | Pending |
+| API-04 | Phase 11 | Pending |
+| API-05 | Phase 11 | Pending |
+| API-06 | Phase 11 | Pending |
+| METRIC-01 | Phase 11 | Pending |
+| METRIC-02 | Phase 11 | Pending |
+| METRIC-03 | Phase 11 | Pending |
+| METRIC-04 | Phase 11 | Pending |
+| METRIC-05 | Phase 11 | Pending |
+| METRIC-06 | Phase 11 | Pending |
+| METRIC-07 | Phase 11 | Pending |
+| METRIC-08 | Phase 11 | Pending |
+| METRIC-09 | Phase 11 | Pending |
+| UX-01 | Phase 12 | Pending |
+| UX-02 | Phase 12 | Pending |
+| UX-03 | Phase 12 | Pending |
+| UX-04 | Phase 12 | Pending |
+| UX-05 | Phase 12 | Pending |
+| UX-06 | Phase 12 | Pending |
+| UX-07 | Phase 12 | Pending |
+| UX-08 | Phase 12 | Pending |
+| UX-09 | Phase 12 | Pending |
+| UX-10 | Phase 12 | Pending |
+| COMPAT-01 | Phase 12 | Pending |
+| COMPAT-02 | Phase 12 | Pending |
+| COMPAT-03 | Phase 12 | Pending |
+| COMPAT-04 | Phase 12 | Pending |
+| COMPAT-05 | Phase 12 | Pending |
+| COMPAT-06 | Phase 12 | Pending |
+| COMPAT-07 | Phase 12 | Pending |
+| PERF-01 | Phase 13 | Pending |
+| PERF-02 | Phase 13 | Pending |
+| PERF-03 | Phase 13 | Pending |
+| PERF-04 | Phase 13 | Pending |
+| PERF-05 | Phase 13 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 63 total
-- Mapped to phases: 0 (roadmap not created yet)
-- Unmapped: 63 ⚠️
+- Mapped to phases: 63 (100% coverage)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-30*
-*Last updated: 2026-01-30 after initial definition*
+*Last updated: 2026-01-30 after roadmap creation*
