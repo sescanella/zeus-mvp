@@ -19,7 +19,7 @@ from typing import Optional
 from datetime import date, datetime
 from redis.exceptions import RedisError
 
-from backend.utils.date_formatter import format_date_for_sheets, today_chile
+from backend.utils.date_formatter import format_date_for_sheets, format_datetime_for_sheets, today_chile, now_chile
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -151,7 +151,9 @@ class OccupationService:
             # Step 3: Update Operaciones sheet with occupation data (with version retry)
             try:
                 # Write Ocupado_Por (column 64) and Fecha_Ocupacion (column 65)
-                fecha_ocupacion_str = format_date_for_sheets(today_chile())
+                # CRITICAL: Use format_datetime_for_sheets() for timestamp with time component
+                # Format: "DD-MM-YYYY HH:MM:SS" (e.g., "30-01-2026 14:30:00")
+                fecha_ocupacion_str = format_datetime_for_sheets(now_chile())
 
                 # Use ConflictService for version-aware update with automatic retry
                 updates_dict = {
@@ -186,7 +188,7 @@ class OccupationService:
                     updates={"ocupado_por": worker_nombre, "fecha_ocupacion": fecha_ocupacion_str}
                 )
 
-            # Step 4: Log to Metadata (audit trail, best effort)
+            # Step 4: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
                 evento_tipo = f"TOMAR_{operacion}"
                 metadata_json = json.dumps({
@@ -208,8 +210,14 @@ class OccupationService:
                 logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
 
             except Exception as e:
-                # Best effort - log but don't fail operation
-                logger.warning(f"⚠️ Metadata logging failed (non-critical): {e}")
+                # CRITICAL: Metadata logging is mandatory for audit compliance
+                # Log error with full details to aid debugging
+                logger.error(
+                    f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
+                    exc_info=True
+                )
+                # Continue operation but log prominently - metadata writes should be investigated
+                # Note: In future, consider making this a hard failure if regulatory compliance requires it
 
             # Step 4.5: Publish real-time event (best effort)
             try:
