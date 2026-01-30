@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 7 of 13 (Data Model Foundation)
-Plan: 2 of TBD in current phase
+Plan: 3 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-30 — Completed 07-02-PLAN.md (validation scripts)
+Last activity: 2026-01-30 — Completed 07-03-PLAN.md (Union model & repository)
 
 Progress: [██████░░░░░░░░] 46% (6 of 13 phases complete from v3.0, Phase 7 in progress)
 
@@ -38,11 +38,11 @@ Progress: [██████░░░░░░░░] 46% (6 of 13 phases compl
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7. Data Model Foundation | 2 | 3 min | 1.5 min |
+| 7. Data Model Foundation | 3 | 7 min | 2.3 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.5, 5.6, 5.4, 1.0, 2.0] min
-- Trend: v4.0 Phase 7 progressing (schema validation scripts)
+- Last 5 plans: [5.6, 5.4, 1.0, 2.0, 4.0] min
+- Trend: v4.0 Phase 7 progressing (Union model & repository complete)
 
 *Updated after each plan completion*
 
@@ -64,6 +64,10 @@ Recent decisions affecting v4.0 work:
 - **D9 (07-01)**: Call ColumnMapCache.invalidate() after schema changes to force cache rebuild
 - **D10 (07-02)**: Validate Uniones sheet structure before v4.0 deployment (fail-fast prevents runtime errors)
 - **D11 (07-02)**: Add N_UNION to Metadata at position 11 (append-column strategy maintains backward compatibility)
+- **D12 (07-03)**: Union model uses TAG_SPOOL as foreign key (maintains v3.0 compatibility with Redis keys and Metadata)
+- **D13 (07-03)**: UnionRepository uses ColumnMapCache exclusively for all column access (NO hardcoded indices)
+- **D14 (07-03)**: Worker format validation enforced via Pydantic field_validator (INICIALES(ID) pattern)
+- **D15 (07-03)**: Union model frozen/immutable (all changes create new versions with new UUID)
 
 ### Pending Todos
 
@@ -85,5 +89,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Completed 07-02-PLAN.md (validation scripts for Uniones and Metadata, 2 min duration)
+Stopped at: Completed 07-03-PLAN.md (Union model & UnionRepository with 15 passing unit tests, 4 min duration)
 Resume file: None
