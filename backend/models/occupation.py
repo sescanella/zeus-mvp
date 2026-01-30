@@ -76,6 +76,10 @@ class PausarRequest(BaseModel):
         min_length=1,
         examples=["MR(93)", "JP(94)"]
     )
+    operacion: ActionType = Field(
+        ...,
+        description="Operación que se está pausando (ARM/SOLD)"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -83,7 +87,8 @@ class PausarRequest(BaseModel):
                 {
                     "tag_spool": "MK-1335-CW-25238-011",
                     "worker_id": 93,
-                    "worker_nombre": "MR(93)"
+                    "worker_nombre": "MR(93)",
+                    "operacion": "ARM"
                 }
             ]
         }
