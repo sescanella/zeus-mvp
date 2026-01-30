@@ -374,7 +374,7 @@ class OccupationService:
                 # Best effort - log but don't fail operation
                 logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
-            # Step 5: Log to Metadata (best effort)
+            # Step 5: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
                 # v3.0: Use operation-agnostic PAUSAR_SPOOL event type
                 evento_tipo = EventoTipo.PAUSAR_SPOOL.value
@@ -390,13 +390,21 @@ class OccupationService:
                     worker_nombre=worker_nombre,
                     operacion=operacion,
                     accion="PAUSAR",
+                    fecha_operacion=format_date_for_sheets(today_chile()),
                     metadata_json=metadata_json
                 )
 
                 logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
 
             except Exception as e:
-                logger.warning(f"⚠️ Metadata logging failed (non-critical): {e}")
+                # CRITICAL: Metadata logging is mandatory for audit compliance
+                # Log error with full details to aid debugging
+                logger.error(
+                    f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
+                    exc_info=True
+                )
+                # Continue operation but log prominently - metadata writes should be investigated
+                # Note: In future, consider making this a hard failure if regulatory compliance requires it
 
             # Step 6: Return success
             message = f"Trabajo pausado en {tag_spool}"
@@ -544,7 +552,7 @@ class OccupationService:
                 # Best effort - log but don't fail operation
                 logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
-            # Step 5: Log to Metadata (best effort)
+            # Step 5: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
                 # v3.0: COMPLETAR uses operation-specific event types (COMPLETAR_ARM, COMPLETAR_SOLD)
                 # Build evento_tipo string and validate against enum
@@ -578,7 +586,14 @@ class OccupationService:
                 logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
 
             except Exception as e:
-                logger.warning(f"⚠️ Metadata logging failed (non-critical): {e}")
+                # CRITICAL: Metadata logging is mandatory for audit compliance
+                # Log error with full details to aid debugging
+                logger.error(
+                    f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
+                    exc_info=True
+                )
+                # Continue operation but log prominently - metadata writes should be investigated
+                # Note: In future, consider making this a hard failure if regulatory compliance requires it
 
             # Step 6: Return success
             message = f"Operación completada en {tag_spool}"

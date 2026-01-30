@@ -34,12 +34,16 @@ class ARMStateMachine(BaseOperationStateMachine):
     # Define states
     pendiente = State("pendiente", initial=True)
     en_progreso = State("en_progreso")
+    pausado = State("pausado")  # NEW: Intermediate paused state
     completado = State("completado", final=True)
 
     # Define transitions
     iniciar = pendiente.to(en_progreso)
+    pausar = en_progreso.to(pausado)  # NEW: Pause work
+    reanudar = pausado.to(en_progreso)  # NEW: Resume work
     completar = en_progreso.to(completado)
-    cancelar = en_progreso.to(pendiente)
+    cancelar = (en_progreso.to(pendiente) |  # Cancel in-progress work
+                pausado.to(pendiente))        # Cancel paused work
 
     def __init__(self, tag_spool: str, sheets_repo, metadata_repo):
         """
@@ -52,18 +56,28 @@ class ARMStateMachine(BaseOperationStateMachine):
         """
         super().__init__(tag_spool, sheets_repo, metadata_repo)
 
-    async def on_enter_en_progreso(self, worker_nombre: str = None, **kwargs):
+    async def on_enter_en_progreso(self, worker_nombre: str = None, source: 'State' = None, **kwargs):
         """
-        Callback when ARM work starts.
+        Callback when ARM work starts or resumes.
 
-        Updates Armador column with worker name.
+        Behavior:
+        - Initial start (pendiente → en_progreso): Update Armador with worker_nombre
+        - Resume (pausado → en_progreso): Do NOT update Armador (preserve original)
 
         Args:
-            worker_nombre: Worker name assigned to this spool (injected by dependency injection)
+            worker_nombre: Worker name (only used for initial start)
+            source: Source state from transition (auto-injected by statemachine)
             **kwargs: Other event arguments (ignored)
         """
         if worker_nombre and self.sheets_repo:
-            # Find row for this spool
+            # Check if resuming from pausado state
+            if source and source.id == 'pausado':
+                # Resume: Do not modify Armador (preserve original worker)
+                from backend.config import logger
+                logger.info(f"ARM resumed for {self.tag_spool}, Armador unchanged")
+                return
+
+            # Initial start: Update Armador column
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
                 column_letter="G",  # TAG_SPOOL column
@@ -71,13 +85,36 @@ class ARMStateMachine(BaseOperationStateMachine):
             )
 
             if row_num:
-                # Update Armador column
                 self.sheets_repo.update_cell_by_column_name(
                     sheet_name=config.HOJA_OPERACIONES_NOMBRE,
                     row=row_num,
                     column_name="Armador",
                     value=worker_nombre
                 )
+                from backend.config import logger
+                logger.info(f"ARM started for {self.tag_spool}, Armador set to {worker_nombre}")
+
+    async def on_enter_pausado(self, **kwargs):
+        """
+        Callback when ARM work is paused.
+
+        This callback is intentionally empty because:
+        - Armador column should remain set (worker who initiated ARM is preserved)
+        - Ocupado_Por is cleared by OccupationService.pausar() (not by state machine)
+        - Estado_Detalle is updated by StateService after this transition
+
+        Separation of concerns:
+        - State machine manages operation state (pendiente/en_progreso/pausado/completado)
+        - OccupationService manages occupation locks (Ocupado_Por, Fecha_Ocupacion)
+        - StateService coordinates both and updates Estado_Detalle
+
+        Args:
+            **kwargs: Event arguments (ignored)
+        """
+        # No Sheets update needed
+        # Armador persists to track who initiated ARM before pause
+        from backend.config import logger
+        logger.info(f"ARM paused for {self.tag_spool}, state: en_progreso → pausado")
 
     async def on_enter_completado(self, fecha_operacion: date = None, **kwargs):
         """
@@ -117,11 +154,11 @@ class ARMStateMachine(BaseOperationStateMachine):
         Clears Armador column to revert the spool to unassigned state.
 
         Args:
-            source: Source state from transition (injected by dependency injection)
+            source: Source state from transition (en_progreso or pausado)
             **kwargs: Other event arguments (ignored)
         """
-        # Only clear if coming from EN_PROGRESO (CANCELAR transition)
-        if source and source.id == 'en_progreso' and self.sheets_repo:
+        # Clear Armador if coming from EN_PROGRESO or PAUSADO (CANCELAR transition)
+        if source and source.id in ['en_progreso', 'pausado'] and self.sheets_repo:
             # Find row for this spool
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
@@ -137,3 +174,5 @@ class ARMStateMachine(BaseOperationStateMachine):
                     column_name="Armador",
                     value=""
                 )
+                from backend.config import logger
+                logger.info(f"ARM cancelled: {source.id} → pendiente, Armador cleared for {self.tag_spool}")

@@ -24,7 +24,7 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.occupation import TomarRequest, PausarRequest, CompletarRequest, OccupationResponse
 from backend.models.enums import ActionType
-from backend.exceptions import SpoolNoEncontradoError
+from backend.exceptions import SpoolNoEncontradoError, InvalidStateTransitionError
 from backend.config import config
 
 logger = logging.getLogger(__name__)
@@ -109,21 +109,96 @@ class StateService:
         await arm_machine.activate_initial_state()
         await sold_machine.activate_initial_state()
 
-        # Step 4: Trigger state transition
+        # Step 4: Trigger state transition (iniciar or reanudar based on current state)
         if operacion == ActionType.ARM:
-            # Trigger ARM iniciar transition (await for async callbacks)
-            await arm_machine.iniciar(
-                worker_nombre=request.worker_nombre,
-                fecha_operacion=date.today()
-            )
-            logger.info(f"ARM state machine transitioned to {arm_machine.get_state_id()}")
+            current_arm_state = arm_machine.get_state_id()
+
+            if current_arm_state == "pausado":
+                # Resume paused work
+                await arm_machine.reanudar(worker_nombre=request.worker_nombre)
+                logger.info(f"ARM state: pausado → en_progreso for {tag_spool} (resumed by {request.worker_nombre})")
+
+            elif current_arm_state == "pendiente":
+                # Start new work
+                await arm_machine.iniciar(
+                    worker_nombre=request.worker_nombre,
+                    fecha_operacion=date.today()
+                )
+                logger.info(f"ARM state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
+
+            elif current_arm_state == "en_progreso":
+                # Already in progress - should not happen (occupation lock prevents it)
+                logger.error(f"ARM already en_progreso for {tag_spool}, occupation lock validation failed")
+                raise InvalidStateTransitionError(
+                    f"Spool {tag_spool} is already occupied (ARM en_progreso)",
+                    tag_spool=tag_spool,
+                    current_state=current_arm_state,
+                    attempted_transition="iniciar"
+                )
+
+            elif current_arm_state == "completado":
+                # Cannot restart completed work
+                raise InvalidStateTransitionError(
+                    f"Cannot TOMAR ARM - operation already completed",
+                    tag_spool=tag_spool,
+                    current_state=current_arm_state,
+                    attempted_transition="iniciar"
+                )
+
+            else:
+                # Unknown state - should never happen
+                logger.error(f"Unknown ARM state '{current_arm_state}' for {tag_spool}")
+                raise InvalidStateTransitionError(
+                    f"Unknown ARM state '{current_arm_state}'",
+                    tag_spool=tag_spool,
+                    current_state=current_arm_state,
+                    attempted_transition="iniciar"
+                )
+
         elif operacion == ActionType.SOLD:
-            # Trigger SOLD iniciar transition (will validate ARM dependency)
-            await sold_machine.iniciar(
-                worker_nombre=request.worker_nombre,
-                fecha_operacion=date.today()
-            )
-            logger.info(f"SOLD state machine transitioned to {sold_machine.get_state_id()}")
+            current_sold_state = sold_machine.get_state_id()
+
+            if current_sold_state == "pausado":
+                # Resume paused work
+                await sold_machine.reanudar(worker_nombre=request.worker_nombre)
+                logger.info(f"SOLD state: pausado → en_progreso for {tag_spool} (resumed by {request.worker_nombre})")
+
+            elif current_sold_state == "pendiente":
+                # Start new work (will validate ARM dependency)
+                await sold_machine.iniciar(
+                    worker_nombre=request.worker_nombre,
+                    fecha_operacion=date.today()
+                )
+                logger.info(f"SOLD state: pendiente → en_progreso for {tag_spool} (started by {request.worker_nombre})")
+
+            elif current_sold_state == "en_progreso":
+                # Already in progress - should not happen (occupation lock prevents it)
+                logger.error(f"SOLD already en_progreso for {tag_spool}, occupation lock validation failed")
+                raise InvalidStateTransitionError(
+                    f"Spool {tag_spool} is already occupied (SOLD en_progreso)",
+                    tag_spool=tag_spool,
+                    current_state=current_sold_state,
+                    attempted_transition="iniciar"
+                )
+
+            elif current_sold_state == "completado":
+                # Cannot restart completed work
+                raise InvalidStateTransitionError(
+                    f"Cannot TOMAR SOLD - operation already completed",
+                    tag_spool=tag_spool,
+                    current_state=current_sold_state,
+                    attempted_transition="iniciar"
+                )
+
+            else:
+                # Unknown state - should never happen
+                logger.error(f"Unknown SOLD state '{current_sold_state}' for {tag_spool}")
+                raise InvalidStateTransitionError(
+                    f"Unknown SOLD state '{current_sold_state}'",
+                    tag_spool=tag_spool,
+                    current_state=current_sold_state,
+                    attempted_transition="iniciar"
+                )
 
         # Step 5: Update Estado_Detalle
         self._update_estado_detalle(
@@ -142,45 +217,83 @@ class StateService:
         PAUSAR operation with state machine coordination.
 
         Flow:
-        1. Delegate to OccupationService (verify lock + release)
-        2. Update Estado_Detalle to show available state
-        3. Log PAUSAR event
+        1. Fetch spool and hydrate state machines
+        2. Trigger pausar transition on state machine (en_progreso → pausado)
+        3. Delegate to OccupationService (verify lock + release occupation)
+        4. Update Estado_Detalle with pausado state
 
         Args:
-            request: PAUSAR request with tag_spool, worker_id, worker_nombre
+            request: PAUSAR request with tag_spool, worker_id, worker_nombre, operacion
 
         Returns:
             OccupationResponse with success status and message
 
         Raises:
-            NoAutorizadoError: If worker doesn't own the lock
-            LockExpiredError: If lock no longer exists
+            SpoolNoEncontradoError: If spool doesn't exist
+            InvalidStateTransitionError: If current state is not en_progreso
+            NoAutorizadoError: If worker doesn't own the lock (from OccupationService)
+            LockExpiredError: If lock no longer exists (from OccupationService)
         """
         tag_spool = request.tag_spool
+        operacion = request.operacion
 
-        logger.info(f"StateService.pausar: {tag_spool} by {request.worker_nombre}")
+        logger.info(f"StateService.pausar: {tag_spool} {operacion} by {request.worker_nombre}")
 
-        # Delegate to OccupationService
+        # Step 1: Fetch spool and hydrate BEFORE calling OccupationService
+        spool = self.sheets_repo.get_spool_by_tag(tag_spool)
+        if not spool:
+            raise SpoolNoEncontradoError(tag_spool)
+
+        arm_machine = self._hydrate_arm_machine(spool)
+        sold_machine = self._hydrate_sold_machine(spool)
+
+        # Activate initial state for async context
+        await arm_machine.activate_initial_state()
+        await sold_machine.activate_initial_state()
+
+        # Step 2: Trigger pausar transition BEFORE clearing occupation
+        # This ensures state machine is in "pausado" state when EstadoDetalleBuilder reads it
+        if operacion == ActionType.ARM:
+            current_arm_state = arm_machine.get_state_id()
+
+            # Defensive validation - state machine will also validate, but this provides clearer error
+            if current_arm_state != "en_progreso":
+                raise InvalidStateTransitionError(
+                    f"Cannot PAUSAR ARM from state '{current_arm_state}'. "
+                    f"PAUSAR is only allowed from 'en_progreso' state.",
+                    tag_spool=tag_spool,
+                    current_state=current_arm_state,
+                    attempted_transition="pausar"
+                )
+
+            await arm_machine.pausar()
+            logger.info(f"ARM state: en_progreso → pausado for {tag_spool}")
+
+        elif operacion == ActionType.SOLD:
+            current_sold_state = sold_machine.get_state_id()
+
+            if current_sold_state != "en_progreso":
+                raise InvalidStateTransitionError(
+                    f"Cannot PAUSAR SOLD from state '{current_sold_state}'. "
+                    f"PAUSAR is only allowed from 'en_progreso' state.",
+                    tag_spool=tag_spool,
+                    current_state=current_sold_state,
+                    attempted_transition="pausar"
+                )
+
+            await sold_machine.pausar()
+            logger.info(f"SOLD state: en_progreso → pausado for {tag_spool}")
+
+        # Step 3: Delegate to OccupationService (clears Ocupado_Por, releases lock)
         response = await self.occupation_service.pausar(request)
 
-        # Fetch current spool state
-        spool = self.sheets_repo.get_spool_by_tag(tag_spool)
-        if spool:
-            # Hydrate state machines to get current states
-            arm_machine = self._hydrate_arm_machine(spool)
-            sold_machine = self._hydrate_sold_machine(spool)
-
-            # Activate initial state for async context
-            await arm_machine.activate_initial_state()
-            await sold_machine.activate_initial_state()
-
-            # Update Estado_Detalle with "Disponible - ARM X, SOLD Y" format
-            self._update_estado_detalle(
-                tag_spool=tag_spool,
-                ocupado_por=None,  # Clear occupation
-                arm_state=arm_machine.get_state_id(),
-                sold_state=sold_machine.get_state_id()
-            )
+        # Step 4: Update Estado_Detalle with pausado state
+        self._update_estado_detalle(
+            tag_spool=tag_spool,
+            ocupado_por=None,  # Occupation cleared
+            arm_state=arm_machine.get_state_id(),  # Now "pausado" for ARM operation
+            sold_state=sold_machine.get_state_id()  # Now "pausado" for SOLD operation
+        )
 
         logger.info(f"✅ StateService.pausar completed for {tag_spool}")
         return response
@@ -282,8 +395,18 @@ class StateService:
 
         Hydration logic:
         - If Fecha_Armado exists → COMPLETADO state
-        - Else if Armador exists → EN_PROGRESO state
+        - Else if Armador exists AND Ocupado_Por is null → PAUSADO state
+        - Else if Armador exists AND Ocupado_Por exists → EN_PROGRESO state
         - Else → PENDIENTE state (initial)
+
+        ⚠️ TECHNICAL DEBT: This creates coupling between occupation state
+        (Ocupado_Por column managed by OccupationService) and state machine state
+        (managed by StateService). Ideally, state machine state should be
+        determinable from state-specific columns only.
+
+        Future Refactoring (v4.0): Add Estado_ARM column (enum: PENDIENTE/EN_PROGRESO/
+        PAUSADO/COMPLETADO) that is updated by state machine callbacks. This would
+        eliminate the coupling and make hydration deterministic.
 
         Args:
             spool: Spool model with current state
@@ -303,9 +426,15 @@ class StateService:
             machine.current_state = machine.completado
             logger.debug(f"ARM hydrated to COMPLETADO for {spool.tag_spool}")
         elif spool.armador:
-            # ARM is in progress
-            machine.current_state = machine.en_progreso
-            logger.debug(f"ARM hydrated to EN_PROGRESO for {spool.tag_spool}")
+            # ARM initiated - check if paused or in progress
+            if spool.ocupado_por is None or spool.ocupado_por == "":
+                # Paused: Worker assigned but no current occupation
+                machine.current_state = machine.pausado
+                logger.debug(f"ARM hydrated to PAUSADO for {spool.tag_spool}")
+            else:
+                # In progress: Worker assigned and occupied
+                machine.current_state = machine.en_progreso
+                logger.debug(f"ARM hydrated to EN_PROGRESO for {spool.tag_spool}")
         else:
             # ARM is pending (initial state)
             logger.debug(f"ARM hydrated to PENDIENTE for {spool.tag_spool}")
@@ -318,8 +447,12 @@ class StateService:
 
         Hydration logic (same pattern as ARM):
         - If Fecha_Soldadura exists → COMPLETADO state
-        - Else if Soldador exists → EN_PROGRESO state
+        - Else if Soldador exists AND Ocupado_Por is null → PAUSADO state
+        - Else if Soldador exists AND Ocupado_Por exists → EN_PROGRESO state
         - Else → PENDIENTE state (initial)
+
+        ⚠️ TECHNICAL DEBT: Same coupling issue as ARM hydration. See _hydrate_arm_machine()
+        docstring for details and future refactoring plan.
 
         Args:
             spool: Spool model with current state
@@ -339,9 +472,15 @@ class StateService:
             machine.current_state = machine.completado
             logger.debug(f"SOLD hydrated to COMPLETADO for {spool.tag_spool}")
         elif spool.soldador:
-            # SOLD is in progress
-            machine.current_state = machine.en_progreso
-            logger.debug(f"SOLD hydrated to EN_PROGRESO for {spool.tag_spool}")
+            # SOLD initiated - check if paused or in progress
+            if spool.ocupado_por is None or spool.ocupado_por == "":
+                # Paused: Worker assigned but no current occupation
+                machine.current_state = machine.pausado
+                logger.debug(f"SOLD hydrated to PAUSADO for {spool.tag_spool}")
+            else:
+                # In progress: Worker assigned and occupied
+                machine.current_state = machine.en_progreso
+                logger.debug(f"SOLD hydrated to EN_PROGRESO for {spool.tag_spool}")
         else:
             # SOLD is pending (initial state)
             logger.debug(f"SOLD hydrated to PENDIENTE for {spool.tag_spool}")

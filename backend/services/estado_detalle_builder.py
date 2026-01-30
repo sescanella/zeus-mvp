@@ -79,7 +79,7 @@ class EstadoDetalleBuilder:
         Convert state ID to Spanish display term.
 
         Args:
-            state: State ID (pendiente/en_progreso/completado)
+            state: State ID (pendiente/en_progreso/pausado/completado)
 
         Returns:
             Spanish display term
@@ -87,6 +87,7 @@ class EstadoDetalleBuilder:
         mapping = {
             "pendiente": "pendiente",
             "en_progreso": "en progreso",
+            "pausado": "pausado",  # NEW: Paused state (v3.0 PAUSAR fix)
             "completado": "completado"
         }
         return mapping.get(state, state)

@@ -79,18 +79,28 @@ def mock_conflict_service():
 
 
 @pytest.fixture
+def mock_redis_event_service():
+    """Mock RedisEventService for real-time event publishing."""
+    service = AsyncMock()
+    service.publish_spool_update = AsyncMock()
+    return service
+
+
+@pytest.fixture
 def occupation_service(
     mock_redis_lock_service,
     mock_sheets_repository,
     mock_metadata_repository,
-    mock_conflict_service
+    mock_conflict_service,
+    mock_redis_event_service
 ):
     """Create OccupationService with mocked dependencies."""
     return OccupationService(
         redis_lock_service=mock_redis_lock_service,
         sheets_repository=mock_sheets_repository,
         metadata_repository=mock_metadata_repository,
-        conflict_service=mock_conflict_service
+        conflict_service=mock_conflict_service,
+        redis_event_service=mock_redis_event_service
     )
 
 
@@ -423,3 +433,197 @@ async def test_lock_expired_during_operation(
     # Should raise lock expired error
     with pytest.raises((LockExpiredError, NoAutorizadoError)):
         await occupation_service.completar(request)
+
+
+@pytest.mark.asyncio
+async def test_pausar_logs_metadata_event_with_correct_fields(
+    occupation_service,
+    mock_redis_lock_service,
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_conflict_service,
+    mock_redis_event_service
+):
+    """
+    PAUSAR must log PAUSAR_SPOOL event to Metadata with correct fields.
+
+    Validates:
+    - metadata_repository.log_event called
+    - evento_tipo = "PAUSAR_SPOOL"
+    - operacion = "ARM"
+    - accion = "PAUSAR"
+    - fecha_operacion is provided with correct format (DD-MM-YYYY)
+    - metadata_json contains estado and lock_released
+    """
+    import re
+    import json
+
+    # Mock lock owned by requesting worker
+    mock_redis_lock_service.get_lock_owner.return_value = (93, "93:test-token")
+
+    request = PausarRequest(
+        tag_spool="TEST-02",
+        worker_id=93,
+        worker_nombre="MR(93)"
+    )
+
+    # Execute PAUSAR
+    response = await occupation_service.pausar(request)
+
+    # Assertions
+    assert response.success is True
+
+    # Verify metadata logged
+    mock_metadata_repository.log_event.assert_called_once()
+
+    # Inspect call arguments
+    call_kwargs = mock_metadata_repository.log_event.call_args.kwargs
+    assert call_kwargs["evento_tipo"] == "PAUSAR_SPOOL"
+    assert call_kwargs["tag_spool"] == "TEST-02"
+    assert call_kwargs["worker_id"] == 93
+    assert call_kwargs["worker_nombre"] == "MR(93)"
+    assert call_kwargs["operacion"] == "ARM"
+    assert call_kwargs["accion"] == "PAUSAR"
+
+    # Verify fecha_operacion provided and has correct format
+    assert call_kwargs["fecha_operacion"] is not None
+    assert re.match(r'\d{2}-\d{2}-\d{4}', call_kwargs["fecha_operacion"]), \
+        f"fecha_operacion must be DD-MM-YYYY format, got: {call_kwargs['fecha_operacion']}"
+
+    # Verify metadata_json structure
+    metadata_dict = json.loads(call_kwargs["metadata_json"])
+    assert "estado" in metadata_dict
+    assert "lock_released" in metadata_dict
+    assert metadata_dict["lock_released"] is True
+
+
+@pytest.mark.asyncio
+async def test_pausar_metadata_failure_logs_critical_error_with_traceback(
+    occupation_service,
+    mock_redis_lock_service,
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_conflict_service,
+    mock_redis_event_service,
+    caplog
+):
+    """
+    If metadata logging fails, PAUSAR should log CRITICAL error with full traceback.
+
+    Validates:
+    - Operation completes successfully (user not impacted)
+    - logger.error called (not logger.warning)
+    - Error message contains "CRITICAL"
+    - exc_info=True ensures traceback in logs
+    """
+    import logging
+
+    # Mock lock owned by requesting worker
+    mock_redis_lock_service.get_lock_owner.return_value = (93, "93:test-token")
+
+    # Mock metadata logging failure
+    mock_metadata_repository.log_event.side_effect = Exception("Sheets API timeout")
+
+    request = PausarRequest(
+        tag_spool="TEST-03",
+        worker_id=93,
+        worker_nombre="MR(93)"
+    )
+
+    # Capture logs
+    with caplog.at_level(logging.ERROR):
+        # Execute PAUSAR - should succeed despite metadata failure
+        response = await occupation_service.pausar(request)
+
+    # Assertions
+    assert response.success is True  # Operation succeeds
+
+    # Verify error logged
+    assert any("CRITICAL" in record.message for record in caplog.records), \
+        "Expected CRITICAL in error message"
+    assert any("Metadata logging failed" in record.message for record in caplog.records), \
+        "Expected 'Metadata logging failed' in error message"
+    assert any("TEST-03" in record.message for record in caplog.records), \
+        "Expected tag_spool in error message"
+
+    # Verify traceback included (exc_info=True)
+    assert any(record.exc_info is not None for record in caplog.records), \
+        "Expected exc_info=True to capture traceback"
+
+
+@pytest.mark.asyncio
+async def test_completar_logs_metadata_event_with_correct_fields(
+    occupation_service,
+    mock_redis_lock_service,
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_conflict_service,
+    mock_redis_event_service
+):
+    """
+    COMPLETAR must log metadata event with correct fields (verify fix applied).
+
+    This test ensures COMPLETAR has same error handling as PAUSAR.
+    """
+    # Mock lock owned by requesting worker
+    mock_redis_lock_service.get_lock_owner.return_value = (93, "93:test-token")
+
+    request = CompletarRequest(
+        tag_spool="TEST-04",
+        worker_id=93,
+        worker_nombre="MR(93)",
+        fecha_operacion=date(2026, 1, 30)
+    )
+
+    # Execute COMPLETAR
+    response = await occupation_service.completar(request)
+
+    # Assertions
+    assert response.success is True
+
+    # Verify metadata logged
+    mock_metadata_repository.log_event.assert_called_once()
+
+    # Verify fields
+    call_kwargs = mock_metadata_repository.log_event.call_args.kwargs
+    assert call_kwargs["evento_tipo"] in ["COMPLETAR_ARM", "COMPLETAR_SOLD"]
+    assert call_kwargs["accion"] == "COMPLETAR"
+    assert call_kwargs["fecha_operacion"] is not None
+
+
+@pytest.mark.asyncio
+async def test_completar_metadata_failure_logs_critical_error(
+    occupation_service,
+    mock_redis_lock_service,
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_conflict_service,
+    mock_redis_event_service,
+    caplog
+):
+    """
+    If metadata logging fails, COMPLETAR should log CRITICAL error (same as PAUSAR).
+    """
+    import logging
+
+    # Mock lock owned by requesting worker
+    mock_redis_lock_service.get_lock_owner.return_value = (93, "93:test-token")
+
+    # Mock metadata logging failure
+    mock_metadata_repository.log_event.side_effect = Exception("Sheets API error")
+
+    request = CompletarRequest(
+        tag_spool="TEST-05",
+        worker_id=93,
+        worker_nombre="MR(93)",
+        fecha_operacion=date(2026, 1, 30)
+    )
+
+    # Capture logs
+    with caplog.at_level(logging.ERROR):
+        response = await occupation_service.completar(request)
+
+    # Assertions
+    assert response.success is True
+    assert any("CRITICAL" in record.message for record in caplog.records)
+    assert any(record.exc_info is not None for record in caplog.records)

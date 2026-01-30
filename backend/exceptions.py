@@ -362,3 +362,32 @@ class OperacionNoDisponibleError(ZEUSException):
                 "operacion": operacion
             }
         )
+
+
+class InvalidStateTransitionError(ZEUSException):
+    """
+    Raised when attempting an invalid state machine transition (v3.0 PAUSAR fix).
+
+    Examples:
+    - PAUSAR from pendiente state (nothing to pause)
+    - REANUDAR from en_progreso state (already in progress)
+    - COMPLETAR from pausado state (need to resume first)
+    - TOMAR ARM when already completado (cannot restart)
+    """
+
+    def __init__(
+        self,
+        message: str,
+        tag_spool: Optional[str] = None,
+        current_state: Optional[str] = None,
+        attempted_transition: Optional[str] = None
+    ):
+        super().__init__(
+            message=message,
+            error_code="INVALID_STATE_TRANSITION",
+            data={
+                "tag_spool": tag_spool,
+                "current_state": current_state,
+                "attempted_transition": attempted_transition
+            }
+        )
