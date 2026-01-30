@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 7 of 13 (Data Model Foundation)
-Plan: 3 of TBD in current phase
+Plan: 4 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-30 — Completed 07-03-PLAN.md (Union model & repository)
+Last activity: 2026-01-30 — Completed 07-04-PLAN.md (Startup schema validation)
 
 Progress: [██████░░░░░░░░] 46% (6 of 13 phases complete from v3.0, Phase 7 in progress)
 
@@ -38,11 +38,11 @@ Progress: [██████░░░░░░░░] 46% (6 of 13 phases compl
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7. Data Model Foundation | 3 | 7 min | 2.3 min |
+| 7. Data Model Foundation | 4 | 10 min | 2.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.6, 5.4, 1.0, 2.0, 4.0] min
-- Trend: v4.0 Phase 7 progressing (Union model & repository complete)
+- Last 5 plans: [5.4, 1.0, 2.0, 4.0, 3.0] min
+- Trend: v4.0 Phase 7 progressing rapidly (startup validation complete)
 
 *Updated after each plan completion*
 
@@ -68,6 +68,10 @@ Recent decisions affecting v4.0 work:
 - **D13 (07-03)**: UnionRepository uses ColumnMapCache exclusively for all column access (NO hardcoded indices)
 - **D14 (07-03)**: Worker format validation enforced via Pydantic field_validator (INICIALES(ID) pattern)
 - **D15 (07-03)**: Union model frozen/immutable (all changes create new versions with new UUID)
+- **D16 (07-04)**: Validate critical v3.0 columns + all v4.0 additions (not full 72-column Operaciones schema)
+- **D17 (07-04)**: Dual-mode validation script (standalone execution + importable from main.py)
+- **D18 (07-04)**: Structured validation results with per-sheet details (actionable error reporting)
+- **D19 (07-04)**: Extra columns allowed, only missing columns cause failure (resilient to schema drift)
 
 ### Pending Todos
 
@@ -76,9 +80,10 @@ None yet.
 ### Blockers/Concerns
 
 **v4.0 Pre-Deployment:**
-- Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy (currently 13/18 columns present)
+- Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy
 - v3.0 7-day rollback window expires 2026-02-02 (v2.1 backup will be archived)
-- Schema migration scripts (07-01, 07-02) verified in dry-run only - execute during startup validation (07-04)
+- Schema migration scripts (07-01, 07-02) must execute before v4.0 code deploys
+- **NEW**: Startup validation script ready (07-04) - add to main.py startup hook before deployment
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -89,5 +94,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Completed 07-03-PLAN.md (Union model & UnionRepository with 15 passing unit tests, 4 min duration)
+Stopped at: Completed 07-04-PLAN.md (Startup schema validation with 8 passing integration tests, 3 min duration)
 Resume file: None
