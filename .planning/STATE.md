@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 7 of 13 (Data Model Foundation)
-Plan: 1 of TBD in current phase
+Plan: 2 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-30 — Completed 07-01-PLAN.md (schema extension)
+Last activity: 2026-01-30 — Completed 07-02-PLAN.md (validation scripts)
 
 Progress: [██████░░░░░░░░] 46% (6 of 13 phases complete from v3.0, Phase 7 in progress)
 
@@ -38,11 +38,11 @@ Progress: [██████░░░░░░░░] 46% (6 of 13 phases compl
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7. Data Model Foundation | 1 | 1 min | 1.0 min |
+| 7. Data Model Foundation | 2 | 3 min | 1.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.3, 5.5, 5.6, 5.4, 1.0] min
-- Trend: v4.0 Phase 7 starting (schema-only work is fast)
+- Last 5 plans: [5.5, 5.6, 5.4, 1.0, 2.0] min
+- Trend: v4.0 Phase 7 progressing (schema validation scripts)
 
 *Updated after each plan completion*
 
@@ -62,6 +62,8 @@ Recent decisions affecting v4.0 work:
 - **D7 (v4.0)**: Trigger automatic metrología when SOLD 100% complete
 - **D8 (07-01)**: Use batch_update() for schema migrations (single API call for all columns + defaults)
 - **D9 (07-01)**: Call ColumnMapCache.invalidate() after schema changes to force cache rebuild
+- **D10 (07-02)**: Validate Uniones sheet structure before v4.0 deployment (fail-fast prevents runtime errors)
+- **D11 (07-02)**: Add N_UNION to Metadata at position 11 (append-column strategy maintains backward compatibility)
 
 ### Pending Todos
 
@@ -70,9 +72,9 @@ None yet.
 ### Blockers/Concerns
 
 **v4.0 Pre-Deployment:**
-- Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy
+- Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy (currently 13/18 columns present)
 - v3.0 7-day rollback window expires 2026-02-02 (v2.1 backup will be archived)
-- Schema migration script (07-01) verified in dry-run only - must execute against production sheet before Phase 07-02
+- Schema migration scripts (07-01, 07-02) verified in dry-run only - execute during startup validation (07-04)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -83,5 +85,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Completed 07-01-PLAN.md (schema extension with 5 new columns, 1 min duration)
+Stopped at: Completed 07-02-PLAN.md (validation scripts for Uniones and Metadata, 2 min duration)
 Resume file: None
