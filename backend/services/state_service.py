@@ -103,12 +103,8 @@ class StateService:
                 raise SpoolNoEncontradoError(tag_spool)
 
             # Step 3: Hydrate state machines
-            arm_machine = self._hydrate_arm_machine(spool)
-            sold_machine = self._hydrate_sold_machine(spool)
-
-            # Activate initial state for async context (required by python-statemachine 2.5.0)
-            await arm_machine.activate_initial_state()
-            await sold_machine.activate_initial_state()
+            arm_machine = await self._hydrate_arm_machine(spool)
+            sold_machine = await self._hydrate_sold_machine(spool)
 
             # Step 4: Trigger state transition (iniciar or reanudar based on current state)
             if operacion == ActionType.ARM:
@@ -288,12 +284,8 @@ class StateService:
         if not spool:
             raise SpoolNoEncontradoError(tag_spool)
 
-        arm_machine = self._hydrate_arm_machine(spool)
-        sold_machine = self._hydrate_sold_machine(spool)
-
-        # Activate initial state for async context
-        await arm_machine.activate_initial_state()
-        await sold_machine.activate_initial_state()
+        arm_machine = await self._hydrate_arm_machine(spool)
+        sold_machine = await self._hydrate_sold_machine(spool)
 
         # Step 2: Trigger pausar transition BEFORE clearing occupation
         # This ensures state machine is in "pausado" state when EstadoDetalleBuilder reads it
@@ -376,12 +368,8 @@ class StateService:
             raise SpoolNoEncontradoError(tag_spool)
 
         # Hydrate state machines
-        arm_machine = self._hydrate_arm_machine(spool)
-        sold_machine = self._hydrate_sold_machine(spool)
-
-        # Activate initial state for async context
-        await arm_machine.activate_initial_state()
-        await sold_machine.activate_initial_state()
+        arm_machine = await self._hydrate_arm_machine(spool)
+        sold_machine = await self._hydrate_sold_machine(spool)
 
         # Trigger completar transition based on operation (await for async callbacks)
         if operacion == ActionType.ARM:
@@ -433,7 +421,7 @@ class StateService:
         logger.info(f"✅ StateService.completar completed for {tag_spool}")
         return response
 
-    def _hydrate_arm_machine(self, spool) -> ARMStateMachine:
+    async def _hydrate_arm_machine(self, spool) -> ARMStateMachine:
         """
         Create ARM state machine and set it to match Sheets state.
 
@@ -463,6 +451,10 @@ class StateService:
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo
         )
+
+        # CRITICAL: Activate initial state FIRST (required by python-statemachine 2.5.0)
+        # Then manually override current_state to hydrate from Sheets
+        await machine.activate_initial_state()
 
         # Hydrate to match Sheets reality
         if spool.fecha_armado:
@@ -501,7 +493,7 @@ class StateService:
 
         return machine
 
-    def _hydrate_sold_machine(self, spool) -> SOLDStateMachine:
+    async def _hydrate_sold_machine(self, spool) -> SOLDStateMachine:
         """
         Create SOLD state machine and set it to match Sheets state.
 
@@ -525,6 +517,10 @@ class StateService:
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo
         )
+
+        # CRITICAL: Activate initial state FIRST (required by python-statemachine 2.5.0)
+        # Then manually override current_state to hydrate from Sheets
+        await machine.activate_initial_state()
 
         # Hydrate to match Sheets reality
         if spool.fecha_soldadura:
