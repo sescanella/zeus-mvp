@@ -6,7 +6,7 @@ ZEUES v3.0 transforms the manufacturing traceability system from progress tracki
 
 ## Core Value
 
-**Real-time visibility of spool occupation** - See EN VIVO who is physically working on which spool, identify available vs occupied spools instantly, and enable flexible collaborative workflows where work can pause mid-stream and be continued by any qualified worker.
+**Track work at the union level with the correct business metric (pulgadas-diámetro)** - Enable workers to complete work by individual welds (unions), measure performance in pulgadas-diámetro (the actual billing metric), and support partial completion workflows where work can pause mid-union-set and be continued by any qualified worker.
 
 ## Requirements
 
@@ -61,7 +61,47 @@ ZEUES v3.0 transforms the manufacturing traceability system from progress tracki
 
 ### Active
 
-None currently — v3.0 milestone complete. Next milestone requirements to be defined.
+**v4.0 Uniones System - Union-Level Tracking:**
+
+**Foundation (Data Model & Architecture):**
+- [ ] **UNION-01**: System reads pre-populated Uniones sheet (18 columns: ID, TAG_SPOOL, N_UNION, DN_UNION, TIPO_UNION, ARM_*, SOL_*, NDT_*, version, audit fields)
+- [ ] **UNION-02**: System uses TAG_SPOOL as primary key (no breaking changes to Redis, Metadata, queries)
+- [ ] **UNION-03**: Hoja Operaciones adds 5 new columns (68-72): Total_Uniones, Uniones_ARM_Completadas, Uniones_SOLD_Completadas, Pulgadas_ARM, Pulgadas_SOLD
+- [ ] **UNION-04**: Hoja Metadata adds N_UNION column (position 11 at end, nullable) for granular audit trail
+- [ ] **UNION-05**: System deprecates Armador/Soldador/Fecha_Armado/Fecha_Soldadura columns (stop writing, calculate on-demand from Uniones)
+
+**Workflows (INICIAR/FINALIZAR UX):**
+- [ ] **WORK-01**: Worker can INICIAR spool (occupies spool with Redis lock, writes Ocupado_Por + Fecha_Ocupacion, does NOT touch Uniones sheet)
+- [ ] **WORK-02**: Worker can FINALIZAR with union selection (checkboxes for available unions, calculates pulgadas-diámetro, auto-determines PAUSAR vs COMPLETAR)
+- [ ] **WORK-03**: System auto-determines PAUSAR (partial: 7/10 unions) vs COMPLETAR (full: 10/10 unions) based on selection count
+- [ ] **WORK-04**: System supports partial completion workflows (worker A completes 7/10 ARM, worker B continues with remaining 3)
+- [ ] **WORK-05**: System enforces ARM→SOLD validation (SOLD requires >= 1 union armada, backend filters only soldable unions)
+- [ ] **WORK-06**: System supports 0 unions selected in FINALIZAR (modal confirmation "¿Liberar sin registrar?", logs SPOOL_CANCELADO event)
+
+**Performance & Batch Operations:**
+- [ ] **PERF-01**: System uses batch API writes (1 call vs N loops) for union updates via gspread.batch_update() with A1 notation
+- [ ] **PERF-02**: System achieves < 1s latency (p95) for 10-union selection operation
+- [ ] **PERF-03**: System uses batch Metadata logging with auto-chunking (900 rows/chunk) for granular union events
+- [ ] **PERF-04**: System logs 1 batch event (spool level) + N granular events (union level) per FINALIZAR operation
+
+**Metrics & Audit:**
+- [ ] **METRIC-01**: System displays pulgadas-diámetro as primary metric (not spools) in dashboards and reports
+- [ ] **METRIC-02**: System calculates worker performance in pulgadas-diámetro/day (SUM(DN_UNION) where ARM_FECHA_FIN != NULL)
+- [ ] **METRIC-03**: System provides union-level metrics endpoint (total_uniones, arm_completadas, pulgadas_arm, pulgadas_sold)
+- [ ] **METRIC-04**: Metadata logs granular UNION_ARM_REGISTRADA and UNION_SOLD_REGISTRADA events with N_UNION, DN_UNION, duracion_min
+
+**v3.0/v4.0 Coexistence:**
+- [ ] **COMPAT-01**: Frontend detects spool version by union count (count > 0 = v4.0, count = 0 = v3.0)
+- [ ] **COMPAT-02**: v3.0 spools continue using TOMAR/PAUSAR/COMPLETAR workflow (3-button UX)
+- [ ] **COMPAT-03**: v4.0 spools use INICIAR/FINALIZAR workflow (2-button UX with auto-determination)
+- [ ] **COMPAT-04**: Backend maintains dual endpoints (/tomar, /pausar, /completar for v3.0 + /iniciar, /finalizar for v4.0)
+- [ ] **COMPAT-05**: Metrología and Reparación workflows remain at spool level (defer union-level granularity to v4.1)
+
+**Redis & State Management:**
+- [ ] **STATE-01**: Redis locks have NO TTL (permanent until FINALIZAR) to support 5-8 hour work sessions
+- [ ] **STATE-02**: System implements lazy cleanup (executed on INICIAR, removes locks > 24h with no Sheets match)
+- [ ] **STATE-03**: System reconciles Redis locks from Sheets.Ocupado_Por on startup (auto-recovery)
+- [ ] **STATE-04**: System triggers automatic transition to metrología queue when SOLD 100% complete (Estado_Detalle = "En Cola Metrología")
 
 ### Out of Scope
 
@@ -127,4 +167,4 @@ None currently — v3.0 milestone complete. Next milestone requirements to be de
 | **No role restriction for reparación** | Consistent with ARM/SOLD pattern where any worker with role can perform operation. All workers can repair, no special "Reparador" role needed. | ✓ Good — Phase 6 implemented OPERATION_TO_ROLES['REPARACION'] = [], test_any_worker_can_tomar_reparacion validates pattern |
 
 ---
-*Last updated: 2026-01-28 after v3.0 milestone completion*
+*Last updated: 2026-01-30 after v4.0 milestone initialization*

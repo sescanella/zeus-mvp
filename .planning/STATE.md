@@ -4,20 +4,16 @@
 
 See: .planning/PROJECT.md (updated 2026-01-28)
 
-**Core value:** Real-time visibility of spool occupation - See EN VIVO who is working on which spool
-**Current focus:** v3.0 milestone complete — Planning next milestone
+**Core value:** Track work at the union level with correct business metric (pulgadas-diámetro)
+**Current focus:** v4.0 Uniones System — Union-level tracking and partial completion workflows
 
 ## Current Position
 
-Phase: v3.0 MILESTONE COMPLETE 🎉
-Status: All 6 phases shipped (31 plans, 161 minutes)
-Last activity: 2026-01-28 — v3.0 milestone completed and archived
+Phase: Not started (defining requirements)
+Status: v4.0 Uniones System milestone initialized
+Last activity: 2026-01-30 — Milestone v4.0 started, extracting requirements from spec
 
-Progress: [██████████████████████████████████] 100% v3.0 SHIPPED
-
-**Next Steps:**
-- `/gsd:new-milestone` — Start next milestone (questioning → research → requirements → roadmap)
-- Consider running `/clear` first for fresh context window
+Progress: [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0% (requirements phase)
 
 ## v3.0 Milestone Summary
 
