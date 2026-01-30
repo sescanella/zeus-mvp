@@ -479,6 +479,22 @@ class StateService:
                 # In progress: Worker assigned and occupied
                 machine.current_state = machine.en_progreso
                 logger.debug(f"ARM hydrated to EN_PROGRESO for {spool.tag_spool}")
+        elif spool.ocupado_por and spool.ocupado_por != "":
+            # EDGE CASE: Ocupado_Por is set but Armador is not
+            # This indicates a partially-failed TOMAR operation where:
+            # 1. OccupationService.tomar() wrote Ocupado_Por successfully
+            # 2. State machine callback failed to write Armador (exception/crash/timeout)
+            # 3. Rollback failed or was incomplete, leaving spool in inconsistent state
+            #
+            # Hydrate to EN_PROGRESO to allow PAUSAR to recover from this state.
+            # PAUSAR will clear Ocupado_Por and release the lock, returning spool to clean PENDIENTE.
+            machine.current_state = machine.en_progreso
+            logger.warning(
+                f"⚠️ INCONSISTENT STATE DETECTED: {spool.tag_spool} has "
+                f"Ocupado_Por='{spool.ocupado_por}' but Armador=None. "
+                f"Hydrating to EN_PROGRESO to allow recovery via PAUSAR. "
+                f"This indicates a previous TOMAR operation failed mid-execution."
+            )
         else:
             # ARM is pending (initial state)
             logger.debug(f"ARM hydrated to PENDIENTE for {spool.tag_spool}")
@@ -525,6 +541,22 @@ class StateService:
                 # In progress: Worker assigned and occupied
                 machine.current_state = machine.en_progreso
                 logger.debug(f"SOLD hydrated to EN_PROGRESO for {spool.tag_spool}")
+        elif spool.ocupado_por and spool.ocupado_por != "":
+            # EDGE CASE: Ocupado_Por is set but Soldador is not
+            # This indicates a partially-failed TOMAR operation where:
+            # 1. OccupationService.tomar() wrote Ocupado_Por successfully
+            # 2. State machine callback failed to write Soldador (exception/crash/timeout)
+            # 3. Rollback failed or was incomplete, leaving spool in inconsistent state
+            #
+            # Hydrate to EN_PROGRESO to allow PAUSAR to recover from this state.
+            # PAUSAR will clear Ocupado_Por and release the lock, returning spool to clean PENDIENTE.
+            machine.current_state = machine.en_progreso
+            logger.warning(
+                f"⚠️ INCONSISTENT STATE DETECTED: {spool.tag_spool} has "
+                f"Ocupado_Por='{spool.ocupado_por}' but Soldador=None. "
+                f"Hydrating to EN_PROGRESO to allow recovery via PAUSAR. "
+                f"This indicates a previous TOMAR operation failed mid-execution."
+            )
         else:
             # SOLD is pending (initial state)
             logger.debug(f"SOLD hydrated to PENDIENTE for {spool.tag_spool}")
