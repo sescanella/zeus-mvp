@@ -14,6 +14,9 @@ from statemachine import State
 from backend.services.state_machines.base_state_machine import BaseOperationStateMachine
 from backend.config import config
 from datetime import date
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ARMStateMachine(BaseOperationStateMachine):
@@ -73,7 +76,6 @@ class ARMStateMachine(BaseOperationStateMachine):
             # Check if resuming from pausado state
             if source and source.id == 'pausado':
                 # Resume: Do not modify Armador (preserve original worker)
-                from backend.config import logger
                 logger.info(f"ARM resumed for {self.tag_spool}, Armador unchanged")
                 return
 
@@ -91,7 +93,6 @@ class ARMStateMachine(BaseOperationStateMachine):
                     column_name="Armador",
                     value=worker_nombre
                 )
-                from backend.config import logger
                 logger.info(f"ARM started for {self.tag_spool}, Armador set to {worker_nombre}")
 
     async def on_enter_pausado(self, **kwargs):
@@ -113,7 +114,6 @@ class ARMStateMachine(BaseOperationStateMachine):
         """
         # No Sheets update needed
         # Armador persists to track who initiated ARM before pause
-        from backend.config import logger
         logger.info(f"ARM paused for {self.tag_spool}, state: en_progreso → pausado")
 
     async def on_enter_completado(self, fecha_operacion: date = None, **kwargs):
@@ -174,5 +174,4 @@ class ARMStateMachine(BaseOperationStateMachine):
                     column_name="Armador",
                     value=""
                 )
-                from backend.config import logger
                 logger.info(f"ARM cancelled: {source.id} → pendiente, Armador cleared for {self.tag_spool}")

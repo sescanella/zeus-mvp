@@ -14,6 +14,9 @@ from backend.services.state_machines.base_state_machine import BaseOperationStat
 from backend.exceptions import DependenciasNoSatisfechasError
 from backend.config import config
 from datetime import date
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SOLDStateMachine(BaseOperationStateMachine):
@@ -121,7 +124,7 @@ class SOLDStateMachine(BaseOperationStateMachine):
             # Check if resuming from pausado state
             if source and source.id == 'pausado':
                 # Resume: Do not modify Soldador (preserve original worker)
-                from backend.config import logger
+
                 logger.info(f"SOLD resumed for {self.tag_spool}, Soldador unchanged")
                 return
 
@@ -139,7 +142,7 @@ class SOLDStateMachine(BaseOperationStateMachine):
                     column_name="Soldador",
                     value=worker_nombre
                 )
-                from backend.config import logger
+
                 logger.info(f"SOLD started for {self.tag_spool}, Soldador set to {worker_nombre}")
 
     async def on_enter_pausado(self, **kwargs):
@@ -161,7 +164,6 @@ class SOLDStateMachine(BaseOperationStateMachine):
         """
         # No Sheets update needed
         # Soldador persists to track who initiated SOLD before pause
-        from backend.config import logger
         logger.info(f"SOLD paused for {self.tag_spool}, state: en_progreso → pausado")
 
     async def on_enter_completado(self, fecha_operacion: date = None, **kwargs):
@@ -222,5 +224,5 @@ class SOLDStateMachine(BaseOperationStateMachine):
                     column_name="Soldador",
                     value=""
                 )
-                from backend.config import logger
+
                 logger.info(f"SOLD cancelled: {source.id} → pendiente, Soldador cleared for {self.tag_spool}")
