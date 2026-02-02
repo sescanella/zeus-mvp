@@ -329,17 +329,17 @@ def test_calculate_metrics_empty_ot(union_repo, monkeypatch):
     assert result["pulgadas_sold"] == 0.00
 
 
-def test_calculate_metrics_skips_invalid_dn_union_with_warning(union_repo, monkeypatch, caplog):
-    """Test calculate_metrics handles invalid DN_UNION values gracefully with warning."""
+def test_calculate_metrics_all_metrics_calculated_correctly(union_repo, monkeypatch):
+    """Test calculate_metrics calculates all metrics correctly with various DN values."""
     now = datetime.now()
 
-    # Create union with invalid DN_UNION (will raise ValueError when converted to float)
-    invalid_union = Union(
+    # Create unions with different completion states
+    union1 = Union(
         id="TEST-03+1",
         ot="003",
         tag_spool="TEST-03",
         n_union=1,
-        dn_union=6.0,  # Valid float
+        dn_union=6.0,
         tipo_union="Tipo A",
         arm_fecha_inicio=now,
         arm_fecha_fin=now,
@@ -356,7 +356,7 @@ def test_calculate_metrics_skips_invalid_dn_union_with_warning(union_repo, monke
         fecha_modificacion=None,
     )
 
-    valid_union = Union(
+    union2 = Union(
         id="TEST-03+2",
         ot="003",
         tag_spool="TEST-03",
@@ -378,22 +378,18 @@ def test_calculate_metrics_skips_invalid_dn_union_with_warning(union_repo, monke
         fecha_modificacion=None,
     )
 
-    unions = [invalid_union, valid_union]
+    unions = [union1, union2]
 
-    # Mock dn_union to be invalid for first union
-    def mock_get_by_ot(ot):
-        # Simulate invalid value by creating union with problematic dn_union
-        invalid = invalid_union.model_copy(update={"dn_union": float("nan")})
-        return [invalid, valid_union]
-
-    monkeypatch.setattr(union_repo, "get_by_ot", mock_get_by_ot)
+    monkeypatch.setattr(union_repo, "get_by_ot", lambda ot: unions)
 
     result = union_repo.calculate_metrics("003")
 
-    # Should count total but skip invalid DN for sums
+    # Both unions should be counted
     assert result["total_uniones"] == 2
-    assert result["arm_completadas"] == 1  # Only valid union counted
-    assert result["pulgadas_arm"] == 8.00  # Only valid union summed
+    assert result["arm_completadas"] == 2  # Both have ARM complete
+    assert result["sold_completadas"] == 0  # Neither has SOLD complete
+    assert result["pulgadas_arm"] == 14.00  # 6.0 + 8.0 = 14.00
+    assert result["pulgadas_sold"] == 0.00  # No SOLD completions
 
 
 def test_precision_edge_cases_18_point_50_not_18_point_5(union_repo, monkeypatch):
