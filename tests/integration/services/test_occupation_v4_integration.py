@@ -602,3 +602,133 @@ class TestMetrologiaAutoTransition:
 
             # Verify: No metrología triggered
             assert response.metrologia_triggered is None or response.metrologia_triggered is False
+
+
+class TestZeroUnionCancellation:
+    """Test zero-union cancellation flow (FINALIZAR with empty selected_unions)."""
+
+    @pytest.mark.asyncio
+    async def test_zero_union_finalizar_cancels_operation(
+        self,
+        occupation_service,
+        redis_lock_service,
+        metadata_repo
+    ):
+        """
+        FINALIZAR with empty selected_unions should cancel and release lock.
+
+        Scenario:
+        1. Worker initiates spool (INICIAR)
+        2. Worker decides not to do any work
+        3. FINALIZAR with empty selected_unions list
+        4. Should release Redis lock
+        5. Should clear Ocupado_Por
+        6. Should log SPOOL_CANCELADO event
+        7. Should return action_taken="CANCELADO"
+        """
+        # Execute: FINALIZAR with empty selected_unions
+        request = FinalizarRequest(
+            tag_spool="OT-001",
+            worker_id=93,
+            worker_nombre="MR(93)",
+            operacion=Operacion.ARM,
+            selected_unions=[]  # Empty list
+        )
+
+        response = await occupation_service.finalizar_spool(request)
+
+        # Verify: Success with cancellation
+        assert response.success is True
+        assert response.action_taken == "CANCELADO"
+        assert response.unions_processed == 0
+        assert "cancelado" in response.message.lower()
+
+        # Verify: Redis lock released
+        redis_lock_service.release_lock.assert_called_once_with(
+            "OT-001",
+            93,
+            "lock-token-123"
+        )
+
+        # Verify: Ocupado_Por cleared
+        occupation_service.conflict_service.update_with_retry.assert_called()
+        update_call = occupation_service.conflict_service.update_with_retry.call_args
+        updates = update_call[1]["updates"]
+        assert updates["Ocupado_Por"] == ""
+        assert updates["Fecha_Ocupacion"] == ""
+
+        # Verify: SPOOL_CANCELADO event logged
+        metadata_repo.log_event.assert_called()
+        log_event_call = metadata_repo.log_event.call_args
+        assert log_event_call[1]["evento_tipo"] == "SPOOL_CANCELADO"
+        assert log_event_call[1]["accion"] == "CANCELAR"
+
+    @pytest.mark.asyncio
+    async def test_cancellation_returns_spool_to_disponible(
+        self,
+        occupation_service,
+        redis_event_service
+    ):
+        """
+        Cancellation should publish real-time event with disponible state.
+
+        Scenario:
+        1. FINALIZAR with empty list
+        2. Real-time event should show "Disponible" estado_detalle
+        3. Event type should be "CANCELAR"
+        """
+        # Execute: Cancel
+        request = FinalizarRequest(
+            tag_spool="OT-001",
+            worker_id=93,
+            worker_nombre="MR(93)",
+            operacion=Operacion.ARM,
+            selected_unions=[]
+        )
+
+        response = await occupation_service.finalizar_spool(request)
+
+        # Verify: Real-time event published
+        redis_event_service.publish_spool_update.assert_called()
+        event_call = redis_event_service.publish_spool_update.call_args
+
+        assert event_call[1]["event_type"] == "CANCELAR"
+        assert event_call[1]["estado_detalle"] == "Disponible"
+        assert event_call[1]["worker_nombre"] is None  # No longer occupied
+
+    @pytest.mark.asyncio
+    async def test_cancellation_does_not_touch_uniones_sheet(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Cancellation should NOT call batch_update (no Uniones changes).
+
+        Scenario:
+        1. FINALIZAR with empty list
+        2. batch_update_arm/sold should NOT be called
+        3. Only Ocupado_Por should be cleared
+        """
+        # Mock batch_update methods
+        with patch.object(union_repo, 'batch_update_arm') as mock_arm, \
+             patch.object(union_repo, 'batch_update_sold') as mock_sold:
+
+            # Execute: Cancel
+            request = FinalizarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.ARM,
+                selected_unions=[]
+            )
+
+            response = await occupation_service.finalizar_spool(request)
+
+            # Verify: No batch updates called
+            mock_arm.assert_not_called()
+            mock_sold.assert_not_called()
+
+            # Verify: Cancellation succeeded
+            assert response.success is True
+            assert response.action_taken == "CANCELADO"
