@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 9 of 13 (Redis & Version Detection)
-Plan: 4 of 5 in current phase
+Plan: 1 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 09-04-PLAN.md (Version detection service)
+Last activity: 2026-02-02 — Completed 09-01-PLAN.md (Persistent locks and degraded mode)
 
-Progress: [█████████░░░░] 71% (9 of 13 phases in progress, 4 of 5 plans complete in Phase 9)
+Progress: [█████████░░░░] 69% (9 of 13 phases in progress, 1 of 5 plans complete in Phase 9)
 
 ## Performance Metrics
 
@@ -40,11 +40,11 @@ Progress: [█████████░░░░] 71% (9 of 13 phases in progr
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
-| 9. Redis & Version Detection | 4/5 | 16.4 min | 4.1 min |
+| 9. Redis & Version Detection | 1/5 | 7.5 min | 7.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [3.0, 6.5, 8.5, 4.0, 4.4] min
-- Trend: Phase 9 IN PROGRESS (4 of 5 plans complete, 4.1-min average)
+- Last 5 plans: [6.5, 8.5, 4.0, 4.4, 7.5] min
+- Trend: Phase 9 IN PROGRESS (1 of 5 plans complete, 7.5-min average)
 
 *Updated after each plan completion*
 
@@ -96,10 +96,10 @@ Recent decisions affecting v4.0 work:
 - **D39 (08-05)**: Union model already has 18 fields including OT (Task 1 was no-op)
 - **D40 (08-05)**: End-to-end workflow test integrated into Task 3 UnionRepository tests
 - **D41 (08-05)**: Mock latency simulation for performance tests (300ms batch update, 150ms append)
-- **D42 (09-04)**: Default to v3.0 on detection failure (safer legacy workflow)
-- **D43 (09-04)**: Retry 3 times with exponential backoff (2s, 4s, 10s max)
-- **D44 (09-04)**: 422 Unprocessable Entity for version mismatch on v4.0 endpoints
-- **D45 (09-04)**: Decorator injection pattern for version validation
+- **D42 (09-01)**: Use two-step acquisition (SET with 10s safety TTL, then PERSIST) to prevent orphaned locks
+- **D43 (09-01)**: Lock value format includes timestamp for lazy cleanup age detection
+- **D44 (09-01)**: Degraded mode falls back to Sheets-only when Redis unavailable
+- **D45 (09-01)**: REDIS_PERSISTENT_LOCKS flag controls v3.0 vs v4.0 lock mode
 
 ### Pending Todos
 
@@ -116,11 +116,9 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **Phase 9 IN PROGRESS**: Redis & Version Detection (4 of 5 plans complete)
-  - Degraded mode for Redis unavailability
-  - Lazy cleanup mechanism (one lock per TOMAR)
-  - Version detection service with retry logic
-  - Diagnostic endpoint for version transparency
+- **Phase 9 IN PROGRESS**: Redis & Version Detection (1 of 5 plans complete)
+  - ✅ Plan 09-01: Persistent locks without TTL, two-step acquisition (SET + PERSIST), degraded mode fallback
+  - Next: Plan 09-02 (Lazy cleanup mechanism)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -131,7 +129,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 09-04-PLAN.md (Version detection service, 4.4 min duration)
+Stopped at: Completed 09-01-PLAN.md (Persistent locks and degraded mode, 7.5 min duration)
 Resume file: None
 
-**Phase 9 In Progress:** 4 of 5 plans complete (16.4 min total, 4.1-min average). Version detection service enables dual workflow routing. Next: 09-05 (Frontend version cache).
+**Phase 9 In Progress:** 1 of 5 plans complete (7.5 min total). Persistent Redis locks without TTL for long-running work sessions. Next: 09-02 (Lazy cleanup mechanism).
