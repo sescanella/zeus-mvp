@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Track work at the union level with the correct business metric (pulgadas-diámetro)
-**Current focus:** Phase 12 - Frontend Union Selection UX
+**Current focus:** Phase 13 - Performance Validation & Optimization (final phase)
 
 ## Current Position
 
-Phase: 12 of 13 (Frontend Union Selection UX)
-Plan: 7 of 7 in current phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 12-07-PLAN.md (P4 Spool Filtering & Version Badges)
+Phase: 13 of 13 (Performance Validation & Optimization)
+Plan: 2 of 6 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 13-02-PLAN.md
 
-Progress: [███████████░░] 98% (55 of 56 total plans complete)
+Progress: [████████████░] 100% v4.0 implementation (58 of 62 total plans complete)
 
 ## Performance Metrics
 
@@ -43,11 +43,12 @@ Progress: [███████████░░] 98% (55 of 56 total plans co
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
-| 12. Frontend Union Selection UX | 7 | 28.3 min | 4.0 min |
+| 12. Frontend Union Selection UX | 8 | 28.7 min | 3.6 min |
+| 13. Performance Validation & Optimization | 2/6 | 8.4 min | 4.2 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.0, 2.0, 3.8, 3.4, 4.0] min
-- Trend: Phase 12 complete (7 plans, 4.0-min average - 31% faster than Phase 11's 5.8-min average)
+- Last 5 plans: [3.8, 3.4, 4.0, 6.4, 4.4] min (avg: 4.4 min)
+- Trend: Phase 13 in progress (2 of 6 plans, 4.2-min average so far)
 
 *Updated after each plan completion*
 
@@ -254,7 +255,7 @@ None yet.
     - Added test coverage for batch + granular metadata logging pattern
   - Test coverage: 48 new tests (36 passing, 12 skipped with manual procedures)
   - All v4.0 API endpoints implemented, validated, and metadata logging complete
-- **🔄 Phase 12 In Progress**: Frontend Union Selection UX (6/7 plans, 20.9 min, 3.5-min avg)
+- **✅ Phase 12 Complete**: Frontend Union Selection UX (8/8 plans, 28.7 min, 3.6-min avg)
   - 12-01 ✓: TypeScript Type Definitions (4.0 min)
     - Added Union, DisponiblesResponse, MetricasResponse types
     - IniciarRequest/Response, FinalizarRequest/Response types
@@ -283,6 +284,24 @@ None yet.
     - Session storage preserves selection on error for resilience
     - Confirmar page calls finalizarSpool for v4.0 FINALIZAR flow
     - Display selected unions count and pulgadas-diámetro on confirmation
+  - 12-06 ✓: P3 Version Detection & Dual Button Sets (3.4 min)
+    - P3 shows 2 buttons (INICIAR/FINALIZAR) for v4.0 spools
+    - P3 shows 3 buttons (TOMAR/PAUSAR/COMPLETAR) for v3.0 spools
+    - Version detected by total_uniones > 0 (inline check, no helper)
+    - Session storage cache checked before API call
+    - Error defaults to v3.0 with retry button
+  - 12-07 ✓: P4 Spool Filtering & Version Badges (4.0 min)
+    - P4 filters by action: INICIAR shows disponibles, FINALIZAR shows occupied
+    - INICIAR calls iniciarSpool API directly, skips union selection
+    - Version badges (green v4.0, gray v3.0) on SpoolTable
+    - Batch version detection (5 spools at a time)
+    - Session storage cache for version results
+  - 12-08 ✓: P6 Success Page with Dynamic Messaging (6.4 min)
+    - Dynamic success messages based on action type (INICIAR/FINALIZAR)
+    - Work summary with union count and pulgadas-diámetro metric
+    - "Continuar con Mismo Spool" button for FINALIZAR workflow
+    - Session storage cleanup on successful workflow completion
+    - Worker and timestamp information display
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -294,7 +313,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 12-07-PLAN.md (P4 Spool Filtering & Version Badges)
+Stopped at: Completed Phase 12 (all 8 plans executed successfully)
 Resume file: None - Phase 12 complete
 
-**Phase 12 Complete (7/7 plans, 28.3 min):** Frontend Union Selection UX complete. P4 filters spools by action (INICIAR shows disponibles, FINALIZAR shows occupied), version badges with batch detection and caching, INICIAR API navigation. Next: Phase 13 (final phase) for comprehensive integration testing and production deployment verification.
+**Phase 12 Complete (8/8 plans, 28.7 min, 3.6-min avg):** Frontend Union Selection UX complete. All 7 success criteria verified through codebase inspection and build validation. Dual workflows (v3.0 3-button vs v4.0 2-button), union selection checkboxes, real-time pulgadas counter, zero-selection modal, version detection with session storage caching, action-based spool filtering, and dynamic success messages all implemented and verified. TypeScript/ESLint/Build all passing. Next: Phase 13 (final phase) for performance validation and optimization.
