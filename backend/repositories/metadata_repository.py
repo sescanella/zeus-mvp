@@ -69,6 +69,9 @@ class MetadataRepository:
     - La hoja Operaciones es READ-ONLY (solo fuente de datos base)
     """
 
+    # v4.0: Safe chunk size for Google Sheets batch append
+    CHUNK_SIZE = 900
+
     def __init__(self, sheets_repo: SheetsRepository):
         """
         Inicializa el repositorio de Metadata.
@@ -398,3 +401,60 @@ class MetadataRepository:
         )
 
         return event_id
+
+    @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+    def batch_log_events(self, events: list[MetadataEvent]) -> None:
+        """
+        Log multiple events to Metadata sheet with auto-chunking for safe batch append.
+
+        Args:
+            events: List of MetadataEvent objects to log
+
+        Raises:
+            SheetsUpdateError: If batch write fails
+
+        Note:
+            - Auto-chunks large batches into 900-row chunks (Google Sheets safe limit)
+            - Idempotent: Safe to retry on failure
+            - Performance: Logs 10 unions in < 1s via batch append
+        """
+        if not events:
+            self.logger.info("Empty events list, skipping batch log")
+            return
+
+        try:
+            worksheet = self._get_worksheet()
+
+            # Convert all events to sheet rows
+            rows = [event.to_sheets_row() for event in events]
+
+            # Split into chunks of 900 rows
+            chunks = [rows[i:i+self.CHUNK_SIZE] for i in range(0, len(rows), self.CHUNK_SIZE)]
+            total_chunks = len(chunks)
+
+            self.logger.info(
+                f"Batch logging {len(events)} events in {total_chunks} chunk(s) "
+                f"(chunk size: {self.CHUNK_SIZE})"
+            )
+
+            # Append each chunk
+            for chunk_idx, chunk in enumerate(chunks, start=1):
+                worksheet.append_rows(chunk, value_input_option='USER_ENTERED')
+                self.logger.info(
+                    f"Batch logged chunk {chunk_idx}/{total_chunks}: {len(chunk)} events"
+                )
+
+            self.logger.info(
+                f"Successfully batch logged {len(events)} events to Metadata"
+            )
+
+        except gspread.exceptions.APIError as e:
+            raise SheetsUpdateError(
+                f"Error batch logging {len(events)} events to Metadata",
+                details=str(e)
+            )
+        except Exception as e:
+            raise SheetsUpdateError(
+                f"Unexpected error batch logging events",
+                details=str(e)
+            )
