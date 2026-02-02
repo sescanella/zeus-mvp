@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 13 of 13 (Performance Validation & Optimization)
-Plan: 3 of 6 in current phase
+Plan: 4 of 6 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 13-03-PLAN.md
+Last activity: 2026-02-02 — Completed 13-04-PLAN.md
 
-Progress: [████████████░] 97% v4.0 implementation (59 of 62 total plans complete)
+Progress: [████████████░] 97% v4.0 implementation (60 of 62 total plans complete)
 
 ## Performance Metrics
 
@@ -44,11 +44,11 @@ Progress: [████████████░] 97% v4.0 implementation (59 
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
 | 12. Frontend Union Selection UX | 8 | 28.7 min | 3.6 min |
-| 13. Performance Validation & Optimization | 3/6 | 34.3 min | 11.4 min |
+| 13. Performance Validation & Optimization | 4/6 | 39.7 min | 9.9 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.0, 6.4, 6.3, 14.0, 14.0] min (avg: 8.9 min)
-- Trend: Phase 13 in progress (2 of 6 plans, 4.2-min average so far)
+- Last 5 plans: [6.4, 6.3, 14.0, 14.0, 5.4] min (avg: 9.2 min)
+- Trend: Phase 13 in progress (4 of 6 plans, 9.9-min average)
 
 *Updated after each plan completion*
 
@@ -195,6 +195,11 @@ Recent decisions affecting v4.0 work:
 - **D121 (13-01)**: 100 iterations for percentile tests provides statistical significance
 - **D122 (13-01)**: 20% regression threshold balances sensitivity with noise tolerance
 - **D123 (13-01)**: Pytest markers @pytest.mark.performance and @pytest.mark.slow for CI/CD control
+- **D124 (13-04)**: Locust for comprehensive load testing (already proven in Phase 4, Python-based, scales to 50+ users)
+- **D125 (13-04)**: Multi-format export JSON/CSV/HTML (covers all stakeholder use cases: engineering, trending, presentations)
+- **D126 (13-04)**: Event listeners for real-time metrics collection (Locust on_request/on_test_stop enables comprehensive tracking)
+- **D127 (13-04)**: Weighted task scenarios 3:2:1:1:1:1 (realistic workload: 10-union ARM most common, 50-union stress rare)
+- **D128 (13-04)**: PerformanceMetrics class for state management (global singleton pattern for cross-request tracking)
 
 ### Pending Todos
 
@@ -307,7 +312,7 @@ None yet.
     - Session storage cache for version results
   - 12-08 ✓: P6 Success Page with Dynamic Messaging (6.4 min)
     - Dynamic success messages based on action type (INICIAR/FINALIZAR)
-- **✅ Phase 13 In Progress**: Performance Validation & Optimization (3/6 plans complete)
+- **✅ Phase 13 In Progress**: Performance Validation & Optimization (4/6 plans complete)
   - 13-01 ✓: Percentile-based Latency Validation (6.3 min)
     - numpy.percentile() for p50/p95/p99 calculation
     - Performance regression detection in CI
@@ -322,20 +327,14 @@ None yet.
     - Burst detection (>20 req in 10s) and warning system
     - GlobalRateLimitMonitor singleton for production
     - Thread-safe operations with threading.Lock
-    - Work summary with union count and pulgadas-diámetro metric
-    - "Continuar con Mismo Spool" button for FINALIZAR workflow
-    - Session storage cleanup on successful workflow completion
-    - Worker and timestamp information display
-- **✅ Phase 13 (1/6 plans)**: Performance Validation & Optimization
-  - 13-01 ✓: Percentile-Based Latency Validation (6.3 min)
-    - Created tests/performance/conftest.py with numpy percentile utilities
-    - Implemented test_batch_latency.py with 4 comprehensive tests
-    - PERF-01/PERF-02 validation: p95 < 1s, p99 < 2s (100 iterations)
-    - Cold vs warm cache performance comparison
-    - 50-union stress test with memory profiling
-    - Performance regression detection (20% threshold vs Phase 8 baseline)
-    - Added pytest markers: @pytest.mark.performance, @pytest.mark.slow
-    - Installed psutil for memory profiling
+  - 13-04 ✓: Comprehensive Load Testing (5.4 min)
+    - Locust-based load tests with weighted task scenarios
+    - locustfile.py: 6 WorkerUser tasks (3:2:1:1:1:1 weights)
+    - test_comprehensive_performance.py: PerformanceMetrics class
+    - Multi-format export: JSON/CSV/HTML reports
+    - Event-driven metrics: on_request, on_test_stop
+    - Validates all 5 PERF requirements simultaneously
+    - README.md with usage guide and troubleshooting
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -347,7 +346,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 13-03-PLAN.md
+Stopped at: Completed 13-04-PLAN.md
 Resume file: None
 
-**Plan 13-03 Complete (14.0 min):** Rate limit monitoring infrastructure complete. Created backend/utils/rate_limiter.py (253 lines) with RateLimitMonitor class using collections.deque for O(1) sliding window operations. Implemented 60-second window tracking, burst detection (>20 req in 10s), quota utilization calculation, and GlobalRateLimitMonitor singleton with threading.Lock. Created tests/performance/test_rate_limit_compliance.py (449 lines) with 10 tests validating PERF-05 (< 30 writes/min = 50% quota): (1) compliance under load (30 workers, 2min), (2) burst detection, (3) sliding window accuracy, (4) RPM edge cases, (5) multi-worker concurrency (shift change), (6) request type categorization, (7) quota utilization. All tests passing. Production-ready monitoring hooks available. Next: 13-04 for comprehensive load testing.
+**Plan 13-04 Complete (5.4 min):** Comprehensive load testing infrastructure complete. Created tests/load/locustfile.py (251 lines) with WorkerUser class simulating 6 realistic v4.0 workflows: finalizar_arm_10_unions (weight 3, most common), finalizar_sold_5_unions (weight 2, partial), finalizar_arm_50_unions (weight 1, stress), iniciar_new_spool, query_disponibles_arm, query_metricas. Created tests/load/test_comprehensive_performance.py (754 lines) with PerformanceMetrics class tracking latency (numpy percentiles), rate limits (RateLimitMonitor integration), memory (psutil), errors, and API calls. Event-driven metrics collection via on_request, on_test_stop. Multi-format export: JSON (complete data), CSV (trending), HTML (visualizations). Validates all 5 PERF requirements with automated assertions. Created README.md (135 lines) with usage guide, troubleshooting, and customization. Installed locust==2.34.0. Ready for production baseline testing. Next: 13-05 for optimization recommendations.
