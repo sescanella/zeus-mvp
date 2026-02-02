@@ -461,3 +461,98 @@ class MetadataRepository:
                 f"Unexpected error batch logging events",
                 details=str(e)
             )
+
+    def build_union_events(
+        self,
+        tag_spool: str,
+        worker_id: int,
+        worker_nombre: str,
+        operacion: str,
+        union_ids: list[str],
+        union_details: list[dict]
+    ) -> list[MetadataEvent]:
+        """
+        Build MetadataEvent objects for union-level completions (v4.0).
+
+        Args:
+            tag_spool: Spool TAG
+            worker_id: Worker ID
+            worker_nombre: Worker name (INICIALES(ID))
+            operacion: Operation (ARM or SOLD)
+            union_ids: List of union IDs (format: "OT-123+5" where 5 is n_union)
+            union_details: List of dicts with union metadata (dn_union, tipo, duracion_min, etc.)
+
+        Returns:
+            list[MetadataEvent]: List of events ready for batch_log_events
+
+        Example:
+            >>> repo.build_union_events(
+            ...     tag_spool="TEST-01",
+            ...     worker_id=93,
+            ...     worker_nombre="MR(93)",
+            ...     operacion="ARM",
+            ...     union_ids=["OT-123+1", "OT-123+2"],
+            ...     union_details=[
+            ...         {"dn_union": 4, "tipo": "B", "duracion_min": 15.5},
+            ...         {"dn_union": 6, "tipo": "A", "duracion_min": 20.0}
+            ...     ]
+            ... )
+        """
+        import uuid
+        import json
+
+        events = []
+
+        # Determine event type based on operation
+        if operacion == "ARM":
+            evento_tipo = EventoTipo.UNION_ARM_REGISTRADA
+        elif operacion == "SOLD":
+            evento_tipo = EventoTipo.UNION_SOLD_REGISTRADA
+        else:
+            raise ValueError(f"Invalid operacion for union events: {operacion}")
+
+        # Use today's date for fecha_operacion
+        from backend.utils.date_formatter import today_chile
+        fecha_operacion_str = format_date_for_sheets(today_chile())
+
+        # Build event for each union
+        for union_id, details in zip(union_ids, union_details):
+            # Extract n_union from union_id (format: "OT-123+5" -> n_union=5)
+            try:
+                n_union = int(union_id.split('+')[1])
+            except (IndexError, ValueError):
+                self.logger.warning(
+                    f"Could not extract n_union from union_id: {union_id}, skipping"
+                )
+                continue
+
+            # Create metadata JSON with union details
+            metadata = {
+                "dn_union": details.get("dn_union"),
+                "tipo": details.get("tipo"),
+                "duracion_min": details.get("duracion_min"),
+                "timestamp_inicio": details.get("timestamp_inicio"),
+                "timestamp_fin": details.get("timestamp_fin")
+            }
+
+            event = MetadataEvent(
+                id=str(uuid.uuid4()),
+                timestamp=now_chile(),
+                evento_tipo=evento_tipo,
+                tag_spool=tag_spool,
+                worker_id=worker_id,
+                worker_nombre=worker_nombre,
+                operacion=operacion,
+                accion=Accion.COMPLETAR,  # Union events are always COMPLETAR
+                fecha_operacion=fecha_operacion_str,
+                metadata_json=json.dumps(metadata),
+                n_union=n_union
+            )
+
+            events.append(event)
+
+        self.logger.info(
+            f"Built {len(events)} union events for {tag_spool} ({operacion})"
+        )
+
+        return events
