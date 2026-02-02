@@ -44,6 +44,10 @@ from backend.models.occupation import (
     FinalizarRequest
 )
 from backend.models.enums import ActionType, EventoTipo
+
+# SOLD_REQUIRED_TYPES: Union types that require SOLD operation (imported from union_service)
+# FW unions are ARM-only (no SOLD needed)
+SOLD_REQUIRED_TYPES = ['BW', 'BR', 'SO', 'FILL', 'LET']
 from backend.exceptions import (
     SpoolNoEncontradoError,
     SpoolOccupiedError,
@@ -923,9 +927,13 @@ class OccupationService:
         - If selected_count < total_available → PAUSAR (partial work)
         - If selected_count > total_available → 409 Conflict (race condition)
 
+        For SOLD: total_available counts only SOLD_REQUIRED_TYPES unions (BW/BR/SO/FILL/LET).
+        FW unions are ARM-only and excluded from SOLD completion logic.
+
         Args:
             selected_count: Number of unions selected by worker
             total_available: Total available unions for this operation
+                            (for SOLD: filtered to SOLD_REQUIRED_TYPES only)
             operacion: Operation type ("ARM" or "SOLD")
 
         Returns:
@@ -1164,7 +1172,17 @@ class OccupationService:
             if operacion == "ARM":
                 disponibles = self.union_repository.get_disponibles_arm_by_ot(spool.ot)
             elif operacion == "SOLD":
-                disponibles = self.union_repository.get_disponibles_sold_by_ot(spool.ot)
+                # Get all ARM-completed unions
+                all_disponibles = self.union_repository.get_disponibles_sold_by_ot(spool.ot)
+                # Filter to only SOLD-required types (exclude FW which is ARM-only)
+                disponibles = [
+                    u for u in all_disponibles
+                    if u.tipo_union in SOLD_REQUIRED_TYPES
+                ]
+                logger.debug(
+                    f"SOLD disponibles filtered: {len(all_disponibles)} total ARM-complete, "
+                    f"{len(disponibles)} SOLD-required types for OT {spool.ot}"
+                )
             else:
                 raise ValueError(f"Unsupported operation: {operacion}")
 
@@ -1289,6 +1307,75 @@ class OccupationService:
 
             except Exception as e:
                 logger.error(f"❌ CRITICAL: Metadata logging failed: {e}", exc_info=True)
+
+            # Step 8.3: Trigger metrología auto-transition if flagged
+            metrologia_new_state = None
+            if metrologia_triggered:
+                try:
+                    # Import StateService to trigger transition
+                    # Note: This creates a circular dependency, but it's acceptable for this use case
+                    # Alternative: Inject StateService as optional dependency (future refactor)
+                    from backend.services.state_service import StateService
+
+                    # Create StateService instance with current dependencies
+                    state_service = StateService(
+                        occupation_service=self,
+                        sheets_repository=self.sheets_repository,
+                        metadata_repository=self.metadata_repository,
+                        redis_event_service=self.redis_event_service
+                    )
+
+                    # Trigger metrología transition
+                    metrologia_new_state = await state_service.trigger_metrologia_transition(tag_spool)
+
+                    if metrologia_new_state:
+                        logger.info(
+                            f"✅ Metrología auto-transition successful for {tag_spool}: "
+                            f"state={metrologia_new_state}"
+                        )
+
+                        # Log METROLOGIA_AUTO_TRIGGERED event
+                        try:
+                            metrologia_metadata = json.dumps({
+                                "trigger_reason": "all_work_complete",
+                                "operacion_completed": operacion,
+                                "unions_processed": updated_count,
+                                "new_state": metrologia_new_state
+                            })
+
+                            self.metadata_repository.log_event(
+                                evento_tipo=EventoTipo.METROLOGIA_AUTO_TRIGGERED.value,
+                                tag_spool=tag_spool,
+                                worker_id=worker_id,
+                                worker_nombre=worker_nombre,
+                                operacion=operacion,
+                                accion="AUTO_TRIGGER",
+                                fecha_operacion=format_date_for_sheets(today_chile()),
+                                metadata_json=metrologia_metadata
+                            )
+
+                            logger.info(
+                                f"✅ Metadata logged: METROLOGIA_AUTO_TRIGGERED for {tag_spool}"
+                            )
+
+                        except Exception as e:
+                            logger.error(
+                                f"❌ CRITICAL: Metrología metadata logging failed: {e}",
+                                exc_info=True
+                            )
+
+                    else:
+                        logger.warning(
+                            f"Metrología auto-transition skipped for {tag_spool} "
+                            f"(state machine rejected or already in queue)"
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to trigger metrología auto-transition for {tag_spool}: {e}",
+                        exc_info=True
+                    )
+                    # Don't block FINALIZAR operation on metrología trigger failure
 
             # Step 8.5: Publish real-time event
             try:
