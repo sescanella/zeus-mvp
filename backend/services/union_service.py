@@ -201,8 +201,24 @@ class UnionService:
             >>> service.calcular_pulgadas(unions)
             10.5
         """
-        # Placeholder implementation (will be implemented in Task 3)
-        raise NotImplementedError("calcular_pulgadas will be implemented in Task 3")
+        if not unions:
+            return 0.0
+
+        total = 0.0
+        for union in unions:
+            try:
+                # Handle potential None values gracefully
+                if union.dn_union is not None:
+                    total += float(union.dn_union)
+            except (ValueError, TypeError) as e:
+                self.logger.warning(
+                    f"Invalid DN_UNION value for union {union.id}: {union.dn_union}, "
+                    f"skipping. Error: {e}"
+                )
+                continue
+
+        # Return with 1 decimal precision per task requirements
+        return round(total, 1)
 
     def build_eventos_metadata(
         self,
