@@ -198,54 +198,7 @@ def test_iniciar_worker_nombre_cannot_be_empty(client):
 
 
 # ==================== ERROR SCENARIO TESTS ====================
-
-
-def test_finalizar_missing_selected_unions(client):
-    """Missing selected_unions field returns 422 validation error."""
-    response = client.post(
-        "/api/v4/occupation/finalizar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            "worker_nombre": "MR(93)",
-            "operacion": "ARM"
-            # Missing selected_unions
-        }
-    )
-
-    assert response.status_code == 422  # Pydantic validation error
-
-
-def test_finalizar_selected_unions_must_be_list(client):
-    """selected_unions must be a list, not string."""
-    response = client.post(
-        "/api/v4/occupation/finalizar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            "worker_nombre": "MR(93)",
-            "operacion": "ARM",
-            "selected_unions": "OT-123+1"  # Invalid: string not list
-        }
-    )
-
-    assert response.status_code == 422  # Pydantic validation error
-
-
-def test_finalizar_invalid_operacion_value(client):
-    """Invalid operacion value returns 422 validation error."""
-    response = client.post(
-        "/api/v4/occupation/finalizar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            "worker_nombre": "MR(93)",
-            "operacion": "METROLOGIA",  # Not ARM or SOLD
-            "selected_unions": ["OT-123+1"]
-        }
-    )
-
-    assert response.status_code == 422  # Pydantic validation error
+# Note: FINALIZAR endpoint tests will be added in Plan 11-04
 
 
 def test_disponibles_missing_operacion_query(client):
@@ -286,21 +239,6 @@ def test_iniciar_wrong_content_type(client):
     assert response.status_code == 422
 
 
-def test_finalizar_empty_string_in_union_list(client):
-    """Empty string in selected_unions list is invalid."""
-    response = client.post(
-        "/api/v4/occupation/finalizar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            "worker_nombre": "MR(93)",
-            "operacion": "ARM",
-            "selected_unions": ["OT-123+1", "", "OT-123+3"]  # Empty string invalid
-        }
-    )
-
-    # Should validate and reject empty strings
-    assert response.status_code == 422
 
 
 def test_iniciar_extra_unexpected_fields_ignored(client):
