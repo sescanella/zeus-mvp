@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 7 of 13 (Data Model Foundation)
-Plan: 6 of 6 in current phase
-Status: Phase complete (with gap closure)
-Last activity: 2026-02-02 — Completed 07-06-PLAN.md (Execute schema migrations on production sheets)
+Plan: 7 of 7 in current phase
+Status: Phase complete (pending Engineering coordination)
+Last activity: 2026-02-02 — Completed 07-07-PLAN.md (Document Uniones requirements for Engineering)
 
-Progress: [███████░░░░░░░] 54% (7 of 13 phases complete, ready for Phase 8)
+Progress: [███████░░░░░░░] 54% (7 of 13 phases complete, pending Engineering handoff for Phase 8)
 
 ## Performance Metrics
 
@@ -38,11 +38,11 @@ Progress: [███████░░░░░░░] 54% (7 of 13 phases compl
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7. Data Model Foundation | 6 | 19 min | 3.2 min |
+| 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: [2.0, 4.0, 3.0, 8.0, 1.0] min
-- Trend: Phase 7 complete with gap closure (Data Model Foundation + schema migrations executed)
+- Last 5 plans: [4.0, 3.0, 8.0, 1.0, 2.0] min
+- Trend: Phase 7 complete with Engineering handoff (Data Model Foundation complete, pending external dependency)
 
 *Updated after each plan completion*
 
@@ -75,6 +75,8 @@ Recent decisions affecting v4.0 work:
 - **D20 (07-05)**: Integrate v4.0 validation into FastAPI startup event (after cache warming, before traffic - fail-fast deployment)
 - **D21 (07-06)**: Execute migrations on production sheets with --force flag (gap closure plan, already validated in dry-run)
 - **D22 (07-06)**: Accept Uniones validation failure as expected (Engineering dependency documented in blockers)
+- **D23 (07-07)**: Document Uniones requirements instead of auto-populating data (Engineering owns union-level data, system provides structure)
+- **D24 (07-07)**: Optional --fix flag to add headers (structure only, not data) - Engineering chooses manual or automated structure setup
 
 ### Pending Todos
 
@@ -84,6 +86,8 @@ None yet.
 
 **v4.0 Pre-Deployment:**
 - Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy (missing 9 columns: ID, TAG_SPOOL, NDT fields, audit fields)
+- **HANDOFF READY**: Engineering documentation created (07-07) at docs/engineering-handoff.md with complete requirements
+- **OPTIONAL FIX**: Script available to add missing headers (--fix flag) - Engineering decides manual or automated structure setup
 - v3.0 7-day rollback window expires TODAY 2026-02-02 (v2.1 backup will be archived)
 - **COMPLETE**: Schema migrations executed on production sheets (07-06) - Operaciones 72 columns, Metadata 11 columns
 - **READY**: Startup validation hook integrated (07-05) - will prevent deployment if schema incomplete
@@ -97,7 +101,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 07-06-PLAN.md (Phase 7 gap closure - schema migrations executed on production sheets, 1 min duration)
+Stopped at: Completed 07-07-PLAN.md (Engineering handoff documentation for Uniones sheet, 2 min duration)
 Resume file: None
 
-**Phase 7 Complete:** All 6 plans finished (5 original + 1 gap closure). Production sheets extended to v4.0 schema. Ready to proceed to Phase 8 (Union CRUD Operations).
+**Phase 7 Complete:** All 7 plans finished (5 original + 2 gap closure). Production sheets extended to v4.0 schema. Engineering handoff documentation created. Phase 8 pending Engineering coordination for Uniones data population.
