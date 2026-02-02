@@ -317,6 +317,45 @@ async def startup_event():
             f"Cache will be built on first request (lazy loading)."
         )
 
+    # v4.0: Validate complete schema before accepting traffic
+    try:
+        logging.info("🔄 Validating v4.0 schema (Operaciones, Uniones, Metadata)...")
+        from backend.scripts.validate_schema_startup import validate_v4_schema
+
+        success, details = validate_v4_schema()
+
+        if not success:
+            # Identify which sheets failed
+            failed_sheets = [sheet for sheet, result in details.items() if result["status"] == "FAIL"]
+            missing_details = []
+            for sheet in failed_sheets:
+                missing_cols = details[sheet]["missing"]
+                missing_details.append(f"{sheet} (missing {len(missing_cols)} columns: {missing_cols})")
+
+            error_msg = (
+                f"❌ CRITICAL: v4.0 schema validation FAILED. "
+                f"Application cannot start with incomplete schema. "
+                f"Failed sheets: {', '.join(failed_sheets)}. "
+                f"Details: {'; '.join(missing_details)}"
+            )
+            logging.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        # Log success with validated column counts
+        logging.info("✅ v4.0 schema validation PASSED")
+        logging.info(f"   Operaciones: {details['Operaciones']['validated_count']} columns validated")
+        logging.info(f"   Uniones: {details['Uniones']['validated_count']} columns validated")
+        logging.info(f"   Metadata: {details['Metadata']['validated_count']} columns validated")
+
+    except RuntimeError:
+        # Re-raise RuntimeError from validation failure (don't catch and warn)
+        raise
+    except Exception as e:
+        # Unexpected validation error - also fail startup
+        error_msg = f"❌ CRITICAL: v4.0 schema validation crashed: {e}. Application cannot start."
+        logging.error(error_msg, exc_info=True)
+        raise RuntimeError(error_msg) from e
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
