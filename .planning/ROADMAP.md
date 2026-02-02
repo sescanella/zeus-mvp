@@ -135,10 +135,17 @@ Plans:
   5. P5 shows modal confirmation "¿Liberar sin registrar?" when 0 unions selected
   6. P5 disables checkboxes for already-completed unions with visual "✓ Armada" or "✓ Soldada" badge
   7. Metrología and Reparación workflows remain at spool level with no changes to existing UI
-**Plans**: TBD
+**Plans**: 8 plans
 
 Plans:
-- [ ] 12-01: [TBD during phase planning]
+- [ ] 12-01-PLAN.md — TypeScript types and API client for v4.0
+- [ ] 12-02-PLAN.md — Base components (Modal, UnionTable shell, version detection)
+- [ ] 12-03-PLAN.md — Context extension with v4.0 state management
+- [ ] 12-04-PLAN.md — P5 union selection page with checkboxes and counter
+- [ ] 12-05-PLAN.md — API integration and error handling for P5
+- [ ] 12-06-PLAN.md — P3 version detection and dual button sets
+- [ ] 12-07-PLAN.md — P4 spool filtering and version badges
+- [ ] 12-08-PLAN.md — P6 success page with dynamic messaging
 
 #### Phase 13: Performance Validation & Optimization
 **Goal**: System meets performance SLA (< 1s p95 for 10 unions) and stays under Google Sheets rate limits
@@ -173,9 +180,9 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 9. Redis & Version Detection | v4.0 | 6/6 | Complete | 2026-02-02 |
 | 10. Backend Services & Validation | v4.0 | 5/5 | Complete | 2026-02-02 |
 | 11. API Endpoints & Metrics | v4.0 | 6/6 | Complete | 2026-02-02 |
-| 12. Frontend Union Selection UX | v4.0 | 0/TBD | Not started | - |
+| 12. Frontend Union Selection UX | v4.0 | 0/8 | Not started | - |
 | 13. Performance Validation & Optimization | v4.0 | 0/TBD | Not started | - |
 
 ---
 
-*Last updated: 2026-02-02 (Phase 11 complete)*
+*Last updated: 2026-02-02 (Phase 12 planned)*
