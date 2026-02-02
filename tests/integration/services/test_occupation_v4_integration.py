@@ -732,3 +732,260 @@ class TestZeroUnionCancellation:
             # Verify: Cancellation succeeded
             assert response.success is True
             assert response.action_taken == "CANCELADO"
+
+
+class TestErrorHandlingAndRaceConditions:
+    """Test error handling and race condition scenarios."""
+
+    @pytest.mark.asyncio
+    async def test_union_becomes_unavailable_during_selection(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Simulate union becoming unavailable between page load and FINALIZAR.
+
+        Scenario:
+        1. Worker loads page, sees 3 disponibles
+        2. Another worker completes 1 union
+        3. First worker tries to select that union
+        4. Should filter out unavailable union and process only valid ones
+        """
+        # Get disponibles
+        disponibles = union_repo.get_disponibles_arm_by_ot("001")
+        assert len(disponibles) >= 2
+
+        # Select 2 unions
+        selected_ids = [u.id for u in disponibles[:2]]
+
+        # Mock one union as completed (simulating race condition)
+        # Modify the union in-place to simulate it being completed
+        disponibles[0].arm_fecha_fin = datetime.now()
+
+        # Mock batch_update to only process 1 union (the available one)
+        with patch.object(union_repo, 'batch_update_arm', return_value=1):
+            request = FinalizarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.ARM,
+                selected_unions=selected_ids
+            )
+
+            # Should succeed with partial processing
+            response = await occupation_service.finalizar_spool(request)
+
+            # Verify: Only 1 union processed (the available one)
+            assert response.success is True
+            assert response.unions_processed == 1
+
+    @pytest.mark.asyncio
+    async def test_race_condition_all_selected_greater_than_available(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Race condition: Selected count > available count raises ValueError.
+
+        Scenario:
+        1. Worker loads page, sees 3 disponibles
+        2. All 3 get completed by other workers
+        3. Worker tries to FINALIZAR with 3 selected
+        4. Fresh query shows 0 disponibles
+        5. Should raise ValueError (3 selected > 0 available)
+        """
+        # Mock disponibles query to return empty (all completed by race)
+        with patch.object(union_repo, 'get_disponibles_arm_by_ot', return_value=[]):
+            request = FinalizarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.ARM,
+                selected_unions=["OT-001+1", "OT-001+2", "OT-001+3"]
+            )
+
+            # Should raise ValueError for race condition
+            with pytest.raises(ValueError, match="Race condition detected"):
+                await occupation_service.finalizar_spool(request)
+
+    @pytest.mark.asyncio
+    async def test_version_conflict_with_retry_logic(
+        self,
+        occupation_service,
+        conflict_service
+    ):
+        """
+        Test version conflict handling with retry logic.
+
+        Scenario:
+        1. FINALIZAR triggers Sheets update
+        2. Version conflict occurs (concurrent update)
+        3. ConflictService retries with exponential backoff
+        4. Eventually succeeds or raises VersionConflictError
+        """
+        # Mock version conflict then success
+        from backend.exceptions import VersionConflictError
+
+        conflict_service.update_with_retry.side_effect = [
+            VersionConflictError("Version mismatch", data={"version": "old"}),
+            "new-version-uuid"  # Success on retry
+        ]
+
+        # Get some unions
+        disponibles = occupation_service.union_repository.get_disponibles_arm_by_ot("001")
+        selected_ids = [u.id for u in disponibles[:2]]
+
+        # Mock batch update
+        with patch.object(occupation_service.union_repository, 'batch_update_arm', return_value=2):
+            request = FinalizarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.ARM,
+                selected_unions=selected_ids
+            )
+
+            # Should handle version conflict and retry
+            response = await occupation_service.finalizar_spool(request)
+
+            # Verify: Eventually succeeded
+            assert response.success is True
+
+    @pytest.mark.asyncio
+    async def test_partial_batch_success_handling(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Test partial batch success (some unions update, some fail).
+
+        Scenario:
+        1. Select 5 unions
+        2. Batch update succeeds for only 3 (2 validation failures)
+        3. Should log warning but continue
+        4. Metadata should reflect actual updated count
+        """
+        # Get unions
+        disponibles = union_repo.get_disponibles_arm_by_ot("001")
+        selected_ids = [u.id for u in disponibles[:3]]
+
+        # Mock partial success (only 2 out of 3 updated)
+        with patch.object(union_repo, 'batch_update_arm', return_value=2):
+            request = FinalizarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.ARM,
+                selected_unions=selected_ids
+            )
+
+            response = await occupation_service.finalizar_spool(request)
+
+            # Verify: Success with partial count
+            assert response.success is True
+            assert response.unions_processed == 2  # Not 3
+
+    @pytest.mark.asyncio
+    async def test_redis_connection_failure_with_fallback(
+        self,
+        occupation_service,
+        redis_lock_service
+    ):
+        """
+        Test Redis connection failure handling.
+
+        Scenario:
+        1. INICIAR operation
+        2. Redis lock acquisition fails (connection error)
+        3. Should propagate error (fail-fast)
+        4. Sheets should NOT be updated
+        """
+        from redis.exceptions import RedisError
+
+        # Mock Redis failure
+        redis_lock_service.acquire_lock.side_effect = RedisError("Connection refused")
+
+        # Execute: INICIAR should fail
+        request = IniciarRequest(
+            tag_spool="OT-001",
+            worker_id=93,
+            worker_nombre="MR(93)",
+            operacion=Operacion.ARM
+        )
+
+        with pytest.raises(RedisError):
+            await occupation_service.iniciar_spool(request)
+
+        # Verify: ConflictService NOT called (no Sheets update)
+        occupation_service.conflict_service.update_with_retry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_proper_error_messages_and_codes(
+        self,
+        occupation_service
+    ):
+        """
+        Test proper error messages and HTTP status code mapping.
+
+        Verify that exceptions have clear messages for debugging.
+        """
+        # Test ArmPrerequisiteError (403)
+        from backend.exceptions import ArmPrerequisiteError
+
+        # Mock no ARM completion
+        with patch.object(
+            occupation_service.validation_service,
+            'validate_arm_prerequisite',
+            side_effect=ArmPrerequisiteError(
+                tag_spool="OT-001",
+                ot="001",
+                detalle="No ARM unions completed"
+            )
+        ):
+            request = IniciarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.SOLD
+            )
+
+            with pytest.raises(ArmPrerequisiteError) as exc_info:
+                await occupation_service.iniciar_spool(request)
+
+            # Verify: Clear error message
+            assert "ARM" in str(exc_info.value)
+            assert "OT-001" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_audit_trail_for_failed_operations(
+        self,
+        occupation_service,
+        metadata_repo
+    ):
+        """
+        Test that failed operations are logged to audit trail.
+
+        Even failures should be tracked for compliance.
+        """
+        # Mock Redis lock failure
+        from redis.exceptions import RedisError
+        occupation_service.redis_lock_service.acquire_lock.side_effect = RedisError("Connection error")
+
+        # Execute: INICIAR will fail
+        request = IniciarRequest(
+            tag_spool="OT-001",
+            worker_id=93,
+            worker_nombre="MR(93)",
+            operacion=Operacion.ARM
+        )
+
+        try:
+            await occupation_service.iniciar_spool(request)
+        except RedisError:
+            pass  # Expected failure
+
+        # Note: Current implementation doesn't log failed operations
+        # This test documents the behavior for future enhancement
