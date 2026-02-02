@@ -1,0 +1,249 @@
+name: Performance Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'tests/performance/**'
+      - 'requirements.txt'
+      - '.github/workflows/performance.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'tests/performance/**'
+      - 'requirements.txt'
+  schedule:
+    # Daily at 2 AM UTC for baseline tracking
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Manual trigger for on-demand performance validation
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install numpy psutil
+
+      - name: Create results directory
+        run: mkdir -p tests/performance/results
+
+      - name: Run performance tests
+        run: |
+          PYTHONPATH=$GITHUB_WORKSPACE pytest tests/performance/ \
+            -m performance \
+            -v \
+            --tb=short \
+            --durations=10 \
+            --junitxml=tests/performance/results/junit.xml
+
+      - name: Check performance regression
+        if: always()
+        run: |
+          # Extract metrics from test output
+          if [ -f tests/performance/results/performance_suite_*.json ]; then
+            echo "📊 Performance metrics generated"
+
+            # Parse JSON and check for regressions
+            python3 << 'EOF'
+          import json
+          import glob
+          import sys
+
+          # Find latest performance report
+          reports = glob.glob("tests/performance/results/performance_suite_*.json")
+          if not reports:
+              print("⚠️  No performance report found")
+              sys.exit(0)
+
+          latest = sorted(reports)[-1]
+          with open(latest, 'r') as f:
+              data = json.load(f)
+
+          summary = data.get("summary", {})
+          requirement_status = summary.get("requirement_status", {})
+
+          print(f"\n📈 Performance Validation Results:")
+          print(f"   Total tests: {summary.get('total_tests', 0)}")
+          print(f"   Passed: {summary.get('passed', 0)}")
+          print(f"   Failed: {summary.get('failed', 0)}")
+          print(f"   Success rate: {summary.get('success_rate', 0):.1f}%")
+
+          print(f"\n📋 PERF Requirements:")
+          for req in ["PERF-01", "PERF-02", "PERF-03", "PERF-04", "PERF-05"]:
+              status = requirement_status.get(req, "NOT_TESTED")
+              icon = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
+              print(f"   {icon} {req}: {status}")
+
+          # Fail CI if any requirement failed
+          if summary.get('failed', 0) > 0:
+              print(f"\n❌ Performance regression detected!")
+              print(f"   {summary['failed']} test(s) failed")
+              sys.exit(1)
+          else:
+              print(f"\n✅ All performance requirements met")
+          EOF
+          else
+            echo "⚠️  No performance report generated"
+          fi
+
+      - name: Upload performance results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-report
+          path: |
+            tests/performance/results/*.json
+            tests/performance/results/*.xml
+          retention-days: 30
+
+      - name: Comment PR with performance results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const glob = require('glob');
+
+            // Find latest performance report
+            const reports = glob.sync('tests/performance/results/performance_suite_*.json');
+            if (reports.length === 0) {
+              console.log('No performance report found');
+              return;
+            }
+
+            const latest = reports.sort().pop();
+            const data = JSON.parse(fs.readFileSync(latest, 'utf8'));
+            const summary = data.summary || {};
+            const reqStatus = summary.requirement_status || {};
+
+            // Build comment body
+            let body = '## 📊 Performance Validation Results\n\n';
+            body += `**Tests:** ${summary.total_tests || 0} total`;
+            body += ` | ✅ ${summary.passed || 0} passed`;
+            body += ` | ❌ ${summary.failed || 0} failed`;
+            body += ` | ⏭️  ${summary.skipped || 0} skipped\n`;
+            body += `**Success Rate:** ${(summary.success_rate || 0).toFixed(1)}%\n`;
+            body += `**Duration:** ${(summary.duration || 0).toFixed(2)}s\n\n`;
+
+            body += '### PERF Requirements\n\n';
+            body += '| Requirement | Status |\n';
+            body += '|-------------|--------|\n';
+
+            ['PERF-01', 'PERF-02', 'PERF-03', 'PERF-04', 'PERF-05'].forEach(req => {
+              const status = reqStatus[req] || 'NOT_TESTED';
+              const icon = status === 'PASS' ? '✅' : status === 'FAIL' ? '❌' : '⚠️';
+              body += `| ${req} | ${icon} ${status} |\n`;
+            });
+
+            if (summary.failed > 0) {
+              body += '\n⚠️ **Performance regression detected!**\n';
+              body += `${summary.failed} test(s) failed. Please review the performance impact.\n`;
+            } else {
+              body += '\n✅ **All performance requirements met!**\n';
+            }
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Performance Validation Results')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Generate performance badge
+        if: github.ref == 'refs/heads/main' && success()
+        run: |
+          # Extract p95 latency for badge
+          python3 << 'EOF'
+          import json
+          import glob
+
+          reports = glob.glob("tests/performance/results/performance_suite_*.json")
+          if not reports:
+              print("No report for badge generation")
+              exit(0)
+
+          latest = sorted(reports)[-1]
+          with open(latest, 'r') as f:
+              data = json.load(f)
+
+          # Extract p95 from test results
+          tests = data.get("tests", [])
+          p95_tests = [t for t in tests if "p95" in t.get("metrics", {})]
+
+          if p95_tests:
+              p95 = p95_tests[0]["metrics"]["p95"]
+
+              # Determine badge color
+              if p95 < 1.0:
+                  color = "brightgreen"
+                  status = f"{p95:.2f}s"
+              elif p95 < 1.5:
+                  color = "yellow"
+                  status = f"{p95:.2f}s"
+              else:
+                  color = "red"
+                  status = f"{p95:.2f}s"
+
+              print(f"Badge: p95={status} (color={color})")
+              # Badge URL: https://img.shields.io/badge/p95-{status}-{color}
+          else:
+              print("No p95 metric found in report")
+          EOF
+
+  notify:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: performance
+    if: failure() && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Notify failure
+        run: |
+          echo "❌ Performance validation failed on main branch"
+          echo "   Commit: ${{ github.sha }}"
+          echo "   Author: ${{ github.actor }}"
+          echo "   Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
