@@ -227,6 +227,12 @@ class OccupationResponse(BaseModel):
         ge=0,
         examples=[3, 10, 0]
     )
+    pulgadas: Optional[float] = Field(
+        None,
+        description="Total pulgadas-diámetro procesadas (v4.0 only, 2 decimal precision)",
+        ge=0,
+        examples=[16.50, 24.75, 0.00]
+    )
     metrologia_triggered: Optional[bool] = Field(
         None,
         description="Si se activó la transición automática a metrología (v4.0)",
@@ -251,14 +257,16 @@ class OccupationResponse(BaseModel):
                     "tag_spool": "MK-1335-CW-25238-011",
                     "message": "Trabajo pausado - 3 uniones completadas",
                     "action_taken": "PAUSAR",
-                    "unions_processed": 3
+                    "unions_processed": 3,
+                    "pulgadas": 16.50
                 },
                 {
                     "success": True,
                     "tag_spool": "MK-1335-CW-25238-011",
                     "message": "Operación completada - 10 uniones completadas",
                     "action_taken": "COMPLETAR",
-                    "unions_processed": 10
+                    "unions_processed": 10,
+                    "pulgadas": 48.75
                 }
             ]
         }
