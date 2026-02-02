@@ -119,10 +119,19 @@ class CompletarRequest(BaseModel):
         min_length=1,
         examples=["MR(93)", "JP(94)"]
     )
+    operacion: ActionType = Field(
+        ...,
+        description="Operación a completar (ARM/SOLD/METROLOGIA)"
+    )
     fecha_operacion: date = Field(
         ...,
         description="Fecha de completado de la operación",
         examples=["2026-01-27"]
+    )
+    resultado: Optional[str] = Field(
+        None,
+        description="Resultado de metrología (APROBADO/RECHAZADO) - solo para METROLOGIA",
+        examples=["APROBADO", "RECHAZADO"]
     )
 
     @field_validator('fecha_operacion', mode='before')
@@ -138,6 +147,7 @@ class CompletarRequest(BaseModel):
                     "tag_spool": "MK-1335-CW-25238-011",
                     "worker_id": 93,
                     "worker_nombre": "MR(93)",
+                    "operacion": "ARM",
                     "fecha_operacion": "2026-01-27"
                 }
             ]
