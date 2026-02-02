@@ -92,8 +92,96 @@ class UnionService:
             SheetsConnectionError: If batch update or event logging fails
             ValueError: If validation fails
         """
-        # Placeholder implementation (will be implemented in Task 2)
-        raise NotImplementedError("process_selection will be implemented in Task 2")
+        if not union_ids:
+            raise ValueError("union_ids cannot be empty")
+
+        self.logger.info(
+            f"Processing selection: {len(union_ids)} unions for {tag_spool} ({operacion})"
+        )
+
+        # Step 1: Validate unions exist and are available
+        # Fetch all unions for this spool
+        all_unions = self.union_repo.get_by_spool(tag_spool)
+        if not all_unions:
+            raise ValueError(f"No unions found for spool {tag_spool}")
+
+        # Build map of union_id -> Union for validation
+        union_map = {u.id: u for u in all_unions}
+
+        # Validate all selected union IDs exist
+        missing_ids = [uid for uid in union_ids if uid not in union_map]
+        if missing_ids:
+            raise ValueError(f"Union IDs not found: {missing_ids}")
+
+        # Get the selected unions
+        selected_unions = [union_map[uid] for uid in union_ids]
+
+        # Validate ownership (all unions belong to same OT)
+        if not self.validate_union_ownership(selected_unions):
+            raise ValueError("All unions must belong to the same OT")
+
+        # Filter for availability (check if unions can be completed for this operation)
+        available_unions = self.filter_available_unions(selected_unions, operacion)
+        if len(available_unions) != len(selected_unions):
+            unavailable_count = len(selected_unions) - len(available_unions)
+            self.logger.warning(
+                f"{unavailable_count} unions are not available for {operacion}"
+            )
+            # Update selected_unions to only process available ones
+            selected_unions = available_unions
+            union_ids = [u.id for u in available_unions]
+
+        # Step 2: Call batch update method based on operation
+        from backend.utils.date_formatter import now_chile
+        timestamp = now_chile()
+
+        if operacion == "ARM":
+            updated_count = self.union_repo.batch_update_arm(
+                tag_spool=tag_spool,
+                union_ids=union_ids,
+                worker=worker_nombre,
+                timestamp=timestamp
+            )
+        elif operacion == "SOLD":
+            updated_count = self.union_repo.batch_update_sold(
+                tag_spool=tag_spool,
+                union_ids=union_ids,
+                worker=worker_nombre,
+                timestamp=timestamp
+            )
+        else:
+            raise ValueError(f"Invalid operacion: {operacion}")
+
+        self.logger.info(f"Batch update complete: {updated_count} unions updated")
+
+        # Step 3: Calculate pulgadas for selected unions
+        pulgadas = self.calcular_pulgadas(selected_unions)
+
+        # Step 4: Build and log metadata events
+        eventos = self.build_eventos_metadata(
+            tag_spool=tag_spool,
+            worker_id=worker_id,
+            worker_nombre=worker_nombre,
+            operacion=operacion,
+            union_ids=union_ids,
+            pulgadas=pulgadas
+        )
+
+        # Batch log all events
+        self.metadata_repo.batch_log_events(eventos)
+
+        self.logger.info(
+            f"Metadata events logged: {len(eventos)} events "
+            f"({updated_count} unions, {pulgadas} pulgadas)"
+        )
+
+        # Step 5: Return processing summary
+        return {
+            "union_count": updated_count,
+            "action": f"{operacion}_COMPLETAR",
+            "pulgadas": round(pulgadas, 1),  # 1 decimal precision
+            "event_count": len(eventos)
+        }
 
     def calcular_pulgadas(self, unions: list[Union]) -> float:
         """
