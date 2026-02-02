@@ -391,3 +391,26 @@ class InvalidStateTransitionError(ZEUSException):
                 "attempted_transition": attempted_transition
             }
         )
+
+
+class ArmPrerequisiteError(ZEUSException):
+    """
+    Raised when SOLD operation is attempted without ARM completion (v4.0 validation).
+
+    Enforces business rule: SOLD operations require at least one union with
+    ARM_FECHA_FIN != NULL before starting.
+
+    Args:
+        tag_spool: Spool identifier
+        unions_sin_armar: Count of unions without ARM completion
+    """
+
+    def __init__(self, tag_spool: str, unions_sin_armar: int = 0):
+        super().__init__(
+            message=f"Cannot start SOLD: No ARM unions completed for spool '{tag_spool}'",
+            error_code="ARM_PREREQUISITE_REQUIRED",
+            data={
+                "tag_spool": tag_spool,
+                "unions_sin_armar": unions_sin_armar
+            }
+        )
