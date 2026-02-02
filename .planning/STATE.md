@@ -43,11 +43,11 @@ Progress: [███████████░░] 98% (55 of 56 total plans co
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
-| 12. Frontend Union Selection UX | 6 (in progress) | 24.3 min | 3.5 min |
+| 12. Frontend Union Selection UX | 7 | 28.3 min | 4.0 min |
 
 **Recent Trend:**
-- Last 5 plans: [2.1, 5.0, 2.0, 3.8, 3.4] min
-- Trend: Phase 12 in progress (6 of 7 plans, 3.5-min average - 40% faster than Phase 11's 5.8-min average)
+- Last 5 plans: [5.0, 2.0, 3.8, 3.4, 4.0] min
+- Trend: Phase 12 complete (7 plans, 4.0-min average - 31% faster than Phase 11's 5.8-min average)
 
 *Updated after each plan completion*
 
@@ -180,6 +180,11 @@ Recent decisions affecting v4.0 work:
 - **D111 (12-06)**: Error defaults to v3.0 with retry button (backward compatible + user recovery path)
 - **D112 (12-06)**: v4.0 INICIAR routes to /seleccionar-spool, FINALIZAR routes to /seleccionar-uniones (skip P4 for FINALIZAR)
 - **D113 (12-06)**: Both button sets use consistent styling (h-20 for v4.0 full-width, h-40 for v3.0 grid)
+- **D114 (12-07)**: Batch processing with 5 spools at a time prevents API overload during version detection
+- **D115 (12-07)**: Session storage cache reduces redundant version detection API calls (spool_version_{TAG} format)
+- **D116 (12-07)**: INICIAR navigation calls iniciarSpool API directly, skips union selection (simplified v4.0 workflow)
+- **D117 (12-07)**: Type assertions for backend fields (Ocupado_Por) not in Spool interface (backend data completeness)
+- **D118 (12-07)**: Default to v3.0 on version detection error (safer legacy workflow fallback)
 
 ### Pending Todos
 
@@ -289,7 +294,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 12-06-PLAN.md (P3 Version Detection & Dual Button Sets)
-Resume file: None - continuing Phase 12 execution
+Stopped at: Completed 12-07-PLAN.md (P4 Spool Filtering & Version Badges)
+Resume file: None - Phase 12 complete
 
-**Phase 12 Progress:** P3 version detection complete. P3 detects spool version via metricas API, shows dual button sets (v4.0: INICIAR/FINALIZAR, v3.0: TOMAR/PAUSAR/COMPLETAR), caches version in session storage. Visual indicators with help text. Context updates for v4.0 workflow. Next: Plan 12-07 (final plan in Phase 12) for P4 skip logic.
+**Phase 12 Complete (7/7 plans, 28.3 min):** Frontend Union Selection UX complete. P4 filters spools by action (INICIAR shows disponibles, FINALIZAR shows occupied), version badges with batch detection and caching, INICIAR API navigation. Next: Phase 13 (final phase) for comprehensive integration testing and production deployment verification.
