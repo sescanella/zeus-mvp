@@ -1222,29 +1222,54 @@ class OccupationService:
                     # Don't block operation on metrología check failure
                     metrologia_triggered = False
 
-            # Step 6: Update Uniones sheet with batch operation
+            # Step 6: Process union selection through UnionService
+            skip_metadata_logging = False
             try:
-                timestamp = now_chile()
-
-                if operacion == "ARM":
-                    updated_count = self.union_repository.batch_update_arm(
+                if self.union_service:
+                    # Use UnionService for batch update + metadata logging
+                    result = self.union_service.process_selection(
                         tag_spool=tag_spool,
                         union_ids=selected_unions,
-                        worker=worker_nombre,
-                        timestamp=timestamp
-                    )
-                elif operacion == "SOLD":
-                    updated_count = self.union_repository.batch_update_sold(
-                        tag_spool=tag_spool,
-                        union_ids=selected_unions,
-                        worker=worker_nombre,
-                        timestamp=timestamp
+                        worker_id=worker_id,
+                        worker_nombre=worker_nombre,
+                        operacion=operacion
                     )
 
-                logger.info(f"✅ Batch update: {updated_count} unions updated in Uniones sheet")
+                    updated_count = result["union_count"]
+                    pulgadas = result.get("pulgadas", 0.0)
+                    event_count = result.get("event_count", 0)
+
+                    logger.info(
+                        f"✅ UnionService processed: {updated_count} unions, "
+                        f"{pulgadas} pulgadas, {event_count} metadata events"
+                    )
+
+                    # Skip manual metadata logging since UnionService handled it
+                    skip_metadata_logging = True
+                else:
+                    # Fallback to direct UnionRepository (v3.0 compatibility)
+                    timestamp = now_chile()
+
+                    if operacion == "ARM":
+                        updated_count = self.union_repository.batch_update_arm(
+                            tag_spool=tag_spool,
+                            union_ids=selected_unions,
+                            worker=worker_nombre,
+                            timestamp=timestamp
+                        )
+                    elif operacion == "SOLD":
+                        updated_count = self.union_repository.batch_update_sold(
+                            tag_spool=tag_spool,
+                            union_ids=selected_unions,
+                            worker=worker_nombre,
+                            timestamp=timestamp
+                        )
+
+                    logger.info(f"✅ Batch update: {updated_count} unions updated in Uniones sheet")
+                    skip_metadata_logging = False
 
             except Exception as e:
-                logger.error(f"Failed to update Uniones sheet: {e}")
+                logger.error(f"Failed to process union selection: {e}")
                 raise SheetsUpdateError(
                     f"Failed to update unions: {e}",
                     updates={"unions": selected_unions}
@@ -1276,41 +1301,44 @@ class OccupationService:
                 logger.error(f"Failed to clear occupation: {e}")
                 # Continue - unions already updated, lock already released
 
-            # Step 8: Log appropriate event to Metadata
-            try:
-                if action_taken == "PAUSAR":
-                    evento_tipo = EventoTipo.PAUSAR_SPOOL.value
-                elif action_taken == "COMPLETAR":
-                    # Use operation-specific event type
-                    evento_tipo_str = f"COMPLETAR_{operacion}"
-                    try:
-                        evento_tipo_enum = EventoTipo(evento_tipo_str)
-                        evento_tipo = evento_tipo_enum.value
-                    except ValueError:
-                        evento_tipo = evento_tipo_str
+            # Step 8: Log appropriate event to Metadata (only if not handled by UnionService)
+            if not skip_metadata_logging:
+                try:
+                    if action_taken == "PAUSAR":
+                        evento_tipo = EventoTipo.PAUSAR_SPOOL.value
+                    elif action_taken == "COMPLETAR":
+                        # Use operation-specific event type
+                        evento_tipo_str = f"COMPLETAR_{operacion}"
+                        try:
+                            evento_tipo_enum = EventoTipo(evento_tipo_str)
+                            evento_tipo = evento_tipo_enum.value
+                        except ValueError:
+                            evento_tipo = evento_tipo_str
 
-                metadata_json = json.dumps({
-                    "v4_operation": "FINALIZAR",
-                    "action_taken": action_taken,
-                    "unions_processed": updated_count,
-                    "selected_unions": selected_unions
-                })
+                    metadata_json = json.dumps({
+                        "v4_operation": "FINALIZAR",
+                        "action_taken": action_taken,
+                        "unions_processed": updated_count,
+                        "selected_unions": selected_unions
+                    })
 
-                self.metadata_repository.log_event(
-                    evento_tipo=evento_tipo,
-                    tag_spool=tag_spool,
-                    worker_id=worker_id,
-                    worker_nombre=worker_nombre,
-                    operacion=operacion,
-                    accion=action_taken,
-                    fecha_operacion=format_date_for_sheets(today_chile()),
-                    metadata_json=metadata_json
-                )
+                    self.metadata_repository.log_event(
+                        evento_tipo=evento_tipo,
+                        tag_spool=tag_spool,
+                        worker_id=worker_id,
+                        worker_nombre=worker_nombre,
+                        operacion=operacion,
+                        accion=action_taken,
+                        fecha_operacion=format_date_for_sheets(today_chile()),
+                        metadata_json=metadata_json
+                    )
 
-                logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+                    logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
 
-            except Exception as e:
-                logger.error(f"❌ CRITICAL: Metadata logging failed: {e}", exc_info=True)
+                except Exception as e:
+                    logger.error(f"❌ CRITICAL: Metadata logging failed: {e}", exc_info=True)
+            else:
+                logger.info(f"✅ Metadata logging handled by UnionService (batch + granular events)")
 
             # Step 8.3: Trigger metrología auto-transition if flagged
             metrologia_new_state = None
