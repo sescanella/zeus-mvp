@@ -216,6 +216,17 @@ class OccupationResponse(BaseModel):
     success: bool = Field(..., description="Si la operación fue exitosa")
     tag_spool: str = Field(..., description="TAG del spool procesado")
     message: str = Field(..., description="Mensaje descriptivo del resultado")
+    action_taken: Optional[str] = Field(
+        None,
+        description="Acción tomada en v4.0 FINALIZAR (PAUSAR/COMPLETAR/CANCELADO)",
+        examples=["PAUSAR", "COMPLETAR", "CANCELADO"]
+    )
+    unions_processed: Optional[int] = Field(
+        None,
+        description="Número de uniones procesadas en v4.0 FINALIZAR",
+        ge=0,
+        examples=[3, 10, 0]
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -224,6 +235,20 @@ class OccupationResponse(BaseModel):
                     "success": True,
                     "tag_spool": "MK-1335-CW-25238-011",
                     "message": "Spool MK-1335-CW-25238-011 tomado por MR(93)"
+                },
+                {
+                    "success": True,
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "message": "Trabajo pausado - 3 uniones completadas",
+                    "action_taken": "PAUSAR",
+                    "unions_processed": 3
+                },
+                {
+                    "success": True,
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "message": "Operación completada - 10 uniones completadas",
+                    "action_taken": "COMPLETAR",
+                    "unions_processed": 10
                 }
             ]
         }
@@ -311,3 +336,110 @@ class LockToken(BaseModel):
     worker_id: int = Field(..., description="ID del trabajador owner")
     token: str = Field(..., description="UUID token único")
     expires_at: Optional[datetime] = Field(None, description="Timestamp de expiración")
+
+
+class IniciarRequest(BaseModel):
+    """
+    Request body para iniciar trabajo en un spool (v4.0 INICIAR operation).
+
+    Ocupa el spool sin tocar la hoja Uniones. El worker debe seleccionar
+    uniones después mediante FINALIZAR.
+
+    Utilizado por endpoint POST /api/iniciar.
+    """
+    tag_spool: str = Field(
+        ...,
+        description="TAG único del spool a ocupar",
+        min_length=1,
+        examples=["MK-1335-CW-25238-011"]
+    )
+    worker_id: int = Field(
+        ...,
+        description="ID del trabajador que inicia trabajo",
+        gt=0,
+        examples=[93, 94, 95]
+    )
+    worker_nombre: str = Field(
+        ...,
+        description="Nombre completo del trabajador (formato: INICIALES(ID))",
+        min_length=1,
+        examples=["MR(93)", "JP(94)"]
+    )
+    operacion: ActionType = Field(
+        ...,
+        description="Operación a realizar (ARM/SOLD)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "worker_id": 93,
+                    "worker_nombre": "MR(93)",
+                    "operacion": "ARM"
+                }
+            ]
+        }
+    )
+
+
+class FinalizarRequest(BaseModel):
+    """
+    Request body para finalizar trabajo en un spool (v4.0 FINALIZAR operation).
+
+    Procesa las uniones seleccionadas y auto-determina si debe PAUSAR o COMPLETAR
+    basado en si se procesaron todas las uniones disponibles.
+
+    selected_unions vacío = cancellation (libera lock sin tocar Uniones).
+
+    Utilizado por endpoint POST /api/finalizar.
+    """
+    tag_spool: str = Field(
+        ...,
+        description="TAG único del spool a finalizar",
+        min_length=1,
+        examples=["MK-1335-CW-25238-011"]
+    )
+    worker_id: int = Field(
+        ...,
+        description="ID del trabajador que finaliza (debe ser el owner)",
+        gt=0,
+        examples=[93, 94, 95]
+    )
+    worker_nombre: str = Field(
+        ...,
+        description="Nombre completo del trabajador",
+        min_length=1,
+        examples=["MR(93)", "JP(94)"]
+    )
+    operacion: ActionType = Field(
+        ...,
+        description="Operación a finalizar (ARM/SOLD)"
+    )
+    selected_unions: list[str] = Field(
+        ...,
+        description="Lista de union IDs seleccionadas (empty list = cancellation)",
+        examples=[["OT-123+1", "OT-123+2"], []]
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "worker_id": 93,
+                    "worker_nombre": "MR(93)",
+                    "operacion": "ARM",
+                    "selected_unions": ["OT-123+1", "OT-123+2", "OT-123+3"]
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "worker_id": 93,
+                    "worker_nombre": "MR(93)",
+                    "operacion": "ARM",
+                    "selected_unions": []
+                }
+            ]
+        }
+    )
