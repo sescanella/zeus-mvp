@@ -9,11 +9,11 @@ Requirements for union-level tracking and partial completion workflows. Each map
 
 ### Data Model & Schema
 
-- [ ] **DATA-01**: Add 5 columns to Uniones sheet (14-18): version (UUID4), Creado_Por, Fecha_Creacion, Modificado_Por, Fecha_Modificacion
-- [ ] **DATA-02**: Add 5 columns to Operaciones sheet (68-72): Total_Uniones, Uniones_ARM_Completadas, Uniones_SOLD_Completadas, Pulgadas_ARM, Pulgadas_SOLD
-- [ ] **DATA-03**: Add N_UNION column to Metadata sheet (position 11 at end, nullable) for granular audit trail
-- [ ] **DATA-04**: UnionRepository uses OT column (not TAG_SPOOL) for foreign key relationship to Operaciones
-- [ ] **DATA-05**: System uses dynamic header mapping for all sheets (never hardcode column indices)
+- [x] **DATA-01**: Add 5 columns to Uniones sheet (14-18): version (UUID4), Creado_Por, Fecha_Creacion, Modificado_Por, Fecha_Modificacion
+- [x] **DATA-02**: Add 5 columns to Operaciones sheet (68-72): Total_Uniones, Uniones_ARM_Completadas, Uniones_SOLD_Completadas, Pulgadas_ARM, Pulgadas_SOLD
+- [x] **DATA-03**: Add N_UNION column to Metadata sheet (position 11 at end, nullable) for granular audit trail
+- [x] **DATA-04**: UnionRepository uses OT column (not TAG_SPOOL) for foreign key relationship to Operaciones
+- [x] **DATA-05**: System uses dynamic header mapping for all sheets (never hardcode column indices)
 
 ### Backend - Repositories & Models
 

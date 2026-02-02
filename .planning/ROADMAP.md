@@ -38,8 +38,8 @@ Plans:
 - [x] 07-03-PLAN.md — Create Union model and repository with tests
 - [x] 07-04-PLAN.md — Add startup schema validation for all sheets
 - [x] 07-05-PLAN.md — Integrate v4.0 schema validation into FastAPI startup
-- [ ] 07-06-PLAN.md — Execute schema migrations for Operaciones and Metadata (gap closure)
-- [ ] 07-07-PLAN.md — Document Uniones requirements for Engineering (gap closure)
+- [x] 07-06-PLAN.md — Execute schema migrations for Operaciones and Metadata (gap closure)
+- [x] 07-07-PLAN.md — Document Uniones requirements for Engineering (gap closure)
 
 #### Phase 8: Backend Data Layer
 **Goal**: Repository layer can read/write union data with batch operations and performance optimization
@@ -150,7 +150,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 4. Real-Time SSE Dashboard | v3.0 | Complete | Complete | 2026-01-27 |
 | 5. Metrología Instant Inspection | v3.0 | Complete | Complete | 2026-01-28 |
 | 6. Reparación Bounded Cycles | v3.0 | Complete | Complete | 2026-01-28 |
-| 7. Data Model Foundation | v4.0 | 5/5 | Gaps found | 2026-02-02 |
+| 7. Data Model Foundation | v4.0 | 7/7 | Complete | 2026-02-02 |
 | 8. Backend Data Layer | v4.0 | 0/TBD | Not started | - |
 | 9. Redis & Version Detection | v4.0 | 0/TBD | Not started | - |
 | 10. Backend Services & Validation | v4.0 | 0/TBD | Not started | - |
@@ -160,4 +160,4 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 
 ---
 
-*Last updated: 2026-01-30*
+*Last updated: 2026-02-02*
