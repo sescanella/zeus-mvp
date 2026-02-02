@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Track work at the union level with the correct business metric (pulgadas-diámetro)
-**Current focus:** Phase 10 - Backend Services & Validation
+**Current focus:** Phase 11 - API Endpoints & Metrics
 
 ## Current Position
 
-Phase: 10 of 13 (Backend Services & Validation)
-Plan: 5 of 5 in current phase
-Status: Phase complete, verified ✓
-Last activity: 2026-02-02 — Completed Phase 10 (all 5 plans executed and verified)
+Phase: 11 of 13 (API Endpoints & Metrics)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 11-01-PLAN.md (API Versioning & V3 Migration)
 
-Progress: [██████████░░░] 77% (10 of 13 phases complete and verified, ready for Phase 11)
+Progress: [██████████░░░] 78% (10 phases complete + 1/5 plans in Phase 11, 41 of 52 total plans)
 
 ## Performance Metrics
 
@@ -41,11 +41,12 @@ Progress: [██████████░░░] 77% (10 of 13 phases complet
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
-| 10. Backend Services & Validation | 5/5 | 28.5 min | 5.7 min |
+| 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
+| 11. API Endpoints & Metrics | 1/5 | 5.2 min | 5.2 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.0, 5.0, 6.0, 6.5, 6.0] min
-- Trend: Phase 10 complete (5 of 5 plans, 5.7-min average - consistent with Phase 9's 5.3-min)
+- Last 5 plans: [5.0, 6.0, 6.5, 6.0, 5.2] min
+- Trend: Phase 11 started (1 of 5 plans, 5.2-min first plan - faster than Phase 10's 5.7-min average)
 
 *Updated after each plan completion*
 
@@ -138,6 +139,9 @@ Recent decisions affecting v4.0 work:
 - **D71 (10-05)**: Ownership validation simplified (realistic scenario uses 1:1 OT:TAG_SPOOL)
 - **D72 (10-05)**: Memory usage test ensures <50MB increase during batches (psutil monitoring)
 - **D73 (10-05)**: Mock fixtures provide realistic Uniones data (100 unions, 10 OTs)
+- **D74 (11-01)**: URL versioning with /api/v3/ and /api/v4/ prefixes (explicit versioning prevents breaking changes)
+- **D75 (11-01)**: Legacy router at /api/ prefix for backward compatibility during transition
+- **D76 (11-01)**: Simple version detection utils in backend/utils/ (complement Phase 9 service for inline checks)
 
 ### Pending Todos
 
@@ -167,11 +171,22 @@ None yet.
   - 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (4.4 min)
   - 10-03 ✓: ARM-before-SOLD validation (6.0 min)
   - 10-04 ✓: Metrología auto-transition (6.5 min)
-  - 10-05 ✓: Integration tests and performance validation (6.0 min, this session)
+  - 10-05 ✓: Integration tests and performance validation (6.0 min)
   - Test coverage: 34 new v4.0 integration/performance tests (100% passing)
   - Performance: <1s for 10-union batches (p95 requirement MET)
+- **🔄 Phase 11 In Progress**: API Endpoints & Metrics (1/5 plans, 5.2 min total, 5.2-min avg)
+  - 11-01 ✓: API Versioning & V3 Migration (5.2 min, this session)
+    - Created occupation_v3.py router with v3.0 endpoints at /api/v3/
+    - Maintained legacy routes at /api/ for backward compatibility
+    - Added version detection utils (is_v4_spool, get_spool_version)
+    - 8 smoke tests validate versioning structure
+  - 11-02 pending: INICIAR/FINALIZAR endpoints at /api/v4/
+  - 11-03 pending: Metrics API for pulgadas-diámetro performance
+  - 11-04 pending: Union listing and selection endpoints
+  - 11-05 pending: Integration tests for v4.0 API
 
 **v3.0 Technical Debt:**
+- 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
 - Frontend metrología/reparación integration unverified (backend complete, UI may be missing)
 - No dedicated reparación router (endpoints in actions.py instead of separate router)
@@ -180,7 +195,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 10 (Backend Services & Validation, 5 plans, 28 min duration)
+Stopped at: Completed 11-01-PLAN.md (API Versioning & V3 Migration, 5.2 min duration)
 Resume file: None
 
-**Phase 10 Complete:** All 5 plans finished and verified. Business logic layer complete with UnionService orchestration (batch operations, pulgadas calculation), INICIAR/FINALIZAR workflows (auto-determination), ARM-before-SOLD validation (403 at INICIAR), metrología auto-transition (mixed union types), and zero-union cancellation. 64 passing tests (52 unit + 12 integration), 100% coverage. Performance validated <1s for 10-union batches. Ready for Phase 11 (API Endpoints & Metrics).
+**Phase 11 Plan 01 Complete:** API versioning structure established. Created occupation_v3.py router (v3.0 endpoints at /api/v3/), maintained legacy routes (/api/) for backward compatibility. Added version detection utils (is_v4_spool, get_spool_version, format_version_badge). 8 smoke tests validate dual-prefix routing. Ready for 11-02 (INICIAR/FINALIZAR v4.0 endpoints at /api/v4/).
