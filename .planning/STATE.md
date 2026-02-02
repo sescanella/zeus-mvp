@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Track work at the union level with the correct business metric (pulgadas-diámetro)
-**Current focus:** Phase 7 - Data Model Foundation
+**Current focus:** Phase 8 - Backend Data Layer
 
 ## Current Position
 
-Phase: 7 of 13 (Data Model Foundation)
-Plan: 7 of 7 in current phase (including 2 gap closure plans)
-Status: Phase complete, gaps closed, verified ✓
-Last activity: 2026-02-02 — Completed Phase 7 with gap closure (07-06 schema migrations, 07-07 engineering docs)
+Phase: 8 of 13 (Backend Data Layer)
+Plan: 4 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 08-04-PLAN.md (Metadata batch logging with n_union field, 3.5 min duration)
 
-Progress: [████████░░░░░] 62% (7 of 13 phases complete and verified, ready for Phase 8)
+Progress: [████████░░░░░] 62% (7 of 13 phases complete, Phase 8 in progress: 4/5 plans done)
 
 ## Performance Metrics
 
@@ -39,10 +39,11 @@ Progress: [████████░░░░░] 62% (7 of 13 phases complete
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
+| 8. Backend Data Layer | 4 | 14 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.0, 3.0, 8.0, 1.0, 2.0] min
-- Trend: Phase 7 complete with Engineering handoff (Data Model Foundation complete, pending external dependency)
+- Last 5 plans: [3.0, 8.0, 1.0, 2.0, 3.5] min
+- Trend: Phase 8 in progress (Backend Data Layer: Union CRUD + Metadata batch logging)
 
 *Updated after each plan completion*
 
@@ -77,6 +78,11 @@ Recent decisions affecting v4.0 work:
 - **D22 (07-06)**: Accept Uniones validation failure as expected (Engineering dependency documented in blockers)
 - **D23 (07-07)**: Document Uniones requirements instead of auto-populating data (Engineering owns union-level data, system provides structure)
 - **D24 (07-07)**: Optional --fix flag to add headers (structure only, not data) - Engineering chooses manual or automated structure setup
+- **D25 (08-04)**: N_UNION field appended as column K (position 11) in Metadata sheet
+- **D26 (08-04)**: Auto-chunk batch_log_events at 900 rows for Google Sheets safety
+- **D27 (08-04)**: build_union_events extracts n_union from union_id format (OT-123+5)
+- **D28 (08-04)**: New event types UNION_ARM_REGISTRADA, UNION_SOLD_REGISTRADA, SPOOL_CANCELADO
+- **D29 (08-04)**: Backward compatibility for v3.0 events (n_union=None, 10-column rows)
 
 ### Pending Todos
 
@@ -102,7 +108,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 07-07-PLAN.md (Engineering handoff documentation for Uniones sheet, 2 min duration)
+Stopped at: Completed 08-04-PLAN.md (Metadata batch logging with n_union field, 3.5 min duration)
 Resume file: None
 
-**Phase 7 Complete:** All 7 plans finished (5 original + 2 gap closure), verification passed (5/5 must-haves). Production sheets extended to v4.0 schema with all union tracking infrastructure. Engineering populated Uniones sheet with 22 columns. Ready for Phase 8.
+**Phase 8 Progress:** 4 of 5 plans complete. Union model with OT-based queries (08-01, 08-02, 08-03) complete. Metadata batch logging with n_union field (08-04) complete. Next: 08-05 metrics aggregation.
