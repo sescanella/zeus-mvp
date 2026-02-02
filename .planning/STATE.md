@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 9 of 13 (Redis & Version Detection)
-Plan: 5 of 5 in current phase
+Plan: 6 of 6 in current phase
 Status: Phase complete
-Last activity: 2026-02-02 — Completed 09-05-PLAN.md (Integration tests)
+Last activity: 2026-02-02 — Completed 09-06-PLAN.md (Frontend version detection)
 
 Progress: [█████████░░░░] 69% (9 of 13 phases complete, Phase 9 finished)
 
@@ -40,11 +40,11 @@ Progress: [█████████░░░░] 69% (9 of 13 phases complete
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
-| 9. Redis & Version Detection | 5 | 28 min | 5.6 min |
+| 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.4, 7.5, 4.0, 4.4, 8.1] min
-- Trend: Phase 9 COMPLETE (5 plans, 5.6-min average - consistent velocity maintained)
+- Last 5 plans: [4.0, 4.4, 8.1, 4.0] min
+- Trend: Phase 9 COMPLETE (6 plans, 5.3-min average - consistent velocity maintained)
 
 *Updated after each plan completion*
 
@@ -107,6 +107,9 @@ Recent decisions affecting v4.0 work:
 - **D50 (09-05)**: Use MagicMock for Spool attributes (frozen model compatibility)
 - **D51 (09-05)**: Simplified retry test due to reraise=False design in version detection
 - **D52 (09-05)**: 84% coverage threshold acceptable for Phase 9 (core functionality 100% covered)
+- **D53 (09-06)**: Frontend detects version locally by union count (no API call per spool - avoids latency)
+- **D54 (09-06)**: Version badges on table instead of cards (P4 uses table layout, added VERSION column)
+- **D55 (09-06)**: Session storage for version caching (spool_version_{tag} format for future workflow routing)
 
 ### Pending Todos
 
@@ -123,11 +126,12 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **✅ Phase 9 Complete**: Redis & Version Detection (5 of 5 plans complete, 28 min total)
+- **✅ Phase 9 Complete**: Redis & Version Detection (6 of 6 plans complete, 32 min total)
   - Persistent locks without TTL (SET + PERSIST two-step acquisition)
   - Lazy cleanup (>24h threshold, eventual consistency)
   - Startup reconciliation from Sheets (10s timeout, age filtering)
   - Version detection service (Total_Uniones logic, retry with exponential backoff)
+  - Frontend version detection (TypeScript types, API functions, visual badges)
   - Comprehensive test suite: 63 tests, 84% coverage
   - Next: Phase 10 (v4.0 endpoints - INICIAR/FINALIZAR workflows)
 
@@ -140,7 +144,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 09-05-PLAN.md (Integration tests, 8.1 min duration)
+Stopped at: Completed 09-06-PLAN.md (Frontend version detection, 4.0 min duration)
 Resume file: None
 
-**Phase 9 Complete:** All 5 plans finished (28 min total, 5.6-min average). Redis infrastructure ready for v4.0: persistent locks + lazy cleanup + startup reconciliation + version detection. 63 tests, 84% coverage. Next: Phase 10 (v4.0 endpoints).
+**Phase 9 Complete:** All 6 plans finished (32 min total, 5.3-min average). Redis infrastructure + frontend version detection ready for v4.0: persistent locks + lazy cleanup + startup reconciliation + backend/frontend version detection + visual badges. 63 tests, 84% coverage. Next: Phase 10 (v4.0 endpoints - INICIAR/FINALIZAR workflows).
