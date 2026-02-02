@@ -82,15 +82,19 @@ class TestAPIVersioning:
     def test_version_detection_helper_functions(self):
         """Version detection utility functions work correctly"""
         from backend.utils.version_detection import is_v4_spool, get_spool_version
-        from unittest.mock import MagicMock
 
-        # v3.0 spool
-        v3_spool = MagicMock(total_uniones=0)
+        # v3.0 spool (Total_Uniones = 0 or None)
+        v3_spool = {"TAG_SPOOL": "TEST-01", "Total_Uniones": "0"}
         assert is_v4_spool(v3_spool) is False
         assert get_spool_version(v3_spool) == "v3.0"
 
-        # v4.0 spool
-        v4_spool = MagicMock(total_uniones=10)
+        # v3.0 spool with None
+        v3_spool_none = {"TAG_SPOOL": "TEST-01", "Total_Uniones": None}
+        assert is_v4_spool(v3_spool_none) is False
+        assert get_spool_version(v3_spool_none) == "v3.0"
+
+        # v4.0 spool (Total_Uniones > 0)
+        v4_spool = {"TAG_SPOOL": "TEST-02", "Total_Uniones": "10"}
         assert is_v4_spool(v4_spool) is True
         assert get_spool_version(v4_spool) == "v4.0"
 
