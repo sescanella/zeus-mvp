@@ -70,14 +70,15 @@ Plans:
   3. System reconciles Redis locks from Sheets.Ocupado_Por on application startup for auto-recovery
   4. Frontend detects spool version by union count (count > 0 = v4.0, count = 0 = v3.0)
   5. System validates v4.0 endpoints reject v3.0 spools with clear error message
-**Plans**: 5 plans
+**Plans**: 6 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Implement persistent Redis locks without TTL
-- [ ] 09-02-PLAN.md — Add lazy cleanup mechanism for abandoned locks
-- [ ] 09-03-PLAN.md — Implement startup reconciliation from Sheets
-- [ ] 09-04-PLAN.md — Create version detection service and diagnostic endpoint
-- [ ] 09-05-PLAN.md — Integration tests for persistent locks and version detection
+- [x] 09-01-PLAN.md — Implement persistent Redis locks without TTL
+- [x] 09-02-PLAN.md — Add lazy cleanup mechanism for abandoned locks
+- [x] 09-03-PLAN.md — Implement startup reconciliation from Sheets
+- [x] 09-04-PLAN.md — Create version detection service and diagnostic endpoint
+- [x] 09-05-PLAN.md — Integration tests for persistent locks and version detection
+- [x] 09-06-PLAN.md — Frontend version detection and badges
 
 #### Phase 10: Backend Services & Validation
 **Goal**: Business logic orchestrates union selection with auto-determination of PAUSAR vs COMPLETAR and ARM-before-SOLD validation
@@ -160,7 +161,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 6. Reparación Bounded Cycles | v3.0 | Complete | Complete | 2026-01-28 |
 | 7. Data Model Foundation | v4.0 | 7/7 | Complete | 2026-02-02 |
 | 8. Backend Data Layer | v4.0 | 5/5 | Complete | 2026-02-02 |
-| 9. Redis & Version Detection | v4.0 | 0/5 | Not started | - |
+| 9. Redis & Version Detection | v4.0 | 6/6 | Complete | 2026-02-02 |
 | 10. Backend Services & Validation | v4.0 | 0/TBD | Not started | - |
 | 11. API Endpoints & Metrics | v4.0 | 0/TBD | Not started | - |
 | 12. Frontend Union Selection UX | v4.0 | 0/TBD | Not started | - |

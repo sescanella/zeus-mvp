@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 
 Phase: 9 of 13 (Redis & Version Detection)
 Plan: 6 of 6 in current phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 09-06-PLAN.md (Frontend version detection)
+Status: Phase complete, verified ✓
+Last activity: 2026-02-02 — Completed Phase 9 (all 6 plans executed and verified)
 
-Progress: [█████████░░░░] 69% (9 of 13 phases complete, Phase 9 finished)
+Progress: [██████████░░░] 77% (9 of 13 phases complete and verified, ready for Phase 10)
 
 ## Performance Metrics
 
@@ -126,7 +126,15 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **✅ Phase 9 Complete**: Redis & Version Detection (6 of 6 plans complete, 32 min total)
+- **✅ Phase 9 Complete**: Redis & Version Detection
+  - Persistent locks without TTL (two-step SET + PERSIST)
+  - Lazy cleanup (one lock per INICIAR, >24h threshold)
+  - Startup reconciliation (10s timeout, Sheets as source of truth)
+  - Version detection service (retry with exponential backoff)
+  - Frontend version badges (green v4.0, gray v3.0)
+  - 63 passing tests (30 unit + 33 integration), 84% coverage
+  - Duration: 32 min total (5.3-min average)
+- **Ready for Phase 10**: Backend Services & Validation
   - Persistent locks without TTL (SET + PERSIST two-step acquisition)
   - Lazy cleanup (>24h threshold, eventual consistency)
   - Startup reconciliation from Sheets (10s timeout, age filtering)
@@ -144,7 +152,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 09-06-PLAN.md (Frontend version detection, 4.0 min duration)
+Stopped at: Completed Phase 9 (Redis & Version Detection, 6 plans, 32 min duration)
 Resume file: None
 
-**Phase 9 Complete:** All 6 plans finished (32 min total, 5.3-min average). Redis infrastructure + frontend version detection ready for v4.0: persistent locks + lazy cleanup + startup reconciliation + backend/frontend version detection + visual badges. 63 tests, 84% coverage. Next: Phase 10 (v4.0 endpoints - INICIAR/FINALIZAR workflows).
+**Phase 9 Complete:** All 6 plans finished and verified. Persistent locks infrastructure complete with 63 passing tests (30 unit + 33 integration), 84% coverage. Redis locks support long-running sessions (TTL=-1), lazy cleanup prevents deadlocks, startup reconciliation auto-recovers from crashes. Version detection ready for dual workflow routing. Ready for Phase 10 (Backend Services & Validation).
