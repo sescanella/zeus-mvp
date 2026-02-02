@@ -12,6 +12,10 @@ interface AppState {
   selectedSpools: string[];  // v2.0: Multiselect batch (array de TAGs)
   batchMode: boolean;  // v2.0: Flag si operación es batch
   batchResults: BatchActionResponse | null;  // v2.0: Resultados de batch operation
+  // v4.0: Union-level workflow fields
+  accion: 'INICIAR' | 'FINALIZAR' | null;  // v4.0: Workflow action (replaces selectedTipo for v4.0 spools)
+  selectedUnions: number[];  // v4.0: Selected union numbers (N_UNION values)
+  pulgadasCompletadas: number;  // v4.0: Calculated pulgadas-diámetro for selected unions
 }
 
 interface AppContextType {
@@ -31,6 +35,10 @@ const initialState: AppState = {
   selectedSpools: [],  // v2.0: Array vacío por defecto
   batchMode: false,  // v2.0: No batch por defecto
   batchResults: null,  // v2.0: Sin resultados por defecto
+  // v4.0: Initialize union-level workflow state
+  accion: null,
+  selectedUnions: [],
+  pulgadasCompletadas: 0,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
