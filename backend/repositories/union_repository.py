@@ -173,6 +173,59 @@ class UnionRepository:
             self.logger.error(f"Failed to query unions for {tag_spool}: {e}", exc_info=True)
             raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")
 
+    def get_disponibles_arm_by_ot(self, ot: str) -> list[Union]:
+        """
+        Get disponibles unions for ARM operation for a given work order.
+
+        Convenience method that filters unions where ARM_FECHA_FIN is NULL.
+
+        Args:
+            ot: Work order number to filter by (e.g., "001", "123")
+
+        Returns:
+            list[Union]: Flat list of unions available for ARM work, empty if none
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        # Fetch all unions for the OT
+        all_unions = self.get_by_ot(ot)
+
+        # Filter to disponibles (ARM not yet completed)
+        disponibles = [u for u in all_unions if u.arm_fecha_fin is None]
+
+        self.logger.debug(f"Found {len(disponibles)} ARM disponibles for OT {ot}")
+        return disponibles
+
+    def get_disponibles_sold_by_ot(self, ot: str) -> list[Union]:
+        """
+        Get disponibles unions for SOLD operation for a given work order.
+
+        Convenience method that filters unions where:
+        - ARM_FECHA_FIN is NOT NULL (ARM must be completed first)
+        - SOL_FECHA_FIN is NULL (SOLD not yet completed)
+
+        Args:
+            ot: Work order number to filter by (e.g., "001", "123")
+
+        Returns:
+            list[Union]: Flat list of unions available for SOLD work, empty if none
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        # Fetch all unions for the OT
+        all_unions = self.get_by_ot(ot)
+
+        # Filter to disponibles (ARM complete, SOLD not yet complete)
+        disponibles = [
+            u for u in all_unions
+            if u.arm_fecha_fin is not None and u.sol_fecha_fin is None
+        ]
+
+        self.logger.debug(f"Found {len(disponibles)} SOLD disponibles for OT {ot}")
+        return disponibles
+
     def get_disponibles(
         self,
         operacion: Literal["ARM", "SOLD"]
