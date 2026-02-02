@@ -1398,6 +1398,9 @@ class OccupationService:
             # Step 9: Return success response
             if action_taken == "COMPLETAR":
                 message = f"Operación completada en {tag_spool} - {updated_count} uniones procesadas"
+                # Add metrología notification if triggered
+                if metrologia_triggered and metrologia_new_state:
+                    message += " (Listo para metrología)"
             else:
                 message = f"Trabajo pausado en {tag_spool} - {updated_count} uniones procesadas"
 
@@ -1408,7 +1411,9 @@ class OccupationService:
                 tag_spool=tag_spool,
                 message=message,
                 action_taken=action_taken,
-                unions_processed=updated_count
+                unions_processed=updated_count,
+                metrologia_triggered=metrologia_triggered if metrologia_triggered else None,
+                new_state=metrologia_new_state if metrologia_new_state else None
             )
 
         except (SpoolNoEncontradoError, NoAutorizadoError, LockExpiredError, ValueError):

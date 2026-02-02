@@ -621,3 +621,106 @@ class StateService:
             logger.debug(f"Estado_Detalle updated for {tag_spool}: {estado_detalle}")
         else:
             logger.warning(f"Could not find row for {tag_spool} to update Estado_Detalle")
+
+    async def trigger_metrologia_transition(self, tag_spool: str) -> Optional[str]:
+        """
+        Trigger automatic transition to metrología queue when all work is complete.
+
+        Flow:
+        1. Fetch current spool state from Sheets
+        2. Load metrología state machine
+        3. Check if already in metrología queue (PENDIENTE_METROLOGIA)
+        4. Trigger transition to PENDIENTE_METROLOGIA state
+        5. Update Estado_Detalle to "En Cola Metrología"
+        6. Return new state or None if transition rejected
+
+        Args:
+            tag_spool: Spool identifier
+
+        Returns:
+            Optional[str]: New state after transition, or None if rejected
+
+        Raises:
+            SpoolNoEncontradoError: If spool doesn't exist
+        """
+        logger.info(f"Triggering metrología auto-transition for {tag_spool}")
+
+        try:
+            # Step 1: Fetch current spool state
+            spool = self.sheets_repo.get_spool_by_tag(tag_spool)
+            if not spool:
+                raise SpoolNoEncontradoError(tag_spool)
+
+            # Step 2: Load metrología state machine
+            from backend.domain.state_machines.metrologia_machine import MetrologiaStateMachine
+
+            metrologia_machine = MetrologiaStateMachine(
+                tag_spool=tag_spool,
+                sheets_repo=self.sheets_repo,
+                metadata_repo=self.metadata_repo
+            )
+
+            # Activate initial state
+            await metrologia_machine.activate_initial_state()
+
+            # Step 3: Check current state
+            current_state = metrologia_machine.get_state_id()
+
+            if current_state != "pendiente":
+                logger.warning(
+                    f"Metrología already in state '{current_state}' for {tag_spool}, "
+                    f"skipping auto-transition"
+                )
+                return None
+
+            # Step 4: Update Estado_Detalle to indicate metrología queue
+            # Note: The actual state transition happens when inspector calls aprobar/rechazar
+            # We just update the display to show it's ready for inspection
+            estado_detalle = "En Cola Metrología"
+
+            row_num = self.sheets_repo.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter="G",  # TAG_SPOOL column
+                value=tag_spool
+            )
+
+            if row_num:
+                self.sheets_repo.update_cell_by_column_name(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    row=row_num,
+                    column_name="Estado_Detalle",
+                    value=estado_detalle
+                )
+                logger.info(f"✅ Estado_Detalle updated to '{estado_detalle}' for {tag_spool}")
+            else:
+                logger.warning(f"Could not find row for {tag_spool} to update Estado_Detalle")
+
+            # Step 5: Publish real-time event (best effort)
+            try:
+                await self.redis_event_service.publish_spool_update(
+                    event_type="METROLOGIA_READY",
+                    tag_spool=tag_spool,
+                    worker_nombre=None,
+                    estado_detalle=estado_detalle,
+                    additional_data={
+                        "metrologia_state": current_state,
+                        "auto_triggered": True
+                    }
+                )
+                logger.info(f"✅ Real-time event published: METROLOGIA_READY for {tag_spool}")
+            except Exception as e:
+                # Best effort - log but don't fail operation
+                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
+
+            logger.info(f"✅ Metrología auto-transition complete for {tag_spool}")
+            return current_state
+
+        except SpoolNoEncontradoError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to trigger metrología transition for {tag_spool}: {e}",
+                exc_info=True
+            )
+            # Don't block FINALIZAR operation on metrología trigger failure
+            return None

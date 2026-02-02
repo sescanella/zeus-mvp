@@ -227,6 +227,16 @@ class OccupationResponse(BaseModel):
         ge=0,
         examples=[3, 10, 0]
     )
+    metrologia_triggered: Optional[bool] = Field(
+        None,
+        description="Si se activó la transición automática a metrología (v4.0)",
+        examples=[True, False]
+    )
+    new_state: Optional[str] = Field(
+        None,
+        description="Nuevo estado después de transición a metrología (v4.0)",
+        examples=["pendiente"]
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

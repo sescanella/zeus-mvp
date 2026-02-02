@@ -78,6 +78,9 @@ class EventoTipo(str, Enum):
     UNION_SOLD_REGISTRADA = "UNION_SOLD_REGISTRADA"    # Union SOLD completion
     SPOOL_CANCELADO = "SPOOL_CANCELADO"                 # 0 unions selected (user cancels)
 
+    # Phase 10 Events (v4.0 Metrología auto-transition)
+    METROLOGIA_AUTO_TRIGGERED = "METROLOGIA_AUTO_TRIGGERED"  # All work complete, auto-transition to metrología queue
+
 
 class EstadoOcupacion(str, Enum):
     """
