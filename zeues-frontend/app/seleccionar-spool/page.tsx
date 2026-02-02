@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
-import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion } from '@/lib/api';
+import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool } from '@/lib/api';
 import type { Spool, SSEEvent } from '@/lib/types';
 import { useSSE } from '@/lib/hooks/useSSE';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -464,6 +464,7 @@ function SeleccionarSpoolContent() {
                     <tr>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">SEL</th>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">TAG SPOOL</th>
+                      <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">VERSION</th>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono">{tipo === 'reparacion' ? 'CICLO/ESTADO' : 'NV'}</th>
                     </tr>
                   </thead>
@@ -474,6 +475,9 @@ function SeleccionarSpoolContent() {
                       const isSelected = (state.selectedSpools || []).includes(spool.tag_spool);
                       const isBloqueado = tipo === 'reparacion' && (spool as unknown as { bloqueado?: boolean }).bloqueado;
                       const cycle = tipo === 'reparacion' ? (spool as unknown as { cycle?: number }).cycle : null;
+
+                      // Detect version from spool data (v4.0 Phase 9)
+                      const version = spool.version || detectVersionFromSpool(spool);
 
                       return (
                         <tr
@@ -499,6 +503,16 @@ function SeleccionarSpoolContent() {
                           <td className="p-3 border-r-2 border-white/30">
                             <span className={`text-lg font-black font-mono ${isBloqueado ? 'text-red-500' : 'text-white'}`}>
                               {spool.tag_spool}
+                            </span>
+                          </td>
+                          <td className="p-3 border-r-2 border-white/30">
+                            {/* Version badge - v4.0 green, v3.0 gray */}
+                            <span className={`px-2 py-1 text-xs font-black font-mono rounded border-2 ${
+                              version === 'v4.0'
+                                ? 'bg-green-500/20 text-green-400 border-green-500'
+                                : 'bg-gray-500/20 text-gray-400 border-gray-500'
+                            }`}>
+                              {version}
                             </span>
                           </td>
                           <td className="p-3">
