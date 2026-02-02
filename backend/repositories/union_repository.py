@@ -45,6 +45,70 @@ class UnionRepository:
         self.sheets_repo = sheets_repo
         self._sheet_name = "Uniones"
 
+    def get_by_ot(self, ot: str) -> list[Union]:
+        """
+        Query all unions for a given work order using OT as foreign key.
+
+        This method queries Uniones.OT (Column B) directly per v4.0 architecture.
+        OT is the primary foreign key: Operaciones.OT (Column C) ↔ Uniones.OT (Column B).
+
+        Args:
+            ot: Work order number to filter by (e.g., "001", "123")
+
+        Returns:
+            list[Union]: List of unions for the OT, empty if none found
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        try:
+            # Read all rows from Uniones sheet (cached)
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+
+            if not all_rows or len(all_rows) < 2:
+                self.logger.debug(f"Uniones sheet is empty or header-only")
+                return []
+
+            # Get column mapping (dynamic, no hardcoded indices)
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            def normalize(name: str) -> str:
+                """Normalize column name for lookup."""
+                return name.lower().replace(" ", "").replace("_", "")
+
+            # Find OT column index (Column B)
+            ot_col_key = normalize("OT")
+            if ot_col_key not in column_map:
+                raise ValueError(f"OT column not found in {self._sheet_name} sheet")
+
+            ot_col_idx = column_map[ot_col_key]
+
+            # Filter and convert matching rows
+            unions = []
+            for row_data in all_rows[1:]:  # Skip header (row 0)
+                # Skip empty rows
+                if not row_data or len(row_data) <= ot_col_idx:
+                    continue
+
+                # Check if OT matches
+                if row_data[ot_col_idx] == ot:
+                    try:
+                        union = self._row_to_union(row_data, column_map)
+                        unions.append(union)
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to parse union row for OT {ot}: {e}",
+                            exc_info=True
+                        )
+                        continue
+
+            self.logger.debug(f"Found {len(unions)} unions for OT {ot}")
+            return unions
+
+        except Exception as e:
+            self.logger.error(f"Failed to query unions for OT {ot}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")
+
     def get_by_spool(self, tag_spool: str) -> list[Union]:
         """
         Query all unions for a given spool using TAG_SPOOL as foreign key.
