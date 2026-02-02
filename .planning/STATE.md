@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Track work at the union level with the correct business metric (pulgadas-diámetro)
-**Current focus:** Phase 9 - Redis & Version Detection
+**Current focus:** Phase 10 - Backend Services & Validation
 
 ## Current Position
 
-Phase: 9 of 13 (Redis & Version Detection)
-Plan: 6 of 6 in current phase
-Status: Phase complete, verified ✓
-Last activity: 2026-02-02 — Completed Phase 9 (all 6 plans executed and verified)
+Phase: 10 of 13 (Backend Services & Validation)
+Plan: 2 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 10-02-PLAN.md (INICIAR/FINALIZAR workflows)
 
-Progress: [██████████░░░] 77% (9 of 13 phases complete and verified, ready for Phase 10)
+Progress: [██████████░░░] 78% (9 phases + 2 plans complete, 10-03 next)
 
 ## Performance Metrics
 
@@ -41,10 +41,11 @@ Progress: [██████████░░░] 77% (9 of 13 phases complete
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
+| 10. Backend Services & Validation | 2/5 | 8.4 min | 4.2 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.0, 4.4, 8.1, 4.0] min
-- Trend: Phase 9 COMPLETE (6 plans, 5.3-min average - consistent velocity maintained)
+- Last 5 plans: [4.4, 8.1, 4.0, 4.0, 4.4] min
+- Trend: Phase 10 in progress (2 of 5 plans, 4.2-min average - stable velocity)
 
 *Updated after each plan completion*
 
@@ -110,6 +111,11 @@ Recent decisions affecting v4.0 work:
 - **D53 (09-06)**: Frontend detects version locally by union count (no API call per spool - avoids latency)
 - **D54 (09-06)**: Version badges on table instead of cards (P4 uses table layout, added VERSION column)
 - **D55 (09-06)**: Session storage for version caching (spool_version_{tag} format for future workflow routing)
+- **D56 (10-02)**: INICIAR uses same TOMAR_SPOOL event type as v3.0 (backward compatibility with Metadata queries)
+- **D57 (10-02)**: FINALIZAR auto-determines PAUSAR vs COMPLETAR (simplifies UX from 3-button to 2-button flow)
+- **D58 (10-02)**: Empty selected_unions list triggers cancellation (not 409 error - intentional user action)
+- **D59 (10-02)**: UnionRepository injected as optional dependency (v3.0 backward compatibility)
+- **D60 (10-02)**: Race condition returns 409 Conflict (selected > available indicates stale data)
 
 ### Pending Todos
 
@@ -152,7 +158,12 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 9 (Redis & Version Detection, 6 plans, 32 min duration)
+Stopped at: Completed 10-02-PLAN.md (Enhance OccupationService with INICIAR/FINALIZAR)
 Resume file: None
 
-**Phase 9 Complete:** All 6 plans finished and verified. Persistent locks infrastructure complete with 63 passing tests (30 unit + 33 integration), 84% coverage. Redis locks support long-running sessions (TTL=-1), lazy cleanup prevents deadlocks, startup reconciliation auto-recovers from crashes. Version detection ready for dual workflow routing. Ready for Phase 10 (Backend Services & Validation).
+**Phase 10 Progress (2/5 plans):**
+- 10-01 ✓: UnionService with validation helpers (4.0 min)
+- 10-02 ✓: OccupationService INICIAR/FINALIZAR (4.4 min, this session)
+- 10-03 next: Validation Service
+
+**10-02 Complete:** INICIAR/FINALIZAR workflows with auto-determination. 13 unit tests passing. Zero-union cancellation support. Race condition detection (409 Conflict). UnionRepository integration via optional dependency. Ready for 10-03 (Validation Service).
