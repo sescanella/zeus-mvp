@@ -168,12 +168,18 @@ class RedisLockService:
             logger.warning(f"Failed to parse timestamp from lock value: {lock_value}, error: {e}")
             return None
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=5),
-        retry=retry_if_exception_type(RedisError),
-        reraise=True
-    )
+    def is_degraded_mode(self, token: str) -> bool:
+        """
+        Check if token indicates degraded mode operation.
+
+        Args:
+            token: Lock token to check
+
+        Returns:
+            True if token is from degraded mode, False if normal Redis lock
+        """
+        return token.startswith("DEGRADED:")
+
     async def acquire_lock(
         self,
         tag_spool: str,
@@ -186,10 +192,12 @@ class RedisLockService:
 
         v4.0 (persistent mode): Two-step acquisition with PERSIST command
         v3.0 (TTL mode): Traditional SET NX EX with expiration
+        Degraded mode: Falls back to Sheets-only operation when Redis unavailable
 
         Atomic operation prevents race conditions:
         - If lock doesn't exist: set lock and return token
         - If lock exists: raise SpoolOccupiedError with current owner
+        - If Redis unavailable: operate in degraded mode (Sheets-only)
 
         Args:
             tag_spool: Spool identifier
@@ -198,11 +206,10 @@ class RedisLockService:
             ttl_seconds: Lock TTL (only used in v3.0 mode, ignored in v4.0 persistent mode)
 
         Returns:
-            Lock token (UUID) for safe release
+            Lock token (UUID) for safe release, or degraded mode token (DEGRADED:worker_id:timestamp)
 
         Raises:
             SpoolOccupiedError: If spool already locked by another worker
-            RedisError: If Redis operation fails (after retries)
         """
         lock_key = self._lock_key(tag_spool)
         lock_value = self._lock_value(worker_id)
@@ -286,9 +293,56 @@ class RedisLockService:
         except SpoolOccupiedError:
             # Re-raise occupation errors without retry
             raise
-        except RedisError as e:
-            logger.warning(f"Redis error acquiring lock for {tag_spool}: {e}")
-            raise
+        except (RedisError, ConnectionError, TimeoutError) as e:
+            # Redis unavailable - enter degraded mode (Sheets-only operation)
+            logger.warning(
+                f"⚠️ Redis unavailable for {tag_spool}, entering degraded mode: {e}"
+            )
+
+            if not self.sheets_repository:
+                # Cannot operate in degraded mode without Sheets access
+                logger.error("Cannot enter degraded mode: sheets_repository not configured")
+                raise RedisError("Redis unavailable and no Sheets fallback configured") from e
+
+            # Degraded mode: Update Sheets.Ocupado_Por directly without Redis lock
+            timestamp = format_datetime_for_sheets(now_chile())
+            degraded_token = f"DEGRADED:{worker_id}:{timestamp}"
+
+            try:
+                # Query Sheets to check if spool is available
+                spool = self.sheets_repository.get_spool_by_tag(tag_spool)
+
+                if not spool:
+                    raise ValueError(f"Spool {tag_spool} not found in Sheets")
+
+                # Check if already occupied
+                if spool.ocupado_por and spool.ocupado_por != "DISPONIBLE":
+                    # Extract worker_id from occupied value (format: "INICIALES(ID)")
+                    import re
+                    match = re.search(r'\((\d+)\)$', spool.ocupado_por)
+                    if match:
+                        existing_owner_id = int(match.group(1))
+                        raise SpoolOccupiedError(
+                            tag_spool=tag_spool,
+                            owner_id=existing_owner_id,
+                            owner_name=spool.ocupado_por
+                        )
+
+                # Update Sheets.Ocupado_Por directly (no Redis lock)
+                # Note: This is done by the caller (occupation service) after acquiring lock
+                logger.info(
+                    f"✅ Degraded mode lock acquired: {tag_spool} by worker {worker_id} "
+                    f"(Sheets-only, no Redis, token: {degraded_token[:20]}...)"
+                )
+
+                return degraded_token
+
+            except SpoolOccupiedError:
+                # Re-raise occupation errors
+                raise
+            except Exception as sheets_error:
+                logger.error(f"Degraded mode failed for {tag_spool}: {sheets_error}")
+                raise RedisError("Both Redis and Sheets fallback failed") from sheets_error
 
     async def release_lock(self, tag_spool: str, worker_id: int, lock_token: str) -> bool:
         """
@@ -297,17 +351,29 @@ class RedisLockService:
         Only deletes lock if the stored value matches our token.
         Prevents accidental release of locks acquired by other workers.
 
+        Supports degraded mode tokens (DEGRADED:*) - only clears Sheets, no Redis operation.
+
         Args:
             tag_spool: Spool identifier
             worker_id: Worker ID who owns the lock (for reconstructing lock_value)
-            lock_token: Token returned from acquire_lock
+            lock_token: Token returned from acquire_lock (may be degraded mode token)
 
         Returns:
             True if lock was released, False if lock not owned by us
 
         Raises:
-            RedisError: If Redis operation fails
+            RedisError: If Redis operation fails (non-degraded mode only)
         """
+        # Check if degraded mode token
+        if self.is_degraded_mode(lock_token):
+            # Degraded mode: Only clear Sheets.Ocupado_Por (no Redis operation)
+            logger.info(
+                f"✅ Degraded mode lock release: {tag_spool} by worker {worker_id} "
+                f"(Sheets-only, no Redis operation)"
+            )
+            # Note: Sheets.Ocupado_Por is cleared by the caller (occupation service)
+            return True
+
         lock_key = self._lock_key(tag_spool)
 
         # Reconstruct full lock_value: "worker_id:token"
