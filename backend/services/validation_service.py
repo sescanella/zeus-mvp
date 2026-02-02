@@ -17,7 +17,8 @@ from backend.exceptions import (
     NoAutorizadoError,
     RolNoAutorizadoError,
     SpoolBloqueadoError,
-    OperacionNoDisponibleError
+    OperacionNoDisponibleError,
+    ArmPrerequisiteError
 )
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,9 @@ class ValidationService:
     - ARM COMPLETADO: fecha_armado != None
     """
 
-    def __init__(self, role_service=None):
+    def __init__(self, role_service=None, union_repository=None):
         self.role_service = role_service
+        self.union_repository = union_repository
 
     def validar_puede_iniciar_arm(self, spool: Spool, worker_id: Optional[int] = None) -> None:
         """Valida INICIAR ARM (v2.1 Direct Read)."""
@@ -355,3 +357,53 @@ class ValidationService:
         # Any worker with appropriate role can cancel
 
         logger.debug(f"[V3.0 Phase 6] ✅ REPARACION CANCELAR validation passed | {spool.tag_spool}")
+
+    def validate_arm_prerequisite(self, tag_spool: str, ot: str) -> dict:
+        """
+        Validate ARM prerequisite for SOLD operation (v4.0).
+
+        Business rule: SOLD operations require at least one union with ARM_FECHA_FIN != NULL.
+        This validation occurs at INICIAR time to fail early with clear feedback.
+
+        Args:
+            tag_spool: Spool identifier for error messaging
+            ot: Work order number to query unions
+
+        Returns:
+            dict: Validation result with unions_armadas count
+                  e.g., {"valid": True, "unions_armadas": 5}
+
+        Raises:
+            ArmPrerequisiteError: If no ARM unions completed
+            ValueError: If union_repository not configured
+        """
+        logger.info(f"[V4.0] Validating ARM prerequisite for SOLD | Spool: {tag_spool} | OT: {ot}")
+
+        if self.union_repository is None:
+            raise ValueError("UnionRepository not configured for ARM prerequisite validation")
+
+        # Query all unions for this OT
+        all_unions = self.union_repository.get_by_ot(ot)
+
+        # Count unions with ARM_FECHA_FIN != NULL
+        unions_armadas = sum(1 for u in all_unions if u.arm_fecha_fin is not None)
+        unions_sin_armar = len(all_unions) - unions_armadas
+
+        logger.debug(
+            f"ARM prerequisite check: {unions_armadas} completed, "
+            f"{unions_sin_armar} pending for OT {ot}"
+        )
+
+        # Raise error if no ARM unions completed
+        if unions_armadas == 0:
+            raise ArmPrerequisiteError(
+                tag_spool=tag_spool,
+                unions_sin_armar=unions_sin_armar
+            )
+
+        logger.debug(f"[V4.0] ✅ ARM prerequisite validation passed | {unions_armadas} ARM unions completed")
+
+        return {
+            "valid": True,
+            "unions_armadas": unions_armadas
+        }
