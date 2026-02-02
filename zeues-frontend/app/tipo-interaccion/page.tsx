@@ -30,9 +30,9 @@ export default function TipoInteraccionPage() {
     // Version detection for v4.0 workflow (only if spool already selected)
     // This page can be reached BEFORE spool selection (P2→P3 flow) or AFTER (v4.0 flow)
     const detectVersion = async () => {
-      // If no spool selected yet, default to v3.0 workflow (traditional flow: P2→P3→P4)
+      // If no spool selected yet, default to v4.0 workflow (new default)
       if (!state.selectedSpool) {
-        setSpoolVersion('v3.0');
+        setSpoolVersion('v4.0');
         setLoadingVersion(false);
         return;
       }
@@ -58,8 +58,8 @@ export default function TipoInteraccionPage() {
 
       } catch (error) {
         console.error('Error detecting version:', error);
-        // Default to v3.0 on error (backward compatible)
-        setSpoolVersion('v3.0');
+        // Default to v4.0 on error (new default workflow)
+        setSpoolVersion('v4.0');
       } finally {
         setLoadingVersion(false);
       }
