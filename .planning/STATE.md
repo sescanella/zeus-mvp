@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Track work at the union level with the correct business metric (pulgadas-diámetro)
-**Current focus:** Phase 11 - API Endpoints & Metrics
+**Current focus:** Phase 12 - Frontend Union Selection UX
 
 ## Current Position
 
-Phase: 11 of 13 (API Endpoints & Metrics)
-Plan: 6 of 6 in current phase
-Status: Phase 11 COMPLETE
-Last activity: 2026-02-02 — Completed 11-06-PLAN.md (Fix Metadata Batch + Granular Logging - Gap closure)
+Phase: 12 of 13 (Frontend Union Selection UX)
+Plan: 4 of 7 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 12-01-PLAN.md (TypeScript Types & API Client)
 
-Progress: [███████████░░] 88% (Phase 11 complete, 46 of 53 total plans)
+Progress: [███████████░░] 90% (50 of 53 total plans complete)
 
 ## Performance Metrics
 
@@ -43,10 +43,11 @@ Progress: [███████████░░] 88% (Phase 11 complete, 46 o
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
+| 12. Frontend Union Selection UX | 4 (in progress) | 10.1 min | 2.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [2.9, 5.2, 6.0, 10.6, 5.0] min
-- Trend: Phase 11 complete (6 of 6 plans, 5.8-min average - 2% faster than Phase 10's 5.7-min average)
+- Last 5 plans: [6.0, 10.6, 5.0, 2.0, 2.1] min
+- Trend: Phase 12 in progress (4 of 7 plans, 2.5-min average - 57% faster than Phase 11's 5.8-min average)
 
 *Updated after each plan completion*
 
@@ -154,6 +155,11 @@ Recent decisions affecting v4.0 work:
 - **D86 (11-06)**: Delegate union processing to UnionService for batch + granular metadata logging
 - **D87 (11-06)**: Skip spool-level metadata logging when UnionService handles it (avoid duplicates)
 - **D88 (11-06)**: Inject UnionService at router level instead of dependency.py (v4.0 specific)
+- **D89 (12-03)**: 1 decimal precision for pulgadas in calculatePulgadas (aligns with service layer presentation, differs from 2-decimal repository storage)
+- **D90 (12-03)**: resetV4State preserves worker/operation/spool (partial reset for workflow continuation)
+- **D91 (12-03)**: All v4.0 helpers memoized with useCallback (prevents unnecessary re-renders)
+- **D92 (12-01)**: Use native fetch() API for v4.0 functions (maintains consistency with v3.0 pattern, no new dependencies)
+- **D93 (12-01)**: ESLint disable comments for future-use types (types defined now for Phase 12 UI components, consumed in plans 02-05)
 
 ### Pending Todos
 
@@ -223,6 +229,21 @@ None yet.
     - Added test coverage for batch + granular metadata logging pattern
   - Test coverage: 48 new tests (36 passing, 12 skipped with manual procedures)
   - All v4.0 API endpoints implemented, validated, and metadata logging complete
+- **🔄 Phase 12 In Progress**: Frontend Union Selection UX (3/7 plans, 8.0 min, 2.7-min avg)
+  - 12-01 ✓: TypeScript Type Definitions (4.0 min)
+    - Added Union, DisponiblesResponse, MetricasResponse types
+    - IniciarRequest/Response, FinalizarRequest/Response types
+    - Comprehensive JSDoc documentation for v4.0 types
+    - TypeScript compilation verified
+  - 12-02 ✓: Reusable Components (Modal, UnionTable) (2.0 min)
+    - Modal component with portal rendering and backdrop
+    - UnionTable component shell with TypeScript interfaces
+    - Build and lint verification passed
+  - 12-03 ✓: Context Extension with v4.0 State (2.0 min)
+    - Extended AppContext with accion, selectedUnions, pulgadasCompletadas fields
+    - Helper functions: resetV4State, calculatePulgadas, toggleUnionSelection, selectAllAvailableUnions
+    - All helpers memoized with useCallback for performance
+    - v3.0 backward compatibility maintained
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -234,7 +255,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 11-06-PLAN.md (Phase 11 complete - all v4.0 API endpoints and metadata logging ready)
-Resume file: None - ready for Phase 12 planning
+Stopped at: Completed 12-03-PLAN.md (Context Extension with v4.0 State)
+Resume file: None - continuing Phase 12 execution
 
-**Phase 11 Complete:** All v4.0 API endpoints implemented with correct batch + granular metadata logging. Gap closure plan 11-06 successfully refactored OccupationService.finalizar_spool() to delegate to UnionService.process_selection(), ensuring 1 batch + N granular metadata events per FINALIZAR operation. METRIC-03 and METRIC-04 requirements fully satisfied.
+**Phase 12 Progress:** Frontend foundation complete (types, components, context). Next: P3.5 Acción Selection, P4 Union Selection Interface, P5 Confirmation, P6 Success pages for v4.0 INICIAR/FINALIZAR workflows.
