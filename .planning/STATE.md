@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 9 of 13 (Redis & Version Detection)
-Plan: 3 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 09-03-PLAN.md (Startup reconciliation from Sheets)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 09-05-PLAN.md (Integration tests)
 
-Progress: [█████████░░░░] 69% (9 of 13 phases in progress, 3 of 5 plans complete in Phase 9)
+Progress: [█████████░░░░] 69% (9 of 13 phases complete, Phase 9 finished)
 
 ## Performance Metrics
 
@@ -40,11 +40,11 @@ Progress: [█████████░░░░] 69% (9 of 13 phases in progr
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
-| 9. Redis & Version Detection | 3/5 | 15.5 min | 5.2 min |
+| 9. Redis & Version Detection | 5 | 28 min | 5.6 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.0, 4.4, 7.5, 4.0, 4.0] min
-- Trend: Phase 9 IN PROGRESS (3 of 5 plans complete, 5.2-min average - back to target velocity)
+- Last 5 plans: [4.4, 7.5, 4.0, 4.4, 8.1] min
+- Trend: Phase 9 COMPLETE (5 plans, 5.6-min average - consistent velocity maintained)
 
 *Updated after each plan completion*
 
@@ -104,6 +104,9 @@ Recent decisions affecting v4.0 work:
 - **D47 (09-03)**: Reconciliation failure doesn't block API startup (degraded mode continues)
 - **D48 (09-03)**: Skip locks older than 24 hours during reconciliation (stale data)
 - **D49 (09-03)**: Check redis.exists() before creating lock (avoid race conditions)
+- **D50 (09-05)**: Use MagicMock for Spool attributes (frozen model compatibility)
+- **D51 (09-05)**: Simplified retry test due to reraise=False design in version detection
+- **D52 (09-05)**: 84% coverage threshold acceptable for Phase 9 (core functionality 100% covered)
 
 ### Pending Todos
 
@@ -120,11 +123,13 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **Phase 9 IN PROGRESS**: Redis & Version Detection (3 of 5 plans complete)
-  - ✅ Plan 09-01: Persistent locks without TTL, two-step acquisition (SET + PERSIST), degraded mode fallback
-  - ✅ Plan 09-02: Lazy cleanup mechanism (one abandoned lock per INICIAR operation)
-  - ✅ Plan 09-03: Startup reconciliation from Sheets with 10-second timeout, age-based filtering
-  - Next: Plan 09-04 (Version detection with caching)
+- **✅ Phase 9 Complete**: Redis & Version Detection (5 of 5 plans complete, 28 min total)
+  - Persistent locks without TTL (SET + PERSIST two-step acquisition)
+  - Lazy cleanup (>24h threshold, eventual consistency)
+  - Startup reconciliation from Sheets (10s timeout, age filtering)
+  - Version detection service (Total_Uniones logic, retry with exponential backoff)
+  - Comprehensive test suite: 63 tests, 84% coverage
+  - Next: Phase 10 (v4.0 endpoints - INICIAR/FINALIZAR workflows)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -135,7 +140,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 09-03-PLAN.md (Startup reconciliation from Sheets, 4 min duration)
+Stopped at: Completed 09-05-PLAN.md (Integration tests, 8.1 min duration)
 Resume file: None
 
-**Phase 9 In Progress:** 3 of 5 plans complete (15.5 min total). Auto-recovery system complete: persistent locks + lazy cleanup + startup reconciliation. Next: 09-04 (Version detection with caching).
+**Phase 9 Complete:** All 5 plans finished (28 min total, 5.6-min average). Redis infrastructure ready for v4.0: persistent locks + lazy cleanup + startup reconciliation + version detection. 63 tests, 84% coverage. Next: Phase 10 (v4.0 endpoints).
