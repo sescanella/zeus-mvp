@@ -42,6 +42,8 @@ from backend.routers import health, workers, spools
 from backend.routers import actions
 # v3.0: Router OCCUPATION implementado (TOMAR/PAUSAR/COMPLETAR)
 from backend.routers import occupation
+# v3.0: Router OCCUPATION_V3 implementado (versioned v3.0 endpoints at /api/v3/)
+from backend.routers import occupation_v3
 # v3.0 Phase 3: Router HISTORY implementado (occupation history timeline)
 from backend.routers import history
 # v3.0 Phase 4: Router SSE implementado (real-time event streaming)
@@ -267,6 +269,7 @@ async def startup_event():
     logging.info(f"Environment: {config.ENVIRONMENT}")
     logging.info(f"Google Sheet ID: {config.GOOGLE_SHEET_ID[:10]}...{config.GOOGLE_SHEET_ID[-10:]}")
     logging.info(f"CORS Origins: {config.ALLOWED_ORIGINS}")
+    logging.info("API versioning enabled: v3.0 endpoints at /api/v3/, v4.0 endpoints at /api/v4/ (future)")
 
     # v3.0: Connect to Redis for occupation locking
     try:
@@ -427,8 +430,11 @@ app.include_router(spools.router, prefix="/api", tags=["Spools"])
 # FASE 3: Router WRITE registrado (CRÍTICO - ownership validation)
 app.include_router(actions.router, prefix="/api", tags=["Actions"])
 
-# v3.0: Router OCCUPATION registrado (TOMAR/PAUSAR/COMPLETAR with Redis locks)
-app.include_router(occupation.router, prefix="/api", tags=["Occupation"])
+# v3.0: Router OCCUPATION_V3 registrado (versioned v3.0 endpoints)
+app.include_router(occupation_v3.router, prefix="/api/v3", tags=["v3-occupation"])
+
+# v3.0: Router OCCUPATION registrado (legacy path for backward compatibility)
+app.include_router(occupation.router, prefix="/api", tags=["occupation-legacy"])
 
 # v3.0 Phase 3: Router HISTORY registrado (occupation history timeline)
 app.include_router(history.router, prefix="/api", tags=["History"])
