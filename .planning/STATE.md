@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 11 of 13 (API Endpoints & Metrics)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 11-02-PLAN.md (Union Query Endpoints)
+Last activity: 2026-02-02 — Completed 11-03-PLAN.md (INICIAR Workflow Endpoint)
 
-Progress: [██████████░░░] 80% (10 phases complete + 2/5 plans in Phase 11, 42 of 52 total plans)
+Progress: [██████████░░░] 83% (10 phases complete + 3/5 plans in Phase 11, 43 of 52 total plans)
 
 ## Performance Metrics
 
@@ -42,11 +42,11 @@ Progress: [██████████░░░] 80% (10 phases complete + 2/
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
-| 11. API Endpoints & Metrics | 2/5 | 8.1 min | 4.1 min |
+| 11. API Endpoints & Metrics | 3/5 | 13.3 min | 4.4 min |
 
 **Recent Trend:**
-- Last 5 plans: [6.0, 6.5, 6.0, 5.2, 2.9] min
-- Trend: Phase 11 acceleration (2 of 5 plans, 4.1-min average - 28% faster than Phase 10's 5.7-min average)
+- Last 5 plans: [6.5, 6.0, 5.2, 2.9, 5.2] min
+- Trend: Phase 11 steady pace (3 of 5 plans, 4.4-min average - 23% faster than Phase 10's 5.7-min average)
 
 *Updated after each plan completion*
 
@@ -142,6 +142,8 @@ Recent decisions affecting v4.0 work:
 - **D74 (11-01)**: URL versioning with /api/v3/ and /api/v4/ prefixes (explicit versioning prevents breaking changes)
 - **D75 (11-01)**: Legacy router at /api/ prefix for backward compatibility during transition
 - **D76 (11-01)**: Simple version detection utils in backend/utils/ (complement Phase 9 service for inline checks)
+- **D77 (11-03)**: Version detection at router layer not middleware (simple, explicit, helpful error messages)
+- **D78 (11-03)**: Reuse existing IniciarRequest model from occupation.py (DRY principle, single source of truth)
 
 ### Pending Todos
 
@@ -180,13 +182,19 @@ None yet.
     - Maintained legacy routes at /api/ for backward compatibility
     - Added version detection utils (is_v4_spool, get_spool_version)
     - 8 smoke tests validate versioning structure
-  - 11-02 ✓: Union Query Endpoints (2.9 min, this session)
+  - 11-02 ✓: Union Query Endpoints (2.9 min)
     - GET /api/v4/uniones/{tag}/disponibles?operacion=ARM|SOLD
     - GET /api/v4/uniones/{tag}/metricas (5 fields, 2-decimal pulgadas)
     - API models: UnionSummary, DisponiblesResponse, MetricasResponse
     - 12 unit tests (6 disponibles, 6 metricas), all passing
-  - 11-03 pending: Metrics API for pulgadas-diámetro performance
-  - 11-04 pending: Union listing and selection endpoints
+  - 11-03 ✓: INICIAR Workflow Endpoint (5.2 min, this session)
+    - POST /api/v4/occupation/iniciar endpoint with version detection
+    - Rejects v3.0 spools with helpful 400 error (correct_endpoint guidance)
+    - ARM prerequisite validation for SOLD (403 Forbidden)
+    - Error handling: 400/403/404/409/500
+    - Reused existing IniciarRequest model (DRY principle)
+    - 11 smoke tests passing
+  - 11-04 pending: FINALIZAR endpoint with union selection
   - 11-05 pending: Integration tests for v4.0 API
 
 **v3.0 Technical Debt:**
