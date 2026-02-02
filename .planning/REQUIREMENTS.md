@@ -40,12 +40,12 @@ Requirements for union-level tracking and partial completion workflows. Each map
 
 ### Backend - API Endpoints
 
-- [ ] **API-01**: GET /api/uniones/{tag}/disponibles?operacion=ARM - returns unions where ARM_FECHA_FIN IS NULL
-- [ ] **API-02**: GET /api/uniones/{tag}/disponibles?operacion=SOLD - returns unions where ARM_FECHA_FIN IS NOT NULL AND SOL_FECHA_FIN IS NULL
-- [ ] **API-03**: GET /api/uniones/{tag}/metricas - returns {total_uniones, arm_completadas, sold_completadas, pulgadas_arm, pulgadas_sold}
-- [ ] **API-04**: POST /api/occupation/iniciar - body: {tag_spool, worker_id, operacion} - occupies spool only
-- [ ] **API-05**: POST /api/occupation/finalizar - body: {tag_spool, worker_id, operacion, selected_unions: list[int]} - auto-determines PAUSAR/COMPLETAR
-- [ ] **API-06**: System maintains v3.0 endpoints (/tomar, /pausar, /completar) for backward compatibility
+- [x] **API-01**: GET /api/uniones/{tag}/disponibles?operacion=ARM - returns unions where ARM_FECHA_FIN IS NULL
+- [x] **API-02**: GET /api/uniones/{tag}/disponibles?operacion=SOLD - returns unions where ARM_FECHA_FIN IS NOT NULL AND SOL_FECHA_FIN IS NULL
+- [x] **API-03**: GET /api/uniones/{tag}/metricas - returns {total_uniones, arm_completadas, sold_completadas, pulgadas_arm, pulgadas_sold}
+- [x] **API-04**: POST /api/occupation/iniciar - body: {tag_spool, worker_id, operacion} - occupies spool only
+- [x] **API-05**: POST /api/occupation/finalizar - body: {tag_spool, worker_id, operacion, selected_unions: list[int]} - auto-determines PAUSAR/COMPLETAR
+- [x] **API-06**: System maintains v3.0 endpoints (/tomar, /pausar, /completar) for backward compatibility
 
 ### Frontend - UX Workflows
 
@@ -76,15 +76,15 @@ Requirements for union-level tracking and partial completion workflows. Each map
 
 ### Metrics & Audit Trail
 
-- [ ] **METRIC-01**: Dashboard displays pulgadas-diámetro as primary metric (not spool count)
-- [ ] **METRIC-02**: System calculates worker performance as pulgadas-diámetro/day
-- [ ] **METRIC-03**: Metadata logs SPOOL_ARM_PAUSADO event with {uniones_completadas, total, uniones_trabajadas, pulgadas}
-- [ ] **METRIC-04**: Metadata logs SPOOL_ARM_COMPLETADO event with {uniones_completadas, total, pulgadas}
-- [ ] **METRIC-05**: Metadata logs SPOOL_SOLD_PAUSADO and SPOOL_SOLD_COMPLETADO events
-- [ ] **METRIC-06**: Metadata logs SPOOL_CANCELADO event when 0 unions selected (with operacion and motivo)
-- [ ] **METRIC-07**: Metadata logs granular UNION_ARM_REGISTRADA event per union with {dn_union, tipo, timestamp_inicio, timestamp_fin, duracion_min}
-- [ ] **METRIC-08**: Metadata logs granular UNION_SOLD_REGISTRADA event per union
-- [ ] **METRIC-09**: Each FINALIZAR operation logs 1 batch event (N_UNION=NULL) + N granular events (N_UNION=1-20)
+- [x] **METRIC-01**: Dashboard displays pulgadas-diámetro as primary metric (not spool count)
+- [x] **METRIC-02**: System calculates worker performance as pulgadas-diámetro/day
+- [x] **METRIC-03**: Metadata logs SPOOL_ARM_PAUSADO event with {uniones_completadas, total, uniones_trabajadas, pulgadas}
+- [x] **METRIC-04**: Metadata logs SPOOL_ARM_COMPLETADO event with {uniones_completadas, total, pulgadas}
+- [x] **METRIC-05**: Metadata logs SPOOL_SOLD_PAUSADO and SPOOL_SOLD_COMPLETADO events
+- [x] **METRIC-06**: Metadata logs SPOOL_CANCELADO event when 0 unions selected (with operacion and motivo)
+- [x] **METRIC-07**: Metadata logs granular UNION_ARM_REGISTRADA event per union with {dn_union, tipo, timestamp_inicio, timestamp_fin, duracion_min}
+- [x] **METRIC-08**: Metadata logs granular UNION_SOLD_REGISTRADA event per union
+- [x] **METRIC-09**: Each FINALIZAR operation logs 1 batch event (N_UNION=NULL) + N granular events (N_UNION=1-20)
 
 ### Redis & State Management
 

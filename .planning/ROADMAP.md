@@ -113,10 +113,15 @@ Plans:
   5. v3.0 endpoints (/tomar, /pausar, /completar) remain functional for backward compatibility
   6. Metadata logs 1 batch event (spool level) plus N granular events (union level) per FINALIZAR operation
   7. Dashboard displays pulgadas-diámetro as primary metric instead of spool count
-**Plans**: TBD
+**Plans**: 6 plans (including 1 gap closure plan)
 
 Plans:
-- [ ] 11-01: [TBD during phase planning]
+- [x] 11-01-PLAN.md — API versioning and v3.0 endpoint migration
+- [x] 11-02-PLAN.md — Union query endpoints (disponibles, metricas)
+- [x] 11-03-PLAN.md — INICIAR workflow endpoint
+- [x] 11-04-PLAN.md — FINALIZAR workflow endpoint
+- [x] 11-05-PLAN.md — Integration tests and validation
+- [x] 11-06-PLAN.md — Fix metadata batch + granular event logging (gap closure)
 
 #### Phase 12: Frontend Union Selection UX
 **Goal**: Mobile-first UI supports dual workflows (v3.0 3-button vs v4.0 2-button INICIAR/FINALIZAR) with union selection checkboxes
@@ -167,10 +172,10 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 8. Backend Data Layer | v4.0 | 5/5 | Complete | 2026-02-02 |
 | 9. Redis & Version Detection | v4.0 | 6/6 | Complete | 2026-02-02 |
 | 10. Backend Services & Validation | v4.0 | 5/5 | Complete | 2026-02-02 |
-| 11. API Endpoints & Metrics | v4.0 | 0/TBD | Not started | - |
+| 11. API Endpoints & Metrics | v4.0 | 6/6 | Complete | 2026-02-02 |
 | 12. Frontend Union Selection UX | v4.0 | 0/TBD | Not started | - |
 | 13. Performance Validation & Optimization | v4.0 | 0/TBD | Not started | - |
 
 ---
 
-*Last updated: 2026-02-02 (Phase 10 complete)*
+*Last updated: 2026-02-02 (Phase 11 complete)*
