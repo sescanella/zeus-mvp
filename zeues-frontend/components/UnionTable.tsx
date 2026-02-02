@@ -29,6 +29,16 @@ export function UnionTable({
   // Sort unions by n_union ascending
   const sortedUnions = [...unions].sort((a, b) => a.n_union - b.n_union);
 
+  // Handle checkbox selection change
+  const handleCheckboxChange = (n_union: number, isChecked: boolean) => {
+    if (onSelectionChange) {
+      const newSelection = isChecked
+        ? [...selectedUnions, n_union]
+        : selectedUnions.filter(n => n !== n_union);
+      onSelectionChange(newSelection);
+    }
+  };
+
   // Determine completion status based on operacion
   const getCompletionBadge = (union: Union) => {
     if (operacion === 'ARM' && union.arm_fecha_fin) {
@@ -68,19 +78,14 @@ export function UnionTable({
       <table className="w-full border-collapse">
         <thead className="bg-gray-50 border-b sticky top-0 z-10">
           <tr>
-            <th scope="col" className="w-16 px-4 py-3 text-center text-sm font-semibold text-gray-900 uppercase tracking-wider">
-              <input
-                type="checkbox"
-                disabled
-                className="h-5 w-5 rounded border-gray-300"
-                aria-label="Select all"
-              />
+            <th scope="col" className="w-16 py-3 text-center text-sm font-semibold text-gray-900 uppercase tracking-wider">
+              Seleccionar
             </th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
               N° Unión
             </th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
-              DN (in)
+              DN
             </th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
               Tipo
@@ -97,25 +102,18 @@ export function UnionTable({
               <tr
                 key={union.n_union}
                 className={`
-                  border-b transition-colors
-                  ${isCompleted ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-50'}
-                  ${isRowDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-                  min-h-[64px]
+                  border-b min-h-[64px] transition-colors
+                  ${isCompleted ? 'opacity-50' : 'hover:bg-gray-50 transition-colors'}
                 `}
               >
-                <td className="w-16 px-4 py-3 text-center">
+                <td className="w-16 text-center">
                   <input
                     type="checkbox"
                     checked={isSelected}
                     disabled={isRowDisabled}
-                    onChange={() => {
-                      // Selection logic will be added in Plan 04
-                      if (onSelectionChange && !isRowDisabled) {
-                        // Placeholder - actual logic comes later
-                      }
-                    }}
-                    className="h-5 w-5 rounded border-gray-300 text-zeues-blue focus:ring-zeues-blue disabled:cursor-not-allowed"
-                    aria-label={`Select union ${union.n_union}`}
+                    onChange={(e) => handleCheckboxChange(union.n_union, e.target.checked)}
+                    className="w-14 h-14 cursor-pointer transition-opacity duration-150 disabled:cursor-not-allowed"
+                    aria-label={`Seleccionar unión ${union.n_union}`}
                   />
                 </td>
                 <td className="px-4 py-3">
