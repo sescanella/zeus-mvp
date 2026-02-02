@@ -217,3 +217,102 @@ export interface VersionResponse {
   success: boolean;
   data: VersionInfo;
 }
+
+// ==========================================
+// v4.0 UNION-LEVEL TYPES (Phase 12)
+// ==========================================
+
+/**
+ * Union interface representing a single union in a spool (v4.0)
+ *
+ * Represents a row from the Uniones sheet (18 columns).
+ * Used for union-level tracking and selection workflows.
+ */
+export interface Union {
+  n_union: number;
+  dn_union: number;
+  tipo_union: string;
+  arm_fecha_inicio?: string;
+  arm_fecha_fin?: string;
+  arm_worker?: string;
+  sol_fecha_inicio?: string;
+  sol_fecha_fin?: string;
+  sol_worker?: string;
+  ndt_fecha?: string;
+  ndt_status?: string;
+  is_completed?: boolean; // Computed field for UI (whether this union is already completed)
+}
+
+/**
+ * Response for GET /api/v4/uniones/{tag}/disponibles endpoint
+ *
+ * Returns list of available unions for a given operation.
+ */
+export interface DisponiblesResponse {
+  tag_spool: string;
+  operacion: string;
+  uniones: Union[];
+  total_uniones: number;
+  disponibles_count: number;
+}
+
+/**
+ * Response for GET /api/v4/uniones/{tag}/metricas endpoint
+ *
+ * Returns pulgadas-diámetro performance metrics.
+ */
+export interface MetricasResponse {
+  tag_spool: string;
+  total_uniones: number;
+  uniones_arm_completadas: number;
+  uniones_sold_completadas: number;
+  pulgadas_arm: number;
+  pulgadas_sold: number;
+}
+
+/**
+ * Request for POST /api/v4/occupation/iniciar endpoint
+ *
+ * Occupies spool without union selection (v4.0 INICIAR workflow).
+ */
+export interface IniciarRequest {
+  tag_spool: string;
+  worker_id: number;
+  worker_nombre: string;
+  operacion: 'ARM' | 'SOLD';
+}
+
+/**
+ * Response for POST /api/v4/occupation/iniciar endpoint
+ */
+export interface IniciarResponse {
+  success: boolean;
+  message: string;
+  tag_spool: string;
+  ocupado_por: string;
+}
+
+/**
+ * Request for POST /api/v4/occupation/finalizar endpoint
+ *
+ * Union selection + auto PAUSAR/COMPLETAR determination (v4.0 FINALIZAR workflow).
+ */
+export interface FinalizarRequest {
+  tag_spool: string;
+  worker_id: number;
+  worker_nombre: string;
+  operacion: 'ARM' | 'SOLD';
+  selected_unions: number[];
+  fecha_operacion: string; // YYYY-MM-DD format
+}
+
+/**
+ * Response for POST /api/v4/occupation/finalizar endpoint
+ */
+export interface FinalizarResponse {
+  success: boolean;
+  message: string;
+  action: 'PAUSAR' | 'COMPLETAR' | 'CANCELAR';
+  pulgadas_completadas: number;
+  uniones_completadas: number;
+}
