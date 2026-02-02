@@ -479,6 +479,7 @@ class UnionRepository:
 
         # Required fields
         id_val = get_col("ID")
+        ot_val = get_col("OT")
         tag_spool_val = get_col("TAG_SPOOL")
         n_union_val = get_col("N_UNION")
         dn_union_val = get_col("DN_UNION")
@@ -489,6 +490,8 @@ class UnionRepository:
         # Validate required fields
         if not id_val:
             raise ValueError("ID is required")
+        if not ot_val:
+            raise ValueError("OT is required")
         if not tag_spool_val:
             raise ValueError("TAG_SPOOL is required")
         if not n_union_val:
@@ -524,6 +527,7 @@ class UnionRepository:
         # Create Union object
         return Union(
             id=id_val,
+            ot=ot_val,
             tag_spool=tag_spool_val,
             n_union=int(n_union_val),
             dn_union=float(dn_union_val),

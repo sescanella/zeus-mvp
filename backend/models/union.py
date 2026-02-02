@@ -26,9 +26,15 @@ class Union(BaseModel):
         description="Composite PK: {TAG_SPOOL}+{N_UNION}",
         examples=["OT-123+5", "MK-1335-CW-25238-011+12"]
     )
+    ot: str = Field(
+        ...,
+        description="Work order number - primary foreign key to Operaciones.OT (Column B in Uniones)",
+        min_length=1,
+        examples=["001", "123", "MK-1335"]
+    )
     tag_spool: str = Field(
         ...,
-        description="Foreign key to Operaciones sheet (columna 2 in Uniones)",
+        description="Spool tag - legacy foreign key to Operaciones.TAG_SPOOL (Column O in Uniones)",
         min_length=1,
         examples=["OT-123", "MK-1335-CW-25238-011"]
     )
