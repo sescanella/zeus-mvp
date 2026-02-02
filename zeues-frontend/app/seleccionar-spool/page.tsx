@@ -226,7 +226,8 @@ function SeleccionarSpoolContent() {
 
   // Initial load
   useEffect(() => {
-    if (!state.selectedWorker || !state.selectedOperation || !tipo) {
+    // Redirect if missing required state (allow EITHER tipo parameter OR accion state for v4.0 compatibility)
+    if (!state.selectedWorker || !state.selectedOperation || (!tipo && !state.accion)) {
       router.push('/');
       return;
     }

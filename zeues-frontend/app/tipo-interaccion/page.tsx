@@ -30,9 +30,9 @@ export default function TipoInteraccionPage() {
     // Version detection for v4.0 workflow (only if spool already selected)
     // This page can be reached BEFORE spool selection (P2→P3 flow) or AFTER (v4.0 flow)
     const detectVersion = async () => {
-      // If no spool selected yet, default to v4.0 workflow (new default)
+      // If no spool selected yet, default to v3.0 workflow (traditional flow)
       if (!state.selectedSpool) {
-        setSpoolVersion('v4.0');
+        setSpoolVersion('v3.0');
         setLoadingVersion(false);
         return;
       }
