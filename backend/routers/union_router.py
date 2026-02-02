@@ -334,9 +334,10 @@ async def finalizar_v4(
             if result.metrologia_triggered:
                 message += " (Listo para metrología)"
 
+        pulgadas_str = f"{pulgadas:.2f}" if pulgadas is not None else "0.00"
         logger.info(
             f"✅ v4.0 FINALIZAR successful: {tag_spool} - {action} with {unions_count} unions, "
-            f"{pulgadas:.2f if pulgadas else 0.00} pulgadas"
+            f"{pulgadas_str} pulgadas"
         )
 
         return FinalizarResponseV4(
