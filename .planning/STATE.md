@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 
 Phase: 8 of 13 (Backend Data Layer)
 Plan: 5 of 5 in current phase
-Status: Phase complete ✓
-Last activity: 2026-02-02 — Completed 08-05-PLAN.md (Integration tests and performance validation, 8.5 min duration)
+Status: Phase complete, verified ✓
+Last activity: 2026-02-02 — Completed Phase 8 (all 5 plans executed and verified)
 
-Progress: [████████░░░░░] 69% (7 of 13 phases complete, Phase 8 COMPLETE: 5/5 plans done)
+Progress: [█████████░░░░] 69% (8 of 13 phases complete and verified, ready for Phase 9)
 
 ## Performance Metrics
 
@@ -104,12 +104,14 @@ None yet.
 
 **v4.0 Status:**
 - **✅ Phase 7 Complete**: All schema migrations executed, validation passing, Engineering handoff complete
-- **✅ Operaciones**: 72 columns with union metrics (Total_Uniones, Uniones_ARM/SOLD_Completadas, Pulgadas_ARM/SOLD)
-- **✅ Uniones**: 22 columns (18 required + 4 extra) - Engineering populated all fields
-- **✅ Metadata**: 11 columns with N_UNION for union-level audit trail
-- **✅ Startup validation**: Integrated and passing for all 3 sheets
-- **✅ Engineering handoff**: Documentation at docs/engineering-handoff.md
-- **Ready for Phase 8**: Backend Data Layer (Union CRUD operations)
+- **✅ Phase 8 Complete**: Repository layer with batch operations and performance optimization
+  - Batch update methods (ARM/SOLD) using single API calls
+  - OT-based query methods (get_by_ot, get_disponibles_arm/sold_by_ot)
+  - Metrics aggregation with 2-decimal precision
+  - Metadata batch logging with auto-chunking (900 rows)
+  - 89 passing tests (61 unit + 28 integration)
+  - Performance: 0.466s average (54% faster than 1s target)
+- **Ready for Phase 9**: Redis & Version Detection
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -123,4 +125,4 @@ Last session: 2026-02-02
 Stopped at: Completed 08-05-PLAN.md (Integration tests and performance validation, 8.5 min duration)
 Resume file: None
 
-**Phase 8 Complete:** All 5 plans finished and verified. Backend Data Layer complete with 40 integration tests passing, performance targets met (<1s for 10-union operations). Ready for Phase 9 (Service Layer).
+**Phase 8 Complete:** All 5 plans finished and verified. Backend Data Layer complete with 89 passing tests (61 unit + 28 integration), performance targets exceeded (0.466s vs 1s target). Ready for Phase 9 (Redis & Version Detection).

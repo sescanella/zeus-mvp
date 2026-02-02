@@ -51,10 +51,14 @@ Plans:
   3. UnionRepository can count completed unions and sum pulgadas for ARM and SOLD operations
   4. MetadataRepository can log batch events with auto-chunking (900 rows max per chunk)
   5. Union Pydantic model validates 18 fields matching Uniones sheet structure
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 08-01: [TBD during phase planning]
+- [x] 08-01-PLAN.md — Implement batch update methods for ARM and SOLD operations
+- [x] 08-02-PLAN.md — Implement OT-based query methods for union repository
+- [x] 08-03-PLAN.md — Implement metrics aggregation methods for union tracking
+- [x] 08-04-PLAN.md — Extend metadata repository with batch logging and N_UNION field
+- [x] 08-05-PLAN.md — Integration tests and performance validation
 
 #### Phase 9: Redis & Version Detection
 **Goal**: Redis locks support long-running sessions and system detects v3.0 vs v4.0 spools for dual workflow routing
@@ -151,7 +155,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 5. Metrología Instant Inspection | v3.0 | Complete | Complete | 2026-01-28 |
 | 6. Reparación Bounded Cycles | v3.0 | Complete | Complete | 2026-01-28 |
 | 7. Data Model Foundation | v4.0 | 7/7 | Complete | 2026-02-02 |
-| 8. Backend Data Layer | v4.0 | 0/TBD | Not started | - |
+| 8. Backend Data Layer | v4.0 | 5/5 | Complete | 2026-02-02 |
 | 9. Redis & Version Detection | v4.0 | 0/TBD | Not started | - |
 | 10. Backend Services & Validation | v4.0 | 0/TBD | Not started | - |
 | 11. API Endpoints & Metrics | v4.0 | 0/TBD | Not started | - |
