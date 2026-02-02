@@ -377,7 +377,7 @@ def print_performance_report(stats: Dict):
 
 def export_metrics(stats: Dict):
     """
-    Export metrics to JSON for analysis.
+    Export metrics to JSON, CSV, and HTML for analysis.
 
     Args:
         stats: Performance statistics dictionary
@@ -386,13 +386,341 @@ def export_metrics(stats: Dict):
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"performance_report_{timestamp}.json"
-    filepath = os.path.join(output_dir, filename)
 
-    with open(filepath, "w") as f:
+    # Export JSON (complete data)
+    json_filename = f"performance_report_{timestamp}.json"
+    json_filepath = os.path.join(output_dir, json_filename)
+
+    with open(json_filepath, "w") as f:
         json.dump(stats, f, indent=2)
 
-    print(f"📊 Metrics exported to: {filepath}")
+    print(f"📊 JSON report: {json_filepath}")
+
+    # Export CSV (for trending analysis)
+    csv_filename = f"performance_metrics_{timestamp}.csv"
+    csv_filepath = os.path.join(output_dir, csv_filename)
+
+    with open(csv_filepath, "w") as f:
+        # Header
+        f.write("metric,value,unit,status\n")
+
+        # Latency metrics
+        lat = stats["latency"]
+        f.write(f"latency_avg,{lat['avg']:.3f},seconds,\n")
+        f.write(f"latency_p50,{lat['p50']:.3f},seconds,\n")
+        f.write(f"latency_p95,{lat['p95']:.3f},seconds,{'PASS' if lat['p95'] < 1.0 else 'FAIL'}\n")
+        f.write(f"latency_p99,{lat['p99']:.3f},seconds,{'PASS' if lat['p99'] < 2.0 else 'FAIL'}\n")
+        f.write(f"latency_max,{lat['max']:.3f},seconds,\n")
+
+        # Rate limit metrics
+        rate = stats["rate_limit"]
+        f.write(f"rate_current_rpm,{rate['current_rpm']:.1f},requests_per_minute,{'PASS' if rate['within_limit'] else 'FAIL'}\n")
+        f.write(f"rate_quota_utilization,{rate['quota_utilization']:.1f},percent,\n")
+
+        # Memory metrics
+        mem = stats["memory"]
+        f.write(f"memory_baseline,{mem['baseline_mb']:.2f},MB,\n")
+        f.write(f"memory_peak,{mem['peak_mb']:.2f},MB,\n")
+        f.write(f"memory_increase,{mem['increase_mb']:.2f},MB,\n")
+
+        # Summary metrics
+        f.write(f"total_requests,{stats['total_requests']},count,\n")
+        f.write(f"success_rate,{stats['success_rate']:.1f},percent,\n")
+        f.write(f"test_duration,{stats['test_duration_seconds']:.1f},seconds,\n")
+
+    print(f"📈 CSV metrics: {csv_filepath}")
+
+    # Export HTML report (human-readable)
+    html_filename = f"performance_report_{timestamp}.html"
+    html_filepath = os.path.join(output_dir, html_filename)
+
+    html_content = generate_html_report(stats, timestamp)
+
+    with open(html_filepath, "w") as f:
+        f.write(html_content)
+
+    print(f"📄 HTML report: {html_filepath}")
+
+
+def generate_html_report(stats: Dict, timestamp: str) -> str:
+    """
+    Generate HTML report with charts and visualizations.
+
+    Args:
+        stats: Performance statistics dictionary
+        timestamp: Timestamp string for report
+
+    Returns:
+        HTML content as string
+    """
+    lat = stats["latency"]
+    rate = stats["rate_limit"]
+    mem = stats["memory"]
+    perf = stats["perf_validation"]
+
+    # Color coding
+    def pass_fail_color(passed: bool) -> str:
+        return "#28a745" if passed else "#dc3545"
+
+    def perf_status(passed: bool) -> str:
+        return "✅ PASS" if passed else "❌ FAIL"
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZEUES v4.0 Performance Report - {timestamp}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .header {{
+            background: #343a40;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }}
+        .section {{
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        .metric {{
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }}
+        .metric:last-child {{
+            border-bottom: none;
+        }}
+        .metric-value {{
+            font-weight: bold;
+            font-size: 1.1em;
+        }}
+        .pass {{ color: #28a745; }}
+        .fail {{ color: #dc3545; }}
+        .perf-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }}
+        .perf-card {{
+            padding: 15px;
+            border-radius: 6px;
+            border: 2px solid;
+        }}
+        .perf-card.pass {{
+            border-color: #28a745;
+            background: #d4edda;
+        }}
+        .perf-card.fail {{
+            border-color: #dc3545;
+            background: #f8d7da;
+        }}
+        h1 {{ margin: 0; }}
+        h2 {{ color: #343a40; border-bottom: 2px solid #007bff; padding-bottom: 10px; }}
+        .timestamp {{ color: #6c757d; margin-top: 5px; }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }}
+        th, td {{
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }}
+        th {{
+            background: #f8f9fa;
+            font-weight: 600;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ZEUES v4.0 Performance Validation Report</h1>
+        <div class="timestamp">Phase 13 - Comprehensive Load Test - {timestamp}</div>
+    </div>
+
+    <div class="section">
+        <h2>Test Summary</h2>
+        <div class="metric">
+            <span>Test Duration</span>
+            <span class="metric-value">{stats['test_duration_seconds']:.1f}s ({stats['test_duration_seconds']/60:.1f}m)</span>
+        </div>
+        <div class="metric">
+            <span>Total Requests</span>
+            <span class="metric-value">{stats['total_requests']}</span>
+        </div>
+        <div class="metric">
+            <span>Success Rate</span>
+            <span class="metric-value">{stats['success_rate']:.1f}%</span>
+        </div>
+        <div class="metric">
+            <span>Successful Requests</span>
+            <span class="metric-value">{stats['success_count']}</span>
+        </div>
+        <div class="metric">
+            <span>Failed Requests</span>
+            <span class="metric-value">{stats['failure_count']}</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Latency Metrics</h2>
+        <div class="metric">
+            <span>Average</span>
+            <span class="metric-value">{lat['avg']:.3f}s</span>
+        </div>
+        <div class="metric">
+            <span>Median (p50)</span>
+            <span class="metric-value">{lat['p50']:.3f}s</span>
+        </div>
+        <div class="metric">
+            <span>p95 (Target: &lt;1.0s)</span>
+            <span class="metric-value {'pass' if lat['p95'] < 1.0 else 'fail'}">{lat['p95']:.3f}s {perf_status(lat['p95'] < 1.0)}</span>
+        </div>
+        <div class="metric">
+            <span>p99 (Target: &lt;2.0s)</span>
+            <span class="metric-value {'pass' if lat['p99'] < 2.0 else 'fail'}">{lat['p99']:.3f}s {perf_status(lat['p99'] < 2.0)}</span>
+        </div>
+        <div class="metric">
+            <span>Maximum</span>
+            <span class="metric-value">{lat['max']:.3f}s</span>
+        </div>
+        <div class="metric">
+            <span>Standard Deviation</span>
+            <span class="metric-value">{lat['std']:.3f}s</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>⏱️ Rate Limit Compliance</h2>
+        <div class="metric">
+            <span>Current RPM</span>
+            <span class="metric-value">{rate['current_rpm']:.1f}</span>
+        </div>
+        <div class="metric">
+            <span>Target RPM (50% quota)</span>
+            <span class="metric-value">30</span>
+        </div>
+        <div class="metric">
+            <span>Quota Utilization</span>
+            <span class="metric-value {'pass' if rate['within_limit'] else 'fail'}">{rate['quota_utilization']:.1f}% {perf_status(rate['within_limit'])}</span>
+        </div>
+        <div class="metric">
+            <span>Requests in Window</span>
+            <span class="metric-value">{rate['requests_in_window']}</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>💾 Memory Usage</h2>
+        <div class="metric">
+            <span>Baseline</span>
+            <span class="metric-value">{mem['baseline_mb']:.2f} MB</span>
+        </div>
+        <div class="metric">
+            <span>Peak</span>
+            <span class="metric-value">{mem['peak_mb']:.2f} MB</span>
+        </div>
+        <div class="metric">
+            <span>Increase</span>
+            <span class="metric-value">{mem['increase_mb']:.2f} MB</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📋 Performance Requirements Validation</h2>
+        <div class="perf-grid">
+            <div class="perf-card {'pass' if perf['PERF-01 (p95 < 1s)'] else 'fail'}">
+                <strong>PERF-01</strong><br>
+                p95 &lt; 1s<br>
+                <span class="metric-value {'pass' if perf['PERF-01 (p95 < 1s)'] else 'fail'}">{perf_status(perf['PERF-01 (p95 < 1s)'])}</span>
+            </div>
+            <div class="perf-card {'pass' if perf['PERF-02 (p99 < 2s)'] else 'fail'}">
+                <strong>PERF-02</strong><br>
+                p99 &lt; 2s<br>
+                <span class="metric-value {'pass' if perf['PERF-02 (p99 < 2s)'] else 'fail'}">{perf_status(perf['PERF-02 (p99 < 2s)'])}</span>
+            </div>
+            <div class="perf-card {'pass' if perf['PERF-03 (max 2 API calls)'] else 'fail'}">
+                <strong>PERF-03</strong><br>
+                Max 2 API calls<br>
+                <span class="metric-value {'pass' if perf['PERF-03 (max 2 API calls)'] else 'fail'}">{perf_status(perf['PERF-03 (max 2 API calls)'])}</span>
+            </div>
+            <div class="perf-card {'pass' if perf['PERF-05 (< 30 RPM)'] else 'fail'}">
+                <strong>PERF-05</strong><br>
+                &lt; 30 RPM<br>
+                <span class="metric-value {'pass' if perf['PERF-05 (< 30 RPM)'] else 'fail'}">{perf_status(perf['PERF-05 (< 30 RPM)'])}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Operations Breakdown</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Operation</th>
+                    <th>Count</th>
+                    <th>Avg Latency</th>
+                    <th>p95</th>
+                    <th>p99</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+
+    # Add operation rows
+    for op_name, op_stats in stats["operations"].items():
+        html += f"""
+                <tr>
+                    <td>{op_name}</td>
+                    <td>{op_stats['n']}</td>
+                    <td>{op_stats['avg']:.3f}s</td>
+                    <td>{op_stats['p95']:.3f}s</td>
+                    <td>{op_stats['p99']:.3f}s</td>
+                </tr>
+"""
+
+    html += """
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Final Result</h2>
+"""
+
+    passed = sum(1 for v in perf.values() if v)
+    total = len(perf)
+    all_passed = passed == total
+
+    html += f"""
+        <div style="text-align: center; padding: 20px; font-size: 1.5em; color: {pass_fail_color(all_passed)};">
+            <strong>{'✅ ALL CRITERIA MET' if all_passed else '❌ VALIDATION FAILED'}</strong><br>
+            <span style="font-size: 0.8em;">{passed}/{total} requirements passed</span>
+        </div>
+    </div>
+
+    <div class="section" style="background: #f8f9fa; color: #6c757d; font-size: 0.9em;">
+        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
+        ZEUES v4.0 - Phase 13 Performance Validation & Optimization
+    </div>
+</body>
+</html>
+"""
+
+    return html
 
 
 def validate_success_criteria(stats: Dict):
