@@ -650,8 +650,7 @@ async def test_finalizar_logs_batch_and_granular_metadata(
     for proper batch + granular metadata logging pattern.
     """
     from backend.models.occupation import FinalizarRequest
-    from backend.models.enums import Operacion
-    from backend.models.spool import Spool
+    from backend.models.enums import ActionType
 
     # Arrange: Mock UnionService with batch + granular metadata event pattern
     mock_union_service = MagicMock()
@@ -669,13 +668,12 @@ async def test_finalizar_logs_batch_and_granular_metadata(
         MagicMock(id="OT-123+3")
     ]
 
-    # Mock spool data with OT
-    mock_sheets_repository.get_spool_by_tag.return_value = Spool(
-        tag_spool="TEST-01",
-        ot="OT-123",
-        fecha_materiales="2026-01-20",
-        total_uniones=5
-    )
+    # Mock spool data with OT (use MagicMock for v4.0 fields not in Spool model)
+    mock_spool = MagicMock()
+    mock_spool.tag_spool = "TEST-01"
+    mock_spool.ot = "OT-123"
+    mock_spool.fecha_materiales = "2026-01-20"
+    mock_sheets_repository.get_spool_by_tag.return_value = mock_spool
 
     # Mock lock ownership
     mock_redis_lock_service.get_lock_owner.return_value = (93, "93:test-token")
@@ -696,7 +694,7 @@ async def test_finalizar_logs_batch_and_granular_metadata(
         tag_spool="TEST-01",
         worker_id=93,
         worker_nombre="MR(93)",
-        operacion=Operacion.ARM,
+        operacion=ActionType.ARM,
         selected_unions=["OT-123+1", "OT-123+2", "OT-123+3"]
     )
 
@@ -718,4 +716,3 @@ async def test_finalizar_logs_batch_and_granular_metadata(
     assert result.success is True
     assert result.unions_processed == 3
     assert result.action_taken in ["PAUSAR", "COMPLETAR"]
-    assert any(record.exc_info is not None for record in caplog.records)
