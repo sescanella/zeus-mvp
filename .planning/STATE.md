@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Track work at the union level with the correct business metric (pulgadas-diámetro)
-**Current focus:** Phase 8 - Backend Data Layer
+**Current focus:** Phase 9 - Redis & Version Detection
 
 ## Current Position
 
-Phase: 8 of 13 (Backend Data Layer)
-Plan: 5 of 5 in current phase
-Status: Phase complete, verified ✓
-Last activity: 2026-02-02 — Completed Phase 8 (all 5 plans executed and verified)
+Phase: 9 of 13 (Redis & Version Detection)
+Plan: 2 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 09-02-PLAN.md (Lazy cleanup mechanism)
 
-Progress: [█████████░░░░] 69% (8 of 13 phases complete and verified, ready for Phase 9)
+Progress: [█████████░░░░] 70% (9 of 13 phases in progress, 2 of 5 plans complete in Phase 9)
 
 ## Performance Metrics
 
@@ -40,10 +40,11 @@ Progress: [█████████░░░░] 69% (8 of 13 phases complete
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
+| 9. Redis & Version Detection | 2/5 | 8 min | 4.0 min |
 
 **Recent Trend:**
-- Last 5 plans: [3.5, 4.0, 3.0, 6.5, 8.5] min
-- Trend: Phase 8 COMPLETE (Backend Data Layer: All repository methods implemented, integration tests passing, performance targets met)
+- Last 5 plans: [4.0, 3.0, 6.5, 8.5, 4.0] min
+- Trend: Phase 9 IN PROGRESS (Lazy cleanup and version detection: 2 of 5 plans complete, 4-min average)
 
 *Updated after each plan completion*
 
@@ -95,6 +96,10 @@ Recent decisions affecting v4.0 work:
 - **D39 (08-05)**: Union model already has 18 fields including OT (Task 1 was no-op)
 - **D40 (08-05)**: End-to-end workflow test integrated into Task 3 UnionRepository tests
 - **D41 (08-05)**: Mock latency simulation for performance tests (300ms batch update, 150ms append)
+- **D42 (09-02)**: Lazy cleanup processes one lock per INICIAR operation (eventual consistency pattern)
+- **D43 (09-02)**: Cleanup logs to application logger only (no Metadata events for maintenance operations)
+- **D44 (09-02)**: Lock value format extended to include timestamp: worker_id:token:timestamp
+- **D45 (09-02)**: Cleanup order before lock acquisition (prevents race condition with newly-acquired lock)
 
 ### Pending Todos
 
@@ -111,7 +116,10 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **Ready for Phase 9**: Redis & Version Detection
+- **🔄 Phase 9 In Progress**: Redis & Version Detection (2 of 5 plans complete)
+  - ✅ Plan 01: Degraded mode for Redis unavailability
+  - ✅ Plan 02: Lazy cleanup mechanism (4 min duration, 10 unit tests passing)
+  - Pending: Plan 03 (Startup reconciliation), Plan 04 (Version detection), Plan 05 (Frontend caching)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -122,7 +130,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 08-05-PLAN.md (Integration tests and performance validation, 8.5 min duration)
+Stopped at: Completed 09-02-PLAN.md (Lazy cleanup mechanism, 4 min duration)
 Resume file: None
 
-**Phase 8 Complete:** All 5 plans finished and verified. Backend Data Layer complete with 89 passing tests (61 unit + 28 integration), performance targets exceeded (0.466s vs 1s target). Ready for Phase 9 (Redis & Version Detection).
+**Phase 9 Progress:** Plan 02 complete. Lazy cleanup mechanism operational with 10 passing unit tests. Ready for Plan 03 (Startup reconciliation from Sheets).
