@@ -59,7 +59,7 @@ class TestAPIVersioning:
     @pytest.fixture
     def client_v3(self, mock_spool_repo_v3, mock_redis_client, mock_metadata_repo):
         """TestClient with v3.0 spool mocked"""
-        from main import app
+        from backend.main import app
 
         with patch("backend.repositories.spool_repository.SpoolRepository") as MockSpoolRepo, \
              patch("backend.core.redis_client.get_redis_client", return_value=mock_redis_client), \
@@ -73,7 +73,7 @@ class TestAPIVersioning:
     @pytest.fixture
     def client_v4(self, mock_spool_repo_v4, mock_redis_client, mock_metadata_repo):
         """TestClient with v4.0 spool mocked"""
-        from main import app
+        from backend.main import app
 
         with patch("backend.repositories.spool_repository.SpoolRepository") as MockSpoolRepo, \
              patch("backend.core.redis_client.get_redis_client", return_value=mock_redis_client), \
@@ -205,7 +205,7 @@ class TestAPIVersioning:
 
     def test_mixed_version_workflow(self, mock_spool_repo_v3, mock_spool_repo_v4, mock_redis_client, mock_metadata_repo):
         """Test handling multiple spools with different versions"""
-        from main import app
+        from backend.main import app
 
         with patch("backend.repositories.spool_repository.SpoolRepository") as MockSpoolRepo, \
              patch("backend.core.redis_client.get_redis_client", return_value=mock_redis_client), \
@@ -244,7 +244,7 @@ class TestAPIVersioning:
 
     def test_api_docs_tag_organization(self):
         """API documentation properly tags v3 and v4 endpoints"""
-        from main import app
+        from backend.main import app
 
         # Get OpenAPI schema
         openapi_schema = app.openapi()

@@ -88,7 +88,7 @@ class TestUnionAPIV4Workflows:
     @pytest.fixture
     def client_with_mocks(self, mock_union_repo, mock_spool_repo, mock_metadata_repo, mock_redis_client):
         """TestClient with all dependencies mocked"""
-        from main import app
+        from backend.main import app
 
         with patch("backend.repositories.union_repository.UnionRepository") as MockUnionRepo, \
              patch("backend.repositories.spool_repository.SpoolRepository") as MockSpoolRepo, \
