@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 11 of 13 (API Endpoints & Metrics)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 11-01-PLAN.md (API Versioning & V3 Migration)
+Last activity: 2026-02-02 — Completed 11-02-PLAN.md (Union Query Endpoints)
 
-Progress: [██████████░░░] 78% (10 phases complete + 1/5 plans in Phase 11, 41 of 52 total plans)
+Progress: [██████████░░░] 80% (10 phases complete + 2/5 plans in Phase 11, 42 of 52 total plans)
 
 ## Performance Metrics
 
@@ -42,11 +42,11 @@ Progress: [██████████░░░] 78% (10 phases complete + 1/
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
-| 11. API Endpoints & Metrics | 1/5 | 5.2 min | 5.2 min |
+| 11. API Endpoints & Metrics | 2/5 | 8.1 min | 4.1 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.0, 6.0, 6.5, 6.0, 5.2] min
-- Trend: Phase 11 started (1 of 5 plans, 5.2-min first plan - faster than Phase 10's 5.7-min average)
+- Last 5 plans: [6.0, 6.5, 6.0, 5.2, 2.9] min
+- Trend: Phase 11 acceleration (2 of 5 plans, 4.1-min average - 28% faster than Phase 10's 5.7-min average)
 
 *Updated after each plan completion*
 
@@ -174,13 +174,17 @@ None yet.
   - 10-05 ✓: Integration tests and performance validation (6.0 min)
   - Test coverage: 34 new v4.0 integration/performance tests (100% passing)
   - Performance: <1s for 10-union batches (p95 requirement MET)
-- **🔄 Phase 11 In Progress**: API Endpoints & Metrics (1/5 plans, 5.2 min total, 5.2-min avg)
-  - 11-01 ✓: API Versioning & V3 Migration (5.2 min, this session)
+- **🔄 Phase 11 In Progress**: API Endpoints & Metrics (2/5 plans, 8.1 min total, 4.1-min avg)
+  - 11-01 ✓: API Versioning & V3 Migration (5.2 min)
     - Created occupation_v3.py router with v3.0 endpoints at /api/v3/
     - Maintained legacy routes at /api/ for backward compatibility
     - Added version detection utils (is_v4_spool, get_spool_version)
     - 8 smoke tests validate versioning structure
-  - 11-02 pending: INICIAR/FINALIZAR endpoints at /api/v4/
+  - 11-02 ✓: Union Query Endpoints (2.9 min, this session)
+    - GET /api/v4/uniones/{tag}/disponibles?operacion=ARM|SOLD
+    - GET /api/v4/uniones/{tag}/metricas (5 fields, 2-decimal pulgadas)
+    - API models: UnionSummary, DisponiblesResponse, MetricasResponse
+    - 12 unit tests (6 disponibles, 6 metricas), all passing
   - 11-03 pending: Metrics API for pulgadas-diámetro performance
   - 11-04 pending: Union listing and selection endpoints
   - 11-05 pending: Integration tests for v4.0 API
@@ -195,7 +199,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 11-01-PLAN.md (API Versioning & V3 Migration, 5.2 min duration)
+Stopped at: Completed 11-02-PLAN.md (Union Query Endpoints, 2.9 min duration)
 Resume file: None
 
-**Phase 11 Plan 01 Complete:** API versioning structure established. Created occupation_v3.py router (v3.0 endpoints at /api/v3/), maintained legacy routes (/api/) for backward compatibility. Added version detection utils (is_v4_spool, get_spool_version, format_version_badge). 8 smoke tests validate dual-prefix routing. Ready for 11-02 (INICIAR/FINALIZAR v4.0 endpoints at /api/v4/).
+**Phase 11 Plan 02 Complete:** Union query endpoints implemented. GET /api/v4/uniones/{tag}/disponibles filters ARM/SOLD disponibles, GET /api/v4/uniones/{tag}/metricas returns 5-field spool metrics with 2-decimal pulgadas. Created API response models (UnionSummary, DisponiblesResponse, MetricasResponse). Added get_union_repository dependency injection. 12 unit tests (6 disponibles, 6 metricas) all passing. Foundation for Phase 12 frontend union selection ready.
