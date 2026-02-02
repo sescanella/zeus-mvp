@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
-import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool } from '@/lib/api';
+import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
 import type { Spool, SSEEvent } from '@/lib/types';
 import { useSSE } from '@/lib/hooks/useSSE';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -75,7 +75,7 @@ function SeleccionarSpoolContent() {
       setError('');
       setSpools([]);
 
-      const { selectedWorker, selectedOperation } = state;
+      const { selectedWorker, selectedOperation, accion } = state;
 
       if (!selectedOperation) {
         setError('No se ha seleccionado una operación');
@@ -130,7 +130,33 @@ function SeleccionarSpoolContent() {
         version: detectVersionFromSpool(spool)
       }));
 
-      setSpools(spoolsWithVersion);
+      // v4.0: Apply filtering based on action type (INICIAR vs FINALIZAR)
+      let filtered = spoolsWithVersion;
+
+      if (accion === 'INICIAR') {
+        // Show only disponibles (not occupied)
+        // Criteria: STATUS_NV='ABIERTA' AND Status_Spool='EN_PROCESO' AND Ocupado_Por IN ('','DISPONIBLE',null)
+        // Note: Spool type doesn't include all backend fields, using type assertion
+        filtered = spoolsWithVersion.filter(spool => {
+          const ocupadoPor = (spool as { Ocupado_Por?: string }).Ocupado_Por;
+          return !ocupadoPor || ocupadoPor === 'DISPONIBLE' || ocupadoPor === '';
+        });
+      } else if (accion === 'FINALIZAR') {
+        // Show only occupied by current worker
+        // Criteria: Ocupado_Por contains worker_id
+        if (selectedWorker) {
+          const workerPattern = `(${selectedWorker.id})`;
+          filtered = spoolsWithVersion.filter(spool => {
+            const ocupadoPor = (spool as { Ocupado_Por?: string }).Ocupado_Por;
+            return ocupadoPor && ocupadoPor.includes(workerPattern);
+          });
+        } else {
+          filtered = [];
+        }
+      }
+      // For v3.0 actions (tipo param) or null, show all (existing behavior)
+
+      setSpools(filtered);
       setLoading(false);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
@@ -204,8 +230,8 @@ function SeleccionarSpoolContent() {
     setState({ selectedSpools: [] });
   };
 
-  // v2.0: Navigate with selections (auto-detect single vs batch)
-  const handleContinueWithBatch = () => {
+  // v2.0/v4.0: Navigate with selections (auto-detect single vs batch)
+  const handleContinueWithBatch = async () => {
     const selectedCount = (state.selectedSpools || []).length;
 
     if (selectedCount === 0) return;
@@ -217,6 +243,31 @@ function SeleccionarSpoolContent() {
         sessionStorage.setItem(`spool_version_${tag}`, spool.version);
       }
     });
+
+    // v4.0: INICIAR workflow - call API directly and navigate to success
+    if (state.accion === 'INICIAR' && selectedCount === 1 && state.selectedWorker && state.selectedOperation) {
+      try {
+        setLoading(true);
+        const tag = state.selectedSpools[0];
+        const workerNombre = `${state.selectedWorker.nombre.charAt(0)}${(state.selectedWorker.apellido || '').charAt(0)}(${state.selectedWorker.id})`;
+
+        await iniciarSpool({
+          tag_spool: tag,
+          worker_id: state.selectedWorker.id,
+          worker_nombre: workerNombre,
+          operacion: state.selectedOperation as 'ARM' | 'SOLD'
+        });
+
+        // Navigate to success page
+        router.push('/exito');
+        return;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+        setError(errorMessage);
+        setLoading(false);
+        return;
+      }
+    }
 
     // METROLOGIA: Navigate to resultado page (single spool only)
     if (tipo === 'metrologia') {
@@ -274,8 +325,17 @@ function SeleccionarSpoolContent() {
                         state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
                         state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' : 'REPARACIÓN';
 
-  // v3.0: Dynamic page title based on tipo
+  // v3.0/v4.0: Dynamic page title based on tipo or accion
   const getPageTitle = () => {
+    // v4.0: Check accion first (INICIAR/FINALIZAR)
+    if (state.accion === 'INICIAR') {
+      return `SELECCIONAR SPOOL PARA INICIAR - ${operationLabel}`;
+    }
+    if (state.accion === 'FINALIZAR') {
+      return `SELECCIONAR SPOOL PARA FINALIZAR - ${operationLabel}`;
+    }
+
+    // v3.0: Fall back to tipo-based titles
     switch (tipo) {
       case 'tomar':
         return `SELECCIONAR SPOOL PARA TOMAR - ${operationLabel}`;
@@ -296,8 +356,17 @@ function SeleccionarSpoolContent() {
     }
   };
 
-  // v3.0: Dynamic empty state message based on tipo
+  // v3.0/v4.0: Dynamic empty state message based on tipo or accion
   const getEmptyMessage = () => {
+    // v4.0: Check accion first (INICIAR/FINALIZAR)
+    if (state.accion === 'INICIAR') {
+      return `No hay spools disponibles para iniciar en ${operationLabel}`;
+    }
+    if (state.accion === 'FINALIZAR') {
+      return `No tienes spools ocupados actualmente para ${operationLabel}`;
+    }
+
+    // v3.0: Fall back to tipo-based messages
     switch (tipo) {
       case 'tomar':
         return `No hay spools disponibles para ${operationLabel}`;
