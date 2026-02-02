@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 12 of 13 (Frontend Union Selection UX)
-Plan: 5 of 7 in current phase
+Plan: 6 of 7 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 12-04-PLAN.md (P5 Union Selection Page with Checkboxes)
+Last activity: 2026-02-02 — Completed 12-05-PLAN.md (API Integration & Error Handling for P5)
 
-Progress: [███████████░░] 92% (52 of 53 total plans complete)
+Progress: [███████████░░] 94% (53 of 53 total plans complete)
 
 ## Performance Metrics
 
@@ -43,11 +43,11 @@ Progress: [███████████░░] 92% (52 of 53 total plans co
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
-| 12. Frontend Union Selection UX | 5 (in progress) | 17.1 min | 3.4 min |
+| 12. Frontend Union Selection UX | 6 (in progress) | 20.9 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.0, 2.0, 2.1, 5.0, 2.0] min
-- Trend: Phase 12 in progress (5 of 7 plans, 3.4-min average - 41% faster than Phase 11's 5.8-min average)
+- Last 5 plans: [2.0, 2.1, 5.0, 2.0, 3.8] min
+- Trend: Phase 12 in progress (6 of 7 plans, 3.5-min average - 40% faster than Phase 11's 5.8-min average)
 
 *Updated after each plan completion*
 
@@ -169,6 +169,12 @@ Recent decisions affecting v4.0 work:
 - **D100 (12-04)**: Zero-selection modal with disabled backdrop click (onBackdropClick={null})
 - **D101 (12-04)**: 56x56px checkbox touch targets (w-14 h-14 Tailwind classes)
 - **D102 (12-04)**: "Seleccionar Todas" only selects available unions (completed unions excluded)
+- **D103 (12-05)**: Fresh API call on P5 mount for accuracy over speed
+- **D104 (12-05)**: Session storage preserves selection on error (unions_selection_{tag} format)
+- **D105 (12-05)**: 409 conflict triggers 2-second auto-reload to P5
+- **D106 (12-05)**: 403 ownership error shows clear message and redirects to spool selection
+- **D107 (12-05)**: Clear session storage on successful FINALIZAR submission
+- **D108 (12-05)**: Display pulgadas-diámetro with 1 decimal precision on confirmar
 
 ### Pending Todos
 
@@ -238,7 +244,7 @@ None yet.
     - Added test coverage for batch + granular metadata logging pattern
   - Test coverage: 48 new tests (36 passing, 12 skipped with manual procedures)
   - All v4.0 API endpoints implemented, validated, and metadata logging complete
-- **🔄 Phase 12 In Progress**: Frontend Union Selection UX (5/7 plans, 17.1 min, 3.4-min avg)
+- **🔄 Phase 12 In Progress**: Frontend Union Selection UX (6/7 plans, 20.9 min, 3.5-min avg)
   - 12-01 ✓: TypeScript Type Definitions (4.0 min)
     - Added Union, DisponiblesResponse, MetricasResponse types
     - IniciarRequest/Response, FinalizarRequest/Response types
@@ -260,6 +266,13 @@ None yet.
     - 56x56px checkboxes (w-14 h-14) for gloved hands
     - Zero-selection modal with disabled backdrop click
     - Full UnionTable selection logic with completion badges
+  - 12-05 ✓: API Integration & Error Handling for P5 (3.8 min)
+    - P5 loads unions via GET /api/v4/uniones/{tag}/disponibles
+    - 409 conflict triggers modal with 2-second auto-reload countdown
+    - 403 ownership error shows clear message and redirects
+    - Session storage preserves selection on error for resilience
+    - Confirmar page calls finalizarSpool for v4.0 FINALIZAR flow
+    - Display selected unions count and pulgadas-diámetro on confirmation
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -271,7 +284,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 12-04-PLAN.md (P5 Union Selection Page with Checkboxes)
+Stopped at: Completed 12-05-PLAN.md (API Integration & Error Handling for P5)
 Resume file: None - continuing Phase 12 execution
 
-**Phase 12 Progress:** P5 union selection page complete with full checkbox logic. 56x56px touch targets, sticky counter, zero-selection modal. Next: P6 Confirmar integration, P7 INICIAR/FINALIZAR endpoints for v4.0 workflows.
+**Phase 12 Progress:** P5 API integration complete with comprehensive error handling. 409 auto-reload with countdown, 403 ownership errors, session storage resilience. Confirmar page handles v4.0 FINALIZAR flow. Next: remaining Phase 12 plans for complete v4.0 frontend workflow.
