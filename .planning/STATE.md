@@ -12,9 +12,9 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 Phase: 12 of 13 (Frontend Union Selection UX)
 Plan: 5 of 7 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 12-02-PLAN.md (Base Components - Modal, UnionTable, Version Detection)
+Last activity: 2026-02-02 — Completed 12-04-PLAN.md (P5 Union Selection Page with Checkboxes)
 
-Progress: [███████████░░] 91% (51 of 53 total plans complete)
+Progress: [███████████░░] 92% (52 of 53 total plans complete)
 
 ## Performance Metrics
 
@@ -43,11 +43,11 @@ Progress: [███████████░░] 91% (51 of 53 total plans co
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
-| 12. Frontend Union Selection UX | 5 (in progress) | 15.1 min | 3.0 min |
+| 12. Frontend Union Selection UX | 5 (in progress) | 17.1 min | 3.4 min |
 
 **Recent Trend:**
-- Last 5 plans: [10.6, 5.0, 2.0, 2.1, 5.0] min
-- Trend: Phase 12 in progress (5 of 7 plans, 3.0-min average - 48% faster than Phase 11's 5.8-min average)
+- Last 5 plans: [5.0, 2.0, 2.1, 5.0, 2.0] min
+- Trend: Phase 12 in progress (5 of 7 plans, 3.4-min average - 41% faster than Phase 11's 5.8-min average)
 
 *Updated after each plan completion*
 
@@ -164,6 +164,11 @@ Recent decisions affecting v4.0 work:
 - **D95 (12-02)**: UnionTable shell without selection logic (deferred to Plan 04 for ARM-before-SOLD validation)
 - **D96 (12-02)**: Version detection uses total_uniones > 0 (simple frontend-only check, no API latency)
 - **D97 (12-02)**: Session storage for version caching (spool_version_{TAG} format, cleared on refresh for data freshness)
+- **D98 (12-04)**: Fresh API call on P5 mount (accuracy over speed)
+- **D99 (12-04)**: 1 decimal precision for pulgadas calculation (Math.round(total * 10) / 10)
+- **D100 (12-04)**: Zero-selection modal with disabled backdrop click (onBackdropClick={null})
+- **D101 (12-04)**: 56x56px checkbox touch targets (w-14 h-14 Tailwind classes)
+- **D102 (12-04)**: "Seleccionar Todas" only selects available unions (completed unions excluded)
 
 ### Pending Todos
 
@@ -233,7 +238,7 @@ None yet.
     - Added test coverage for batch + granular metadata logging pattern
   - Test coverage: 48 new tests (36 passing, 12 skipped with manual procedures)
   - All v4.0 API endpoints implemented, validated, and metadata logging complete
-- **🔄 Phase 12 In Progress**: Frontend Union Selection UX (3/7 plans, 8.0 min, 2.7-min avg)
+- **🔄 Phase 12 In Progress**: Frontend Union Selection UX (5/7 plans, 17.1 min, 3.4-min avg)
   - 12-01 ✓: TypeScript Type Definitions (4.0 min)
     - Added Union, DisponiblesResponse, MetricasResponse types
     - IniciarRequest/Response, FinalizarRequest/Response types
@@ -248,6 +253,13 @@ None yet.
     - Helper functions: resetV4State, calculatePulgadas, toggleUnionSelection, selectAllAvailableUnions
     - All helpers memoized with useCallback for performance
     - v3.0 backward compatibility maintained
+  - 12-04 ✓: P5 Union Selection Page with Checkboxes (2.0 min)
+    - Created app/seleccionar-uniones/page.tsx (219 lines)
+    - Fresh API call via getDisponiblesUnions for accuracy
+    - Sticky counter: "Seleccionadas: X/Y | Pulgadas: Z"
+    - 56x56px checkboxes (w-14 h-14) for gloved hands
+    - Zero-selection modal with disabled backdrop click
+    - Full UnionTable selection logic with completion badges
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -259,7 +271,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 12-02-PLAN.md (Base Components - Modal, UnionTable, Version Detection)
+Stopped at: Completed 12-04-PLAN.md (P5 Union Selection Page with Checkboxes)
 Resume file: None - continuing Phase 12 execution
 
-**Phase 12 Progress:** Base components ready (Modal, UnionTable, version detection). Types and API client complete. Next: P3 API Integration, P4 Selection Logic, P5 FINALIZAR Integration for v4.0 workflows.
+**Phase 12 Progress:** P5 union selection page complete with full checkbox logic. 56x56px touch targets, sticky counter, zero-selection modal. Next: P6 Confirmar integration, P7 INICIAR/FINALIZAR endpoints for v4.0 workflows.
