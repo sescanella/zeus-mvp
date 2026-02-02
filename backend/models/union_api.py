@@ -5,7 +5,8 @@ These models provide read-only views of union data optimized for frontend consum
 Separates API contract from internal Union domain model.
 """
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
+from .enums import ActionType
 
 
 class UnionSummary(BaseModel):
@@ -102,4 +103,66 @@ class MetricasResponse(BaseModel):
         ...,
         description="Sum of DN_UNION for completed SOLD unions (2 decimal precision)",
         ge=0
+    )
+
+
+class FinalizarRequestV4(BaseModel):
+    """
+    v4.0 FINALIZAR request with union selection.
+
+    Used by POST /api/v4/occupation/finalizar endpoint.
+    Processes selected unions and auto-determines PAUSAR vs COMPLETAR.
+    Empty selected_unions list = cancellation (releases lock without touching Uniones).
+    """
+    tag_spool: str = Field(
+        ...,
+        description="Spool TAG identifier",
+        min_length=1
+    )
+    worker_id: int = Field(
+        ...,
+        description="Worker ID number",
+        gt=0
+    )
+    operacion: ActionType = Field(
+        ...,
+        description="ARM or SOLD operation"
+    )
+    selected_unions: List[str] = Field(
+        default_factory=list,
+        description="List of union IDs to complete (empty = cancellation)"
+    )
+
+
+class FinalizarResponseV4(BaseModel):
+    """
+    v4.0 FINALIZAR response with metrics.
+
+    Includes action_taken (PAUSAR/COMPLETAR/CANCELADO), unions processed count,
+    and total pulgadas-diámetro metric.
+    """
+    success: bool = Field(..., description="Operation success status")
+    tag_spool: str = Field(..., description="Spool TAG that was processed")
+    message: str = Field(..., description="Human-readable result message")
+    action_taken: str = Field(
+        ...,
+        description="Action determined: PAUSAR, COMPLETAR, or CANCELADO"
+    )
+    unions_processed: int = Field(
+        ...,
+        description="Number of unions processed",
+        ge=0
+    )
+    pulgadas: Optional[float] = Field(
+        None,
+        description="Total pulgadas-diámetro processed (2 decimal precision)",
+        ge=0
+    )
+    metrologia_triggered: bool = Field(
+        False,
+        description="Whether auto-transition to metrología occurred"
+    )
+    new_state: Optional[str] = Field(
+        None,
+        description="New state after metrología transition (if triggered)"
     )
