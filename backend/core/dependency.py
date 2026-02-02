@@ -34,6 +34,7 @@ from fastapi import Depends
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.repositories.redis_repository import RedisRepository
+from backend.repositories.union_repository import UnionRepository
 from backend.services.sheets_service import SheetsService
 from backend.services.redis_lock_service import RedisLockService
 from backend.services.conflict_service import ConflictService
@@ -182,6 +183,36 @@ def get_metadata_repository(
         metadata_repo: MetadataRepository = Depends(get_metadata_repository)
     """
     return MetadataRepository(sheets_repo=sheets_repo)
+
+
+def get_union_repository(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> UnionRepository:
+    """
+    Factory para UnionRepository (nueva instancia por request) - v4.0 PHASE 8.
+
+    v4.0 Phase 8: UnionRepository provides union-level CRUD operations.
+
+    UnionRepository handles:
+    - Query unions by TAG_SPOOL or OT (foreign keys)
+    - Get available unions for ARM/SOLD operations
+    - Batch update ARM/SOLD completion for multiple unions
+    - Calculate metrics (pulgadas-diámetro, completion counts)
+    - Dynamic column mapping via ColumnMapCache
+
+    Args:
+        sheets_repo: Repository for Google Sheets access (injected).
+
+    Returns:
+        Nueva instancia de UnionRepository.
+
+    Usage:
+        union_repo: UnionRepository = Depends(get_union_repository)
+
+    Note:
+        v4.0 Phase 8: Union-level tracking foundation for pulgadas-diámetro metrics.
+    """
+    return UnionRepository(sheets_repo=sheets_repo)
 
 
 def get_validation_service() -> ValidationService:
