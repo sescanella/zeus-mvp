@@ -124,7 +124,13 @@ function SeleccionarSpoolContent() {
         return;
       }
 
-      setSpools(fetchedSpools);
+      // Detect version for each spool (v4.0 Phase 9 - frontend detection by union count)
+      const spoolsWithVersion = fetchedSpools.map(spool => ({
+        ...spool,
+        version: detectVersionFromSpool(spool)
+      }));
+
+      setSpools(spoolsWithVersion);
       setLoading(false);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
@@ -203,6 +209,14 @@ function SeleccionarSpoolContent() {
     const selectedCount = (state.selectedSpools || []).length;
 
     if (selectedCount === 0) return;
+
+    // Cache version per session (v4.0 Phase 9)
+    state.selectedSpools?.forEach((tag) => {
+      const spool = spools.find(s => s.tag_spool === tag);
+      if (spool?.version) {
+        sessionStorage.setItem(`spool_version_${tag}`, spool.version);
+      }
+    });
 
     // METROLOGIA: Navigate to resultado page (single spool only)
     if (tipo === 'metrologia') {
