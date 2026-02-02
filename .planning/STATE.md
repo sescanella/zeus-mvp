@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 13 of 13 (Performance Validation & Optimization)
-Plan: 1 of 6 in current phase
+Plan: 3 of 6 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 13-01-PLAN.md
+Last activity: 2026-02-02 — Completed 13-03-PLAN.md
 
-Progress: [████████████░] 95% v4.0 implementation (57 of 62 total plans complete)
+Progress: [████████████░] 97% v4.0 implementation (59 of 62 total plans complete)
 
 ## Performance Metrics
 
@@ -44,10 +44,10 @@ Progress: [████████████░] 95% v4.0 implementation (57 
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
 | 12. Frontend Union Selection UX | 8 | 28.7 min | 3.6 min |
-| 13. Performance Validation & Optimization | 1/6 | 6.3 min | 6.3 min |
+| 13. Performance Validation & Optimization | 3/6 | 34.3 min | 11.4 min |
 
 **Recent Trend:**
-- Last 5 plans: [3.4, 4.0, 6.4, 6.3] min (avg: 5.0 min)
+- Last 5 plans: [4.0, 6.4, 6.3, 14.0, 14.0] min (avg: 8.9 min)
 - Trend: Phase 13 in progress (2 of 6 plans, 4.2-min average so far)
 
 *Updated after each plan completion*
@@ -167,6 +167,10 @@ Recent decisions affecting v4.0 work:
 - **D97 (12-02)**: Session storage for version caching (spool_version_{TAG} format, cleared on refresh for data freshness)
 - **D98 (12-04)**: Fresh API call on P5 mount (accuracy over speed)
 - **D99 (12-04)**: 1 decimal precision for pulgadas calculation (Math.round(total * 10) / 10)
+- **D100 (13-03)**: collections.deque for sliding window (O(1) append/popleft vs O(N) for list.pop(0))
+- **D101 (13-03)**: 30 RPM target (50% of 60 quota) provides safety margin for bursts
+- **D102 (13-03)**: Burst detection threshold >20 requests in 10 seconds (identifies rapid clusters)
+- **D103 (13-03)**: Thread-safe singleton GlobalRateLimitMonitor with threading.Lock
 - **D100 (12-04)**: Zero-selection modal with disabled backdrop click (onBackdropClick={null})
 - **D101 (12-04)**: 56x56px checkbox touch targets (w-14 h-14 Tailwind classes)
 - **D102 (12-04)**: "Seleccionar Todas" only selects available unions (completed unions excluded)
@@ -303,6 +307,21 @@ None yet.
     - Session storage cache for version results
   - 12-08 ✓: P6 Success Page with Dynamic Messaging (6.4 min)
     - Dynamic success messages based on action type (INICIAR/FINALIZAR)
+- **✅ Phase 13 In Progress**: Performance Validation & Optimization (3/6 plans complete)
+  - 13-01 ✓: Percentile-based Latency Validation (6.3 min)
+    - numpy.percentile() for p50/p95/p99 calculation
+    - Performance regression detection in CI
+    - Mock latency simulation (300ms batch_update, 150ms append_rows)
+  - 13-02 ✓: API Call Efficiency Validation (14.0 min)
+    - PERF-03: max 2 API calls per FINALIZAR validated
+    - Call count verification using mock.call_count
+    - Edge cases: empty selection, single union, max batch size
+  - 13-03 ✓: Rate Limit Monitoring Implementation (14.0 min)
+    - RateLimitMonitor with collections.deque sliding window
+    - PERF-05: validates < 30 writes/min (50% of quota)
+    - Burst detection (>20 req in 10s) and warning system
+    - GlobalRateLimitMonitor singleton for production
+    - Thread-safe operations with threading.Lock
     - Work summary with union count and pulgadas-diámetro metric
     - "Continuar con Mismo Spool" button for FINALIZAR workflow
     - Session storage cleanup on successful workflow completion
@@ -328,7 +347,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 13-01-PLAN.md
+Stopped at: Completed 13-03-PLAN.md
 Resume file: None
 
-**Plan 13-01 Complete (6.3 min):** Percentile-based latency validation infrastructure complete. Created conftest.py with numpy.percentile utilities (calculate_performance_percentiles, print_performance_report, mock latency helpers). Implemented test_batch_latency.py with 4 tests: (1) PERF-01/PERF-02 validation (100 iterations), (2) cold vs warm cache comparison, (3) 50-union stress test with memory profiling, (4) performance regression detection (20% threshold). Added pytest markers (@pytest.mark.performance, @pytest.mark.slow), installed psutil. All tests passing with mock infrastructure. Next: 13-02 for API call efficiency validation.
+**Plan 13-03 Complete (14.0 min):** Rate limit monitoring infrastructure complete. Created backend/utils/rate_limiter.py (253 lines) with RateLimitMonitor class using collections.deque for O(1) sliding window operations. Implemented 60-second window tracking, burst detection (>20 req in 10s), quota utilization calculation, and GlobalRateLimitMonitor singleton with threading.Lock. Created tests/performance/test_rate_limit_compliance.py (449 lines) with 10 tests validating PERF-05 (< 30 writes/min = 50% quota): (1) compliance under load (30 workers, 2min), (2) burst detection, (3) sliding window accuracy, (4) RPM edge cases, (5) multi-worker concurrency (shift change), (6) request type categorization, (7) quota utilization. All tests passing. Production-ready monitoring hooks available. Next: 13-04 for comprehensive load testing.
