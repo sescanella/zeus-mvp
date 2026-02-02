@@ -386,6 +386,7 @@ def test_finalizar_pausar_partial(client, mock_union_repo, mock_sheets_repo):
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
     from backend.core.dependency import get_occupation_service, get_worker_service
+    from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
     mock_spool = Mock(spec=Spool)
@@ -401,7 +402,7 @@ def test_finalizar_pausar_partial(client, mock_union_repo, mock_sheets_repo):
     mock_worker_service = Mock()
     mock_worker_service.get_worker_by_id.return_value = mock_worker
 
-    # Mock occupation service (PAUSAR result)
+    # Mock occupation service (PAUSAR result) - use AsyncMock for async method
     mock_occupation_service = Mock()
     mock_occupation_response = OccupationResponse(
         success=True,
@@ -411,7 +412,7 @@ def test_finalizar_pausar_partial(client, mock_union_repo, mock_sheets_repo):
         unions_processed=3,
         metrologia_triggered=False
     )
-    mock_occupation_service.finalizar_spool = Mock(return_value=mock_occupation_response)
+    mock_occupation_service.finalizar_spool = AsyncMock(return_value=mock_occupation_response)
 
     # Mock metrics calculation (pulgadas)
     mock_union_repo.calculate_metrics.return_value = {
@@ -453,6 +454,7 @@ def test_finalizar_completar_full(client, mock_union_repo, mock_sheets_repo):
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
     from backend.core.dependency import get_occupation_service, get_worker_service
+    from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
     mock_spool = Mock(spec=Spool)
@@ -468,7 +470,7 @@ def test_finalizar_completar_full(client, mock_union_repo, mock_sheets_repo):
     mock_worker_service = Mock()
     mock_worker_service.get_worker_by_id.return_value = mock_worker
 
-    # Mock occupation service (COMPLETAR result)
+    # Mock occupation service (COMPLETAR result) - use AsyncMock
     mock_occupation_service = Mock()
     mock_occupation_response = OccupationResponse(
         success=True,
@@ -478,7 +480,7 @@ def test_finalizar_completar_full(client, mock_union_repo, mock_sheets_repo):
         unions_processed=10,
         metrologia_triggered=False
     )
-    mock_occupation_service.finalizar_spool = Mock(return_value=mock_occupation_response)
+    mock_occupation_service.finalizar_spool = AsyncMock(return_value=mock_occupation_response)
 
     # Mock metrics calculation (pulgadas)
     mock_union_repo.calculate_metrics.return_value = {
@@ -519,6 +521,7 @@ def test_finalizar_cancelado_zero(client, mock_union_repo, mock_sheets_repo):
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
     from backend.core.dependency import get_occupation_service, get_worker_service
+    from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
     mock_spool = Mock(spec=Spool)
@@ -534,7 +537,7 @@ def test_finalizar_cancelado_zero(client, mock_union_repo, mock_sheets_repo):
     mock_worker_service = Mock()
     mock_worker_service.get_worker_by_id.return_value = mock_worker
 
-    # Mock occupation service (CANCELADO result)
+    # Mock occupation service (CANCELADO result) - use AsyncMock
     mock_occupation_service = Mock()
     mock_occupation_response = OccupationResponse(
         success=True,
@@ -543,7 +546,7 @@ def test_finalizar_cancelado_zero(client, mock_union_repo, mock_sheets_repo):
         action_taken="CANCELADO",
         unions_processed=0
     )
-    mock_occupation_service.finalizar_spool = Mock(return_value=mock_occupation_response)
+    mock_occupation_service.finalizar_spool = AsyncMock(return_value=mock_occupation_response)
 
     # Override dependencies
     app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
@@ -574,6 +577,7 @@ def test_finalizar_race_condition(client, mock_sheets_repo):
     from backend.models.spool import Spool
     from backend.models.worker import Worker
     from backend.core.dependency import get_occupation_service, get_worker_service
+    from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
     mock_spool = Mock(spec=Spool)
@@ -589,10 +593,12 @@ def test_finalizar_race_condition(client, mock_sheets_repo):
     mock_worker_service = Mock()
     mock_worker_service.get_worker_by_id.return_value = mock_worker
 
-    # Mock occupation service (race condition - ValueError)
+    # Mock occupation service (race condition - ValueError) - use AsyncMock
     mock_occupation_service = Mock()
-    mock_occupation_service.finalizar_spool.side_effect = ValueError(
-        "Selected 5 unions but only 3 available - more unions than available"
+    mock_occupation_service.finalizar_spool = AsyncMock(
+        side_effect=ValueError(
+            "Selected 5 unions but only 3 available - more unions than available"
+        )
     )
 
     # Override dependencies
@@ -624,6 +630,7 @@ def test_finalizar_not_owner(client, mock_sheets_repo):
     from backend.models.worker import Worker
     from backend.exceptions import NoAutorizadoError
     from backend.core.dependency import get_occupation_service, get_worker_service
+    from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
     mock_spool = Mock(spec=Spool)
@@ -639,13 +646,15 @@ def test_finalizar_not_owner(client, mock_sheets_repo):
     mock_worker_service = Mock()
     mock_worker_service.get_worker_by_id.return_value = mock_worker
 
-    # Mock occupation service (not owner - NoAutorizadoError)
+    # Mock occupation service (not owner - NoAutorizadoError) - use AsyncMock
     mock_occupation_service = Mock()
-    mock_occupation_service.finalizar_spool.side_effect = NoAutorizadoError(
-        tag_spool="TEST-02",
-        trabajador_esperado="Worker 94",
-        trabajador_solicitante="Rodriguez(93)",
-        operacion="FINALIZAR"
+    mock_occupation_service.finalizar_spool = AsyncMock(
+        side_effect=NoAutorizadoError(
+            tag_spool="TEST-02",
+            trabajador_esperado="Worker 94",
+            trabajador_solicitante="Rodriguez(93)",
+            operacion="FINALIZAR"
+        )
     )
 
     # Override dependencies
@@ -676,6 +685,7 @@ def test_finalizar_metrologia_triggered(client, mock_union_repo, mock_sheets_rep
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
     from backend.core.dependency import get_occupation_service, get_worker_service
+    from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
     mock_spool = Mock(spec=Spool)
@@ -691,7 +701,7 @@ def test_finalizar_metrologia_triggered(client, mock_union_repo, mock_sheets_rep
     mock_worker_service = Mock()
     mock_worker_service.get_worker_by_id.return_value = mock_worker
 
-    # Mock occupation service (COMPLETAR with metrología trigger)
+    # Mock occupation service (COMPLETAR with metrología trigger) - use AsyncMock
     mock_occupation_service = Mock()
     mock_occupation_response = OccupationResponse(
         success=True,
@@ -702,7 +712,7 @@ def test_finalizar_metrologia_triggered(client, mock_union_repo, mock_sheets_rep
         metrologia_triggered=True,
         new_state="pendiente"
     )
-    mock_occupation_service.finalizar_spool = Mock(return_value=mock_occupation_response)
+    mock_occupation_service.finalizar_spool = AsyncMock(return_value=mock_occupation_response)
 
     # Mock metrics calculation (pulgadas)
     mock_union_repo.calculate_metrics.return_value = {
