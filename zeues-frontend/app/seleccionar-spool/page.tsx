@@ -87,8 +87,20 @@ function SeleccionarSpoolContent() {
 
       let fetchedSpools: Spool[];
 
-      // METROLOGIA uses 'metrologia' tipo
-      if (tipo === 'metrologia') {
+      // v4.0: Handle INICIAR/FINALIZAR workflows (accion-based, no tipo parameter)
+      if (accion === 'INICIAR') {
+        // INICIAR shows available spools for the operation
+        fetchedSpools = await getSpoolsDisponible(selectedOperation as 'ARM' | 'SOLD' | 'REPARACION');
+      } else if (accion === 'FINALIZAR') {
+        // FINALIZAR shows spools occupied by current worker
+        if (!selectedWorker) {
+          setError('No se ha seleccionado un trabajador');
+          setLoading(false);
+          return;
+        }
+        fetchedSpools = await getSpoolsOcupados(selectedWorker.id, selectedOperation as 'ARM' | 'SOLD' | 'REPARACION');
+      } else if (tipo === 'metrologia') {
+        // v3.0: METROLOGIA uses 'metrologia' tipo
         fetchedSpools = await getSpoolsParaIniciar('METROLOGIA' as 'ARM' | 'SOLD');
       } else if (tipo === 'reparacion') {
         // REPARACION uses dedicated endpoint - returns object with spools array
@@ -120,7 +132,7 @@ function SeleccionarSpoolContent() {
           fetchedSpools = await getSpoolsParaCancelar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.id);
         }
       } else {
-        // Fallback for any legacy tipo values
+        // Fallback for any invalid tipo/accion values
         setError('Tipo de acción no válido');
         setLoading(false);
         return;
