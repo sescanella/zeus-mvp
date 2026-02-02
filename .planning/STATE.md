@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 10 of 13 (Backend Services & Validation)
-Plan: 1 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 10-01-PLAN.md (UnionService for batch operations)
+Last activity: 2026-02-02 — Completed 10-03-PLAN.md (ARM-before-SOLD validation)
 
-Progress: [██████████░░░] 78% (9 phases + 1 plan complete, 10-02 next)
+Progress: [██████████░░░] 80% (9 phases + 3 plans complete, 10-04 next)
 
 ## Performance Metrics
 
@@ -41,11 +41,11 @@ Progress: [██████████░░░] 78% (9 phases + 1 plan compl
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
-| 10. Backend Services & Validation | 1/5 | 5 min | 5.0 min |
+| 10. Backend Services & Validation | 3/5 | 16 min | 5.3 min |
 
 **Recent Trend:**
-- Last 5 plans: [8.1, 4.0, 4.0, 4.4, 5.0] min
-- Trend: Phase 10 in progress (1 of 5 plans, 5.0-min average - consistent velocity)
+- Last 5 plans: [4.0, 4.4, 5.0, 5.0, 6.0] min
+- Trend: Phase 10 in progress (3 of 5 plans, 5.3-min average - consistent velocity)
 
 *Updated after each plan completion*
 
@@ -120,6 +120,11 @@ Recent decisions affecting v4.0 work:
 - **D58 (10-02)**: Empty selected_unions list triggers cancellation (not 409 error - intentional user action)
 - **D59 (10-02)**: UnionRepository injected as optional dependency (v3.0 backward compatibility)
 - **D60 (10-02)**: Race condition returns 409 Conflict (selected > available indicates stale data)
+- **D61 (10-03)**: Validate ARM prerequisite at INICIAR (not FINALIZAR) to fail early before lock acquisition
+- **D62 (10-03)**: Filter SOLD disponibles by union type (exclude FW ARM-only unions) in finalizar_spool
+- **D63 (10-03)**: Import SOLD_REQUIRED_TYPES constant from occupation_service to avoid duplication
+- **D64 (10-03)**: Return 403 Forbidden for ARM prerequisite violation (business rule violation)
+- **D65 (10-03)**: Count only SOLD_REQUIRED_TYPES unions in _determine_action for accurate completion logic
 
 ### Pending Todos
 
@@ -144,14 +149,12 @@ None yet.
   - Frontend version badges (green v4.0, gray v3.0)
   - 63 passing tests (30 unit + 33 integration), 84% coverage
   - Duration: 32 min total (5.3-min average)
-- **Ready for Phase 10**: Backend Services & Validation
-  - Persistent locks without TTL (SET + PERSIST two-step acquisition)
-  - Lazy cleanup (>24h threshold, eventual consistency)
-  - Startup reconciliation from Sheets (10s timeout, age filtering)
-  - Version detection service (Total_Uniones logic, retry with exponential backoff)
-  - Frontend version detection (TypeScript types, API functions, visual badges)
-  - Comprehensive test suite: 63 tests, 84% coverage
-  - Next: Phase 10 (v4.0 endpoints - INICIAR/FINALIZAR workflows)
+- **Phase 10 In Progress**: Backend Services & Validation (3/5 plans)
+  - 10-01 ✓: UnionService for batch operations (5.0 min)
+  - 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (5.0 min)
+  - 10-03 ✓: ARM-before-SOLD validation (6.0 min, this session)
+  - Next: 10-04 (Metrología auto-trigger) or 10-05 (Service integration)
+  - Test coverage: 13 new v4.0 validation tests (100% passing)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -162,11 +165,13 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 10-01-PLAN.md (Create UnionService for Batch Operations)
+Stopped at: Completed 10-03-PLAN.md (Add ARM-before-SOLD Validation)
 Resume file: None
 
-**Phase 10 Progress (1/5 plans):**
-- 10-01 ✓: UnionService for batch operations (5.0 min, this session)
-- 10-02 next: OccupationServiceV4 with INICIAR/FINALIZAR
+**Phase 10 Progress (3/5 plans):**
+- 10-01 ✓: UnionService for batch operations (5.0 min)
+- 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (5.0 min)
+- 10-03 ✓: ARM-before-SOLD validation (6.0 min, this session)
+- 10-04 next: Metrología auto-trigger OR 10-05: Service integration
 
-**10-01 Complete:** UnionService orchestrates batch union updates with 1-decimal pulgadas calculation, batch/granular metadata events, and FW union exclusion from SOLD. 26 unit tests passing (100% coverage). Dependency injection ready for Phase 10-02. Ready for 10-02 (OccupationServiceV4).
+**10-03 Complete:** ARM prerequisite validation enforces SOLD-after-ARM business rule at INICIAR time with 403 error. Union type filtering excludes FW (ARM-only) from SOLD completion logic. 13 new unit tests (100% passing). ValidationService + OccupationService integration complete. Ready for 10-04 (Metrología auto-trigger).
