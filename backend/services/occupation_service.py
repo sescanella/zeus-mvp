@@ -137,6 +137,14 @@ class OccupationService:
                     detalle="El spool debe tener materiales registrados antes de ocuparlo"
                 )
 
+            # Step 1.5: Lazy cleanup (best effort, don't block on failure)
+            # Clean up one abandoned lock >24h old before acquiring new lock
+            try:
+                await self.redis_lock_service.lazy_cleanup_one_abandoned_lock()
+            except Exception as e:
+                # Log warning but continue with TOMAR operation
+                logger.warning(f"Lazy cleanup failed during TOMAR: {e}")
+
             # Step 2: Acquire Redis lock (atomic operation)
             try:
                 lock_token = await self.redis_lock_service.acquire_lock(
