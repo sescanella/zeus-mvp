@@ -10,7 +10,7 @@ import { cacheSpoolVersion, getCachedVersion } from '@/lib/version';
 
 export default function TipoInteraccionPage() {
   const router = useRouter();
-  const { state, setState } = useAppState();
+  const { state, setState, resetV4State } = useAppState();
   const [spoolVersion, setSpoolVersion] = useState<'v3.0' | 'v4.0' | null>(null);
   const [loadingVersion, setLoadingVersion] = useState(true);
 
@@ -68,6 +68,24 @@ export default function TipoInteraccionPage() {
   const handleSelectTipo = (tipo: 'tomar' | 'pausar' | 'completar' | 'cancelar') => {
     setState({ selectedTipo: tipo });
     router.push(`/seleccionar-spool?tipo=${tipo}`);
+  };
+
+  // v4.0 button handlers
+  const handleIniciar = () => {
+    setState({ accion: 'INICIAR' });
+    router.push('/seleccionar-spool');
+  };
+
+  const handleFinalizar = () => {
+    setState({ accion: 'FINALIZAR' });
+    // Skip P4 - worker already knows which spool they're working on
+    router.push('/seleccionar-uniones');
+  };
+
+  // Back button with v4.0 cleanup
+  const handleBack = () => {
+    resetV4State();  // Clear v4.0 state
+    router.back();
   };
 
   if (!state.selectedWorker || !state.selectedOperation) return null;
@@ -176,89 +194,153 @@ export default function TipoInteraccionPage() {
         </div>
 
         <div className="mb-6 tablet:mb-4">
-          {/* Grid 3 columnas - TOMAR/PAUSAR/COMPLETAR */}
-          <div className="grid grid-cols-3 gap-4 tablet:gap-3 mb-4">
-            {/* TOMAR */}
-            <button
-              onClick={() => handleSelectTipo('tomar')}
-              className="
-                h-40 narrow:h-32
-                bg-transparent
-                border-4 border-white
-                flex flex-col items-center justify-center gap-4
-                cursor-pointer
-                active:bg-zeues-orange active:border-zeues-orange
-                transition-all duration-200
-                group
-              "
-            >
-              <Play size={56} strokeWidth={3} className="text-white group-active:text-white" />
-              <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                TOMAR
-              </h3>
-            </button>
+          {/* v4.0 buttons - INICIAR/FINALIZAR */}
+          {!loadingVersion && spoolVersion === 'v4.0' && (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-white tracking-[0.15em] font-mono mb-6">
+                ¿QUÉ DESEAS HACER?
+              </h2>
 
-            {/* PAUSAR */}
-            <button
-              onClick={() => handleSelectTipo('pausar')}
-              className="
-                h-40 narrow:h-32
-                bg-transparent
-                border-4 border-white
-                flex flex-col items-center justify-center gap-4
-                cursor-pointer
-                active:bg-yellow-500 active:border-yellow-500
-                transition-all duration-200
-                group
-              "
-            >
-              <Pause size={56} strokeWidth={3} className="text-white group-active:text-white" />
-              <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                PAUSAR
-              </h3>
-            </button>
+              <button
+                onClick={handleIniciar}
+                className="
+                  w-full h-20
+                  bg-transparent
+                  border-4 border-white
+                  flex items-center justify-center gap-4
+                  cursor-pointer
+                  active:bg-zeues-orange active:border-zeues-orange
+                  transition-all duration-200
+                  group
+                "
+              >
+                <Play size={48} strokeWidth={3} className="text-white group-active:text-white" />
+                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+                  INICIAR
+                </h3>
+              </button>
 
-            {/* COMPLETAR */}
-            <button
-              onClick={() => handleSelectTipo('completar')}
-              className="
-                h-40 narrow:h-32
-                bg-transparent
-                border-4 border-white
-                flex flex-col items-center justify-center gap-4
-                cursor-pointer
-                active:bg-green-500 active:border-green-500
-                transition-all duration-200
-                group
-              "
-            >
-              <CheckCircle size={56} strokeWidth={3} className="text-white group-active:text-white" />
-              <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                COMPLETAR
-              </h3>
-            </button>
-          </div>
+              <button
+                onClick={handleFinalizar}
+                className="
+                  w-full h-20
+                  bg-transparent
+                  border-4 border-white
+                  flex items-center justify-center gap-4
+                  cursor-pointer
+                  active:bg-green-500 active:border-green-500
+                  transition-all duration-200
+                  group
+                "
+              >
+                <CheckCircle size={48} strokeWidth={3} className="text-white group-active:text-white" />
+                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+                  FINALIZAR
+                </h3>
+              </button>
 
-          {/* CANCELAR - full width (REPARACIÓN only) */}
-          {state.selectedOperation === 'REPARACION' && (
-            <button
-              onClick={() => handleSelectTipo('cancelar')}
-              className="
-                w-full h-24 narrow:h-20
-                bg-transparent
-                border-4 border-red-500
-                flex items-center justify-center gap-4
-                cursor-pointer
-                active:bg-red-500 active:border-red-500
-                transition-all duration-200
-                group
-              "
-            >
-              <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
-              <h3 className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
-                CANCELAR REPARACIÓN
-              </h3>
-            </button>
+              <p className="text-sm text-white/60 mt-4 font-mono tracking-[0.1em] text-center">
+                Versión 4.0 - Trabajo por uniones
+              </p>
+            </div>
+          )}
+
+          {/* v3.0 buttons - TOMAR/PAUSAR/COMPLETAR */}
+          {!loadingVersion && spoolVersion === 'v3.0' && (
+            <>
+              <h2 className="text-2xl font-black text-white tracking-[0.15em] font-mono mb-6">
+                SELECCIONA LA ACCIÓN
+              </h2>
+
+              {/* Grid 3 columnas - TOMAR/PAUSAR/COMPLETAR */}
+              <div className="grid grid-cols-3 gap-4 tablet:gap-3 mb-4">
+                {/* TOMAR */}
+                <button
+                  onClick={() => handleSelectTipo('tomar')}
+                  className="
+                    h-40 narrow:h-32
+                    bg-transparent
+                    border-4 border-white
+                    flex flex-col items-center justify-center gap-4
+                    cursor-pointer
+                    active:bg-zeues-orange active:border-zeues-orange
+                    transition-all duration-200
+                    group
+                  "
+                >
+                  <Play size={56} strokeWidth={3} className="text-white group-active:text-white" />
+                  <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+                    TOMAR
+                  </h3>
+                </button>
+
+                {/* PAUSAR */}
+                <button
+                  onClick={() => handleSelectTipo('pausar')}
+                  className="
+                    h-40 narrow:h-32
+                    bg-transparent
+                    border-4 border-white
+                    flex flex-col items-center justify-center gap-4
+                    cursor-pointer
+                    active:bg-yellow-500 active:border-yellow-500
+                    transition-all duration-200
+                    group
+                  "
+                >
+                  <Pause size={56} strokeWidth={3} className="text-white group-active:text-white" />
+                  <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+                    PAUSAR
+                  </h3>
+                </button>
+
+                {/* COMPLETAR */}
+                <button
+                  onClick={() => handleSelectTipo('completar')}
+                  className="
+                    h-40 narrow:h-32
+                    bg-transparent
+                    border-4 border-white
+                    flex flex-col items-center justify-center gap-4
+                    cursor-pointer
+                    active:bg-green-500 active:border-green-500
+                    transition-all duration-200
+                    group
+                  "
+                >
+                  <CheckCircle size={56} strokeWidth={3} className="text-white group-active:text-white" />
+                  <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
+                    COMPLETAR
+                  </h3>
+                </button>
+              </div>
+
+              {/* CANCELAR - full width (REPARACIÓN only) */}
+              {state.selectedOperation === 'REPARACION' && (
+                <button
+                  onClick={() => handleSelectTipo('cancelar')}
+                  className="
+                    w-full h-24 narrow:h-20
+                    bg-transparent
+                    border-4 border-red-500
+                    flex items-center justify-center gap-4
+                    cursor-pointer
+                    active:bg-red-500 active:border-red-500
+                    transition-all duration-200
+                    group
+                  "
+                >
+                  <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
+                  <h3 className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
+                    CANCELAR REPARACIÓN
+                  </h3>
+                </button>
+              )}
+
+              <p className="text-sm text-white/60 mt-4 font-mono tracking-[0.1em] text-center">
+                Versión 3.0 - Trabajo por spool completo
+              </p>
+            </>
           )}
         </div>
 
@@ -266,7 +348,7 @@ export default function TipoInteraccionPage() {
         <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
           <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
             <button
-              onClick={() => router.back()}
+              onClick={handleBack}
               className="
                 flex-1 narrow:w-full h-16
                 bg-transparent
