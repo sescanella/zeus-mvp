@@ -274,6 +274,37 @@ async def startup_event():
         redis_repo = RedisRepository()
         await redis_repo.connect()
         logging.info("✅ Redis connected successfully")
+
+        # v4.0: Reconcile Redis locks from Sheets (auto-recovery)
+        try:
+            from backend.services.redis_lock_service import RedisLockService
+            import asyncio
+
+            logging.info("🔄 Reconciling Redis locks from Sheets.Ocupado_Por...")
+            sheets_repo = get_sheets_repository()
+            lock_service = RedisLockService(redis_repo.client, sheets_repo)
+
+            # Reconcile with timeout (10 seconds max)
+            results = await asyncio.wait_for(
+                lock_service.reconcile_from_sheets(sheets_repo),
+                timeout=10.0
+            )
+
+            logging.info(
+                f"✅ Redis reconciliation complete: {results['reconciled']} locks created, "
+                f"{results['skipped']} old locks skipped"
+            )
+        except asyncio.TimeoutError:
+            logging.warning(
+                "⚠️ Redis reconciliation timed out after 10s. "
+                "Locks will be created on-demand."
+            )
+        except Exception as reconcile_error:
+            logging.warning(
+                f"⚠️ Redis reconciliation failed: {reconcile_error}. "
+                f"Locks will be created on-demand."
+            )
+
     except Exception as e:
         # Log error but don't block startup - API works without Redis (degraded mode)
         logging.warning(
