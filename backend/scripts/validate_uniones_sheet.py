@@ -7,9 +7,15 @@ as specified in v4.0 requirements. This sheet is pre-populated by Engineering
 external process and must be validated before v4.0 deployment.
 
 Usage:
-    python backend/scripts/validate_uniones_sheet.py           # Validate structure
-    python backend/scripts/validate_uniones_sheet.py --fix     # Add missing columns
-    python backend/scripts/validate_uniones_sheet.py --verbose # Detailed logging
+    python backend/scripts/validate_uniones_sheet.py                    # Validate structure
+    python backend/scripts/validate_uniones_sheet.py --fix              # Add missing column headers
+    python backend/scripts/validate_uniones_sheet.py --fix --dry-run    # Simulate fix without changes
+    python backend/scripts/validate_uniones_sheet.py --verbose          # Detailed logging
+
+Notes:
+    - --fix adds column headers only (structure), not data
+    - Engineering must populate data after headers are added
+    - --dry-run simulates changes without modifying sheet
 """
 import sys
 import argparse
@@ -170,7 +176,7 @@ def validate_sheet_structure(repo: SheetsRepository, sheet_name: str = "Uniones"
         }
 
 
-def fix_missing_columns(repo: SheetsRepository, missing_columns: list[str], sheet_name: str = "Uniones") -> bool:
+def fix_missing_columns(repo: SheetsRepository, missing_columns: list[str], sheet_name: str = "Uniones", dry_run: bool = False) -> bool:
     """
     Add missing column headers to Uniones sheet.
 
@@ -178,15 +184,23 @@ def fix_missing_columns(repo: SheetsRepository, missing_columns: list[str], shee
         repo: SheetsRepository instance
         missing_columns: List of column names to add
         sheet_name: Name of sheet to modify
+        dry_run: If True, simulate without modifying sheet
 
     Returns:
-        True if columns were added successfully
+        True if columns were added successfully (or would be added in dry-run)
     """
     logger = logging.getLogger(__name__)
 
     try:
         if not missing_columns:
             logger.info("No missing columns to add")
+            return True
+
+        if dry_run:
+            logger.info(f"[DRY RUN] Would add {len(missing_columns)} missing columns:")
+            for col in missing_columns:
+                logger.info(f"  - {col}")
+            logger.warning("[DRY RUN] No changes made to sheet")
             return True
 
         logger.info(f"Adding {len(missing_columns)} missing columns...")
@@ -217,12 +231,14 @@ def fix_missing_columns(repo: SheetsRepository, missing_columns: list[str], shee
                 'range': cell_address,
                 'values': [[col_name]]
             })
+            logger.info(f"  Column {current_count + i + 1} ({col_letter}1): {col_name}")
 
         # Execute batch update
-        logger.info(f"Adding {len(updates)} column headers...")
+        logger.info(f"Executing batch update for {len(updates)} column headers...")
         worksheet.batch_update(updates, value_input_option='USER_ENTERED')
 
         logger.info(f"Successfully added {len(missing_columns)} columns")
+        logger.warning("IMPORTANT: Column headers added, but Engineering must populate data")
         return True
 
     except Exception as e:
@@ -238,7 +254,12 @@ def main():
     parser.add_argument(
         '--fix',
         action='store_true',
-        help='Add missing column headers (headers only, no data migration)'
+        help='Add missing column headers (structure only, no data migration)'
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Simulate fix without modifying sheet (requires --fix)'
     )
     parser.add_argument(
         '--sheet-name',
@@ -293,21 +314,35 @@ def main():
 
             # Fix if requested
             if args.fix and details['missing_columns']:
-                logger.info("Attempting to add missing columns...")
-                success = fix_missing_columns(repo, details['missing_columns'], args.sheet_name)
-                if success:
-                    logger.info("Missing columns added successfully")
-                    # Re-validate
-                    is_valid, details = validate_sheet_structure(repo, args.sheet_name)
-                    if is_valid:
-                        logger.info("Sheet validation passed after fix")
+                if args.dry_run:
+                    logger.info("Simulating column header addition...")
+                    success = fix_missing_columns(repo, details['missing_columns'], args.sheet_name, dry_run=True)
+                    if success:
+                        logger.info("[DRY RUN] Simulation successful - run without --dry-run to apply changes")
                         return 0
                     else:
-                        logger.error("Sheet validation still failing after fix")
+                        logger.error("[DRY RUN] Simulation failed")
                         return 1
                 else:
-                    logger.error("Failed to add missing columns")
-                    return 1
+                    logger.info("Attempting to add missing columns...")
+                    success = fix_missing_columns(repo, details['missing_columns'], args.sheet_name, dry_run=False)
+                    if success:
+                        logger.info("Missing columns added successfully")
+                        # Re-validate
+                        is_valid, details = validate_sheet_structure(repo, args.sheet_name)
+                        if is_valid:
+                            logger.info("Sheet validation passed after fix")
+                            logger.info("Next step: Engineering must populate data in new columns")
+                            return 0
+                        else:
+                            logger.error("Sheet validation still failing after fix")
+                            return 1
+                    else:
+                        logger.error("Failed to add missing columns")
+                        return 1
+            elif args.fix and not details['missing_columns']:
+                logger.info("No missing columns to add (--fix has no effect)")
+                return 1
 
             return 1
 
