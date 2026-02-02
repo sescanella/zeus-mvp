@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 11 of 13 (API Endpoints & Metrics)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 11-03-PLAN.md (INICIAR Workflow Endpoint)
+Last activity: 2026-02-02 — Completed 11-04-PLAN.md (FINALIZAR Workflow Endpoint)
 
-Progress: [██████████░░░] 83% (10 phases complete + 3/5 plans in Phase 11, 43 of 52 total plans)
+Progress: [██████████░░░] 85% (10 phases complete + 4/5 plans in Phase 11, 44 of 52 total plans)
 
 ## Performance Metrics
 
@@ -42,11 +42,11 @@ Progress: [██████████░░░] 83% (10 phases complete + 3/
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
-| 11. API Endpoints & Metrics | 3/5 | 13.3 min | 4.4 min |
+| 11. API Endpoints & Metrics | 4/5 | 19.3 min | 4.8 min |
 
 **Recent Trend:**
-- Last 5 plans: [6.5, 6.0, 5.2, 2.9, 5.2] min
-- Trend: Phase 11 steady pace (3 of 5 plans, 4.4-min average - 23% faster than Phase 10's 5.7-min average)
+- Last 5 plans: [6.0, 5.2, 2.9, 5.2, 6.0] min
+- Trend: Phase 11 steady pace (4 of 5 plans, 4.8-min average - 16% faster than Phase 10's 5.7-min average)
 
 *Updated after each plan completion*
 
@@ -144,6 +144,9 @@ Recent decisions affecting v4.0 work:
 - **D76 (11-01)**: Simple version detection utils in backend/utils/ (complement Phase 9 service for inline checks)
 - **D77 (11-03)**: Version detection at router layer not middleware (simple, explicit, helpful error messages)
 - **D78 (11-03)**: Reuse existing IniciarRequest model from occupation.py (DRY principle, single source of truth)
+- **D79 (11-04)**: Router-level pulgadas calculation (service handles business logic, router adds presentation metrics)
+- **D80 (11-04)**: Reuse FinalizarRequest from occupation.py (DRY principle, consistent with INICIAR pattern)
+- **D81 (11-04)**: Worker name derivation at router layer (validates worker exists before service call)
 
 ### Pending Todos
 
@@ -176,7 +179,7 @@ None yet.
   - 10-05 ✓: Integration tests and performance validation (6.0 min)
   - Test coverage: 34 new v4.0 integration/performance tests (100% passing)
   - Performance: <1s for 10-union batches (p95 requirement MET)
-- **🔄 Phase 11 In Progress**: API Endpoints & Metrics (2/5 plans, 8.1 min total, 4.1-min avg)
+- **🔄 Phase 11 In Progress**: API Endpoints & Metrics (4/5 plans, 19.3 min total, 4.8-min avg)
   - 11-01 ✓: API Versioning & V3 Migration (5.2 min)
     - Created occupation_v3.py router with v3.0 endpoints at /api/v3/
     - Maintained legacy routes at /api/ for backward compatibility
@@ -187,14 +190,21 @@ None yet.
     - GET /api/v4/uniones/{tag}/metricas (5 fields, 2-decimal pulgadas)
     - API models: UnionSummary, DisponiblesResponse, MetricasResponse
     - 12 unit tests (6 disponibles, 6 metricas), all passing
-  - 11-03 ✓: INICIAR Workflow Endpoint (5.2 min, this session)
+  - 11-03 ✓: INICIAR Workflow Endpoint (5.2 min)
     - POST /api/v4/occupation/iniciar endpoint with version detection
     - Rejects v3.0 spools with helpful 400 error (correct_endpoint guidance)
     - ARM prerequisite validation for SOLD (403 Forbidden)
     - Error handling: 400/403/404/409/500
     - Reused existing IniciarRequest model (DRY principle)
     - 11 smoke tests passing
-  - 11-04 pending: FINALIZAR endpoint with union selection
+  - 11-04 ✓: FINALIZAR Workflow Endpoint (6.0 min, this session)
+    - POST /api/v4/occupation/finalizar with union selection
+    - Auto-determines PAUSAR/COMPLETAR/CANCELADO based on selection
+    - Calculates pulgadas-diámetro from union metrics (2 decimal precision)
+    - Error handling: 400/403/404/409/500 status codes
+    - Race condition detection (409 CONFLICT)
+    - Metrología auto-trigger support
+    - 7 comprehensive tests (19 total in test_union_router.py)
   - 11-05 pending: Integration tests for v4.0 API
 
 **v3.0 Technical Debt:**
@@ -207,7 +217,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 11-02-PLAN.md (Union Query Endpoints, 2.9 min duration)
+Stopped at: Completed 11-04-PLAN.md (FINALIZAR Workflow Endpoint, 6.0 min duration)
 Resume file: None
 
-**Phase 11 Plan 02 Complete:** Union query endpoints implemented. GET /api/v4/uniones/{tag}/disponibles filters ARM/SOLD disponibles, GET /api/v4/uniones/{tag}/metricas returns 5-field spool metrics with 2-decimal pulgadas. Created API response models (UnionSummary, DisponiblesResponse, MetricasResponse). Added get_union_repository dependency injection. 12 unit tests (6 disponibles, 6 metricas) all passing. Foundation for Phase 12 frontend union selection ready.
+**Phase 11 Plan 04 Complete:** FINALIZAR endpoint implemented. POST /api/v4/occupation/finalizar accepts selected_unions array and auto-determines PAUSAR/COMPLETAR/CANCELADO. Calculates pulgadas-diámetro from union metrics (2 decimal precision). Enhanced OccupationResponse with pulgadas field (backward compatible). Error handling: 400 (v3.0 rejection), 403 (ownership), 404 (not found), 409 (race condition), 500 (errors). 7 comprehensive tests (PAUSAR, COMPLETAR, CANCELADO, race, not owner, metrología trigger, v3.0 rejection). All 19 tests passing. Ready for Phase 11-05 integration tests.
