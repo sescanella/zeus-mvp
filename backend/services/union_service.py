@@ -252,8 +252,81 @@ class UnionService:
             - 1 batch event (N_UNION=None, metadata has pulgadas)
             - 2 granular events (N_UNION=1, N_UNION=2)
         """
-        # Placeholder implementation (will be implemented in Task 4)
-        raise NotImplementedError("build_eventos_metadata will be implemented in Task 4")
+        import uuid
+        import json
+        from backend.models.enums import EventoTipo
+        from backend.models.metadata import Accion
+        from backend.utils.date_formatter import now_chile, today_chile, format_date_for_sheets
+
+        eventos = []
+
+        # Determine event type based on operation
+        if operacion == "ARM":
+            evento_tipo_granular = EventoTipo.UNION_ARM_REGISTRADA
+        elif operacion == "SOLD":
+            evento_tipo_granular = EventoTipo.UNION_SOLD_REGISTRADA
+        else:
+            raise ValueError(f"Invalid operacion: {operacion}")
+
+        # Get current timestamp and date
+        timestamp = now_chile()
+        fecha_operacion_str = format_date_for_sheets(today_chile())
+
+        # Event 1: Batch event at spool level (N_UNION=None)
+        batch_metadata = {
+            "union_count": len(union_ids),
+            "pulgadas": pulgadas,
+            "union_ids": union_ids
+        }
+
+        batch_event = MetadataEvent(
+            id=str(uuid.uuid4()),
+            timestamp=timestamp,
+            evento_tipo=evento_tipo_granular,
+            tag_spool=tag_spool,
+            worker_id=worker_id,
+            worker_nombre=worker_nombre,
+            operacion=operacion,
+            accion=Accion.COMPLETAR,
+            fecha_operacion=fecha_operacion_str,
+            metadata_json=json.dumps(batch_metadata),
+            n_union=None  # Spool-level event
+        )
+        eventos.append(batch_event)
+
+        # Events 2-N: Granular events per union (N_UNION=union_number)
+        for union_id in union_ids:
+            # Extract n_union from union_id (format: "OT-123+5" -> n_union=5)
+            try:
+                n_union = int(union_id.split('+')[1])
+            except (IndexError, ValueError) as e:
+                self.logger.warning(
+                    f"Could not extract n_union from union_id: {union_id}, skipping. Error: {e}"
+                )
+                continue
+
+            # Create granular event with n_union
+            granular_event = MetadataEvent(
+                id=str(uuid.uuid4()),
+                timestamp=timestamp,
+                evento_tipo=evento_tipo_granular,
+                tag_spool=tag_spool,
+                worker_id=worker_id,
+                worker_nombre=worker_nombre,
+                operacion=operacion,
+                accion=Accion.COMPLETAR,
+                fecha_operacion=fecha_operacion_str,
+                metadata_json=json.dumps({"union_id": union_id}),
+                n_union=n_union  # Union-specific event
+            )
+            eventos.append(granular_event)
+
+        self.logger.info(
+            f"Built {len(eventos)} metadata events: "
+            f"1 batch event + {len(eventos) - 1} granular events"
+        )
+
+        return eventos
 
     def validate_union_ownership(self, unions: list[Union]) -> bool:
         """
