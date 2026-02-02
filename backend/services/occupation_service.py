@@ -51,7 +51,8 @@ from backend.exceptions import (
     NoAutorizadoError,
     LockExpiredError,
     SheetsUpdateError,
-    VersionConflictError
+    VersionConflictError,
+    ArmPrerequisiteError
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,8 @@ class OccupationService:
         metadata_repository: MetadataRepository,
         conflict_service: ConflictService,
         redis_event_service: RedisEventService,
-        union_repository=None  # Optional dependency for v4.0 operations
+        union_repository=None,  # Optional dependency for v4.0 operations
+        validation_service=None  # Optional dependency for v4.0 validations
     ):
         """
         Initialize occupation service with injected dependencies.
@@ -84,6 +86,7 @@ class OccupationService:
             conflict_service: Service for version conflict handling and retry
             redis_event_service: Service for publishing real-time events
             union_repository: Repository for union-level operations (v4.0)
+            validation_service: Service for business rule validation (v4.0)
         """
         self.redis_lock_service = redis_lock_service
         self.sheets_repository = sheets_repository
@@ -91,6 +94,7 @@ class OccupationService:
         self.conflict_service = conflict_service
         self.redis_event_service = redis_event_service
         self.union_repository = union_repository
+        self.validation_service = validation_service
         logger.info("OccupationService initialized with Redis lock + optimistic locking")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
@@ -718,6 +722,7 @@ class OccupationService:
 
         Flow:
         1. Validate spool exists and has Fecha_Materiales prerequisite
+        1.6. Validate ARM prerequisite for SOLD operations (v4.0)
         2. Acquire persistent Redis lock (no TTL)
         3. Update Ocupado_Por and Fecha_Ocupacion in Operaciones sheet
         4. Log TOMAR_SPOOL event to Metadata (same event as v3.0 TOMAR)
@@ -733,6 +738,7 @@ class OccupationService:
         Raises:
             SpoolNoEncontradoError: If spool doesn't exist
             DependenciasNoSatisfechasError: If Fecha_Materiales is missing
+            ArmPrerequisiteError: If SOLD operation without ARM completion (403)
             SpoolOccupiedError: If spool already locked by another worker (409)
             SheetsUpdateError: If Sheets write fails
             RedisError: If Redis operation fails
@@ -762,7 +768,23 @@ class OccupationService:
                     detalle="El spool debe tener materiales registrados antes de ocuparlo"
                 )
 
-            # Step 1.5: Lazy cleanup (best effort, don't block on failure)
+            # Step 1.6: Validate ARM prerequisite for SOLD operations (v4.0)
+            if operacion == "SOLD":
+                if self.validation_service is None:
+                    logger.warning("ValidationService not configured, skipping ARM prerequisite check")
+                else:
+                    try:
+                        self.validation_service.validate_arm_prerequisite(
+                            tag_spool=tag_spool,
+                            ot=spool.ot
+                        )
+                        logger.info(f"✅ ARM prerequisite validation passed for {tag_spool}")
+                    except ArmPrerequisiteError:
+                        # Re-raise to be mapped to 403 by router
+                        logger.warning(f"ARM prerequisite validation failed for {tag_spool}")
+                        raise
+
+            # Step 1.7: Lazy cleanup (best effort, don't block on failure)
             # Clean up one abandoned lock >24h old before acquiring new lock
             try:
                 await self.redis_lock_service.lazy_cleanup_one_abandoned_lock()
@@ -880,7 +902,7 @@ class OccupationService:
                 message=message
             )
 
-        except (SpoolNoEncontradoError, DependenciasNoSatisfechasError, SpoolOccupiedError):
+        except (SpoolNoEncontradoError, DependenciasNoSatisfechasError, ArmPrerequisiteError, SpoolOccupiedError):
             # Re-raise business exceptions for router to handle
             raise
         except Exception as e:
@@ -1162,6 +1184,21 @@ class OccupationService:
                 # Race condition - union became unavailable
                 logger.error(f"Race condition detected: {e}")
                 raise
+
+            # Step 5.5: Check if metrología should trigger (after COMPLETAR determination)
+            # Only check if action is COMPLETAR - PAUSAR means work is not done
+            metrologia_triggered = False
+            if action_taken == "COMPLETAR":
+                try:
+                    metrologia_triggered = self.should_trigger_metrologia(tag_spool)
+                    logger.info(
+                        f"Metrología trigger check for {tag_spool}: "
+                        f"{'TRIGGERED' if metrologia_triggered else 'NOT TRIGGERED'}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to check metrología trigger for {tag_spool}: {e}")
+                    # Don't block operation on metrología check failure
+                    metrologia_triggered = False
 
             # Step 6: Update Uniones sheet with batch operation
             try:
