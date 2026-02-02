@@ -44,6 +44,12 @@ class Config:
     REDIS_LOCK_TTL_SECONDS: int = int(os.getenv('REDIS_LOCK_TTL_SECONDS', '3600'))  # 1 hour default
     REDIS_MAX_CONNECTIONS: int = int(os.getenv('REDIS_MAX_CONNECTIONS', '50'))
 
+    # Redis Connection Pool Configuration (Phase 2: Crisis Recovery)
+    REDIS_POOL_MAX_CONNECTIONS: int = int(os.getenv('REDIS_POOL_MAX_CONNECTIONS', '20'))  # Conservative limit for Railway
+    REDIS_SOCKET_TIMEOUT: int = int(os.getenv('REDIS_SOCKET_TIMEOUT', '5'))  # Prevents hanging connections
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = int(os.getenv('REDIS_SOCKET_CONNECT_TIMEOUT', '5'))  # Fail fast if unreachable
+    REDIS_HEALTH_CHECK_INTERVAL: int = int(os.getenv('REDIS_HEALTH_CHECK_INTERVAL', '30'))  # Proactive health checks
+
     # Environment
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'development')
 

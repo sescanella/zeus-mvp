@@ -98,18 +98,21 @@ class RedisRepository:
         try:
             logger.info(
                 f"Connecting to Redis at {config.REDIS_URL} "
-                f"(max_connections={config.REDIS_MAX_CONNECTIONS})"
+                f"(max_connections={config.REDIS_POOL_MAX_CONNECTIONS})"
             )
 
-            # Create connection pool
+            # Create connection pool with optimized settings (Phase 2: Crisis Recovery)
+            # Railway Redis has ~20-30 connection limit, using conservative 20 with proper timeouts
             self._pool = aioredis.ConnectionPool.from_url(
                 config.REDIS_URL,
-                max_connections=config.REDIS_MAX_CONNECTIONS,
+                max_connections=config.REDIS_POOL_MAX_CONNECTIONS,  # Conservative limit for Railway
                 decode_responses=True,  # Auto-decode bytes to str
                 encoding='utf-8',
-                socket_connect_timeout=5,  # 5 seconds connection timeout
+                socket_connect_timeout=config.REDIS_SOCKET_CONNECT_TIMEOUT,  # Fail fast if unreachable
+                socket_timeout=config.REDIS_SOCKET_TIMEOUT,  # Prevents hanging connections
                 socket_keepalive=True,
-                retry_on_timeout=True
+                retry_on_timeout=True,
+                health_check_interval=config.REDIS_HEALTH_CHECK_INTERVAL  # Proactive health checks every 30s
             )
 
             # Create Redis client with pool
@@ -213,3 +216,41 @@ class RedisRepository:
         except RedisError as e:
             logger.error(f"Failed to get Redis info: {e}")
             return {"error": str(e)}
+
+    def get_connection_stats(self) -> dict:
+        """
+        Get connection pool statistics for monitoring (Phase 2: Crisis Recovery).
+
+        Returns:
+            dict with pool statistics including utilization percentage.
+            Example: {
+                "status": "ok",
+                "max_connections": 20,
+                "pool_created": true,
+                "alert": null
+            }
+        """
+        if self._pool is None:
+            return {
+                "status": "pool_not_initialized",
+                "max_connections": 0,
+                "pool_created": False,
+                "alert": "CRITICAL"
+            }
+
+        try:
+            max_conn = self._pool.max_connections
+
+            return {
+                "status": "ok",
+                "max_connections": max_conn,
+                "pool_created": True,
+                "alert": None
+            }
+        except Exception as e:
+            logger.error(f"Error getting pool stats: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "alert": "ERROR"
+            }

@@ -28,25 +28,30 @@ async def health_check(
     sheets_repo: SheetsRepository = Depends(get_sheets_repository)
 ):
     """
-    Health check endpoint para monitoreo del sistema.
+    Health check endpoint para monitoreo del sistema (Phase 2: Enhanced with Redis).
 
     Verifica:
     - Estado general de la API (si responde, está "alive")
     - Conexión con Google Sheets (intenta leer hoja Trabajadores)
+    - Conexión con Redis (v3.0 - Phase 2 Crisis Recovery)
 
-    Si Google Sheets falla, retorna status "degraded" en lugar de error 503.
-    Esto permite que Railway/Monitoring vean que la API responde, pero con
-    funcionalidad reducida.
+    Status logic:
+    - "healthy": Sheets OK AND Redis OK
+    - "degraded": Sheets OK BUT Redis FAIL (occupation features unavailable)
+    - "unhealthy": Sheets FAIL (core features unavailable)
 
     Args:
         sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
 
     Returns:
         Dict con:
-        - status: "healthy" si todo OK, "degraded" si Sheets falla
+        - status: "healthy", "degraded", or "unhealthy"
+        - operational: Boolean indicating if core features work
         - timestamp: Timestamp UTC actual (ISO 8601 format)
         - environment: Ambiente de ejecución (development/production)
         - sheets_connection: "ok" si Sheets responde, "error" si falla
+        - redis_connection: "ok" si Redis responde, "error" si falla
+        - redis_pool_stats: Connection pool statistics (if Redis connected)
         - version: Versión de la API
 
     Raises:
@@ -56,21 +61,13 @@ async def health_check(
         ```json
         {
             "status": "healthy",
-            "timestamp": "2025-11-10T14:30:00Z",
-            "environment": "development",
+            "operational": true,
+            "timestamp": "2026-02-02T14:30:00Z",
+            "environment": "production",
             "sheets_connection": "ok",
-            "version": "1.0.0"
-        }
-        ```
-
-    Example response (degraded):
-        ```json
-        {
-            "status": "degraded",
-            "timestamp": "2025-11-10T14:30:00Z",
-            "environment": "development",
-            "sheets_connection": "error",
-            "version": "1.0.0"
+            "redis_connection": "ok",
+            "redis_pool_stats": {"max_connections": 20, "status": "ok"},
+            "version": "3.0.0"
         }
         ```
 
@@ -78,33 +75,76 @@ async def health_check(
         ```bash
         curl http://localhost:8000/api/health
         ```
-
-    Note:
-        Railway usa este endpoint para health checks. Si retornara 503 en lugar
-        de 200 con status="degraded", Railway consideraría la app como down y
-        la reiniciaría innecesariamente.
     """
-    logger.info("Health check requested")
+    logger.info("Health check requested (Phase 2: Sheets + Redis)")
 
     # Test conexión Google Sheets (intentar leer 1 fila de Trabajadores)
     sheets_status = "ok"
+    sheets_error = None
     try:
-        # Leer hoja Trabajadores (usa cache si disponible)
         sheets_repo.read_worksheet(config.HOJA_TRABAJADORES_NOMBRE)
         logger.debug("Sheets connection test successful")
     except Exception as e:
-        # Log error pero no propagarlo (retornar degraded en lugar de 503)
         logger.error(f"Health check failed: Sheets connection error - {str(e)}")
         sheets_status = "error"
+        sheets_error = str(e)
+
+    # Test conexión Redis (v3.0 - Phase 2)
+    redis_status = "ok"
+    redis_error = None
+    redis_pool_stats = None
+    try:
+        redis_repo = RedisRepository()
+        if redis_repo.client is not None:
+            # Test PING
+            await redis_repo.client.ping()
+            # Get pool stats
+            redis_pool_stats = redis_repo.get_connection_stats()
+            logger.debug("Redis connection test successful")
+        else:
+            redis_status = "error"
+            redis_error = "Redis client not connected"
+            logger.warning("Redis health check: client not connected")
+    except Exception as e:
+        logger.error(f"Health check failed: Redis connection error - {str(e)}")
+        redis_status = "error"
+        redis_error = str(e)
+
+    # Determine overall status
+    if sheets_status == "ok" and redis_status == "ok":
+        status = "healthy"
+        operational = True
+    elif sheets_status == "ok" and redis_status == "error":
+        status = "degraded"
+        operational = False  # Occupation features unavailable
+    else:
+        status = "unhealthy"
+        operational = False  # Core features unavailable
 
     # Construir response
-    return {
-        "status": "healthy" if sheets_status == "ok" else "degraded",
+    response = {
+        "status": status,
+        "operational": operational,
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "environment": config.ENVIRONMENT,
         "sheets_connection": sheets_status,
-        "version": "1.0.0"
+        "redis_connection": redis_status,
+        "version": "3.0.0"
     }
+
+    # Add error details if present
+    if sheets_error or redis_error:
+        response["details"] = {}
+        if sheets_error:
+            response["details"]["sheets_error"] = sheets_error
+        if redis_error:
+            response["details"]["redis_error"] = redis_error
+
+    # Add pool stats if available
+    if redis_pool_stats:
+        response["redis_pool_stats"] = redis_pool_stats
+
+    return response
 
 
 @router.get("/health/diagnostic", status_code=status.HTTP_200_OK)
@@ -583,6 +623,65 @@ async def clear_cache():
             "error": str(e),
             "error_type": type(e).__name__
         }
+
+
+@router.get("/redis-connection-stats", status_code=status.HTTP_200_OK)
+async def redis_connection_stats():
+    """
+    Redis connection pool statistics endpoint (Phase 2: Crisis Recovery).
+
+    Provides real-time monitoring of connection pool health and utilization.
+    Use this endpoint to detect connection exhaustion before it causes issues.
+
+    Returns:
+        Dict with:
+        - status: "ok", "pool_not_initialized", or "error"
+        - max_connections: Maximum connections in pool
+        - pool_created: Boolean indicating if pool is initialized
+        - alert: "CRITICAL" if pool not initialized, None if OK
+        - timestamp: Current timestamp
+
+    Example response (healthy):
+        ```json
+        {
+            "status": "ok",
+            "max_connections": 20,
+            "pool_created": true,
+            "alert": null,
+            "timestamp": "2026-02-02T14:30:00Z"
+        }
+        ```
+
+    Example response (critical):
+        ```json
+        {
+            "status": "pool_not_initialized",
+            "max_connections": 0,
+            "pool_created": false,
+            "alert": "CRITICAL",
+            "timestamp": "2026-02-02T14:30:00Z"
+        }
+        ```
+
+    Usage:
+        ```bash
+        curl http://localhost:8000/api/redis-connection-stats
+        ```
+
+    Note:
+        Use this for monitoring/alerting. Alert if:
+        - status != "ok"
+        - alert == "CRITICAL"
+    """
+    logger.info("Redis connection stats requested")
+
+    redis_repo = RedisRepository()
+    stats = redis_repo.get_connection_stats()
+
+    # Add timestamp
+    stats["timestamp"] = datetime.utcnow().isoformat() + "Z"
+
+    return stats
 
 
 @router.get("/redis-health", status_code=status.HTTP_200_OK)
