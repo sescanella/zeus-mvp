@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 9 of 13 (Redis & Version Detection)
-Plan: 1 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 09-01-PLAN.md (Persistent locks and degraded mode)
+Last activity: 2026-02-02 — Completed 09-03-PLAN.md (Startup reconciliation from Sheets)
 
-Progress: [█████████░░░░] 69% (9 of 13 phases in progress, 1 of 5 plans complete in Phase 9)
+Progress: [█████████░░░░] 69% (9 of 13 phases in progress, 3 of 5 plans complete in Phase 9)
 
 ## Performance Metrics
 
@@ -40,11 +40,11 @@ Progress: [█████████░░░░] 69% (9 of 13 phases in progr
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
-| 9. Redis & Version Detection | 1/5 | 7.5 min | 7.5 min |
+| 9. Redis & Version Detection | 3/5 | 15.5 min | 5.2 min |
 
 **Recent Trend:**
-- Last 5 plans: [6.5, 8.5, 4.0, 4.4, 7.5] min
-- Trend: Phase 9 IN PROGRESS (1 of 5 plans complete, 7.5-min average)
+- Last 5 plans: [4.0, 4.4, 7.5, 4.0, 4.0] min
+- Trend: Phase 9 IN PROGRESS (3 of 5 plans complete, 5.2-min average - back to target velocity)
 
 *Updated after each plan completion*
 
@@ -100,6 +100,10 @@ Recent decisions affecting v4.0 work:
 - **D43 (09-01)**: Lock value format includes timestamp for lazy cleanup age detection
 - **D44 (09-01)**: Degraded mode falls back to Sheets-only when Redis unavailable
 - **D45 (09-01)**: REDIS_PERSISTENT_LOCKS flag controls v3.0 vs v4.0 lock mode
+- **D46 (09-03)**: Reconciliation with 10-second timeout prevents slow startups
+- **D47 (09-03)**: Reconciliation failure doesn't block API startup (degraded mode continues)
+- **D48 (09-03)**: Skip locks older than 24 hours during reconciliation (stale data)
+- **D49 (09-03)**: Check redis.exists() before creating lock (avoid race conditions)
 
 ### Pending Todos
 
@@ -116,9 +120,11 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **Phase 9 IN PROGRESS**: Redis & Version Detection (1 of 5 plans complete)
+- **Phase 9 IN PROGRESS**: Redis & Version Detection (3 of 5 plans complete)
   - ✅ Plan 09-01: Persistent locks without TTL, two-step acquisition (SET + PERSIST), degraded mode fallback
-  - Next: Plan 09-02 (Lazy cleanup mechanism)
+  - ✅ Plan 09-02: Lazy cleanup mechanism (one abandoned lock per INICIAR operation)
+  - ✅ Plan 09-03: Startup reconciliation from Sheets with 10-second timeout, age-based filtering
+  - Next: Plan 09-04 (Version detection with caching)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -129,7 +135,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 09-01-PLAN.md (Persistent locks and degraded mode, 7.5 min duration)
+Stopped at: Completed 09-03-PLAN.md (Startup reconciliation from Sheets, 4 min duration)
 Resume file: None
 
-**Phase 9 In Progress:** 1 of 5 plans complete (7.5 min total). Persistent Redis locks without TTL for long-running work sessions. Next: 09-02 (Lazy cleanup mechanism).
+**Phase 9 In Progress:** 3 of 5 plans complete (15.5 min total). Auto-recovery system complete: persistent locks + lazy cleanup + startup reconciliation. Next: 09-04 (Version detection with caching).
