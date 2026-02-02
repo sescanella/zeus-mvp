@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 10 of 13 (Backend Services & Validation)
-Plan: 2 of 5 in current phase
+Plan: 1 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 10-02-PLAN.md (INICIAR/FINALIZAR workflows)
+Last activity: 2026-02-02 — Completed 10-01-PLAN.md (UnionService for batch operations)
 
-Progress: [██████████░░░] 78% (9 phases + 2 plans complete, 10-03 next)
+Progress: [██████████░░░] 78% (9 phases + 1 plan complete, 10-02 next)
 
 ## Performance Metrics
 
@@ -41,11 +41,11 @@ Progress: [██████████░░░] 78% (9 phases + 2 plans comp
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
-| 10. Backend Services & Validation | 2/5 | 8.4 min | 4.2 min |
+| 10. Backend Services & Validation | 1/5 | 5 min | 5.0 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.4, 8.1, 4.0, 4.0, 4.4] min
-- Trend: Phase 10 in progress (2 of 5 plans, 4.2-min average - stable velocity)
+- Last 5 plans: [8.1, 4.0, 4.0, 4.4, 5.0] min
+- Trend: Phase 10 in progress (1 of 5 plans, 5.0-min average - consistent velocity)
 
 *Updated after each plan completion*
 
@@ -111,6 +111,10 @@ Recent decisions affecting v4.0 work:
 - **D53 (09-06)**: Frontend detects version locally by union count (no API call per spool - avoids latency)
 - **D54 (09-06)**: Version badges on table instead of cards (P4 uses table layout, added VERSION column)
 - **D55 (09-06)**: Session storage for version caching (spool_version_{tag} format for future workflow routing)
+- **D56 (10-01)**: 1 decimal precision for pulgadas calculation in UnionService (service layer presentation, differs from 2-decimal repository storage)
+- **D57 (10-01)**: SOLD_REQUIRED_TYPES constant ['BW', 'BR', 'SO', 'FILL', 'LET'] excludes FW (ARM-only unions)
+- **D58 (10-01)**: Batch + granular metadata event structure (1 batch event at spool level + N granular events per union)
+- **D59 (10-01)**: Partial success pattern for unavailable unions (filter and process available, log warning)
 - **D56 (10-02)**: INICIAR uses same TOMAR_SPOOL event type as v3.0 (backward compatibility with Metadata queries)
 - **D57 (10-02)**: FINALIZAR auto-determines PAUSAR vs COMPLETAR (simplifies UX from 3-button to 2-button flow)
 - **D58 (10-02)**: Empty selected_unions list triggers cancellation (not 409 error - intentional user action)
@@ -158,12 +162,11 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 10-02-PLAN.md (Enhance OccupationService with INICIAR/FINALIZAR)
+Stopped at: Completed 10-01-PLAN.md (Create UnionService for Batch Operations)
 Resume file: None
 
-**Phase 10 Progress (2/5 plans):**
-- 10-01 ✓: UnionService with validation helpers (4.0 min)
-- 10-02 ✓: OccupationService INICIAR/FINALIZAR (4.4 min, this session)
-- 10-03 next: Validation Service
+**Phase 10 Progress (1/5 plans):**
+- 10-01 ✓: UnionService for batch operations (5.0 min, this session)
+- 10-02 next: OccupationServiceV4 with INICIAR/FINALIZAR
 
-**10-02 Complete:** INICIAR/FINALIZAR workflows with auto-determination. 13 unit tests passing. Zero-union cancellation support. Race condition detection (409 Conflict). UnionRepository integration via optional dependency. Ready for 10-03 (Validation Service).
+**10-01 Complete:** UnionService orchestrates batch union updates with 1-decimal pulgadas calculation, batch/granular metadata events, and FW union exclusion from SOLD. 26 unit tests passing (100% coverage). Dependency injection ready for Phase 10-02. Ready for 10-02 (OccupationServiceV4).
