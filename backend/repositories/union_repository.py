@@ -209,6 +209,57 @@ class UnionRepository:
 
         return count
 
+    def count_completed_arm(self, ot: str) -> int:
+        """
+        Count completed ARM unions for a given work order.
+
+        v4.0: Supports Operaciones column 69 (Uniones_ARM_Completadas).
+        No caching - always calculates fresh for consistency.
+
+        Args:
+            ot: TAG_SPOOL value (OT reference)
+
+        Returns:
+            int: Number of unions where arm_fecha_fin is not None, 0 if OT has no unions
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        unions = self.get_by_spool(ot)
+
+        count = 0
+        for union in unions:
+            if union.arm_fecha_fin is not None:
+                count += 1
+
+        return count
+
+    def count_completed_sold(self, ot: str) -> int:
+        """
+        Count completed SOLD unions for a given work order.
+
+        v4.0: Supports Operaciones column 70 (Uniones_SOLD_Completadas).
+        No caching - always calculates fresh for consistency.
+        Ensures ARM prerequisite consistency (SOLD requires ARM complete).
+
+        Args:
+            ot: TAG_SPOOL value (OT reference)
+
+        Returns:
+            int: Number of unions where sol_fecha_fin is not None, 0 if OT has no unions
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        unions = self.get_by_spool(ot)
+
+        count = 0
+        for union in unions:
+            if union.sol_fecha_fin is not None:
+                count += 1
+
+        return count
+
     def sum_pulgadas(
         self,
         tag_spool: str,
@@ -219,12 +270,14 @@ class UnionRepository:
 
         This is the primary business metric for v4.0 (not spool count).
 
+        BREAKING CHANGE: v08-03 changed from 1 to 2 decimal precision (18.50 not 18.5).
+
         Args:
             tag_spool: TAG_SPOOL to filter by
             operacion: Operation type ("ARM" or "SOLD")
 
         Returns:
-            float: Sum of DN_UNION for completed unions (1 decimal precision)
+            float: Sum of DN_UNION for completed unions (2 decimal precision)
 
         Raises:
             SheetsConnectionError: If Google Sheets read fails
@@ -238,8 +291,138 @@ class UnionRepository:
             elif operacion == "SOLD" and union.sol_fecha_fin is not None:
                 total += union.dn_union
 
-        # Return with 1 decimal precision
-        return round(total, 1)
+        # Return with 2 decimal precision (v08-03 breaking change)
+        return round(total, 2)
+
+    def sum_pulgadas_arm(self, ot: str) -> float:
+        """
+        Sum pulgadas-diámetro for completed ARM unions.
+
+        v4.0: Supports Operaciones column 71 (Pulgadas_ARM).
+
+        Args:
+            ot: TAG_SPOOL value (OT reference)
+
+        Returns:
+            float: Sum of DN_UNION where arm_fecha_fin is not None (2 decimal precision)
+                   Returns 0.00 for empty OT
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        unions = self.get_by_spool(ot)
+
+        total = 0.0
+        for union in unions:
+            if union.arm_fecha_fin is not None:
+                total += union.dn_union
+
+        # Return with 2 decimal precision
+        return round(total, 2)
+
+    def sum_pulgadas_sold(self, ot: str) -> float:
+        """
+        Sum pulgadas-diámetro for completed SOLD unions.
+
+        v4.0: Supports Operaciones column 72 (Pulgadas_SOLD).
+
+        Args:
+            ot: TAG_SPOOL value (OT reference)
+
+        Returns:
+            float: Sum of DN_UNION where sol_fecha_fin is not None (2 decimal precision)
+                   Returns 0.00 for empty OT
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        unions = self.get_by_spool(ot)
+
+        total = 0.0
+        for union in unions:
+            if union.sol_fecha_fin is not None:
+                total += union.dn_union
+
+        # Return with 2 decimal precision
+        return round(total, 2)
+
+    def get_total_uniones(self, ot: str) -> int:
+        """
+        Get total count of all unions for a given work order.
+
+        v4.0: Supports Operaciones column 68 (Total_Uniones).
+        Counts ALL unions regardless of completion state - represents total work scope.
+
+        Args:
+            ot: TAG_SPOOL value (OT reference)
+
+        Returns:
+            int: Total number of unions for the OT, 0 if OT not found or has no unions
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        unions = self.get_by_spool(ot)
+        return len(unions)
+
+    def calculate_metrics(self, ot: str) -> dict:
+        """
+        Calculate all union metrics for a given work order in a single call.
+
+        More efficient than calling 5 separate methods - fetches unions once
+        and calculates all metrics. Supports Operaciones columns 68-72.
+
+        Args:
+            ot: TAG_SPOOL value (OT reference)
+
+        Returns:
+            dict with keys:
+                - total_uniones (int): Total union count (column 68)
+                - arm_completadas (int): ARM completed count (column 69)
+                - sold_completadas (int): SOLD completed count (column 70)
+                - pulgadas_arm (float): ARM pulgadas sum with 2 decimals (column 71)
+                - pulgadas_sold (float): SOLD pulgadas sum with 2 decimals (column 72)
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        unions = self.get_by_spool(ot)
+
+        # Initialize metrics
+        total_uniones = len(unions)
+        arm_completadas = 0
+        sold_completadas = 0
+        pulgadas_arm = 0.0
+        pulgadas_sold = 0.0
+
+        # Single pass calculation
+        for union in unions:
+            # Handle invalid DN_UNION values
+            try:
+                dn_value = float(union.dn_union)
+            except (ValueError, TypeError):
+                self.logger.warning(
+                    f"Invalid DN_UNION value for union {union.id}: {union.dn_union}, skipping"
+                )
+                continue
+
+            # Count and sum ARM completions
+            if union.arm_fecha_fin is not None:
+                arm_completadas += 1
+                pulgadas_arm += dn_value
+
+            # Count and sum SOLD completions
+            if union.sol_fecha_fin is not None:
+                sold_completadas += 1
+                pulgadas_sold += dn_value
+
+        return {
+            "total_uniones": total_uniones,
+            "arm_completadas": arm_completadas,
+            "sold_completadas": sold_completadas,
+            "pulgadas_arm": round(pulgadas_arm, 2),
+            "pulgadas_sold": round(pulgadas_sold, 2),
+        }
 
     def _row_to_union(self, row_data: list, column_map: dict) -> Union:
         """
