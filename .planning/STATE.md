@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 10 of 13 (Backend Services & Validation)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 10-03-PLAN.md (ARM-before-SOLD validation)
+Last activity: 2026-02-02 — Completed 10-04-PLAN.md (Metrología auto-transition)
 
-Progress: [██████████░░░] 80% (9 phases + 3 plans complete, 10-04 next)
+Progress: [██████████░░░] 81% (9 phases + 4 plans complete, 10-05 next)
 
 ## Performance Metrics
 
@@ -41,11 +41,11 @@ Progress: [██████████░░░] 80% (9 phases + 3 plans comp
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
-| 10. Backend Services & Validation | 3/5 | 16 min | 5.3 min |
+| 10. Backend Services & Validation | 4/5 | 22.5 min | 5.6 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.0, 4.4, 5.0, 5.0, 6.0] min
-- Trend: Phase 10 in progress (3 of 5 plans, 5.3-min average - consistent velocity)
+- Last 5 plans: [4.4, 5.0, 5.0, 6.0, 6.5] min
+- Trend: Phase 10 in progress (4 of 5 plans, 5.6-min average - slight uptick from 5.3-min)
 
 *Updated after each plan completion*
 
@@ -120,6 +120,13 @@ Recent decisions affecting v4.0 work:
 - **D58 (10-02)**: Empty selected_unions list triggers cancellation (not 409 error - intentional user action)
 - **D59 (10-02)**: UnionRepository injected as optional dependency (v3.0 backward compatibility)
 - **D60 (10-02)**: Race condition returns 409 Conflict (selected > available indicates stale data)
+- **D61 (10-04)**: Check metrología trigger AFTER COMPLETAR determination (not for PAUSAR)
+- **D62 (10-04)**: Separate FW unions from SOLD-required unions (SOLD_REQUIRED_TYPES constant)
+- **D63 (10-04)**: StateService imported inside finalizar_spool() to avoid circular dependency
+- **D64 (10-04)**: Metrología transition is best-effort (don't block FINALIZAR on failure)
+- **D65 (10-04)**: Update Estado_Detalle to "En Cola Metrología" on trigger
+- **D66 (10-04)**: Log METROLOGIA_AUTO_TRIGGERED event with completion stats
+- **D67 (10-04)**: Add "(Listo para metrología)" suffix to completion message when triggered
 - **D61 (10-03)**: Validate ARM prerequisite at INICIAR (not FINALIZAR) to fail early before lock acquisition
 - **D62 (10-03)**: Filter SOLD disponibles by union type (exclude FW ARM-only unions) in finalizar_spool
 - **D63 (10-03)**: Import SOLD_REQUIRED_TYPES constant from occupation_service to avoid duplication
@@ -149,12 +156,13 @@ None yet.
   - Frontend version badges (green v4.0, gray v3.0)
   - 63 passing tests (30 unit + 33 integration), 84% coverage
   - Duration: 32 min total (5.3-min average)
-- **Phase 10 In Progress**: Backend Services & Validation (3/5 plans)
+- **Phase 10 In Progress**: Backend Services & Validation (4/5 plans)
   - 10-01 ✓: UnionService for batch operations (5.0 min)
-  - 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (5.0 min)
-  - 10-03 ✓: ARM-before-SOLD validation (6.0 min, this session)
-  - Next: 10-04 (Metrología auto-trigger) or 10-05 (Service integration)
-  - Test coverage: 13 new v4.0 validation tests (100% passing)
+  - 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (4.4 min)
+  - 10-03 ✓: ARM-before-SOLD validation (6.0 min)
+  - 10-04 ✓: Metrología auto-transition (6.5 min, this session)
+  - Next: 10-05 (Router integration for v4.0 endpoints)
+  - Test coverage: 25 new v4.0 tests (100% passing)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -165,13 +173,14 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 10-03-PLAN.md (Add ARM-before-SOLD Validation)
+Stopped at: Completed 10-04-PLAN.md (Metrología Auto-Transition)
 Resume file: None
 
-**Phase 10 Progress (3/5 plans):**
+**Phase 10 Progress (4/5 plans):**
 - 10-01 ✓: UnionService for batch operations (5.0 min)
-- 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (5.0 min)
-- 10-03 ✓: ARM-before-SOLD validation (6.0 min, this session)
-- 10-04 next: Metrología auto-trigger OR 10-05: Service integration
+- 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (4.4 min)
+- 10-03 ✓: ARM-before-SOLD validation (6.0 min)
+- 10-04 ✓: Metrología auto-transition (6.5 min, this session)
+- 10-05 next: Router integration (v4.0 endpoints)
 
-**10-03 Complete:** ARM prerequisite validation enforces SOLD-after-ARM business rule at INICIAR time with 403 error. Union type filtering excludes FW (ARM-only) from SOLD completion logic. 13 new unit tests (100% passing). ValidationService + OccupationService integration complete. Ready for 10-04 (Metrología auto-trigger).
+**10-04 Complete:** Automatic metrología queue entry when all union work complete (FW ARM'd, SOLD-required unions SOLD'd). Mixed union type detection (FW vs BW/BR/SO/FILL/LET), StateService trigger, METROLOGIA_AUTO_TRIGGERED event, enhanced OccupationResponse. 12 unit tests passing (100% coverage). Ready for 10-05 (Router integration).
