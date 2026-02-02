@@ -346,8 +346,22 @@ class UnionService:
             >>> service.validate_union_ownership(unions)
             False
         """
-        # Placeholder implementation (will be implemented in Task 5)
-        raise NotImplementedError("validate_union_ownership will be implemented in Task 5")
+        if not unions:
+            return True  # Empty list is valid
+
+        # Get OT from first union
+        first_ot = unions[0].ot
+
+        # Check all unions have the same OT
+        for union in unions:
+            if union.ot != first_ot:
+                self.logger.warning(
+                    f"Union ownership validation failed: "
+                    f"union {union.id} has OT {union.ot}, expected {first_ot}"
+                )
+                return False
+
+        return True
 
     def filter_available_unions(
         self,
@@ -373,8 +387,47 @@ class UnionService:
             >>> service.filter_available_unions(unions, "ARM")
             [Union(arm_fecha_fin=None, ...)]
         """
-        # Placeholder implementation (will be implemented in Task 5)
-        raise NotImplementedError("filter_available_unions will be implemented in Task 5")
+        if not unions:
+            return []
+
+        available = []
+
+        for union in unions:
+            if operacion == "ARM":
+                # ARM available: ARM not yet completed
+                if union.arm_fecha_fin is None:
+                    available.append(union)
+                else:
+                    self.logger.debug(
+                        f"Union {union.id} not available for ARM: already completed"
+                    )
+
+            elif operacion == "SOLD":
+                # SOLD available: ARM complete but SOLD not yet complete
+                # Also check if union type requires SOLD (FW unions are ARM-only)
+                if union.tipo_union not in SOLD_REQUIRED_TYPES:
+                    self.logger.debug(
+                        f"Union {union.id} type {union.tipo_union} does not require SOLD"
+                    )
+                    continue
+
+                if union.arm_fecha_fin is not None and union.sol_fecha_fin is None:
+                    available.append(union)
+                else:
+                    if union.arm_fecha_fin is None:
+                        self.logger.debug(
+                            f"Union {union.id} not available for SOLD: ARM not yet completed"
+                        )
+                    else:
+                        self.logger.debug(
+                            f"Union {union.id} not available for SOLD: already completed"
+                        )
+
+        self.logger.info(
+            f"Filtered {len(available)}/{len(unions)} available unions for {operacion}"
+        )
+
+        return available
 
     def get_sold_required_types(self) -> list[str]:
         """
@@ -389,5 +442,4 @@ class UnionService:
             >>> service.get_sold_required_types()
             ['BW', 'BR', 'SO', 'FILL', 'LET']
         """
-        # Placeholder implementation (will be implemented in Task 5)
-        raise NotImplementedError("get_sold_required_types will be implemented in Task 5")
+        return SOLD_REQUIRED_TYPES.copy()  # Return copy to prevent modification
