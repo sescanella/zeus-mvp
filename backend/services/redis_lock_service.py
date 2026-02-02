@@ -27,6 +27,8 @@ from tenacity import (
 
 from backend.config import config
 from backend.exceptions import SpoolOccupiedError, LockExpiredError
+from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +58,13 @@ class RedisLockService:
         default_ttl: Default lock TTL in seconds (from config)
     """
 
-    def __init__(self, redis_client: aioredis.Redis):
+    def __init__(self, redis_client: aioredis.Redis, sheets_repository=None):
         """
         Initialize lock service with Redis client.
 
         Args:
             redis_client: Connected async Redis client (from RedisRepository.get_client())
+            sheets_repository: SheetsRepository instance for lazy cleanup queries (optional)
 
         Note:
             The redis_client should be obtained via RedisRepository.get_client() method,
@@ -73,7 +76,8 @@ class RedisLockService:
             ```python
             # In dependency.py
             redis_repo = RedisRepository()
-            lock_service = RedisLockService(redis_client=redis_repo.get_client())
+            sheets_repo = SheetsRepository()
+            lock_service = RedisLockService(redis_client=redis_repo.get_client(), sheets_repository=sheets_repo)
             ```
 
         Warning:
@@ -82,6 +86,7 @@ class RedisLockService:
         """
         self.redis = redis_client
         self.default_ttl = config.REDIS_LOCK_TTL_SECONDS
+        self.sheets_repository = sheets_repository
 
     def _lock_key(self, tag_spool: str) -> str:
         """
@@ -99,37 +104,69 @@ class RedisLockService:
 
     def _lock_value(self, worker_id: int) -> str:
         """
-        Generate unique lock value with worker ID and UUID token.
+        Generate unique lock value with worker ID, UUID token, and timestamp.
 
-        Format: "{worker_id}:{uuid4}"
-        Example: "93:550e8400-e29b-41d4-a716-446655440000"
+        Format: "{worker_id}:{uuid4}:{timestamp}"
+        Example: "93:550e8400-e29b-41d4-a716-446655440000:21-01-2026 14:30:00"
 
         Args:
             worker_id: Worker identifier
 
         Returns:
-            Lock value string with embedded worker_id and unique token
+            Lock value string with embedded worker_id, unique token, and timestamp
         """
-        return f"{worker_id}:{uuid.uuid4()}"
+        timestamp = format_datetime_for_sheets(now_chile())
+        return f"{worker_id}:{uuid.uuid4()}:{timestamp}"
 
     def _parse_lock_value(self, lock_value: str) -> tuple[int, str]:
         """
         Parse lock value into worker_id and token.
 
         Args:
-            lock_value: Lock value string (format: "{worker_id}:{token}")
+            lock_value: Lock value string (format: "{worker_id}:{token}:{timestamp}" or legacy "{worker_id}:{token}")
 
         Returns:
             Tuple of (worker_id, token)
 
         Raises:
             ValueError: If lock_value format is invalid
+
+        Note:
+            Supports both legacy format (worker_id:token) and new format (worker_id:token:timestamp).
+            Timestamp is ignored in this method - see _parse_lock_timestamp for timestamp extraction.
         """
         try:
-            worker_id_str, token = lock_value.split(":", 1)
+            parts = lock_value.split(":", 2)
+            worker_id_str = parts[0]
+            token = parts[1] if len(parts) >= 2 else ""
             return int(worker_id_str), token
-        except (ValueError, AttributeError) as e:
+        except (ValueError, AttributeError, IndexError) as e:
             raise ValueError(f"Invalid lock value format: {lock_value}") from e
+
+    def _parse_lock_timestamp(self, lock_value: str) -> Optional[datetime]:
+        """
+        Parse timestamp from lock value.
+
+        Args:
+            lock_value: Lock value string (format: "{worker_id}:{token}:{timestamp}")
+
+        Returns:
+            datetime object if timestamp present, None for legacy locks
+
+        Note:
+            Legacy locks (format: worker_id:token) return None.
+            New locks (format: worker_id:token:timestamp) return parsed datetime.
+        """
+        try:
+            parts = lock_value.split(":", 2)
+            if len(parts) >= 3:
+                timestamp_str = parts[2]
+                # Parse DD-MM-YYYY HH:MM:SS format
+                return datetime.strptime(timestamp_str, "%d-%m-%Y %H:%M:%S")
+            return None
+        except (ValueError, AttributeError, IndexError) as e:
+            logger.warning(f"Failed to parse timestamp from lock value: {lock_value}, error: {e}")
+            return None
 
     @retry(
         stop=stop_after_attempt(3),
@@ -145,7 +182,10 @@ class RedisLockService:
         ttl_seconds: Optional[int] = None
     ) -> str:
         """
-        Acquire atomic lock on spool using SET NX EX pattern.
+        Acquire atomic lock on spool.
+
+        v4.0 (persistent mode): Two-step acquisition with PERSIST command
+        v3.0 (TTL mode): Traditional SET NX EX with expiration
 
         Atomic operation prevents race conditions:
         - If lock doesn't exist: set lock and return token
@@ -155,7 +195,7 @@ class RedisLockService:
             tag_spool: Spool identifier
             worker_id: Worker attempting to acquire lock
             worker_nombre: Worker name for error messages
-            ttl_seconds: Lock TTL (default: 3600 seconds from config)
+            ttl_seconds: Lock TTL (only used in v3.0 mode, ignored in v4.0 persistent mode)
 
         Returns:
             Lock token (UUID) for safe release
@@ -166,43 +206,82 @@ class RedisLockService:
         """
         lock_key = self._lock_key(tag_spool)
         lock_value = self._lock_value(worker_id)
-        ttl = ttl_seconds or self.default_ttl
 
         try:
-            # Atomic SET NX EX: set if not exists with expiration
-            acquired = await self.redis.set(
-                lock_key,
-                lock_value,
-                nx=True,  # Only set if key doesn't exist
-                ex=ttl    # Auto-expire after TTL seconds
-            )
+            # Check if persistent locks enabled (v4.0) or TTL mode (v3.0)
+            if config.REDIS_PERSISTENT_LOCKS:
+                # v4.0: Two-step persistent lock acquisition
+                # Step 1: Acquire with safety TTL (prevents orphaned locks if crash between SET and PERSIST)
+                acquired = await self.redis.set(
+                    lock_key,
+                    lock_value,
+                    nx=True,  # Only set if key doesn't exist
+                    ex=config.REDIS_SAFETY_TTL  # 10-second safety TTL
+                )
 
-            if not acquired:
-                # Lock already exists, get current owner for error message
-                current_owner = await self.get_lock_owner(tag_spool)
-                if current_owner:
-                    owner_id, _ = current_owner
-                    # Query owner name from lock value if available
-                    # For now, use generic message
-                    raise SpoolOccupiedError(
-                        tag_spool=tag_spool,
-                        owner_id=owner_id,
-                        owner_name=f"Worker {owner_id}"
-                    )
-                else:
-                    # Race condition: lock was released between SET and GET
-                    # Retry will handle this
-                    raise RedisError("Lock state changed during acquisition")
+                if not acquired:
+                    # Lock already exists
+                    current_owner = await self.get_lock_owner(tag_spool)
+                    if current_owner:
+                        owner_id, _ = current_owner
+                        raise SpoolOccupiedError(
+                            tag_spool=tag_spool,
+                            owner_id=owner_id,
+                            owner_name=f"Worker {owner_id}"
+                        )
+                    else:
+                        raise RedisError("Lock state changed during acquisition")
 
-            # Extract token from lock_value for return
-            _, token = self._parse_lock_value(lock_value)
+                # Step 2: Remove TTL to make persistent
+                persist_result = await self.redis.persist(lock_key)
 
-            logger.info(
-                f"✅ Lock acquired: {tag_spool} by worker {worker_id} "
-                f"(TTL: {ttl}s, token: {token[:8]}...)"
-            )
+                if persist_result != 1:
+                    # PERSIST failed (key disappeared between SET and PERSIST)
+                    await self.redis.delete(lock_key)
+                    raise RedisError("PERSIST command failed - key may have expired during acquisition")
 
-            return token
+                # Extract token from lock_value for return
+                _, token = self._parse_lock_value(lock_value)
+
+                logger.info(
+                    f"✅ Persistent lock acquired: {tag_spool} by worker {worker_id} "
+                    f"(no TTL, token: {token[:8]}...)"
+                )
+
+                return token
+
+            else:
+                # v3.0: Traditional TTL-based lock (backward compatibility)
+                ttl = ttl_seconds or self.default_ttl
+
+                acquired = await self.redis.set(
+                    lock_key,
+                    lock_value,
+                    nx=True,  # Only set if key doesn't exist
+                    ex=ttl    # Auto-expire after TTL seconds
+                )
+
+                if not acquired:
+                    current_owner = await self.get_lock_owner(tag_spool)
+                    if current_owner:
+                        owner_id, _ = current_owner
+                        raise SpoolOccupiedError(
+                            tag_spool=tag_spool,
+                            owner_id=owner_id,
+                            owner_name=f"Worker {owner_id}"
+                        )
+                    else:
+                        raise RedisError("Lock state changed during acquisition")
+
+                # Extract token from lock_value for return
+                _, token = self._parse_lock_value(lock_value)
+
+                logger.info(
+                    f"✅ Lock acquired: {tag_spool} by worker {worker_id} "
+                    f"(TTL: {ttl}s, token: {token[:8]}...)"
+                )
+
+                return token
 
         except SpoolOccupiedError:
             # Re-raise occupation errors without retry
