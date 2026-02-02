@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 7 of 13 (Data Model Foundation)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 07-05-PLAN.md (Integrate v4.0 schema validation into startup)
+Plan: 6 of 6 in current phase
+Status: Phase complete (with gap closure)
+Last activity: 2026-02-02 — Completed 07-06-PLAN.md (Execute schema migrations on production sheets)
 
 Progress: [███████░░░░░░░] 54% (7 of 13 phases complete, ready for Phase 8)
 
@@ -38,11 +38,11 @@ Progress: [███████░░░░░░░] 54% (7 of 13 phases compl
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7. Data Model Foundation | 5 | 18 min | 3.6 min |
+| 7. Data Model Foundation | 6 | 19 min | 3.2 min |
 
 **Recent Trend:**
-- Last 5 plans: [1.0, 2.0, 4.0, 3.0, 8.0] min
-- Trend: Phase 7 complete (Data Model Foundation with Union model, validation scripts, startup hooks)
+- Last 5 plans: [2.0, 4.0, 3.0, 8.0, 1.0] min
+- Trend: Phase 7 complete with gap closure (Data Model Foundation + schema migrations executed)
 
 *Updated after each plan completion*
 
@@ -73,6 +73,8 @@ Recent decisions affecting v4.0 work:
 - **D18 (07-04)**: Structured validation results with per-sheet details (actionable error reporting)
 - **D19 (07-04)**: Extra columns allowed, only missing columns cause failure (resilient to schema drift)
 - **D20 (07-05)**: Integrate v4.0 validation into FastAPI startup event (after cache warming, before traffic - fail-fast deployment)
+- **D21 (07-06)**: Execute migrations on production sheets with --force flag (gap closure plan, already validated in dry-run)
+- **D22 (07-06)**: Accept Uniones validation failure as expected (Engineering dependency documented in blockers)
 
 ### Pending Todos
 
@@ -81,9 +83,9 @@ None yet.
 ### Blockers/Concerns
 
 **v4.0 Pre-Deployment:**
-- Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy
-- v3.0 7-day rollback window expires 2026-02-02 (v2.1 backup will be archived)
-- Schema migration scripts (07-01, 07-02) must execute before v4.0 code deploys
+- Uniones sheet must be pre-populated by Engineering external process before v4.0 can deploy (missing 9 columns: ID, TAG_SPOOL, NDT fields, audit fields)
+- v3.0 7-day rollback window expires TODAY 2026-02-02 (v2.1 backup will be archived)
+- **COMPLETE**: Schema migrations executed on production sheets (07-06) - Operaciones 72 columns, Metadata 11 columns
 - **READY**: Startup validation hook integrated (07-05) - will prevent deployment if schema incomplete
 
 **v3.0 Technical Debt:**
@@ -95,7 +97,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 07-05-PLAN.md (Phase 7 complete - Data Model Foundation with startup validation integration, 8 min duration)
+Stopped at: Completed 07-06-PLAN.md (Phase 7 gap closure - schema migrations executed on production sheets, 1 min duration)
 Resume file: None
 
-**Phase 7 Complete:** All 5 plans finished. Ready to proceed to Phase 8 (Union CRUD Operations).
+**Phase 7 Complete:** All 6 plans finished (5 original + 1 gap closure). Production sheets extended to v4.0 schema. Ready to proceed to Phase 8 (Union CRUD Operations).
