@@ -630,4 +630,92 @@ async def test_completar_metadata_failure_logs_critical_error(
     # Assertions
     assert response.success is True
     assert any("CRITICAL" in record.message for record in caplog.records)
+
+
+# v4.0 Phase 11 Tests - Batch + Granular Metadata Logging
+
+
+@pytest.mark.asyncio
+async def test_finalizar_logs_batch_and_granular_metadata(
+    mock_redis_lock_service,
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_conflict_service,
+    mock_redis_event_service
+):
+    """
+    Verify FINALIZAR logs 1 batch + N granular metadata events via UnionService.
+
+    Gap closure test (11-06): Ensures OccupationService delegates to UnionService
+    for proper batch + granular metadata logging pattern.
+    """
+    from backend.models.occupation import FinalizarRequest
+    from backend.models.enums import Operacion
+    from backend.models.spool import Spool
+
+    # Arrange: Mock UnionService with batch + granular metadata event pattern
+    mock_union_service = MagicMock()
+    mock_union_service.process_selection.return_value = {
+        "union_count": 3,
+        "pulgadas": 18.5,
+        "event_count": 4  # 1 batch + 3 granular
+    }
+
+    # Mock UnionRepository for disponibles query
+    mock_union_repository = MagicMock()
+    mock_union_repository.get_disponibles_arm_by_ot.return_value = [
+        MagicMock(id="OT-123+1"),
+        MagicMock(id="OT-123+2"),
+        MagicMock(id="OT-123+3")
+    ]
+
+    # Mock spool data with OT
+    mock_sheets_repository.get_spool_by_tag.return_value = Spool(
+        tag_spool="TEST-01",
+        ot="OT-123",
+        fecha_materiales="2026-01-20",
+        total_uniones=5
+    )
+
+    # Mock lock ownership
+    mock_redis_lock_service.get_lock_owner.return_value = (93, "93:test-token")
+
+    # Create service with UnionService injected
+    service = OccupationService(
+        redis_lock_service=mock_redis_lock_service,
+        sheets_repository=mock_sheets_repository,
+        metadata_repository=mock_metadata_repository,
+        conflict_service=mock_conflict_service,
+        redis_event_service=mock_redis_event_service,
+        union_repository=mock_union_repository,
+        union_service=mock_union_service
+    )
+
+    # Act: Call finalizar_spool
+    request = FinalizarRequest(
+        tag_spool="TEST-01",
+        worker_id=93,
+        worker_nombre="MR(93)",
+        operacion=Operacion.ARM,
+        selected_unions=["OT-123+1", "OT-123+2", "OT-123+3"]
+    )
+
+    result = await service.finalizar_spool(request)
+
+    # Assert: Verify UnionService.process_selection was called
+    mock_union_service.process_selection.assert_called_once_with(
+        tag_spool="TEST-01",
+        union_ids=["OT-123+1", "OT-123+2", "OT-123+3"],
+        worker_id=93,
+        worker_nombre="MR(93)",
+        operacion="ARM"
+    )
+
+    # Assert: Verify metadata_repository.log_event NOT called (UnionService handles it)
+    mock_metadata_repository.log_event.assert_not_called()
+
+    # Assert: Verify result contains union count
+    assert result.success is True
+    assert result.unions_processed == 3
+    assert result.action_taken in ["PAUSAR", "COMPLETAR"]
     assert any(record.exc_info is not None for record in caplog.records)
