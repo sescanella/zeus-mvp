@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 9 of 13 (Redis & Version Detection)
-Plan: 2 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 09-02-PLAN.md (Lazy cleanup mechanism)
+Last activity: 2026-02-02 — Completed 09-04-PLAN.md (Version detection service)
 
-Progress: [█████████░░░░] 70% (9 of 13 phases in progress, 2 of 5 plans complete in Phase 9)
+Progress: [█████████░░░░] 71% (9 of 13 phases in progress, 4 of 5 plans complete in Phase 9)
 
 ## Performance Metrics
 
@@ -40,11 +40,11 @@ Progress: [█████████░░░░] 70% (9 of 13 phases in progr
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
-| 9. Redis & Version Detection | 2/5 | 8 min | 4.0 min |
+| 9. Redis & Version Detection | 4/5 | 16.4 min | 4.1 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.0, 3.0, 6.5, 8.5, 4.0] min
-- Trend: Phase 9 IN PROGRESS (Lazy cleanup and version detection: 2 of 5 plans complete, 4-min average)
+- Last 5 plans: [3.0, 6.5, 8.5, 4.0, 4.4] min
+- Trend: Phase 9 IN PROGRESS (4 of 5 plans complete, 4.1-min average)
 
 *Updated after each plan completion*
 
@@ -96,10 +96,10 @@ Recent decisions affecting v4.0 work:
 - **D39 (08-05)**: Union model already has 18 fields including OT (Task 1 was no-op)
 - **D40 (08-05)**: End-to-end workflow test integrated into Task 3 UnionRepository tests
 - **D41 (08-05)**: Mock latency simulation for performance tests (300ms batch update, 150ms append)
-- **D42 (09-02)**: Lazy cleanup processes one lock per INICIAR operation (eventual consistency pattern)
-- **D43 (09-02)**: Cleanup logs to application logger only (no Metadata events for maintenance operations)
-- **D44 (09-02)**: Lock value format extended to include timestamp: worker_id:token:timestamp
-- **D45 (09-02)**: Cleanup order before lock acquisition (prevents race condition with newly-acquired lock)
+- **D42 (09-04)**: Default to v3.0 on detection failure (safer legacy workflow)
+- **D43 (09-04)**: Retry 3 times with exponential backoff (2s, 4s, 10s max)
+- **D44 (09-04)**: 422 Unprocessable Entity for version mismatch on v4.0 endpoints
+- **D45 (09-04)**: Decorator injection pattern for version validation
 
 ### Pending Todos
 
@@ -116,10 +116,11 @@ None yet.
   - Metadata batch logging with auto-chunking (900 rows)
   - 89 passing tests (61 unit + 28 integration)
   - Performance: 0.466s average (54% faster than 1s target)
-- **🔄 Phase 9 In Progress**: Redis & Version Detection (2 of 5 plans complete)
-  - ✅ Plan 01: Degraded mode for Redis unavailability
-  - ✅ Plan 02: Lazy cleanup mechanism (4 min duration, 10 unit tests passing)
-  - Pending: Plan 03 (Startup reconciliation), Plan 04 (Version detection), Plan 05 (Frontend caching)
+- **Phase 9 IN PROGRESS**: Redis & Version Detection (4 of 5 plans complete)
+  - Degraded mode for Redis unavailability
+  - Lazy cleanup mechanism (one lock per TOMAR)
+  - Version detection service with retry logic
+  - Diagnostic endpoint for version transparency
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -130,7 +131,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 09-02-PLAN.md (Lazy cleanup mechanism, 4 min duration)
+Stopped at: Completed 09-04-PLAN.md (Version detection service, 4.4 min duration)
 Resume file: None
 
-**Phase 9 Progress:** Plan 02 complete. Lazy cleanup mechanism operational with 10 passing unit tests. Ready for Plan 03 (Startup reconciliation from Sheets).
+**Phase 9 In Progress:** 4 of 5 plans complete (16.4 min total, 4.1-min average). Version detection service enables dual workflow routing. Next: 09-05 (Frontend version cache).
