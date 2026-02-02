@@ -16,11 +16,18 @@ import {
   BatchOccupationResponse,
   VersionInfo,
   VersionResponse,
+  // v4.0 types - will be used in future plans
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   DisponiblesResponse,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   MetricasResponse,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   IniciarRequest,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   IniciarResponse,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   FinalizarRequest,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   FinalizarResponse
 } from './types';
 
