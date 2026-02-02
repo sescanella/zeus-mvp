@@ -30,13 +30,14 @@
   3. Metadata sheet has 11 columns including N_UNION field at position 11 for granular audit trail
   4. System queries all sheets using dynamic header mapping (no hardcoded column indices)
   5. UnionRepository can query Uniones using OT column as foreign key to Operaciones
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Extend Operaciones sheet to 72 columns with metrics
-- [ ] 07-02-PLAN.md — Validate Uniones sheet and extend Metadata schema
-- [ ] 07-03-PLAN.md — Create Union model and repository with tests
-- [ ] 07-04-PLAN.md — Add startup schema validation for all sheets
+- [x] 07-01-PLAN.md — Extend Operaciones sheet to 72 columns with metrics
+- [x] 07-02-PLAN.md — Validate Uniones sheet and extend Metadata schema
+- [x] 07-03-PLAN.md — Create Union model and repository with tests
+- [x] 07-04-PLAN.md — Add startup schema validation for all sheets
+- [x] 07-05-PLAN.md — Integrate v4.0 schema validation into FastAPI startup
 
 #### Phase 8: Backend Data Layer
 **Goal**: Repository layer can read/write union data with batch operations and performance optimization
@@ -147,7 +148,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 4. Real-Time SSE Dashboard | v3.0 | Complete | Complete | 2026-01-27 |
 | 5. Metrología Instant Inspection | v3.0 | Complete | Complete | 2026-01-28 |
 | 6. Reparación Bounded Cycles | v3.0 | Complete | Complete | 2026-01-28 |
-| 7. Data Model Foundation | v4.0 | 0/4 | Ready | - |
+| 7. Data Model Foundation | v4.0 | 5/5 | Gaps found | 2026-02-02 |
 | 8. Backend Data Layer | v4.0 | 0/TBD | Not started | - |
 | 9. Redis & Version Detection | v4.0 | 0/TBD | Not started | - |
 | 10. Backend Services & Validation | v4.0 | 0/TBD | Not started | - |

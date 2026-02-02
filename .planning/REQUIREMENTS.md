@@ -154,11 +154,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 7 | Pending |
-| DATA-02 | Phase 7 | Pending |
-| DATA-03 | Phase 7 | Pending |
-| DATA-04 | Phase 7 | Pending |
-| DATA-05 | Phase 7 | Pending |
+| DATA-01 | Phase 7 | Complete |
+| DATA-02 | Phase 7 | Complete |
+| DATA-03 | Phase 7 | Complete |
+| DATA-04 | Phase 7 | Complete |
+| DATA-05 | Phase 7 | Complete |
 | REPO-01 | Phase 8 | Pending |
 | REPO-02 | Phase 8 | Pending |
 | REPO-03 | Phase 8 | Pending |
