@@ -436,3 +436,109 @@ class RedisLockService:
         except RedisError as e:
             logger.error(f"Redis error getting lock owner for {tag_spool}: {e}")
             raise
+
+    async def lazy_cleanup_one_abandoned_lock(self) -> None:
+        """
+        Clean up ONE abandoned lock >24h old without matching Sheets.Ocupado_Por.
+
+        Eventual consistency approach - cleans one lock per INICIAR operation
+        instead of expensive batch cleanup. This method processes only the first
+        lock found to avoid blocking operations.
+
+        Cleanup criteria:
+        - Lock age > 24 hours (based on timestamp in lock value)
+        - Sheets.Ocupado_Por is None or "DISPONIBLE" (source of truth)
+
+        Process:
+        1. Scan Redis for one lock (SCAN with count=10)
+        2. Parse TAG_SPOOL from key format "spool_lock:{tag}"
+        3. Extract timestamp from lock value "{worker_id}:{token}:{timestamp}"
+        4. Calculate age using now_chile()
+        5. If age > 24h: Query Sheets.Ocupado_Por
+        6. If Sheets says DISPONIBLE: Delete lock silently (no Metadata event)
+
+        Note:
+            - Logs to application logger ONLY (no Metadata events)
+            - Returns early after checking one lock
+            - Requires sheets_repository to be set in constructor
+
+        Raises:
+            Does not raise exceptions - logs warnings and returns on error
+        """
+        if not self.sheets_repository:
+            logger.warning("Lazy cleanup skipped: sheets_repository not configured")
+            return
+
+        try:
+            # Scan for ONE candidate lock (count=10 for efficient batch)
+            cursor = 0
+            pattern = "spool_lock:*"
+
+            cursor, keys = await self.redis.scan(cursor=cursor, match=pattern, count=10)
+
+            if not keys:
+                # No locks to clean
+                return
+
+            # Check first key only (one lock per operation)
+            lock_key = keys[0]
+
+            # Extract TAG_SPOOL from "spool_lock:TEST-01" format
+            if isinstance(lock_key, bytes):
+                lock_key = lock_key.decode('utf-8')
+
+            parts = lock_key.split(":", 1)
+            if len(parts) < 2:
+                logger.warning(f"Invalid lock key format: {lock_key}")
+                return
+
+            tag_spool = parts[1]
+
+            # Get lock value and parse timestamp
+            lock_value = await self.redis.get(lock_key)
+            if not lock_value:
+                # Lock expired between SCAN and GET
+                return
+
+            if isinstance(lock_value, bytes):
+                lock_value = lock_value.decode('utf-8')
+
+            # Parse timestamp from lock value
+            lock_time = self._parse_lock_timestamp(lock_value)
+
+            if not lock_time:
+                # Legacy lock without timestamp - skip cleanup
+                logger.debug(f"Legacy lock without timestamp, skipping cleanup: {tag_spool}")
+                return
+
+            # Calculate age in hours
+            age_hours = (now_chile().replace(tzinfo=None) - lock_time).total_seconds() / 3600
+
+            if age_hours > 24:
+                # Query Sheets.Ocupado_Por for this TAG_SPOOL
+                spool = self.sheets_repository.get_spool_by_tag(tag_spool)
+
+                if not spool:
+                    logger.warning(f"Spool not found in Sheets during cleanup: {tag_spool}")
+                    return
+
+                # Check if abandoned (no Sheets occupation)
+                if not spool.ocupado_por or spool.ocupado_por == "DISPONIBLE":
+                    # Abandoned lock - delete silently (no Metadata event)
+                    await self.redis.delete(lock_key)
+                    logger.info(
+                        f"Lazy cleanup: removed abandoned lock for {tag_spool} "
+                        f"(age: {age_hours:.1f}h, Redis lock existed but Sheets.Ocupado_Por={spool.ocupado_por})"
+                    )
+                else:
+                    # Lock matches Sheets occupation - keep it
+                    logger.debug(
+                        f"Lock {tag_spool} age {age_hours:.1f}h but matches Sheets.Ocupado_Por={spool.ocupado_por}, keeping"
+                    )
+            else:
+                # Lock not old enough yet
+                logger.debug(f"Lock {tag_spool} age {age_hours:.1f}h < 24h, skipping")
+
+        except Exception as e:
+            # Log error but don't block operations
+            logger.warning(f"Lazy cleanup failed: {e}", exc_info=True)
