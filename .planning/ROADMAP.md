@@ -138,14 +138,14 @@ Plans:
 **Plans**: 8 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — TypeScript types and API client for v4.0
-- [ ] 12-02-PLAN.md — Base components (Modal, UnionTable shell, version detection)
-- [ ] 12-03-PLAN.md — Context extension with v4.0 state management
-- [ ] 12-04-PLAN.md — P5 union selection page with checkboxes and counter
-- [ ] 12-05-PLAN.md — API integration and error handling for P5
-- [ ] 12-06-PLAN.md — P3 version detection and dual button sets
-- [ ] 12-07-PLAN.md — P4 spool filtering and version badges
-- [ ] 12-08-PLAN.md — P6 success page with dynamic messaging
+- [x] 12-01-PLAN.md — TypeScript types and API client for v4.0
+- [x] 12-02-PLAN.md — Base components (Modal, UnionTable shell, version detection)
+- [x] 12-03-PLAN.md — Context extension with v4.0 state management
+- [x] 12-04-PLAN.md — P5 union selection page with checkboxes and counter
+- [x] 12-05-PLAN.md — API integration and error handling for P5
+- [x] 12-06-PLAN.md — P3 version detection and dual button sets
+- [x] 12-07-PLAN.md — P4 spool filtering and version badges
+- [x] 12-08-PLAN.md — P6 success page with dynamic messaging
 
 #### Phase 13: Performance Validation & Optimization
 **Goal**: System meets performance SLA (< 1s p95 for 10 unions) and stays under Google Sheets rate limits
@@ -157,10 +157,14 @@ Plans:
   3. Single FINALIZAR operation makes maximum 2 Sheets API calls (1 batch update + 1 batch append)
   4. Metadata batch logging chunks eventos into 900-row groups to respect Google Sheets append_rows limit
   5. System stays under 50% of Google Sheets write rate limit (30 writes/min vs 60 limit) during normal operations
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 13-01: [TBD during phase planning]
+- [ ] 13-01-PLAN.md — Percentile-Based Latency Validation (PERF-01, PERF-02)
+- [ ] 13-02-PLAN.md — API Call Efficiency Validation (PERF-03, PERF-04)
+- [ ] 13-03-PLAN.md — Rate Limit Monitoring (PERF-05)
+- [ ] 13-04-PLAN.md — Comprehensive Load Testing with Locust
+- [ ] 13-05-PLAN.md — Performance Report Generation & CI Integration
 
 ## Progress
 
@@ -180,9 +184,9 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 9. Redis & Version Detection | v4.0 | 6/6 | Complete | 2026-02-02 |
 | 10. Backend Services & Validation | v4.0 | 5/5 | Complete | 2026-02-02 |
 | 11. API Endpoints & Metrics | v4.0 | 6/6 | Complete | 2026-02-02 |
-| 12. Frontend Union Selection UX | v4.0 | 0/8 | Not started | - |
+| 12. Frontend Union Selection UX | v4.0 | 8/8 | Complete | 2026-02-02 |
 | 13. Performance Validation & Optimization | v4.0 | 0/TBD | Not started | - |
 
 ---
 
-*Last updated: 2026-02-02 (Phase 12 planned)*
+*Last updated: 2026-02-02 (Phase 12 complete)*
