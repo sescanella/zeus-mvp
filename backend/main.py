@@ -54,6 +54,8 @@ from backend.routers import dashboard_router
 from backend.routers import metrologia
 # v4.0 Phase 9: Router DIAGNOSTIC implementado (version detection diagnostics)
 from backend.routers import diagnostic
+# v4.0 Phase 11: Router OCCUPATION_V4 implementado (INICIAR/FINALIZAR workflows)
+from backend.routers import occupation_v4
 
 
 # ============================================================================
@@ -435,6 +437,9 @@ app.include_router(occupation_v3.router, prefix="/api/v3", tags=["v3-occupation"
 
 # v3.0: Router OCCUPATION registrado (legacy path for backward compatibility)
 app.include_router(occupation.router, prefix="/api", tags=["occupation-legacy"])
+
+# v4.0: Router OCCUPATION_V4 registrado (INICIAR/FINALIZAR workflows)
+app.include_router(occupation_v4.router, prefix="/api/v4", tags=["v4-occupation"])
 
 # v3.0 Phase 3: Router HISTORY registrado (occupation history timeline)
 app.include_router(history.router, prefix="/api", tags=["History"])
