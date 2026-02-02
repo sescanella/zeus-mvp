@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 10 of 13 (Backend Services & Validation)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 10-04-PLAN.md (Metrología auto-transition)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 10-05-PLAN.md (Integration tests and performance validation)
 
-Progress: [██████████░░░] 81% (9 phases + 4 plans complete, 10-05 next)
+Progress: [███████████░░] 83% (10 phases complete)
 
 ## Performance Metrics
 
@@ -41,11 +41,11 @@ Progress: [██████████░░░] 81% (9 phases + 4 plans comp
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
-| 10. Backend Services & Validation | 4/5 | 22.5 min | 5.6 min |
+| 10. Backend Services & Validation | 5/5 | 28.5 min | 5.7 min |
 
 **Recent Trend:**
-- Last 5 plans: [4.4, 5.0, 5.0, 6.0, 6.5] min
-- Trend: Phase 10 in progress (4 of 5 plans, 5.6-min average - slight uptick from 5.3-min)
+- Last 5 plans: [5.0, 5.0, 6.0, 6.5, 6.0] min
+- Trend: Phase 10 complete (5 of 5 plans, 5.7-min average - consistent with Phase 9's 5.3-min)
 
 *Updated after each plan completion*
 
@@ -132,6 +132,12 @@ Recent decisions affecting v4.0 work:
 - **D63 (10-03)**: Import SOLD_REQUIRED_TYPES constant from occupation_service to avoid duplication
 - **D64 (10-03)**: Return 403 Forbidden for ARM prerequisite violation (business rule violation)
 - **D65 (10-03)**: Count only SOLD_REQUIRED_TYPES unions in _determine_action for accurate completion logic
+- **D68 (10-05)**: Integration tests use real UnionRepository with mocked SheetsRepository (not full end-to-end)
+- **D69 (10-05)**: Performance tests simulate 300ms Google Sheets latency (realistic API timing)
+- **D70 (10-05)**: Race condition tests validate ValueError when selected > available
+- **D71 (10-05)**: Ownership validation simplified (realistic scenario uses 1:1 OT:TAG_SPOOL)
+- **D72 (10-05)**: Memory usage test ensures <50MB increase during batches (psutil monitoring)
+- **D73 (10-05)**: Mock fixtures provide realistic Uniones data (100 unions, 10 OTs)
 
 ### Pending Todos
 
@@ -156,13 +162,14 @@ None yet.
   - Frontend version badges (green v4.0, gray v3.0)
   - 63 passing tests (30 unit + 33 integration), 84% coverage
   - Duration: 32 min total (5.3-min average)
-- **Phase 10 In Progress**: Backend Services & Validation (4/5 plans)
+- **✅ Phase 10 Complete**: Backend Services & Validation (5/5 plans, 28.5 min total, 5.7-min avg)
   - 10-01 ✓: UnionService for batch operations (5.0 min)
   - 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (4.4 min)
   - 10-03 ✓: ARM-before-SOLD validation (6.0 min)
-  - 10-04 ✓: Metrología auto-transition (6.5 min, this session)
-  - Next: 10-05 (Router integration for v4.0 endpoints)
-  - Test coverage: 25 new v4.0 tests (100% passing)
+  - 10-04 ✓: Metrología auto-transition (6.5 min)
+  - 10-05 ✓: Integration tests and performance validation (6.0 min, this session)
+  - Test coverage: 34 new v4.0 integration/performance tests (100% passing)
+  - Performance: <1s for 10-union batches (p95 requirement MET)
 
 **v3.0 Technical Debt:**
 - Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
@@ -173,14 +180,14 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 10-04-PLAN.md (Metrología Auto-Transition)
+Stopped at: Completed 10-05-PLAN.md (Integration Tests and Performance Validation)
 Resume file: None
 
-**Phase 10 Progress (4/5 plans):**
+**Phase 10 Complete (5/5 plans):**
 - 10-01 ✓: UnionService for batch operations (5.0 min)
 - 10-02 ✓: OccupationServiceV4 with INICIAR/FINALIZAR (4.4 min)
 - 10-03 ✓: ARM-before-SOLD validation (6.0 min)
-- 10-04 ✓: Metrología auto-transition (6.5 min, this session)
-- 10-05 next: Router integration (v4.0 endpoints)
+- 10-04 ✓: Metrología auto-transition (6.5 min)
+- 10-05 ✓: Integration tests and performance validation (6.0 min, this session)
 
-**10-04 Complete:** Automatic metrología queue entry when all union work complete (FW ARM'd, SOLD-required unions SOLD'd). Mixed union type detection (FW vs BW/BR/SO/FILL/LET), StateService trigger, METROLOGIA_AUTO_TRIGGERED event, enhanced OccupationResponse. 12 unit tests passing (100% coverage). Ready for 10-05 (Router integration).
+**10-05 Complete:** Comprehensive integration and performance tests validating INICIAR/FINALIZAR workflows, ARM-before-SOLD validation, metrología auto-transition, and <1 second performance for 10-union batches. 34 new v4.0 tests (7 INICIAR->FINALIZAR, 5 ARM-to-SOLD, 6 metrología, 3 cancellation, 5 performance, 8 error handling). Race conditions, version conflicts, and Redis failures covered. Performance targets achieved (<1s p95, <2s p99, <50MB memory). Ready for Phase 11 (API Router Integration).
