@@ -257,3 +257,43 @@ class TestWorkflowStructure:
         See: MANUAL_VALIDATION.md Test #12
         """
         pass
+
+    @pytest.mark.skip(reason="Requires backend infrastructure - use MANUAL_VALIDATION.md")
+    def test_finalizar_creates_batch_and_granular_events(self):
+        """
+        Verify FINALIZAR creates 1 batch + N granular metadata events.
+
+        Gap closure test (11-06): Ensures metadata logging pattern matches
+        METRIC-03 and METRIC-04 requirements.
+
+        Manual validation procedure:
+        1. POST /api/v4/occupation/iniciar with TEST-02
+           curl -X POST "http://localhost:8000/api/v4/occupation/iniciar" \\
+             -H "Content-Type: application/json" \\
+             -d '{"tag_spool": "TEST-02", "worker_id": 93, "operacion": "ARM"}'
+
+        2. POST /api/v4/occupation/finalizar with 3 unions selected
+           curl -X POST "http://localhost:8000/api/v4/occupation/finalizar" \\
+             -H "Content-Type: application/json" \\
+             -d '{
+               "tag_spool": "TEST-02",
+               "worker_id": 93,
+               "operacion": "ARM",
+               "selected_unions": ["TEST-02+1", "TEST-02+2", "TEST-02+3"]
+             }'
+
+        3. Query Metadata sheet - should see 4 new events:
+           - 1 event with N_UNION = NULL, evento = "PAUSAR_SPOOL"
+             (batch event with pulgadas in metadata_json)
+           - 3 events with N_UNION = 1,2,3, evento = "UNION_ARM_REGISTRADA"
+             (granular events, one per union)
+
+        Expected Metadata sheet structure:
+        - Batch event: Contains total pulgadas for all selected unions
+        - Granular events: Each contains DN_UNION for individual union
+        - All events share same timestamp (within 1 second)
+        - All events reference same tag_spool and worker
+
+        See: MANUAL_VALIDATION.md for full procedure
+        """
+        pass
