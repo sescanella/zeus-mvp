@@ -89,6 +89,13 @@ class MetadataEvent(BaseModel):
         description="JSON con datos adicionales (IP, device, etc.)",
         examples=['{"ip": "192.168.1.10", "device": "tablet-01"}']
     )
+    n_union: Optional[int] = Field(
+        None,
+        description="Union number within spool (1-20) for v4.0 union-level granularity",
+        ge=1,
+        le=20,
+        examples=[1, 5, 10]
+    )
 
     model_config = ConfigDict(
         frozen=True,  # Inmutable (Event Sourcing)
@@ -104,7 +111,8 @@ class MetadataEvent(BaseModel):
                 "operacion": "ARM",
                 "accion": "INICIAR",
                 "fecha_operacion": "10-12-2025",
-                "metadata_json": '{"device": "tablet-01"}'
+                "metadata_json": '{"device": "tablet-01"}',
+                "n_union": 5
             }
         }
     )
@@ -114,7 +122,7 @@ class MetadataEvent(BaseModel):
         Convierte el evento a una fila de Google Sheets.
 
         Returns:
-            list[str]: Lista con valores para escribir en Sheets (columnas A-J)
+            list[str]: Lista con valores para escribir en Sheets (columnas A-K)
         """
         return [
             self.id,
@@ -126,7 +134,8 @@ class MetadataEvent(BaseModel):
             self.operacion,
             self.accion.value,
             self.fecha_operacion,
-            self.metadata_json or ""
+            self.metadata_json or "",
+            str(self.n_union) if self.n_union is not None else ""  # Column K
         ]
 
     @classmethod
@@ -135,7 +144,7 @@ class MetadataEvent(BaseModel):
         Crea un MetadataEvent desde una fila de Google Sheets.
 
         Args:
-            row: Lista de valores de una fila de Sheets (columnas A-J)
+            row: Lista de valores de una fila de Sheets (columnas A-K, backward compatible with A-J)
 
         Returns:
             MetadataEvent: Instancia del evento
@@ -149,6 +158,15 @@ class MetadataEvent(BaseModel):
             # Fallback to old ISO 8601 format
             timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
 
+        # Parse n_union (column K, index 10) with backward compatibility
+        n_union = None
+        if len(row) > 10 and row[10]:
+            try:
+                n_union = int(row[10])
+            except (ValueError, TypeError):
+                # Gracefully handle non-integer values
+                pass
+
         return cls(
             id=row[0],
             timestamp=timestamp,
@@ -159,5 +177,6 @@ class MetadataEvent(BaseModel):
             operacion=row[6],
             accion=Accion(row[7]),
             fecha_operacion=row[8],
-            metadata_json=row[9] if len(row) > 9 and row[9] else None
+            metadata_json=row[9] if len(row) > 9 and row[9] else None,
+            n_union=n_union
         )
