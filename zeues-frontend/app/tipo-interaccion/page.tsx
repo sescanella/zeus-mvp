@@ -101,6 +101,38 @@ export default function TipoInteraccionPage() {
     );
   }
 
+  // Error boundary for version detection failure
+  if (!loadingVersion && !spoolVersion) {
+    return (
+      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center p-8">
+        <div className="max-w-md w-full">
+          <div className="bg-red-900/30 border-4 border-red-500 rounded p-6">
+            <p className="text-red-200 text-lg font-mono mb-4">
+              Error detectando versión. Usando modo v3.0.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="
+                w-full h-12
+                bg-transparent
+                border-4 border-white
+                flex items-center justify-center
+                cursor-pointer
+                active:bg-white active:text-[#001F3F]
+                transition-all duration-200
+                group
+              "
+            >
+              <span className="text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                REINTENTAR
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
                         state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
 
@@ -111,6 +143,18 @@ export default function TipoInteraccionPage() {
   const workerRoles = (Array.isArray(state.selectedWorker.roles)
     ? state.selectedWorker.roles
     : [state.selectedWorker.rol]).filter((r): r is string => r !== undefined);
+
+  // Version badge component
+  const VersionBadge = ({ version }: { version: 'v3.0' | 'v4.0' }) => (
+    <span className={`
+      inline-flex items-center px-3 py-1 text-xs font-black tracking-[0.15em] rounded font-mono
+      ${version === 'v4.0'
+        ? 'text-green-700 bg-green-100 border-2 border-green-700'
+        : 'text-gray-700 bg-gray-100 border-2 border-gray-700'}
+    `}>
+      {version}
+    </span>
+  );
 
   return (
     <div
@@ -193,6 +237,23 @@ export default function TipoInteraccionPage() {
           </div>
         </div>
 
+        {/* Spool Info with Version Badge */}
+        {state.selectedSpool && spoolVersion && (
+          <div className="border-4 border-white/30 mb-6 p-5">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs font-black text-white/50 font-mono tracking-[0.2em] mb-2">
+                  SPOOL SELECCIONADO
+                </p>
+                <p className="text-2xl narrow:text-xl font-black text-white font-mono tracking-[0.15em]">
+                  {state.selectedSpool}
+                </p>
+              </div>
+              <VersionBadge version={spoolVersion} />
+            </div>
+          </div>
+        )}
+
         <div className="mb-6 tablet:mb-4">
           {/* v4.0 buttons - INICIAR/FINALIZAR */}
           {!loadingVersion && spoolVersion === 'v4.0' && (
@@ -242,6 +303,16 @@ export default function TipoInteraccionPage() {
               <p className="text-sm text-white/60 mt-4 font-mono tracking-[0.1em] text-center">
                 Versión 4.0 - Trabajo por uniones
               </p>
+
+              {/* Help text for v4.0 */}
+              <div className="mt-6 p-4 bg-blue-900/30 border-2 border-blue-500/50 rounded">
+                <p className="text-sm text-blue-200 font-mono">
+                  <strong className="text-blue-100">INICIAR:</strong> Ocupar spool para comenzar trabajo
+                </p>
+                <p className="text-sm text-blue-200 mt-2 font-mono">
+                  <strong className="text-blue-100">FINALIZAR:</strong> Registrar uniones completadas y liberar spool
+                </p>
+              </div>
             </div>
           )}
 
@@ -340,6 +411,13 @@ export default function TipoInteraccionPage() {
               <p className="text-sm text-white/60 mt-4 font-mono tracking-[0.1em] text-center">
                 Versión 3.0 - Trabajo por spool completo
               </p>
+
+              {/* Help text for v3.0 */}
+              <div className="mt-6 p-4 bg-gray-800/50 border-2 border-gray-500/50 rounded">
+                <p className="text-sm text-gray-300 font-mono text-center">
+                  Flujo tradicional: trabajo a nivel de spool completo
+                </p>
+              </div>
             </>
           )}
         </div>
