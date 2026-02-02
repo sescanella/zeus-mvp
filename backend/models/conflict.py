@@ -133,13 +133,15 @@ class RetryConfig(BaseModel):
         # Calculate exponential backoff
         delay_ms = self.base_delay_ms * (self.exponential_base ** attempt)
 
-        # Cap at max_delay_ms
+        # Cap at max_delay_ms before jitter
         delay_ms = min(delay_ms, self.max_delay_ms)
 
         # Add jitter if enabled (±25% random variation)
         if self.jitter:
             jitter_factor = random.uniform(0.75, 1.25)
             delay_ms *= jitter_factor
+            # Cap again after jitter so result never exceeds max_delay_ms
+            delay_ms = min(delay_ms, self.max_delay_ms)
 
         # Convert to seconds
         return delay_ms / 1000.0

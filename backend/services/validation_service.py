@@ -292,12 +292,14 @@ class ValidationService:
                 mensaje="Spool bloqueado después de 3 rechazos. Contactar supervisor."
             )
 
-        # 2. Check RECHAZADO (can only repair rejected spools)
-        if not spool.estado_detalle or "RECHAZADO" not in spool.estado_detalle:
+        # 2. Check RECHAZADO or REPARACION_PAUSADA (can repair rejected or resume paused repair)
+        if not spool.estado_detalle or (
+            "RECHAZADO" not in spool.estado_detalle and "REPARACION_PAUSADA" not in spool.estado_detalle
+        ):
             raise OperacionNoDisponibleError(
                 tag_spool=spool.tag_spool,
                 operacion="REPARACION",
-                mensaje="Solo spools RECHAZADOS pueden ser reparados"
+                mensaje="Solo spools RECHAZADOS o REPARACION_PAUSADA pueden ser reparados"
             )
 
         # 3. Check NOT occupied

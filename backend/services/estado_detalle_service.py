@@ -143,6 +143,7 @@ class EstadoDetalleService:
 
                 return {
                     "detected": True,
+                    "tag_spool": tag_spool,
                     "previous_estado": last_estado,
                     "current_estado": current_estado,
                     "event_id": event_id

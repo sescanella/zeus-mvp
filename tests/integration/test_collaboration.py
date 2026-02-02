@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from backend.services.state_service import StateService
 from backend.services.occupation_service import OccupationService
 from backend.services.history_service import HistoryService
+from backend.services.redis_event_service import RedisEventService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.repositories.redis_repository import RedisRepository
@@ -109,12 +110,21 @@ def mock_occupation_service():
 
 
 @pytest.fixture
-def state_service(mock_occupation_service, mock_sheets_repo, mock_metadata_repo):
+def mock_redis_event_service():
+    """Mock RedisEventService for testing."""
+    service = AsyncMock(spec=RedisEventService)
+    service.publish_spool_update.return_value = True
+    return service
+
+
+@pytest.fixture
+def state_service(mock_occupation_service, mock_sheets_repo, mock_metadata_repo, mock_redis_event_service):
     """Create StateService instance with mocked dependencies."""
     return StateService(
         occupation_service=mock_occupation_service,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo
+        metadata_repository=mock_metadata_repo,
+        redis_event_service=mock_redis_event_service
     )
 
 
@@ -159,14 +169,25 @@ async def test_armador_handoff(state_service, mock_sheets_repo):
     response = await state_service.tomar(tomar_request_a)
     assert response.success is True
 
-    # Verify Armador column would be updated (via state machine callback)
-    # State machine triggers column update automatically
+    # Mock: spool now occupied by Worker A (ARM en_progreso) so PAUSAR is allowed
+    mock_sheets_repo.get_spool_by_tag.return_value = Spool(
+        tag_spool="TEST-001",
+        fecha_materiales=date(2026, 1, 10),
+        armador="MR(93)",
+        fecha_armado=None,
+        soldador=None,
+        fecha_soldadura=None,
+        ocupado_por="MR(93)",
+        fecha_ocupacion=None,
+        version=1
+    )
 
     # Step 2: Worker A pauses
     pausar_request_a = PausarRequest(
         tag_spool="TEST-001",
         worker_id=93,
-        worker_nombre="MR(93)"
+        worker_nombre="MR(93)",
+        operacion=ActionType.ARM
     )
 
     response = await state_service.pausar(pausar_request_a)
@@ -205,21 +226,34 @@ async def test_armador_handoff(state_service, mock_sheets_repo):
         fecha_operacion=date(2026, 1, 27)
     )
 
-    # Update mock to show Worker B's completion
+    # Mock: ARM en_progreso (Worker B occupying) so completar(ARM) can transition
     mock_sheets_repo.get_spool_by_tag.return_value = Spool(
         tag_spool="TEST-001",
         fecha_materiales=date(2026, 1, 10),
-        armador="JP(94)",  # Worker B overwrote Worker A
-        fecha_armado=date(2026, 1, 27),  # Completed
+        armador="JP(94)",
+        fecha_armado=None,
+        soldador=None,
+        fecha_soldadura=None,
+        ocupado_por="JP(94)",
+        fecha_ocupacion="27-01-2026 12:00:00",
+        version=2
+    )
+
+    response = await state_service.completar(completar_request_b)
+    assert response.success is True
+
+    # Mock final state (completar updated sheet via state machine; we assert on mock calls below)
+    mock_sheets_repo.get_spool_by_tag.return_value = Spool(
+        tag_spool="TEST-001",
+        fecha_materiales=date(2026, 1, 10),
+        armador="JP(94)",
+        fecha_armado=date(2026, 1, 27),
         soldador=None,
         fecha_soldadura=None,
         ocupado_por=None,
         fecha_ocupacion=None,
         version=3
     )
-
-    response = await state_service.completar(completar_request_b)
-    assert response.success is True
 
     # Verify final state
     final_spool = mock_sheets_repo.get_spool_by_tag("TEST-001")
@@ -322,7 +356,22 @@ async def test_sequential_operations(state_service, mock_sheets_repo):
         fecha_operacion=date(2026, 1, 27)
     )
 
-    # Update mock to show ARM completed
+    # Mock: ARM in progress (armador set, fecha_armado None) so completar(ARM) can transition
+    mock_sheets_repo.get_spool_by_tag.return_value = Spool(
+        tag_spool="TEST-003",
+        fecha_materiales=date(2026, 1, 10),
+        armador="MR(93)",
+        fecha_armado=None,
+        soldador=None,
+        fecha_soldadura=None,
+        ocupado_por="MR(93)",
+        fecha_ocupacion="27-01-2026 12:00:00",
+        version=2
+    )
+
+    await state_service.completar(completar_request_arm)
+
+    # After completar(ARM), mock shows ARM completed for next steps
     mock_sheets_repo.get_spool_by_tag.return_value = Spool(
         tag_spool="TEST-003",
         fecha_materiales=date(2026, 1, 10),
@@ -332,10 +381,8 @@ async def test_sequential_operations(state_service, mock_sheets_repo):
         fecha_soldadura=None,
         ocupado_por=None,
         fecha_ocupacion=None,
-        version=2
+        version=3
     )
-
-    await state_service.completar(completar_request_arm)
 
     # Step 2: Worker B starts SOLD (ARM is now complete)
     tomar_request_sold = TomarRequest(
@@ -356,7 +403,22 @@ async def test_sequential_operations(state_service, mock_sheets_repo):
         fecha_operacion=date(2026, 1, 27)
     )
 
-    # Update mock to show both operations complete
+    # Mock: SOLD en_progreso (Worker B occupying) so completar(SOLD) can transition
+    mock_sheets_repo.get_spool_by_tag.return_value = Spool(
+        tag_spool="TEST-003",
+        fecha_materiales=date(2026, 1, 10),
+        armador="MR(93)",
+        fecha_armado=date(2026, 1, 27),
+        soldador="JP(94)",
+        fecha_soldadura=None,
+        ocupado_por="JP(94)",
+        fecha_ocupacion="27-01-2026 12:00:00",
+        version=4
+    )
+
+    await state_service.completar(completar_request_sold)
+
+    # Mock final state for assertions
     mock_sheets_repo.get_spool_by_tag.return_value = Spool(
         tag_spool="TEST-003",
         fecha_materiales=date(2026, 1, 10),
@@ -366,10 +428,8 @@ async def test_sequential_operations(state_service, mock_sheets_repo):
         fecha_soldadura=date(2026, 1, 27),
         ocupado_por=None,
         fecha_ocupacion=None,
-        version=4
+        version=5
     )
-
-    await state_service.completar(completar_request_sold)
 
     # Verify final state
     final_spool = mock_sheets_repo.get_spool_by_tag("TEST-003")

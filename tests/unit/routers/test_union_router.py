@@ -385,7 +385,7 @@ def test_finalizar_pausar_partial(client, mock_union_repo, mock_sheets_repo):
     from backend.models.spool import Spool
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
-    from backend.core.dependency import get_occupation_service, get_worker_service
+    from backend.core.dependency import get_occupation_service_v4, get_worker_service
     from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
@@ -424,7 +424,7 @@ def test_finalizar_pausar_partial(client, mock_union_repo, mock_sheets_repo):
     }
 
     # Override dependencies
-    app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
+    app.dependency_overrides[get_occupation_service_v4] = lambda: mock_occupation_service
     app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
 
     # Execute
@@ -453,7 +453,7 @@ def test_finalizar_completar_full(client, mock_union_repo, mock_sheets_repo):
     from backend.models.spool import Spool
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
-    from backend.core.dependency import get_occupation_service, get_worker_service
+    from backend.core.dependency import get_occupation_service_v4, get_worker_service
     from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
@@ -492,7 +492,7 @@ def test_finalizar_completar_full(client, mock_union_repo, mock_sheets_repo):
     }
 
     # Override dependencies
-    app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
+    app.dependency_overrides[get_occupation_service_v4] = lambda: mock_occupation_service
     app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
 
     # Execute
@@ -520,7 +520,7 @@ def test_finalizar_cancelado_zero(client, mock_union_repo, mock_sheets_repo):
     from backend.models.spool import Spool
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
-    from backend.core.dependency import get_occupation_service, get_worker_service
+    from backend.core.dependency import get_occupation_service_v4, get_worker_service
     from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
@@ -549,7 +549,7 @@ def test_finalizar_cancelado_zero(client, mock_union_repo, mock_sheets_repo):
     mock_occupation_service.finalizar_spool = AsyncMock(return_value=mock_occupation_response)
 
     # Override dependencies
-    app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
+    app.dependency_overrides[get_occupation_service_v4] = lambda: mock_occupation_service
     app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
 
     # Execute
@@ -576,7 +576,7 @@ def test_finalizar_race_condition(client, mock_sheets_repo):
     # Setup - mock dependencies
     from backend.models.spool import Spool
     from backend.models.worker import Worker
-    from backend.core.dependency import get_occupation_service, get_worker_service
+    from backend.core.dependency import get_occupation_service_v4, get_worker_service
     from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
@@ -602,7 +602,7 @@ def test_finalizar_race_condition(client, mock_sheets_repo):
     )
 
     # Override dependencies
-    app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
+    app.dependency_overrides[get_occupation_service_v4] = lambda: mock_occupation_service
     app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
 
     # Execute
@@ -629,7 +629,7 @@ def test_finalizar_not_owner(client, mock_sheets_repo):
     from backend.models.spool import Spool
     from backend.models.worker import Worker
     from backend.exceptions import NoAutorizadoError
-    from backend.core.dependency import get_occupation_service, get_worker_service
+    from backend.core.dependency import get_occupation_service_v4, get_worker_service
     from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
@@ -658,7 +658,7 @@ def test_finalizar_not_owner(client, mock_sheets_repo):
     )
 
     # Override dependencies
-    app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
+    app.dependency_overrides[get_occupation_service_v4] = lambda: mock_occupation_service
     app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
 
     # Execute
@@ -684,7 +684,7 @@ def test_finalizar_metrologia_triggered(client, mock_union_repo, mock_sheets_rep
     from backend.models.spool import Spool
     from backend.models.worker import Worker
     from backend.models.occupation import OccupationResponse
-    from backend.core.dependency import get_occupation_service, get_worker_service
+    from backend.core.dependency import get_occupation_service_v4, get_worker_service
     from unittest.mock import AsyncMock
 
     # Mock spool (v4.0)
@@ -724,7 +724,7 @@ def test_finalizar_metrologia_triggered(client, mock_union_repo, mock_sheets_rep
     }
 
     # Override dependencies
-    app.dependency_overrides[get_occupation_service] = lambda: mock_occupation_service
+    app.dependency_overrides[get_occupation_service_v4] = lambda: mock_occupation_service
     app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
 
     # Execute

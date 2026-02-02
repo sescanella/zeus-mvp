@@ -38,10 +38,11 @@ from backend.exceptions import (
 
 @pytest.fixture
 def mock_sheets_repo():
-    """Mock SheetsRepository for testing."""
+    """Mock SheetsRepository for testing (MetrologiaService uses batch_update_by_column_name)."""
     repo = Mock(spec=SheetsRepository)
     repo.find_row_by_column_value.return_value = 2
     repo.update_cell_by_column_name.return_value = None
+    repo.batch_update_by_column_name.return_value = None
     return repo
 
 
@@ -171,10 +172,12 @@ async def test_completar_aprobado_success(metrologia_service, mock_sheets_repo, 
     assert result["tag_spool"] == "INTEGRATION-001"
     assert "aprobado" in result["message"].lower()
 
-    # Verify Fecha_QC_Metrología was updated
-    mock_sheets_repo.update_cell_by_column_name.assert_called()
-    call_args = mock_sheets_repo.update_cell_by_column_name.call_args
-    assert call_args[1]["column_name"] == "Fecha_QC_Metrología"
+    # Verify Fecha_QC_Metrología was updated (Metrologia machine uses batch_update_by_column_name)
+    mock_sheets_repo.batch_update_by_column_name.assert_called()
+    call_args = mock_sheets_repo.batch_update_by_column_name.call_args
+    updates = call_args[1]["updates"]
+    column_names = [u["column_name"] for u in updates]
+    assert "Fecha_QC_Metrología" in column_names
 
 
 @pytest.mark.asyncio
@@ -197,8 +200,8 @@ async def test_completar_rechazado_success(metrologia_service, mock_sheets_repo,
     assert result["tag_spool"] == "INTEGRATION-001"
     assert "rechazado" in result["message"].lower()
 
-    # Verify Fecha_QC_Metrologia was updated
-    mock_sheets_repo.update_cell_by_column_name.assert_called()
+    # Verify Fecha_QC_Metrología was updated (Metrologia machine uses batch_update_by_column_name)
+    mock_sheets_repo.batch_update_by_column_name.assert_called()
 
 
 @pytest.mark.asyncio

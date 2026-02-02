@@ -69,9 +69,9 @@ class MetadataEvent(BaseModel):
     )
     operacion: str = Field(
         ...,
-        description="Operación realizada (ARM, SOLD, METROLOGIA)",
-        pattern="^(ARM|SOLD|METROLOGIA)$",
-        examples=["ARM", "SOLD", "METROLOGIA"]
+        description="Operación realizada (ARM, SOLD, METROLOGIA, REPARACION)",
+        pattern="^(ARM|SOLD|METROLOGIA|REPARACION)$",
+        examples=["ARM", "SOLD", "METROLOGIA", "REPARACION"]
     )
     accion: Accion = Field(
         ...,

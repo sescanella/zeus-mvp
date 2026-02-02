@@ -94,14 +94,15 @@ def mock_union_repository():
     repo = MagicMock()
 
     # Create mock unions for testing
-    def create_union(n_union: int, arm_complete: bool = False, sold_complete: bool = False):
+    # tipo_union in SOLD_REQUIRED_TYPES ('BW','BR','SO','FILL','LET') for SOLD filtering
+    def create_union(n_union: int, arm_complete: bool = False, sold_complete: bool = False, tipo_union: str = "Tipo A"):
         return Union(
             id=f"OT-123+{n_union}",
             ot="123",
             tag_spool="OT-123",
             n_union=n_union,
             dn_union=2.5,
-            tipo_union="Tipo A",
+            tipo_union=tipo_union,
             arm_fecha_inicio=None,
             arm_fecha_fin=datetime(2026, 1, 20) if arm_complete else None,
             arm_worker="MR(93)" if arm_complete else None,
@@ -120,9 +121,9 @@ def mock_union_repository():
         create_union(i) for i in range(1, 11)
     ])
 
-    # Default: 5 unions available for SOLD (ARM already complete)
+    # Default: 5 unions available for SOLD (ARM complete + tipo in SOLD_REQUIRED_TYPES)
     repo.get_disponibles_sold_by_ot = MagicMock(return_value=[
-        create_union(i, arm_complete=True) for i in range(1, 6)
+        create_union(i, arm_complete=True, tipo_union="BW") for i in range(1, 6)
     ])
 
     repo.batch_update_arm = MagicMock(return_value=3)  # 3 unions updated
@@ -460,9 +461,9 @@ async def test_finalizar_sold_operation(occupation_service_v4, mock_union_reposi
         selected_unions=["OT-123+1", "OT-123+2"]
     )
 
-    # Mock 5 available SOLD unions
+    # Mock 5 available SOLD unions (tipo_union must be in SOLD_REQUIRED_TYPES for filter)
     mock_union_repository.get_disponibles_sold_by_ot.return_value = [
-        MagicMock() for _ in range(5)
+        MagicMock(tipo_union="BW") for _ in range(5)
     ]
     mock_union_repository.batch_update_sold.return_value = 2
 

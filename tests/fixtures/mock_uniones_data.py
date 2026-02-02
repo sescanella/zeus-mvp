@@ -68,7 +68,8 @@ def generate_mock_uniones(num_ots: int = 10, unions_per_ot: int = 10) -> list[li
 
     for ot_idx in range(1, num_ots + 1):
         ot = f"{ot_idx:03d}"  # Format: "001", "002", etc.
-        tag_spool = f"MK-1335-CW-25238-{ot_idx:03d}"
+        # Use OT-001 for first OT so integration tests (OT-001) find unions
+        tag_spool = f"OT-{ot}" if ot_idx == 1 else f"MK-1335-CW-25238-{ot_idx:03d}"
 
         for n_union in range(1, unions_per_ot + 1):
             union_id = f"{ot}+{n_union}"

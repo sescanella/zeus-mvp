@@ -27,10 +27,13 @@ export default function TipoInteraccionPage() {
       return;
     }
 
-    // Version detection for v4.0 workflow
+    // Version detection for v4.0 workflow (only if spool already selected)
+    // This page can be reached BEFORE spool selection (P2→P3 flow) or AFTER (v4.0 flow)
     const detectVersion = async () => {
+      // If no spool selected yet, default to v3.0 workflow (traditional flow: P2→P3→P4)
       if (!state.selectedSpool) {
-        router.push('/seleccionar-spool');
+        setSpoolVersion('v3.0');
+        setLoadingVersion(false);
         return;
       }
 

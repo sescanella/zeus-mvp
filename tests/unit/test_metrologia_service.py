@@ -20,10 +20,10 @@ from backend.exceptions import (
 
 @pytest.fixture
 def mock_sheets_repo():
-    """Mock SheetsRepository."""
+    """Mock SheetsRepository (MetrologiaService uses state machine -> batch_update_by_column_name)."""
     repo = Mock()
     repo.find_row_by_column_value = Mock(return_value=10)
-    repo.update_cell_by_column_name = Mock()
+    repo.batch_update_by_column_name = Mock()
     return repo
 
 
@@ -168,8 +168,8 @@ async def test_completar_aprobado_success(metrologia_service, mock_sheets_repo, 
     assert result["resultado"] == "APROBADO"
     assert result["tag_spool"] == "TEST-001"
 
-    # Verify Sheets update was called
-    mock_sheets_repo.update_cell_by_column_name.assert_called_once()
+    # Verify Sheets batch update was called (state machine updates Fecha_QC_Metrología + Estado_Detalle)
+    mock_sheets_repo.batch_update_by_column_name.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -189,8 +189,8 @@ async def test_completar_rechazado_success(metrologia_service, mock_sheets_repo,
     assert result["resultado"] == "RECHAZADO"
     assert result["tag_spool"] == "TEST-001"
 
-    # Verify Sheets update was called
-    mock_sheets_repo.update_cell_by_column_name.assert_called_once()
+    # Verify Sheets batch update was called (state machine updates Fecha_QC_Metrología + Estado_Detalle)
+    mock_sheets_repo.batch_update_by_column_name.assert_called_once()
 
 
 @pytest.mark.asyncio

@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 
 from backend.services.occupation_service import OccupationService
+from backend.services.union_service import UnionService
 from backend.services.redis_lock_service import RedisLockService
 from backend.services.conflict_service import ConflictService
 from backend.services.redis_event_service import RedisEventService
@@ -19,8 +20,9 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.core.column_map_cache import ColumnMapCache
 from backend.models.occupation import IniciarRequest, FinalizarRequest
-from backend.models.enums import Operacion
+from backend.models.enums import ActionType
 from backend.models.spool import Spool
+from backend.models.union import Union
 from backend.exceptions import (
     ArmPrerequisiteError,
     SpoolOccupiedError,
@@ -100,7 +102,7 @@ def redis_event_service():
 @pytest.fixture
 def validation_service(union_repo):
     """Real ValidationService with mocked UnionRepository."""
-    return ValidationService(union_repo=union_repo)
+    return ValidationService(union_repository=union_repo)
 
 
 @pytest.fixture
@@ -113,7 +115,12 @@ def occupation_service(
     union_repo,
     validation_service
 ):
-    """Create OccupationService with all dependencies."""
+    """Create OccupationService with all dependencies (v4.0 union_service)."""
+    union_service = UnionService(
+        union_repo=union_repo,
+        metadata_repo=metadata_repo,
+        sheets_repo=mock_sheets_repo,
+    )
     return OccupationService(
         redis_lock_service=redis_lock_service,
         sheets_repository=mock_sheets_repo,
@@ -121,7 +128,8 @@ def occupation_service(
         conflict_service=conflict_service,
         redis_event_service=redis_event_service,
         union_repository=union_repo,
-        validation_service=validation_service
+        validation_service=validation_service,
+        union_service=union_service,
     )
 
 
@@ -142,23 +150,21 @@ class TestArmToSoldWorkflow:
         2. Attempt INICIAR SOLD operation
         3. Should raise ArmPrerequisiteError (403)
         """
-        # Setup: Verify all unions have no ARM completion
+        # Setup: Unions with no ARM completion (Union is frozen, use model_copy)
         all_unions = union_repo.get_by_ot("001")
+        all_arm_incomplete = [u.model_copy(update={"arm_fecha_fin": None}) for u in all_unions]
 
-        # Mock all unions as ARM incomplete for this test
-        for union in all_unions:
-            union.arm_fecha_fin = None
+        with patch.object(union_repo, "get_by_ot", return_value=all_arm_incomplete):
+            # Execute: INICIAR SOLD should fail
+            request = IniciarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=ActionType.SOLD
+            )
 
-        # Execute: INICIAR SOLD should fail
-        request = IniciarRequest(
-            tag_spool="OT-001",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion=Operacion.SOLD
-        )
-
-        with pytest.raises(ArmPrerequisiteError):
-            await occupation_service.iniciar_spool(request)
+            with pytest.raises(ArmPrerequisiteError):
+                await occupation_service.iniciar_spool(request)
 
     @pytest.mark.asyncio
     async def test_sold_iniciar_succeeds_with_partial_arm(
@@ -183,7 +189,7 @@ class TestArmToSoldWorkflow:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.SOLD
+            operacion=ActionType.SOLD
         )
 
         response = await occupation_service.iniciar_spool(request)
@@ -236,7 +242,7 @@ class TestArmToSoldWorkflow:
             tag_spool="OT-001",
             worker_id=93,
             worker_nome="MR(93)",
-            operacion=Operacion.SOLD,
+            operacion=ActionType.SOLD,
             selected_unions=selected_ids
         )
 
@@ -267,7 +273,7 @@ class TestArmToSoldWorkflow:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.ARM
+            operacion=ActionType.ARM
         )
 
         response = await occupation_service.iniciar_spool(iniciar_arm)
@@ -283,7 +289,7 @@ class TestArmToSoldWorkflow:
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.ARM,
+                operacion=ActionType.ARM,
                 selected_unions=selected_arm
             )
 
@@ -296,7 +302,7 @@ class TestArmToSoldWorkflow:
             tag_spool="OT-001",
             worker_id=45,
             worker_nombre="JD(45)",
-            operacion=Operacion.SOLD
+            operacion=ActionType.SOLD
         )
 
         # Reset lock owner for new worker
@@ -325,7 +331,7 @@ class TestArmToSoldWorkflow:
                 tag_spool="OT-001",
                 worker_id=45,
                 worker_nombre="JD(45)",
-                operacion=Operacion.SOLD,
+                operacion=ActionType.SOLD,
                 selected_unions=selected_sold
             )
 
@@ -361,7 +367,7 @@ class TestArmToSoldWorkflow:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.SOLD
+            operacion=ActionType.SOLD
         )
 
         # Should succeed (ARM unions are completed in mock data)
@@ -388,22 +394,20 @@ class TestMetrologiaAutoTransition:
         4. FINALIZAR should trigger metrología auto-transition
         5. Estado_Detalle should update to "En Cola Metrología"
         """
-        # Setup: Get all unions
-        all_unions = union_repo.get_by_ot("001")
-
-        # Manually set all unions as complete for this test
+        # Setup: All unions complete (Union is frozen, use model_copy)
         from backend.services.occupation_service import SOLD_REQUIRED_TYPES
 
-        for union in all_unions:
-            # Complete ARM for all
-            union.arm_fecha_fin = datetime.now()
+        all_unions = union_repo.get_by_ot("001")
+        now = datetime.now()
+        all_complete = [
+            u.model_copy(update={
+                "arm_fecha_fin": now,
+                "sol_fecha_fin": now if u.tipo_union in SOLD_REQUIRED_TYPES else u.sol_fecha_fin
+            })
+            for u in all_unions
+        ]
 
-            # Complete SOLD only for SOLD-required types
-            if union.tipo_union in SOLD_REQUIRED_TYPES:
-                union.sol_fecha_fin = datetime.now()
-
-        # Mock get_by_spool to return our modified unions
-        with patch.object(union_repo, 'get_by_spool', return_value=all_unions):
+        with patch.object(union_repo, 'get_by_spool', return_value=all_complete):
             # Check should_trigger_metrologia
             should_trigger = occupation_service.should_trigger_metrologia("OT-001")
             assert should_trigger is True
@@ -423,22 +427,20 @@ class TestMetrologiaAutoTransition:
         3. All SOLD complete
         4. Should NOT trigger metrología
         """
-        # Setup: Get all unions
-        all_unions = union_repo.get_by_ot("001")
-
+        # Setup: Some FW incomplete (Union is frozen, use model_copy)
         from backend.services.occupation_service import SOLD_REQUIRED_TYPES
 
-        # Complete SOLD for all SOLD-required types
-        for union in all_unions:
-            if union.tipo_union in SOLD_REQUIRED_TYPES:
-                union.arm_fecha_fin = datetime.now()
-                union.sol_fecha_fin = datetime.now()
-            else:
-                # Leave some FW incomplete
-                union.arm_fecha_fin = None
+        all_unions = union_repo.get_by_ot("001")
+        now = datetime.now()
+        mixed = [
+            u.model_copy(update={
+                "arm_fecha_fin": now if u.tipo_union in SOLD_REQUIRED_TYPES else None,
+                "sol_fecha_fin": now if u.tipo_union in SOLD_REQUIRED_TYPES else u.sol_fecha_fin
+            })
+            for u in all_unions
+        ]
 
-        # Mock get_by_spool
-        with patch.object(union_repo, 'get_by_spool', return_value=all_unions):
+        with patch.object(union_repo, 'get_by_spool', return_value=mixed):
             should_trigger = occupation_service.should_trigger_metrologia("OT-001")
             assert should_trigger is False
 
@@ -456,21 +458,24 @@ class TestMetrologiaAutoTransition:
         2. Some BW/BR/SO SOLD incomplete
         3. Should NOT trigger metrología
         """
-        # Setup
-        all_unions = union_repo.get_by_ot("001")
-
+        # Setup: All ARM complete, at least one SOLD-required union with sol_fecha_fin=None
+        # Mock data uses "Brida"/"Socket" etc; SOLD_REQUIRED_TYPES are BW/BR/SO - force one BW
         from backend.services.occupation_service import SOLD_REQUIRED_TYPES
 
-        # Complete all ARM
-        for union in all_unions:
-            union.arm_fecha_fin = datetime.now()
+        all_unions = union_repo.get_by_ot("001")
+        now = datetime.now()
+        # First union: BW (SOLD-required) with SOLD incomplete; rest: ARM complete, SOLD complete if SOLD-required
+        sold_incomplete = []
+        for i, u in enumerate(all_unions):
+            if i == 0:
+                sold_incomplete.append(u.model_copy(update={"arm_fecha_fin": now, "tipo_union": "BW", "sol_fecha_fin": None}))
+            else:
+                sold_incomplete.append(u.model_copy(update={
+                    "arm_fecha_fin": now,
+                    "sol_fecha_fin": now if u.tipo_union in SOLD_REQUIRED_TYPES else u.sol_fecha_fin
+                }))
 
-            # Leave some SOLD-required unions incomplete
-            if union.tipo_union in SOLD_REQUIRED_TYPES:
-                union.sol_fecha_fin = None  # Incomplete
-
-        # Mock get_by_spool
-        with patch.object(union_repo, 'get_by_spool', return_value=all_unions):
+        with patch.object(union_repo, 'get_by_spool', return_value=sold_incomplete):
             should_trigger = occupation_service.should_trigger_metrologia("OT-001")
             assert should_trigger is False
 
@@ -491,70 +496,63 @@ class TestMetrologiaAutoTransition:
         4. METROLOGIA_AUTO_TRIGGERED event should be logged
         5. Response should include metrologia_triggered flag
         """
-        # Setup: Complete all unions except one
-        all_unions = union_repo.get_by_ot("001")
-
+        # Setup: Complete all except last SOLD (Union is frozen, use model_copy)
+        # Mock data has no SOLD_REQUIRED_TYPES; force first 3 to BW and leave last BW incomplete
         from backend.services.occupation_service import SOLD_REQUIRED_TYPES
 
-        # Complete everything except last SOLD union
-        sold_required_unions = [
-            u for u in all_unions
-            if u.tipo_union in SOLD_REQUIRED_TYPES
-        ]
+        all_unions = union_repo.get_by_ot("001")
+        now = datetime.now()
+        # Build list with first 3 as BW (SOLD-required), first 2 complete, 3rd incomplete
+        unions_before_finalizar = []
+        for i, u in enumerate(all_unions):
+            if i < 3:
+                # BW, ARM complete, SOLD complete only for first 2
+                unions_before_finalizar.append(u.model_copy(update={
+                    "tipo_union": "BW",
+                    "arm_fecha_fin": now,
+                    "sol_fecha_fin": None if i == 2 else now
+                }))
+            else:
+                unions_before_finalizar.append(u.model_copy(update={"arm_fecha_fin": now, "sol_fecha_fin": now if u.tipo_union in SOLD_REQUIRED_TYPES else u.sol_fecha_fin}))
+        last_union = unions_before_finalizar[2]  # The incomplete BW
+        unions_after_finalizar = [u.model_copy(update={"sol_fecha_fin": now}) if u.id == last_union.id else u for u in unions_before_finalizar]
 
-        for union in all_unions:
-            union.arm_fecha_fin = datetime.now()
+        # SOLD disponibles = SOLD-required with ARM complete, SOLD incomplete (only last_union)
+        sold_disponibles = [last_union]
 
-            if union.tipo_union in SOLD_REQUIRED_TYPES:
-                # Leave last one incomplete
-                if union.id == sold_required_unions[-1].id:
-                    union.sol_fecha_fin = None
-                else:
-                    union.sol_fecha_fin = datetime.now()
+        with patch.object(occupation_service, 'should_trigger_metrologia', return_value=True):
+            with patch('backend.services.state_service.StateService') as MockStateService:
+                mock_state_service = AsyncMock()
+                mock_state_service.trigger_metrologia_transition = AsyncMock(return_value="pendiente_metrologia")
+                MockStateService.return_value = mock_state_service
 
-        # Get the last disponible SOLD union
-        last_union = sold_required_unions[-1]
+                with patch.object(union_repo, 'get_disponibles_sold_by_ot', return_value=sold_disponibles):
+                    with patch.object(union_repo, 'batch_update_sold', return_value=1):
+                        with patch.object(union_repo, 'get_by_spool', side_effect=[unions_before_finalizar, unions_after_finalizar]):
+                            # Execute: FINALIZAR with last union
+                            request = FinalizarRequest(
+                                tag_spool="OT-001",
+                                worker_id=93,
+                                worker_nombre="MR(93)",
+                                operacion=ActionType.SOLD,
+                                selected_unions=[last_union.id]
+                            )
 
-        # Mock StateService trigger_metrologia_transition
-        with patch('backend.services.occupation_service.StateService') as MockStateService:
-            mock_state_service = AsyncMock()
-            mock_state_service.trigger_metrologia_transition.return_value = "pendiente_metrologia"
-            MockStateService.return_value = mock_state_service
+                            response = await occupation_service.finalizar_spool(request)
 
-            # Mock batch update
-            with patch.object(union_repo, 'batch_update_sold', return_value=1):
-                # Mock get_by_spool to return updated unions
-                updated_unions = all_unions.copy()
-                for u in updated_unions:
-                    if u.id == last_union.id:
-                        u.sol_fecha_fin = datetime.now()
+                            # Verify: Metrología triggered
+                            assert response.success is True
+                            assert response.metrologia_triggered is True
+                            assert response.new_state == "pendiente_metrologia"
+                            assert "(Listo para metrología)" in response.message
 
-                with patch.object(union_repo, 'get_by_spool', return_value=updated_unions):
-                    # Execute: FINALIZAR with last union
-                    request = FinalizarRequest(
-                        tag_spool="OT-001",
-                        worker_id=93,
-                        worker_nombre="MR(93)",
-                        operacion=Operacion.SOLD,
-                        selected_unions=[last_union.id]
-                    )
-
-                    response = await occupation_service.finalizar_spool(request)
-
-                    # Verify: Metrología triggered
-                    assert response.success is True
-                    assert response.metrologia_triggered is True
-                    assert response.new_state == "pendiente_metrologia"
-                    assert "(Listo para metrología)" in response.message
-
-                    # Verify: METROLOGIA_AUTO_TRIGGERED event logged
-                    # Check that log_event was called with METROLOGIA_AUTO_TRIGGERED
-                    log_event_calls = metadata_repo.log_event.call_args_list
-                    metrologia_event_logged = any(
-                        "METROLOGIA_AUTO_TRIGGERED" in str(call)
-                        for call in log_event_calls
-                    )
-                    assert metrologia_event_logged
+                            # Verify: METROLOGIA_AUTO_TRIGGERED event logged
+                            log_event_calls = metadata_repo.log_event.call_args_list
+                            metrologia_event_logged = any(
+                                "METROLOGIA_AUTO_TRIGGERED" in str(call)
+                                for call in log_event_calls
+                            )
+                            assert metrologia_event_logged
 
     @pytest.mark.asyncio
     async def test_metrologia_does_not_trigger_on_pausar(
@@ -591,7 +589,7 @@ class TestMetrologiaAutoTransition:
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.SOLD,
+                operacion=ActionType.SOLD,
                 selected_unions=selected
             )
 
@@ -631,7 +629,7 @@ class TestZeroUnionCancellation:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.ARM,
+            operacion=ActionType.ARM,
             selected_unions=[]  # Empty list
         )
 
@@ -682,7 +680,7 @@ class TestZeroUnionCancellation:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.ARM,
+            operacion=ActionType.ARM,
             selected_unions=[]
         )
 
@@ -719,7 +717,7 @@ class TestZeroUnionCancellation:
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.ARM,
+                operacion=ActionType.ARM,
                 selected_unions=[]
             )
 
@@ -759,17 +757,13 @@ class TestErrorHandlingAndRaceConditions:
         # Select 2 unions
         selected_ids = [u.id for u in disponibles[:2]]
 
-        # Mock one union as completed (simulating race condition)
-        # Modify the union in-place to simulate it being completed
-        disponibles[0].arm_fecha_fin = datetime.now()
-
-        # Mock batch_update to only process 1 union (the available one)
+        # Mock batch_update to only process 1 union (simulating race: one already completed)
         with patch.object(union_repo, 'batch_update_arm', return_value=1):
             request = FinalizarRequest(
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.ARM,
+                operacion=ActionType.ARM,
                 selected_unions=selected_ids
             )
 
@@ -802,7 +796,7 @@ class TestErrorHandlingAndRaceConditions:
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.ARM,
+                operacion=ActionType.ARM,
                 selected_unions=["OT-001+1", "OT-001+2", "OT-001+3"]
             )
 
@@ -829,7 +823,7 @@ class TestErrorHandlingAndRaceConditions:
         from backend.exceptions import VersionConflictError
 
         conflict_service.update_with_retry.side_effect = [
-            VersionConflictError("Version mismatch", data={"version": "old"}),
+            VersionConflictError("old", "new", "Version mismatch"),
             "new-version-uuid"  # Success on retry
         ]
 
@@ -843,7 +837,7 @@ class TestErrorHandlingAndRaceConditions:
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.ARM,
+                operacion=ActionType.ARM,
                 selected_unions=selected_ids
             )
 
@@ -878,7 +872,7 @@ class TestErrorHandlingAndRaceConditions:
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.ARM,
+                operacion=ActionType.ARM,
                 selected_unions=selected_ids
             )
 
@@ -913,7 +907,7 @@ class TestErrorHandlingAndRaceConditions:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.ARM
+            operacion=ActionType.ARM
         )
 
         with pytest.raises(RedisError):
@@ -941,15 +935,14 @@ class TestErrorHandlingAndRaceConditions:
             'validate_arm_prerequisite',
             side_effect=ArmPrerequisiteError(
                 tag_spool="OT-001",
-                ot="001",
-                detalle="No ARM unions completed"
+                unions_sin_armar=10
             )
         ):
             request = IniciarRequest(
                 tag_spool="OT-001",
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion=Operacion.SOLD
+                operacion=ActionType.SOLD
             )
 
             with pytest.raises(ArmPrerequisiteError) as exc_info:
@@ -979,7 +972,7 @@ class TestErrorHandlingAndRaceConditions:
             tag_spool="OT-001",
             worker_id=93,
             worker_nombre="MR(93)",
-            operacion=Operacion.ARM
+            operacion=ActionType.ARM
         )
 
         try:

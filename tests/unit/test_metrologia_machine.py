@@ -11,10 +11,10 @@ from datetime import date
 
 @pytest.fixture
 def mock_sheets_repo():
-    """Mock SheetsRepository for testing."""
+    """Mock SheetsRepository for testing (machine uses batch_update_by_column_name)."""
     repo = Mock()
     repo.find_row_by_column_value = Mock(return_value=10)
-    repo.update_cell_by_column_name = Mock()
+    repo.batch_update_by_column_name = Mock()
     return repo
 
 
@@ -63,11 +63,14 @@ def test_aprobar_transition_from_pendiente_to_aprobado(metrologia_machine, mock_
     # Verify state changed
     assert metrologia_machine.current_state.id == "aprobado"
 
-    # Verify Sheets column update was called
-    mock_sheets_repo.update_cell_by_column_name.assert_called_once()
-    call_args = mock_sheets_repo.update_cell_by_column_name.call_args
-    assert call_args.kwargs["column_name"] == "Fecha_QC_Metrología"
-    assert call_args.kwargs["value"] == "27-01-2026"
+    # Verify Sheets batch update was called (Fecha_QC_Metrología + Estado_Detalle)
+    mock_sheets_repo.batch_update_by_column_name.assert_called_once()
+    call_args = mock_sheets_repo.batch_update_by_column_name.call_args
+    updates = call_args.kwargs["updates"]
+    col_names = [u["column_name"] for u in updates]
+    assert "Fecha_QC_Metrología" in col_names
+    fecha_update = next(u for u in updates if u["column_name"] == "Fecha_QC_Metrología")
+    assert fecha_update["value"] == "27-01-2026"
 
 
 def test_rechazar_transition_from_pendiente_to_rechazado(metrologia_machine, mock_sheets_repo):
@@ -78,11 +81,14 @@ def test_rechazar_transition_from_pendiente_to_rechazado(metrologia_machine, moc
     # Verify state changed
     assert metrologia_machine.current_state.id == "rechazado"
 
-    # Verify Sheets column update was called
-    mock_sheets_repo.update_cell_by_column_name.assert_called_once()
-    call_args = mock_sheets_repo.update_cell_by_column_name.call_args
-    assert call_args.kwargs["column_name"] == "Fecha_QC_Metrología"
-    assert call_args.kwargs["value"] == "27-01-2026"
+    # Verify Sheets batch update was called (Fecha_QC_Metrología + Estado_Detalle)
+    mock_sheets_repo.batch_update_by_column_name.assert_called_once()
+    call_args = mock_sheets_repo.batch_update_by_column_name.call_args
+    updates = call_args.kwargs["updates"]
+    col_names = [u["column_name"] for u in updates]
+    assert "Fecha_QC_Metrología" in col_names
+    fecha_update = next(u for u in updates if u["column_name"] == "Fecha_QC_Metrología")
+    assert fecha_update["value"] == "27-01-2026"
 
 
 def test_aprobado_is_terminal_state(metrologia_machine):
@@ -115,8 +121,10 @@ def test_both_transitions_update_same_column(metrologia_machine, mock_sheets_rep
     )
     machine1.aprobar(fecha_operacion=date(2026, 1, 27))
 
-    aprobado_call = mock_sheets_repo.update_cell_by_column_name.call_args
-    assert aprobado_call.kwargs["column_name"] == "Fecha_QC_Metrología"
+    aprobado_call = mock_sheets_repo.batch_update_by_column_name.call_args
+    assert aprobado_call is not None
+    updates = aprobado_call.kwargs["updates"]
+    assert any(u["column_name"] == "Fecha_QC_Metrología" for u in updates)
 
     # Reset mock
     mock_sheets_repo.reset_mock()
@@ -129,5 +137,7 @@ def test_both_transitions_update_same_column(metrologia_machine, mock_sheets_rep
     )
     machine2.rechazar(fecha_operacion=date(2026, 1, 27))
 
-    rechazado_call = mock_sheets_repo.update_cell_by_column_name.call_args
-    assert rechazado_call.kwargs["column_name"] == "Fecha_QC_Metrología"
+    rechazado_call = mock_sheets_repo.batch_update_by_column_name.call_args
+    assert rechazado_call is not None
+    updates = rechazado_call.kwargs["updates"]
+    assert any(u["column_name"] == "Fecha_QC_Metrología" for u in updates)

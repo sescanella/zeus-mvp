@@ -4,6 +4,7 @@ Unit tests for RedisEventService.
 Tests event publishing to Redis pub/sub channel with various scenarios.
 """
 import json
+import re
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
@@ -68,7 +69,8 @@ class TestRedisEventService:
         assert message["estado_detalle"] == estado_detalle
         assert message["operacion"] == "ARM"
         assert "timestamp" in message
-        assert message["timestamp"].endswith("Z")  # ISO 8601 with Z
+        # Chile format DD-MM-YYYY HH:MM:SS (America/Santiago)
+        assert re.match(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}", message["timestamp"])
 
     @pytest.mark.asyncio
     async def test_publish_spool_update_pausar_success(
@@ -223,11 +225,12 @@ class TestRedisEventService:
 
     @pytest.mark.asyncio
     async def test_timestamp_format(self, event_service, mock_redis_client):
-        """Test timestamp is in ISO 8601 format with Z suffix."""
-        # Act
-        with patch('backend.services.redis_event_service.datetime') as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2026, 1, 27, 15, 30, 45, 123456)
+        """Test timestamp is in Chile format DD-MM-YYYY HH:MM:SS (America/Santiago)."""
+        from backend.utils.date_formatter import format_datetime_for_sheets
+        fixed_dt = datetime(2026, 1, 27, 15, 30, 45)
+        expected_ts = format_datetime_for_sheets(fixed_dt)  # "27-01-2026 15:30:45"
 
+        with patch('backend.services.redis_event_service.now_chile', return_value=fixed_dt):
             await event_service.publish_spool_update(
                 event_type="TOMAR",
                 tag_spool="SPOOL-009",
@@ -235,7 +238,6 @@ class TestRedisEventService:
                 estado_detalle="ARM: En Progreso"
             )
 
-            # Assert
             call_args = mock_redis_client.publish.call_args
             message = json.loads(call_args[0][1])
-            assert message["timestamp"] == "2026-01-27T15:30:45.123456Z"
+            assert message["timestamp"] == expected_ts

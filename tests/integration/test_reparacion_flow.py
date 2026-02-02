@@ -42,11 +42,12 @@ from backend.exceptions import (
 
 @pytest.fixture
 def mock_sheets_repo():
-    """Mock SheetsRepository for testing."""
-    repo = Mock(spec=SheetsRepository)
+    """Mock SheetsRepository for testing (ReparacionStateMachine uses batch_update_by_column_name, get_cell_value)."""
+    repo = Mock()  # No spec: state machine calls get_cell_value which may not be on SheetsRepository
     repo.get_spool_by_tag.return_value = None  # Will be set per test
-    repo.update_spool_ocupacion.return_value = None
-    repo.update_spool_estado_detalle.return_value = None
+    repo.find_row_by_column_value.return_value = 2
+    repo.get_cell_value.return_value = ""
+    repo.batch_update_by_column_name.return_value = None
     return repo
 
 
@@ -595,13 +596,27 @@ async def test_cannot_completar_without_ownership(reparacion_service, mock_sheet
 
 
 @pytest.mark.asyncio
-async def test_cannot_tomar_already_occupied(reparacion_service, mock_sheets_repo, en_reparacion_spool):
-    """Should raise SpoolOccupiedError if spool already occupied."""
-    tag_spool = en_reparacion_spool.tag_spool
-    worker_id = 96  # Different worker trying to TOMAR
+async def test_cannot_tomar_already_occupied(reparacion_service, mock_sheets_repo, rechazado_cycle1_spool):
+    """Should raise SpoolOccupiedError if spool already occupied by another worker."""
+    # Spool is RECHAZADO (eligible for repair) but already occupied by CP(95)
+    occupied_spool = Spool(
+        tag_spool=rechazado_cycle1_spool.tag_spool,
+        fecha_materiales=rechazado_cycle1_spool.fecha_materiales,
+        fecha_armado=rechazado_cycle1_spool.fecha_armado,
+        fecha_soldadura=rechazado_cycle1_spool.fecha_soldadura,
+        fecha_qc_metrologia=rechazado_cycle1_spool.fecha_qc_metrologia,
+        armador=rechazado_cycle1_spool.armador,
+        soldador=rechazado_cycle1_spool.soldador,
+        ocupado_por="CP(95)",
+        fecha_ocupacion="28/01/2026",
+        estado_detalle="RECHAZADO (Ciclo 1/3) - Pendiente reparación",
+        version=8
+    )
+    tag_spool = occupied_spool.tag_spool
+    worker_id = 96
     worker_nombre = "NW(96)"
 
-    mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
+    mock_sheets_repo.get_spool_by_tag.return_value = occupied_spool
 
     with pytest.raises(SpoolOccupiedError):
         await reparacion_service.tomar_reparacion(tag_spool, worker_id, worker_nombre)

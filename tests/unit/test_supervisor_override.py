@@ -530,4 +530,4 @@ def test_batch_check_returns_only_overrides(estado_detalle_service, mock_sheets_
     # Should only return BATCH-001 (has override)
     assert len(overrides) == 1
     assert overrides[0]["detected"] is True
-    assert "BATCH-001" in str(overrides)
+    assert overrides[0]["tag_spool"] == "BATCH-001"

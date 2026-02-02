@@ -45,6 +45,7 @@ from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
 from backend.services.action_service import ActionService
 from backend.services.occupation_service import OccupationService
+from backend.services.union_service import UnionService
 from backend.services.state_service import StateService
 from backend.services.history_service import HistoryService
 from backend.services.redis_event_service import RedisEventService
@@ -488,6 +489,36 @@ def get_occupation_service(
         metadata_repository=metadata_repository,
         conflict_service=conflict_service,
         redis_event_service=redis_event_service
+    )
+
+
+def get_occupation_service_v4(
+    redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
+    conflict_service: ConflictService = Depends(get_conflict_service),
+    redis_event_service: RedisEventService = Depends(get_redis_event_service),
+    union_repo: UnionRepository = Depends(get_union_repository),
+) -> OccupationService:
+    """
+    Factory for OccupationService with v4.0 union support (FINALIZAR workflow).
+
+    Used by POST /api/v4/occupation/finalizar. Builds UnionService and OccupationService
+    with union_repository and union_service for batch union updates.
+    """
+    union_service = UnionService(
+        union_repo=union_repo,
+        metadata_repo=metadata_repository,
+        sheets_repo=sheets_repo,
+    )
+    return OccupationService(
+        redis_lock_service=redis_lock_service,
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repository,
+        conflict_service=conflict_service,
+        redis_event_service=redis_event_service,
+        union_repository=union_repo,
+        union_service=union_service,
     )
 
 

@@ -30,35 +30,37 @@ def mock_sheets_repository():
     """Create mock SheetsRepository for testing."""
     mock = Mock()
 
-    # Default header row for Uniones sheet (18 columns)
+    # Default header row for Uniones sheet (19 cols: OT required by _row_to_union)
     header = [
         "ID",                    # col 0
-        "TAG_SPOOL",            # col 1
-        "N_UNION",              # col 2
-        "DN_UNION",             # col 3
-        "TIPO_UNION",           # col 4
-        "ARM_FECHA_INICIO",     # col 5
-        "ARM_FECHA_FIN",        # col 6
-        "ARM_WORKER",           # col 7
-        "SOL_FECHA_INICIO",     # col 8
-        "SOL_FECHA_FIN",        # col 9
-        "SOL_WORKER",           # col 10
-        "NDT_FECHA",            # col 11
-        "NDT_STATUS",           # col 12
-        "version",              # col 13
-        "Creado_Por",           # col 14
-        "Fecha_Creacion",       # col 15
-        "Modificado_Por",       # col 16
-        "Fecha_Modificacion",   # col 17
+        "OT",                    # col 1
+        "TAG_SPOOL",            # col 2
+        "N_UNION",              # col 3
+        "DN_UNION",             # col 4
+        "TIPO_UNION",           # col 5
+        "ARM_FECHA_INICIO",     # col 6
+        "ARM_FECHA_FIN",        # col 7
+        "ARM_WORKER",           # col 8
+        "SOL_FECHA_INICIO",     # col 9
+        "SOL_FECHA_FIN",        # col 10
+        "SOL_WORKER",           # col 11
+        "NDT_FECHA",            # col 12
+        "NDT_STATUS",           # col 13
+        "version",              # col 14
+        "Creado_Por",           # col 15
+        "Fecha_Creacion",       # col 16
+        "Modificado_Por",       # col 17
+        "Fecha_Modificacion",   # col 18
     ]
 
-    # Sample data rows
+    # Sample data rows (OT column required by UnionRepository._row_to_union)
     rows = [
         header,  # Row 0 (header)
 
         # Row 1: OT-123, union 1, ARM complete, SOLD pending
         [
             "OT-123+1",             # ID
+            "123",                  # OT
             "OT-123",               # TAG_SPOOL
             "1",                    # N_UNION
             "2.5",                  # DN_UNION
@@ -81,6 +83,7 @@ def mock_sheets_repository():
         # Row 2: OT-123, union 2, ARM pending
         [
             "OT-123+2",
+            "123",                  # OT
             "OT-123",
             "2",
             "3.0",
@@ -103,6 +106,7 @@ def mock_sheets_repository():
         # Row 3: OT-124, union 1, ARM and SOLD complete
         [
             "OT-124+1",
+            "124",                  # OT
             "OT-124",
             "1",
             "4.0",
@@ -125,6 +129,7 @@ def mock_sheets_repository():
         # Row 4: OT-125, union 1, ARM pending
         [
             "OT-125+1",
+            "125",                  # OT
             "OT-125",
             "1",
             "1.5",
@@ -250,13 +255,14 @@ class TestUnionRepository:
 
     def test_handles_missing_columns_gracefully(self, mock_sheets_repository):
         """Test repository doesn't crash if optional columns are missing."""
-        # Modify mock to have minimal columns (no optional fields)
+        # Modify mock to have minimal columns (OT required by _row_to_union)
         minimal_header = [
-            "ID", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
+            "ID", "OT", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
             "Creado_Por", "Fecha_Creacion"
         ]
         minimal_row = [
             "OT-126+1",
+            "126",                  # OT
             "OT-126",
             "1",
             "5.0",
@@ -295,33 +301,23 @@ class TestUnionRepository:
 
     def test_uses_tag_spool_as_foreign_key(self, mock_sheets_repository):
         """Test repository uses TAG_SPOOL (not OT) for queries."""
-        # Add data with different TAG_SPOOL values
+        # Use same header and row structure as main fixture (19 cols, OT required)
         header = mock_sheets_repository.read_worksheet.return_value[0]
-        rows = [
-            header,
-            # Row with TAG_SPOOL = "SPECIAL-001"
-            [
-                "SPECIAL-001+1",
-                "SPECIAL-001",       # TAG_SPOOL (col 1)
-                "1",
-                "6.0",
-                "Tipo D",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "version-uuid-5",
-                "MR(93)",
-                "24-01-2026 11:00:00",
-                "",
-                "",
-            ],
+        row_special = [
+            "SPECIAL-001+1",          # ID
+            "SPECIAL",                # OT
+            "SPECIAL-001",            # TAG_SPOOL
+            "1", "6.0", "Tipo D",     # N_UNION, DN_UNION, TIPO_UNION
+            "", "", "",              # ARM_FECHA_INICIO, ARM_FECHA_FIN, ARM_WORKER
+            "", "", "",              # SOL_*
+            "", "",                   # NDT_*
+            "version-uuid-5",         # version
+            "MR(93)",                  # Creado_Por (worker format)
+            "24-01-2026 11:00:00",    # Fecha_Creacion
+            "", "",                   # Modificado_Por, Fecha_Modificacion
         ]
-        mock_sheets_repository.read_worksheet.return_value = rows
+        assert len(row_special) == 19, "Row must match header length"
+        mock_sheets_repository.read_worksheet.return_value = [header, row_special]
 
         repo = UnionRepository(mock_sheets_repository)
         unions = repo.get_by_spool("SPECIAL-001")
@@ -357,12 +353,13 @@ class TestUnionRepository:
     def test_datetime_parsing_handles_multiple_formats(self, mock_sheets_repository):
         """Test datetime parsing handles both full and date-only formats."""
         header = [
-            "ID", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
+            "ID", "OT", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
             "ARM_FECHA_INICIO", "ARM_FECHA_FIN",
             "Creado_Por", "Fecha_Creacion"
         ]
         row_with_dates = [
             "OT-200+1",
+            "200",                   # OT
             "OT-200",
             "1",
             "3.5",

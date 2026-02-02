@@ -313,6 +313,7 @@ async def test_completar_updates_correct_date_column(
         tag_spool="TAG-004",
         worker_id=93,
         worker_nombre="Worker93",
+        operacion="ARM",
         fecha_operacion="2026-01-27"
     )
 
@@ -429,6 +430,7 @@ async def test_lock_expired_during_operation(
         tag_spool="TAG-EXPIRED",
         worker_id=93,
         worker_nombre="Worker93",
+        operacion="ARM",
         fecha_operacion="2026-01-27"
     )
 
@@ -576,6 +578,7 @@ async def test_completar_logs_metadata_event_with_correct_fields(
         tag_spool="TEST-04",
         worker_id=93,
         worker_nombre="MR(93)",
+        operacion="ARM",
         fecha_operacion=date(2026, 1, 30)
     )
 
@@ -620,6 +623,7 @@ async def test_completar_metadata_failure_logs_critical_error(
         tag_spool="TEST-05",
         worker_id=93,
         worker_nombre="MR(93)",
+        operacion="ARM",
         fecha_operacion=date(2026, 1, 30)
     )
 

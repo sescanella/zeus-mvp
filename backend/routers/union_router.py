@@ -22,20 +22,12 @@ from backend.models.union_api import (
 from backend.models.occupation import FinalizarRequest
 from backend.repositories.union_repository import UnionRepository
 from backend.repositories.sheets_repository import SheetsRepository
-from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.occupation_service import OccupationService
-from backend.services.union_service import UnionService
 from backend.services.worker_service import WorkerService
-from backend.services.redis_lock_service import RedisLockService
-from backend.services.conflict_service import ConflictService
-from backend.services.redis_event_service import RedisEventService
 from backend.core.dependency import (
     get_union_repository,
     get_sheets_repository,
-    get_metadata_repository,
-    get_redis_lock_service,
-    get_conflict_service,
-    get_redis_event_service,
+    get_occupation_service_v4,
     get_worker_service
 )
 from backend.exceptions import SheetsConnectionError, SpoolNoEncontradoError, NoAutorizadoError
@@ -223,12 +215,9 @@ async def get_metricas(
 async def finalizar_v4(
     request: FinalizarRequestV4,
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repo: MetadataRepository = Depends(get_metadata_repository),
-    redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
-    conflict_service: ConflictService = Depends(get_conflict_service),
-    redis_event_service: RedisEventService = Depends(get_redis_event_service),
     worker_service: WorkerService = Depends(get_worker_service),
-    union_repo: UnionRepository = Depends(get_union_repository)
+    union_repo: UnionRepository = Depends(get_union_repository),
+    occupation_service: OccupationService = Depends(get_occupation_service_v4),
 ):
     """
     v4.0 FINALIZAR - Process selected unions and auto-determine action.
@@ -306,23 +295,7 @@ async def finalizar_v4(
         # Format worker_nombre as APELLIDO(ID)
         worker_nombre = f"{worker.apellido}({request.worker_id})"
 
-        # Step 3: Create OccupationService with UnionService injected
-        union_service = UnionService(
-            union_repo=union_repo,
-            metadata_repo=metadata_repo
-        )
-
-        occupation_service = OccupationService(
-            redis_lock_service=redis_lock_service,
-            sheets_repository=sheets_repo,
-            metadata_repository=metadata_repo,
-            conflict_service=conflict_service,
-            redis_event_service=redis_event_service,
-            union_repository=union_repo,
-            union_service=union_service
-        )
-
-        # Step 4: Build Phase 10 FinalizarRequest
+        # Step 3: Build Phase 10 FinalizarRequest
         finalizar_request = FinalizarRequest(
             tag_spool=request.tag_spool,
             worker_id=request.worker_id,
@@ -331,14 +304,14 @@ async def finalizar_v4(
             selected_unions=request.selected_unions
         )
 
-        # Step 5: Call service layer
+        # Step 4: Call service layer
         result = await occupation_service.finalizar_spool(finalizar_request)
 
         # Extract metrics from result
         action = result.action_taken or "UNKNOWN"
         unions_count = result.unions_processed or 0
 
-        # Step 6: Calculate pulgadas if unions were processed
+        # Step 5: Calculate pulgadas if unions were processed
         pulgadas = None
         if unions_count > 0 and len(request.selected_unions) > 0:
             # Get OT from spool for metrics calculation

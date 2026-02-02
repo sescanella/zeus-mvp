@@ -221,12 +221,16 @@ async def test_tomar_sse_failure_does_not_block(reparacion_service, mock_sheets_
 
 
 @pytest.mark.asyncio
-async def test_pausar_clears_occupation(reparacion_service, mock_sheets_repo, en_reparacion_spool):
+async def test_pausar_clears_occupation(
+    reparacion_service, mock_sheets_repo, mock_cycle_counter, en_reparacion_spool
+):
     """Should clear occupation when pausing repair work."""
     tag_spool = en_reparacion_spool.tag_spool
     worker_id = 95
 
     mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
+    # pausar_reparacion calls build_reparacion_estado("reparacion_pausada", cycle)
+    mock_cycle_counter.build_reparacion_estado.return_value = "REPARACION_PAUSADA (Ciclo 1/3)"
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
         mock_machine = Mock()

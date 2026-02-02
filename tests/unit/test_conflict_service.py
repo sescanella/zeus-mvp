@@ -84,9 +84,9 @@ def test_calculate_retry_delay_exponential_backoff(conflict_service):
     - Base delay and exponential base from config
     - Max delay capped at configured maximum
     """
-    # First attempt (0) should be base delay
+    # First attempt (0) should be base delay (jitter ±25% so ~75ms–125ms)
     delay0 = conflict_service.calculate_retry_delay(0)
-    assert 0.09 <= delay0 <= 0.15  # 100ms +/- jitter
+    assert 0.07 <= delay0 <= 0.15
 
     # Second attempt should be ~2x base delay
     delay1 = conflict_service.calculate_retry_delay(1)
@@ -160,8 +160,8 @@ async def test_update_with_retry_success_first_attempt(
     # Mock successful update
     mock_sheets_repository.update_spool_with_version.return_value = "version-2"
 
-    # Execute update
-    new_version = await conflict_service.update_with_retry(tag_spool, updates)
+    # Execute update (operation required for v4.0)
+    new_version = await conflict_service.update_with_retry(tag_spool, updates, operation="TOMAR")
 
     # Assertions
     assert new_version == "version-2"
@@ -186,13 +186,14 @@ async def test_update_with_retry_version_conflict_then_success(
     updates = {"ocupado_por": "Worker93"}
 
     # Mock first attempt fails with conflict, second succeeds
+    # VersionConflictError(expected, actual, message)
     mock_sheets_repository.update_spool_with_version.side_effect = [
-        VersionConflictError("TAG-002", "version-1", "version-2", "TOMAR"),
+        VersionConflictError("version-1", "version-2", "TOMAR"),
         "version-3"  # Success on retry
     ]
 
-    # Execute update
-    new_version = await conflict_service.update_with_retry(tag_spool, updates, max_attempts=3)
+    # Execute update (operation required)
+    new_version = await conflict_service.update_with_retry(tag_spool, updates, operation="TOMAR", max_attempts=3)
 
     # Assertions
     assert new_version == "version-3"
@@ -215,22 +216,22 @@ async def test_update_with_retry_max_attempts_exceeded(
     tag_spool = "TAG-003"
     updates = {"ocupado_por": "Worker93"}
 
-    # Mock all attempts fail with conflict
+    # Mock all attempts fail with conflict (VersionConflictError: expected, actual, message)
     mock_sheets_repository.update_spool_with_version.side_effect = [
-        VersionConflictError("TAG-003", "version-1", "version-2", "TOMAR"),
-        VersionConflictError("TAG-003", "version-2", "version-3", "TOMAR"),
-        VersionConflictError("TAG-003", "version-3", "version-4", "TOMAR")
+        VersionConflictError("version-1", "version-2", "TOMAR"),
+        VersionConflictError("version-2", "version-3", "TOMAR"),
+        VersionConflictError("version-3", "version-4", "TOMAR")
     ]
 
     # Should raise error after 3 attempts
     with pytest.raises(VersionConflictError) as exc_info:
-        await conflict_service.update_with_retry(tag_spool, updates, max_attempts=3)
+        await conflict_service.update_with_retry(tag_spool, updates, operation="TOMAR", max_attempts=3)
 
     # Verify all attempts made
     assert mock_sheets_repository.update_spool_with_version.call_count == 3
 
-    # Error message should indicate retries exhausted
-    assert "TAG-003" in str(exc_info.value)
+    # Error message should indicate version conflict / retries exhausted
+    assert "Conflicto" in str(exc_info.value) or "version-3" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -249,9 +250,9 @@ async def test_update_with_retry_jitter_prevents_thundering_herd(
     tag_spool = "TAG-004"
     updates = {"ocupado_por": "Worker93"}
 
-    # Mock conflict on first attempt
+    # Mock conflict on first attempt (VersionConflictError: expected, actual, message)
     mock_sheets_repository.update_spool_with_version.side_effect = [
-        VersionConflictError("TAG-004", "version-1", "version-2", "TOMAR"),
+        VersionConflictError("version-1", "version-2", "TOMAR"),
         "version-3"
     ]
 
@@ -259,10 +260,10 @@ async def test_update_with_retry_jitter_prevents_thundering_herd(
     delays = []
     for _ in range(5):
         mock_sheets_repository.update_spool_with_version.side_effect = [
-            VersionConflictError("TAG-004", "version-1", "version-2", "TOMAR"),
+            VersionConflictError("version-1", "version-2", "TOMAR"),
             "version-3"
         ]
-        await conflict_service.update_with_retry(tag_spool, updates, max_attempts=3)
+        await conflict_service.update_with_retry(tag_spool, updates, operation="TOMAR", max_attempts=3)
 
         # Calculate delay used (would need timing instrumentation in real code)
         # For this test, just verify jitter is enabled
@@ -319,10 +320,10 @@ def test_detect_conflict_pattern_identifies_hot_spots(conflict_service):
     # Detect pattern
     analysis = conflict_service.detect_conflict_pattern(conflicts)
 
-    # Assertions
+    # Assertions (hot_spots is list of tag_spool strings; conflict_counts has per-spool counts)
     assert "TAG-HOTSPOT" in str(analysis), "Should identify hot spot spool"
-    assert analysis["hot_spots"][0]["tag_spool"] == "TAG-HOTSPOT"
-    assert analysis["hot_spots"][0]["conflict_count"] == 3
+    assert analysis["hot_spots"][0] == "TAG-HOTSPOT"
+    assert analysis["conflict_counts"]["TAG-HOTSPOT"] == 3
 
 
 def test_conflict_metrics_tracked(conflict_service):
@@ -336,19 +337,19 @@ def test_conflict_metrics_tracked(conflict_service):
     """
     tag_spool = "TAG-METRICS"
 
-    # Track some conflicts
-    conflict_service._record_conflict(tag_spool, retry_count=1, success=False)
-    conflict_service._record_conflict(tag_spool, retry_count=2, success=False)
-    conflict_service._record_conflict(tag_spool, retry_count=1, success=True)
+    # Track some conflicts (_record_conflict: tag_spool, retry_count, succeeded)
+    conflict_service._record_conflict(tag_spool, retry_count=1, succeeded=False)
+    conflict_service._record_conflict(tag_spool, retry_count=2, succeeded=False)
+    conflict_service._record_conflict(tag_spool, retry_count=1, succeeded=True)
 
     # Get metrics
     metrics = conflict_service._conflict_metrics.get(tag_spool)
 
-    # Assertions
+    # Assertions (ConflictMetrics: one record per conflict; succeeded/failed counts)
     assert metrics is not None
-    assert metrics.total_conflicts >= 3
-    assert metrics.total_retries >= 4  # 1 + 2 + 1
-    assert metrics.success_count >= 1
+    assert metrics.total_conflicts == 3
+    assert metrics.retries_succeeded + metrics.retries_failed == 3
+    assert metrics.retries_succeeded >= 1
 
 
 def test_retry_config_validation():

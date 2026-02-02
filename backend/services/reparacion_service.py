@@ -340,8 +340,12 @@ class ReparacionService:
         # Validate ownership
         if not spool.ocupado_por or f"({worker_id})" not in spool.ocupado_por:
             from backend.exceptions import NoAutorizadoError
+            trabajador_esperado = spool.ocupado_por or "desconocido"
             raise NoAutorizadoError(
-                f"Spool {tag_spool} no está ocupado por este trabajador"
+                tag_spool=tag_spool,
+                trabajador_esperado=trabajador_esperado,
+                trabajador_solicitante=worker_nombre,
+                operacion="REPARACION"
             )
 
         # Step 2: Instantiate state machine and trigger COMPLETAR transition
@@ -446,7 +450,8 @@ class ReparacionService:
         if not spool:
             raise SpoolNoEncontradoError(tag_spool)
 
-        self.validation_service.validar_puede_cancelar_reparacion(spool, worker_id)
+        worker_nombre = spool.ocupado_por or ""
+        self.validation_service.validar_puede_cancelar_reparacion(spool, worker_nombre, worker_id)
 
         # Step 2: Instantiate state machine and trigger CANCELAR transition
         reparacion_machine = REPARACIONStateMachine(
