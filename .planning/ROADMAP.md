@@ -30,7 +30,7 @@
   3. Metadata sheet has 11 columns including N_UNION field at position 11 for granular audit trail
   4. System queries all sheets using dynamic header mapping (no hardcoded column indices)
   5. UnionRepository can query Uniones using OT column as foreign key to Operaciones
-**Plans**: 5 plans
+**Plans**: 7 plans (including 2 gap closure plans)
 
 Plans:
 - [x] 07-01-PLAN.md — Extend Operaciones sheet to 72 columns with metrics
@@ -38,6 +38,8 @@ Plans:
 - [x] 07-03-PLAN.md — Create Union model and repository with tests
 - [x] 07-04-PLAN.md — Add startup schema validation for all sheets
 - [x] 07-05-PLAN.md — Integrate v4.0 schema validation into FastAPI startup
+- [ ] 07-06-PLAN.md — Execute schema migrations for Operaciones and Metadata (gap closure)
+- [ ] 07-07-PLAN.md — Document Uniones requirements for Engineering (gap closure)
 
 #### Phase 8: Backend Data Layer
 **Goal**: Repository layer can read/write union data with batch operations and performance optimization
