@@ -608,3 +608,168 @@ class RedisLockService:
         except Exception as e:
             # Log error but don't block operations
             logger.warning(f"Lazy cleanup failed: {e}", exc_info=True)
+
+    async def reconcile_from_sheets(self, sheets_repository) -> dict:
+        """
+        Reconcile Redis locks from Sheets.Ocupado_Por (startup auto-recovery).
+
+        Treats Sheets as source of truth and recreates missing Redis locks for
+        spools that are currently occupied according to Sheets.Ocupado_Por field.
+
+        Process:
+        1. Query all spools from Operaciones sheet
+        2. Filter spools where ocupado_por is not None and not "DISPONIBLE"
+        3. For each occupied spool:
+           - Parse fecha_ocupacion to check age
+           - Skip if older than 24 hours (stale occupation)
+           - Check if Redis lock exists using redis.exists()
+           - If lock missing:
+             - Parse worker_id from "INICIALES(ID)" format using regex
+             - Create lock value: "{worker_id}:{uuid}:{fecha_ocupacion}"
+             - Acquire with safety TTL (10 seconds)
+             - Call persist() to make permanent
+             - Log reconciliation action
+
+        Returns:
+            dict with keys:
+                - reconciled: Number of locks created from Sheets data
+                - skipped: Number of old locks (>24h) that were not recreated
+
+        Note:
+            - Should be called during FastAPI startup event
+            - Wrapped with timeout to prevent blocking startup too long
+            - Silently skips errors (logs warnings only)
+        """
+        if not sheets_repository:
+            logger.warning("Reconciliation skipped: sheets_repository not provided")
+            return {"reconciled": 0, "skipped": 0}
+
+        reconciled_count = 0
+        skipped_count = 0
+
+        try:
+            # Query all spools from Sheets
+            logger.info("🔄 Querying all spools from Sheets for reconciliation...")
+            all_spools = sheets_repository.get_all_spools()
+
+            # Filter occupied spools
+            occupied_spools = [
+                spool for spool in all_spools
+                if spool.ocupado_por and spool.ocupado_por != "DISPONIBLE"
+            ]
+
+            logger.info(f"Found {len(occupied_spools)} occupied spools in Sheets")
+
+            for spool in occupied_spools:
+                try:
+                    # Check timestamp - skip locks older than 24 hours
+                    if spool.fecha_ocupacion:
+                        try:
+                            # Parse DD-MM-YYYY HH:MM:SS format
+                            ocupacion_time = datetime.strptime(
+                                spool.fecha_ocupacion,
+                                "%d-%m-%Y %H:%M:%S"
+                            )
+                            age_hours = (now_chile().replace(tzinfo=None) - ocupacion_time).total_seconds() / 3600
+
+                            if age_hours > 24:
+                                logger.debug(
+                                    f"Skipping old occupation: {spool.tag_spool} "
+                                    f"(age: {age_hours:.1f}h, occupied_by: {spool.ocupado_por})"
+                                )
+                                skipped_count += 1
+                                continue
+
+                        except ValueError as e:
+                            logger.warning(
+                                f"Failed to parse fecha_ocupacion for {spool.tag_spool}: "
+                                f"{spool.fecha_ocupacion}, error: {e}. Skipping."
+                            )
+                            skipped_count += 1
+                            continue
+
+                    # Check if Redis lock exists
+                    lock_key = self._lock_key(spool.tag_spool)
+                    exists = await self.redis.exists(lock_key)
+
+                    if exists:
+                        # Lock already exists in Redis - no need to recreate
+                        logger.debug(f"Lock already exists in Redis: {spool.tag_spool}")
+                        continue
+
+                    # Lock missing - recreate from Sheets data
+                    # Parse worker_id from "INICIALES(ID)" format
+                    import re
+                    match = re.search(r'\((\d+)\)$', spool.ocupado_por)
+
+                    if not match:
+                        logger.warning(
+                            f"Failed to parse worker_id from ocupado_por: {spool.ocupado_por} "
+                            f"for {spool.tag_spool}. Skipping."
+                        )
+                        skipped_count += 1
+                        continue
+
+                    worker_id = int(match.group(1))
+
+                    # Create lock value: "{worker_id}:{uuid}:{fecha_ocupacion}"
+                    # Use existing fecha_ocupacion timestamp from Sheets
+                    timestamp = spool.fecha_ocupacion or format_datetime_for_sheets(now_chile())
+                    lock_value = f"{worker_id}:{uuid.uuid4()}:{timestamp}"
+
+                    # Two-step acquisition: SET with safety TTL, then PERSIST
+                    # Step 1: Acquire with 10-second safety TTL
+                    acquired = await self.redis.set(lock_key, lock_value, nx=True, ex=10)
+
+                    if not acquired:
+                        # Lock was created between EXISTS check and SET - skip
+                        logger.debug(
+                            f"Lock appeared during reconciliation: {spool.tag_spool}. "
+                            f"Skipping (race condition)."
+                        )
+                        continue
+
+                    # Step 2: Remove TTL to make persistent
+                    persist_result = await self.redis.persist(lock_key)
+
+                    if persist_result != 1:
+                        # PERSIST failed - release lock and skip
+                        await self.redis.delete(lock_key)
+                        logger.warning(
+                            f"PERSIST failed for {spool.tag_spool} during reconciliation. "
+                            f"Lock released."
+                        )
+                        skipped_count += 1
+                        continue
+
+                    reconciled_count += 1
+                    logger.info(
+                        f"✅ Reconciled lock: {spool.tag_spool} for worker {worker_id} "
+                        f"(from Sheets.Ocupado_Por={spool.ocupado_por})"
+                    )
+
+                except Exception as spool_error:
+                    # Log error but continue with next spool
+                    logger.warning(
+                        f"Failed to reconcile lock for {spool.tag_spool}: {spool_error}",
+                        exc_info=True
+                    )
+                    skipped_count += 1
+                    continue
+
+            logger.info(
+                f"✅ Redis reconciliation complete: {reconciled_count} locks created, "
+                f"{skipped_count} old locks skipped"
+            )
+
+            return {
+                "reconciled": reconciled_count,
+                "skipped": skipped_count
+            }
+
+        except Exception as e:
+            logger.error(f"Reconciliation failed: {e}", exc_info=True)
+            return {
+                "reconciled": reconciled_count,
+                "skipped": skipped_count
+            }
