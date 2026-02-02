@@ -43,11 +43,11 @@ Progress: [███████████░░] 91% (51 of 53 total plans co
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
-| 12. Frontend Union Selection UX | 4 (in progress) | 10.1 min | 2.5 min |
+| 12. Frontend Union Selection UX | 5 (in progress) | 15.1 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: [6.0, 10.6, 5.0, 2.0, 2.1] min
-- Trend: Phase 12 in progress (4 of 7 plans, 2.5-min average - 57% faster than Phase 11's 5.8-min average)
+- Last 5 plans: [10.6, 5.0, 2.0, 2.1, 5.0] min
+- Trend: Phase 12 in progress (5 of 7 plans, 3.0-min average - 48% faster than Phase 11's 5.8-min average)
 
 *Updated after each plan completion*
 
@@ -160,6 +160,10 @@ Recent decisions affecting v4.0 work:
 - **D91 (12-03)**: All v4.0 helpers memoized with useCallback (prevents unnecessary re-renders)
 - **D92 (12-01)**: Use native fetch() API for v4.0 functions (maintains consistency with v3.0 pattern, no new dependencies)
 - **D93 (12-01)**: ESLint disable comments for future-use types (types defined now for Phase 12 UI components, consumed in plans 02-05)
+- **D94 (12-02)**: Modal uses createPortal for body-level rendering (proper z-index stacking without parent constraints)
+- **D95 (12-02)**: UnionTable shell without selection logic (deferred to Plan 04 for ARM-before-SOLD validation)
+- **D96 (12-02)**: Version detection uses total_uniones > 0 (simple frontend-only check, no API latency)
+- **D97 (12-02)**: Session storage for version caching (spool_version_{TAG} format, cleared on refresh for data freshness)
 
 ### Pending Todos
 
@@ -255,7 +259,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 12-03-PLAN.md (Context Extension with v4.0 State)
+Stopped at: Completed 12-02-PLAN.md (Base Components - Modal, UnionTable, Version Detection)
 Resume file: None - continuing Phase 12 execution
 
-**Phase 12 Progress:** Frontend foundation complete (types, components, context). Next: P3.5 Acción Selection, P4 Union Selection Interface, P5 Confirmation, P6 Success pages for v4.0 INICIAR/FINALIZAR workflows.
+**Phase 12 Progress:** Base components ready (Modal, UnionTable, version detection). Types and API client complete. Next: P3 API Integration, P4 Selection Logic, P5 FINALIZAR Integration for v4.0 workflows.
