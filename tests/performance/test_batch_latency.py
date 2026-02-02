@@ -21,6 +21,26 @@ from tests.performance.conftest import (
 )
 
 
+# Performance baselines from Phase 8
+# Updated: 2026-02-02
+# Source: Phase 8 integration tests (test_performance_target.py)
+PERFORMANCE_BASELINES = {
+    "10_union_batch": {
+        "avg": 0.466,  # Phase 8 measured average
+        "p95": 0.55,   # Estimated from Phase 8 data
+        "p99": 0.70,   # Estimated from Phase 8 data
+        "note": "Phase 8 integration test results with 300ms mock latency"
+    },
+    "20_union_batch": {
+        "avg": 0.93,   # Estimated 2x scaling
+        "p95": 1.10,   # Estimated
+        "p99": 1.40,   # Estimated
+        "note": "Estimated from 10-union baseline with linear scaling"
+    },
+    "regression_threshold": 0.20  # 20% degradation triggers failure
+}
+
+
 def generate_mock_unions(num_unions: int, ot: str = "001"):
     """Generate mock union data for performance testing."""
     headers = [
@@ -386,3 +406,95 @@ class TestBatchLatencyPercentiles:
         assert stats['p95'] < 5.0, f"50-union p95 exceeded 5s: {stats['p95']:.3f}s"
 
         print("\n✅ 50-union batch: Linear scaling verified, memory efficient")
+
+    @pytest.mark.performance
+    def test_performance_no_regression(self, mock_sheets_repo_with_realistic_latency):
+        """
+        Verify performance doesn't degrade from Phase 8 baseline.
+
+        Compares current performance against documented baseline (0.466s average).
+        Fails if performance degrades > 20% from baseline.
+
+        This ensures no accidental performance regressions from code changes.
+        """
+        # Setup
+        mock_sheets_repo, mock_metadata_worksheet = mock_sheets_repo_with_realistic_latency
+
+        ColumnMapCache.invalidate("Uniones")
+        mock_data = generate_mock_unions(num_unions=10, ot="004")
+        mock_sheets_repo.read_worksheet.return_value = mock_data
+
+        union_repo = UnionRepository(mock_sheets_repo)
+        metadata_repo = MagicMock()
+        metadata_repo._worksheet = mock_metadata_worksheet
+        metadata_repo.batch_log_events = MagicMock()
+
+        union_service = UnionService(
+            union_repo=union_repo,
+            metadata_repo=metadata_repo,
+            sheets_repo=mock_sheets_repo
+        )
+
+        # Get unions
+        all_unions = union_repo.get_by_ot("004")
+        union_ids = [u.id for u in all_unions]
+
+        # Run 50 iterations for baseline comparison
+        iterations = 50
+        latencies = []
+
+        for _ in range(iterations):
+            start_time = time.time()
+
+            union_service.process_selection(
+                tag_spool="OT-004",
+                union_ids=union_ids,
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion="ARM"
+            )
+
+            elapsed = time.time() - start_time
+            latencies.append(elapsed)
+
+        # Calculate percentiles
+        stats = calculate_performance_percentiles(latencies)
+
+        # Get baseline and threshold
+        baseline = PERFORMANCE_BASELINES["10_union_batch"]
+        threshold = PERFORMANCE_BASELINES["regression_threshold"]
+
+        baseline_avg = baseline["avg"]
+        max_allowed_avg = baseline_avg * (1 + threshold)
+
+        baseline_p95 = baseline["p95"]
+        max_allowed_p95 = baseline_p95 * (1 + threshold)
+
+        # Print comparison
+        print(f"\n📊 PERFORMANCE REGRESSION TEST")
+        print(f"  Baseline (Phase 8): {baseline_avg:.3f}s average")
+        print(f"  Current: {stats['avg']:.3f}s average")
+        print(f"  Threshold: {threshold*100:.0f}% degradation")
+        print(f"  Max allowed: {max_allowed_avg:.3f}s")
+        print(f"")
+        print(f"  Baseline p95: {baseline_p95:.3f}s")
+        print(f"  Current p95: {stats['p95']:.3f}s")
+        print(f"  Max allowed p95: {max_allowed_p95:.3f}s")
+
+        # Check for regression
+        avg_regression = ((stats['avg'] - baseline_avg) / baseline_avg) * 100
+        p95_regression = ((stats['p95'] - baseline_p95) / baseline_p95) * 100
+
+        print(f"")
+        print(f"  Average regression: {avg_regression:+.1f}%")
+        print(f"  p95 regression: {p95_regression:+.1f}%")
+
+        # Verify no regression
+        assert stats['avg'] <= max_allowed_avg, \
+            f"Average performance regressed by {avg_regression:.1f}% (threshold: {threshold*100:.0f}%)"
+
+        assert stats['p95'] <= max_allowed_p95, \
+            f"p95 performance regressed by {p95_regression:.1f}% (threshold: {threshold*100:.0f}%)"
+
+        print(f"\n✅ No performance regression detected")
+        print(f"   Baseline maintained within {threshold*100:.0f}% threshold")
