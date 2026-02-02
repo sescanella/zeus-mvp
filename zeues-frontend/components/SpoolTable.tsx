@@ -2,12 +2,30 @@ import { Spool } from '@/lib/types';
 import { Checkbox } from './Checkbox';
 
 interface SpoolTableProps {
-  spools: Spool[];
+  spools: Array<Spool & { version?: 'v3.0' | 'v4.0' }>;
   selectedTags: string[];
   isMaxReached: boolean;
   onToggle: (tag: string) => void;
   hasActiveFilters: boolean;
 }
+
+/**
+ * Version badge component for v3.0 vs v4.0 spools
+ */
+const VersionBadge = ({ version }: { version?: 'v3.0' | 'v4.0' }) => {
+  if (!version) return <span className="text-gray-400">-</span>;
+
+  return (
+    <span className={`
+      inline-flex items-center px-2 py-1 text-xs font-medium rounded
+      ${version === 'v4.0'
+        ? 'text-green-700 bg-green-100'
+        : 'text-gray-700 bg-gray-100'}
+    `}>
+      {version}
+    </span>
+  );
+};
 
 /**
  * Componente de tabla de spools con checkboxes integrados
@@ -18,6 +36,7 @@ interface SpoolTableProps {
  * - Click en fila completa para toggle
  * - Estados visuales (selected, disabled)
  * - Sticky header
+ * - Version badges (v3.0 gray, v4.0 green)
  */
 export function SpoolTable({
   spools,
@@ -52,6 +71,9 @@ export function SpoolTable({
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
               TAG_SPOOL
             </th>
+            <th scope="col" className="px-4 py-3 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider hidden sm:table-cell">
+              Versión
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -69,8 +91,10 @@ export function SpoolTable({
                     ? 'bg-zeues-blue/10 hover:bg-zeues-blue/20'
                     : isDisabled
                       ? 'bg-gray-50 cursor-not-allowed opacity-50'
-                      : 'hover:bg-gray-50'
-                  }
+                      : 'hover:bg-gray-50'}
+                  ${(spool as { Ocupado_Por?: string }).Ocupado_Por && (spool as { Ocupado_Por?: string }).Ocupado_Por !== 'DISPONIBLE'
+                    ? 'bg-yellow-50 hover:bg-yellow-100'
+                    : ''}
                 `}
               >
                 <td className="px-4 py-3 whitespace-nowrap">
@@ -96,6 +120,9 @@ export function SpoolTable({
                       {spool.proyecto}
                     </div>
                   )}
+                </td>
+                <td className="px-4 py-3 hidden sm:table-cell">
+                  <VersionBadge version={spool.version} />
                 </td>
               </tr>
             );
