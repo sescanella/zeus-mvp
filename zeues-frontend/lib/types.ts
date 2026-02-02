@@ -22,6 +22,8 @@ export interface Spool {
   fecha_soldadura?: string;
   soldador?: string;  // v2.1: Formato "INICIALES(ID)" ej: "MG(94)"
   fecha_qc_metrologia?: string | null;  // v2.1: Fecha QC/Metrología completada
+  total_uniones?: number;  // v4.0: Column 68 - Total union count
+  version?: 'v3.0' | 'v4.0';  // v4.0: Derived from total_uniones (>0 = v4.0, 0 = v3.0)
 }
 
 export interface ActionPayload {
@@ -190,4 +192,28 @@ export interface UseSSEOptions {
   onError?: (error: Event) => void;
   onConnectionChange?: (connected: boolean) => void;
   openWhenHidden?: boolean;  // Default: false
+}
+
+// ==========================================
+// VERSION DETECTION (v4.0 Phase 9)
+// ==========================================
+
+/**
+ * Version information for a spool (v3.0 vs v4.0)
+ *
+ * Detection logic: count > 0 = v4.0, count = 0 = v3.0
+ */
+export interface VersionInfo {
+  version: 'v3.0' | 'v4.0';
+  union_count: number;
+  detection_logic: string;
+  tag_spool: string;
+}
+
+/**
+ * API response for version detection endpoint
+ */
+export interface VersionResponse {
+  success: boolean;
+  data: VersionInfo;
 }
