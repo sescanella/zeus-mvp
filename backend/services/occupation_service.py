@@ -71,7 +71,8 @@ class OccupationService:
         sheets_repository: SheetsRepository,
         metadata_repository: MetadataRepository,
         conflict_service: ConflictService,
-        redis_event_service: RedisEventService
+        redis_event_service: RedisEventService,
+        union_repository=None  # Optional dependency for v4.0 operations
     ):
         """
         Initialize occupation service with injected dependencies.
@@ -82,12 +83,14 @@ class OccupationService:
             metadata_repository: Repository for audit logging
             conflict_service: Service for version conflict handling and retry
             redis_event_service: Service for publishing real-time events
+            union_repository: Repository for union-level operations (v4.0)
         """
         self.redis_lock_service = redis_lock_service
         self.sheets_repository = sheets_repository
         self.metadata_repository = metadata_repository
         self.conflict_service = conflict_service
         self.redis_event_service = redis_event_service
+        self.union_repository = union_repository
         logger.info("OccupationService initialized with Redis lock + optimistic locking")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
@@ -882,4 +885,336 @@ class OccupationService:
             raise
         except Exception as e:
             logger.error(f"❌ INICIAR operation failed: {e}")
+            raise
+
+    def _determine_action(
+        self,
+        selected_count: int,
+        total_available: int,
+        operacion: str
+    ) -> str:
+        """
+        Determine if action should be PAUSAR or COMPLETAR based on selected vs total.
+
+        Auto-determination logic:
+        - If selected_count == total_available → COMPLETAR (all work done)
+        - If selected_count < total_available → PAUSAR (partial work)
+        - If selected_count > total_available → 409 Conflict (race condition)
+
+        Args:
+            selected_count: Number of unions selected by worker
+            total_available: Total available unions for this operation
+            operacion: Operation type ("ARM" or "SOLD")
+
+        Returns:
+            str: "PAUSAR" or "COMPLETAR"
+
+        Raises:
+            ValueError: If selected_count > total_available (race condition)
+        """
+        if selected_count > total_available:
+            raise ValueError(
+                f"Race condition detected: {selected_count} unions selected but only "
+                f"{total_available} available for {operacion}"
+            )
+
+        if selected_count == total_available:
+            return "COMPLETAR"
+        else:
+            return "PAUSAR"
+
+    async def finalizar_spool(self, request: FinalizarRequest) -> OccupationResponse:
+        """
+        Finalizar trabajo en un spool (v4.0 FINALIZAR operation).
+
+        Procesa las uniones seleccionadas y auto-determina si debe PAUSAR o COMPLETAR
+        basado en si se procesaron todas las uniones disponibles.
+
+        selected_unions vacío = cancellation (libera lock sin tocar Uniones).
+
+        Flow:
+        1. Verify worker owns the Redis lock
+        2. Get fresh union totals from UnionRepository
+        3. If selected_unions is empty → handle as cancellation
+        4. Calculate if action is PAUSAR or COMPLETAR based on selected vs total
+        5. Update Uniones sheet with batch operation
+        6. Release Redis lock and clear Ocupado_Por
+        7. Log appropriate event to Metadata
+        8. Return response with action_taken and unions_processed
+
+        Args:
+            request: FINALIZAR request with tag_spool, worker_id, worker_nombre, operacion, selected_unions
+
+        Returns:
+            OccupationResponse with action_taken and unions_processed
+
+        Raises:
+            SpoolNoEncontradoError: If spool doesn't exist
+            NoAutorizadoError: If worker doesn't own the lock
+            LockExpiredError: If lock no longer exists
+            ValueError: If race condition (union became unavailable)
+            SheetsUpdateError: If Sheets write fails
+        """
+        tag_spool = request.tag_spool
+        worker_id = request.worker_id
+        worker_nombre = request.worker_nombre
+        operacion = request.operacion.value
+        selected_unions = request.selected_unions
+
+        logger.info(
+            f"FINALIZAR operation started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
+            f"for {operacion}, {len(selected_unions)} unions selected"
+        )
+
+        try:
+            # Step 1: Verify lock ownership
+            lock_owner = await self.redis_lock_service.get_lock_owner(tag_spool)
+
+            if lock_owner is None:
+                raise LockExpiredError(tag_spool)
+
+            owner_id, lock_token = lock_owner
+
+            if owner_id != worker_id:
+                raise NoAutorizadoError(
+                    tag_spool=tag_spool,
+                    trabajador_esperado=f"Worker {owner_id}",
+                    trabajador_solicitante=worker_nombre,
+                    operacion="FINALIZAR"
+                )
+
+            # Step 2: Validate spool exists
+            spool = self.sheets_repository.get_spool_by_tag(tag_spool)
+            if not spool:
+                raise SpoolNoEncontradoError(tag_spool)
+
+            # Step 3: Handle zero-union cancellation
+            if len(selected_unions) == 0:
+                logger.info(f"Zero unions selected - handling as cancellation for {tag_spool}")
+
+                # Release Redis lock
+                try:
+                    await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
+                except Exception as e:
+                    logger.warning(f"Failed to release lock during cancellation: {e}")
+
+                # Clear occupation fields (with version retry)
+                try:
+                    updates_dict = {
+                        "Ocupado_Por": "",
+                        "Fecha_Ocupacion": ""
+                    }
+
+                    await self.conflict_service.update_with_retry(
+                        tag_spool=tag_spool,
+                        updates=updates_dict,
+                        operation="CANCELAR"
+                    )
+
+                    logger.info(f"✅ Occupation cleared for {tag_spool}")
+
+                except Exception as e:
+                    logger.error(f"Failed to clear occupation during cancellation: {e}")
+                    # Continue - lock already released
+
+                # Log cancellation event to Metadata
+                try:
+                    evento_tipo = EventoTipo.SPOOL_CANCELADO.value
+                    metadata_json = json.dumps({
+                        "reason": "zero_unions_selected"
+                    })
+
+                    self.metadata_repository.log_event(
+                        evento_tipo=evento_tipo,
+                        tag_spool=tag_spool,
+                        worker_id=worker_id,
+                        worker_nombre=worker_nombre,
+                        operacion=operacion,
+                        accion="CANCELAR",
+                        fecha_operacion=format_date_for_sheets(today_chile()),
+                        metadata_json=metadata_json
+                    )
+
+                    logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+
+                except Exception as e:
+                    logger.error(f"❌ CRITICAL: Metadata logging failed for cancellation: {e}")
+
+                # Publish real-time event
+                try:
+                    await self.redis_event_service.publish_spool_update(
+                        event_type="CANCELAR",
+                        tag_spool=tag_spool,
+                        worker_nombre=None,
+                        estado_detalle="Disponible",
+                        additional_data={"operacion": operacion}
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
+
+                return OccupationResponse(
+                    success=True,
+                    tag_spool=tag_spool,
+                    message=f"Trabajo cancelado en {tag_spool}",
+                    action_taken="CANCELADO",
+                    unions_processed=0
+                )
+
+            # Step 4: Get fresh union totals to determine action
+            if self.union_repository is None:
+                raise ValueError("UnionRepository not configured for v4.0 operations")
+
+            # Get available unions for this operation
+            if operacion == "ARM":
+                disponibles = self.union_repository.get_disponibles_arm_by_ot(spool.ot)
+            elif operacion == "SOLD":
+                disponibles = self.union_repository.get_disponibles_sold_by_ot(spool.ot)
+            else:
+                raise ValueError(f"Unsupported operation: {operacion}")
+
+            total_available = len(disponibles)
+            selected_count = len(selected_unions)
+
+            logger.info(
+                f"Union availability for {tag_spool}: {selected_count} selected, "
+                f"{total_available} available for {operacion}"
+            )
+
+            # Step 5: Auto-determine action (PAUSAR vs COMPLETAR)
+            try:
+                action_taken = self._determine_action(selected_count, total_available, operacion)
+                logger.info(f"Auto-determined action: {action_taken}")
+            except ValueError as e:
+                # Race condition - union became unavailable
+                logger.error(f"Race condition detected: {e}")
+                raise
+
+            # Step 6: Update Uniones sheet with batch operation
+            try:
+                timestamp = now_chile()
+
+                if operacion == "ARM":
+                    updated_count = self.union_repository.batch_update_arm(
+                        tag_spool=tag_spool,
+                        union_ids=selected_unions,
+                        worker=worker_nombre,
+                        timestamp=timestamp
+                    )
+                elif operacion == "SOLD":
+                    updated_count = self.union_repository.batch_update_sold(
+                        tag_spool=tag_spool,
+                        union_ids=selected_unions,
+                        worker=worker_nombre,
+                        timestamp=timestamp
+                    )
+
+                logger.info(f"✅ Batch update: {updated_count} unions updated in Uniones sheet")
+
+            except Exception as e:
+                logger.error(f"Failed to update Uniones sheet: {e}")
+                raise SheetsUpdateError(
+                    f"Failed to update unions: {e}",
+                    updates={"unions": selected_unions}
+                )
+
+            # Step 7: Release Redis lock and clear occupation
+            try:
+                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
+            except Exception as e:
+                logger.error(f"Failed to release lock for {tag_spool}: {e}")
+                # Continue - Sheets already updated
+
+            # Clear occupation fields (with version retry)
+            try:
+                updates_dict = {
+                    "Ocupado_Por": "",
+                    "Fecha_Ocupacion": ""
+                }
+
+                await self.conflict_service.update_with_retry(
+                    tag_spool=tag_spool,
+                    updates=updates_dict,
+                    operation="FINALIZAR"
+                )
+
+                logger.info(f"✅ Occupation cleared for {tag_spool}")
+
+            except Exception as e:
+                logger.error(f"Failed to clear occupation: {e}")
+                # Continue - unions already updated, lock already released
+
+            # Step 8: Log appropriate event to Metadata
+            try:
+                if action_taken == "PAUSAR":
+                    evento_tipo = EventoTipo.PAUSAR_SPOOL.value
+                elif action_taken == "COMPLETAR":
+                    # Use operation-specific event type
+                    evento_tipo_str = f"COMPLETAR_{operacion}"
+                    try:
+                        evento_tipo_enum = EventoTipo(evento_tipo_str)
+                        evento_tipo = evento_tipo_enum.value
+                    except ValueError:
+                        evento_tipo = evento_tipo_str
+
+                metadata_json = json.dumps({
+                    "v4_operation": "FINALIZAR",
+                    "action_taken": action_taken,
+                    "unions_processed": updated_count,
+                    "selected_unions": selected_unions
+                })
+
+                self.metadata_repository.log_event(
+                    evento_tipo=evento_tipo,
+                    tag_spool=tag_spool,
+                    worker_id=worker_id,
+                    worker_nombre=worker_nombre,
+                    operacion=operacion,
+                    accion=action_taken,
+                    fecha_operacion=format_date_for_sheets(today_chile()),
+                    metadata_json=metadata_json
+                )
+
+                logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+
+            except Exception as e:
+                logger.error(f"❌ CRITICAL: Metadata logging failed: {e}", exc_info=True)
+
+            # Step 8.5: Publish real-time event
+            try:
+                estado_detalle = f"{operacion} {'completado' if action_taken == 'COMPLETAR' else 'parcial (pausado)'}"
+                await self.redis_event_service.publish_spool_update(
+                    event_type=action_taken,
+                    tag_spool=tag_spool,
+                    worker_nombre=None,
+                    estado_detalle=estado_detalle,
+                    additional_data={
+                        "operacion": operacion,
+                        "v4_operation": "FINALIZAR",
+                        "unions_processed": updated_count
+                    }
+                )
+                logger.info(f"✅ Real-time event published: FINALIZAR ({action_taken}) for {tag_spool}")
+            except Exception as e:
+                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
+
+            # Step 9: Return success response
+            if action_taken == "COMPLETAR":
+                message = f"Operación completada en {tag_spool} - {updated_count} uniones procesadas"
+            else:
+                message = f"Trabajo pausado en {tag_spool} - {updated_count} uniones procesadas"
+
+            logger.info(f"✅ FINALIZAR completed successfully: {message}")
+
+            return OccupationResponse(
+                success=True,
+                tag_spool=tag_spool,
+                message=message,
+                action_taken=action_taken,
+                unions_processed=updated_count
+            )
+
+        except (SpoolNoEncontradoError, NoAutorizadoError, LockExpiredError, ValueError):
+            raise
+        except Exception as e:
+            logger.error(f"❌ FINALIZAR operation failed: {e}")
             raise
