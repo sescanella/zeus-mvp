@@ -56,6 +56,8 @@ from backend.routers import metrologia
 from backend.routers import diagnostic
 # v4.0 Phase 11: Router OCCUPATION_V4 implementado (INICIAR/FINALIZAR workflows)
 from backend.routers import occupation_v4
+# v4.0 Phase 11: Router UNION implementado (union query endpoints)
+from backend.routers import union_router
 
 
 # ============================================================================
@@ -455,6 +457,9 @@ app.include_router(metrologia.router, prefix="/api/metrologia", tags=["Metrologi
 
 # v4.0 Phase 9: Router DIAGNOSTIC registrado (version detection diagnostics)
 app.include_router(diagnostic.router, prefix="/api", tags=["Diagnostic"])
+
+# v4.0 Phase 11: Router UNION registrado (union query endpoints)
+app.include_router(union_router.router, prefix="/api/v4", tags=["v4-unions"])
 
 
 # ============================================================================
