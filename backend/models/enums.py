@@ -73,6 +73,11 @@ class EventoTipo(str, Enum):
     COMPLETAR_REPARACION = "COMPLETAR_REPARACION"
     CANCELAR_REPARACION = "CANCELAR_REPARACION"
 
+    # Phase 8 Events (v4.0 Union-level tracking)
+    UNION_ARM_REGISTRADA = "UNION_ARM_REGISTRADA"       # Union ARM completion
+    UNION_SOLD_REGISTRADA = "UNION_SOLD_REGISTRADA"    # Union SOLD completion
+    SPOOL_CANCELADO = "SPOOL_CANCELADO"                 # 0 unions selected (user cancels)
+
 
 class EstadoOcupacion(str, Enum):
     """
