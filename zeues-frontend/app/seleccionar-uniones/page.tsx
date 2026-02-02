@@ -15,15 +15,41 @@ export default function SeleccionarUnionesPage() {
 
   const [unions, setUnions] = useState<Union[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showZeroModal, setShowZeroModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Redirect if missing required context
   useEffect(() => {
-    if (!state.selectedSpool || !state.selectedOperation) {
+    if (!state.selectedSpool || !state.selectedOperation || state.selectedOperation === 'METROLOGIA') {
       router.push('/');
     }
   }, [state.selectedSpool, state.selectedOperation, router]);
+
+  // Restore selection from session storage on mount if exists
+  useEffect(() => {
+    if (state.selectedSpool) {
+      const saved = sessionStorage.getItem(`unions_selection_${state.selectedSpool}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setState({ selectedUnions: parsed });
+        } catch {
+          // Invalid JSON, ignore
+        }
+      }
+    }
+  }, [state.selectedSpool, setState]);
+
+  // Save selection to session storage on change
+  useEffect(() => {
+    if (state.selectedSpool && state.selectedUnions.length > 0) {
+      sessionStorage.setItem(
+        `unions_selection_${state.selectedSpool}`,
+        JSON.stringify(state.selectedUnions)
+      );
+    }
+  }, [state.selectedUnions, state.selectedSpool]);
 
   // Fetch unions on mount (IMPORTANT: Fresh API call for P5 data accuracy)
   useEffect(() => {
@@ -39,8 +65,11 @@ export default function SeleccionarUnionesPage() {
           state.selectedOperation as 'ARM' | 'SOLD'
         );
 
+        // Sort by n_union ascending
+        const sorted = response.uniones.sort((a, b) => a.n_union - b.n_union);
+
         // Mark completed unions based on operation
-        const unionsWithCompletionStatus = response.uniones.map(u => ({
+        const unionsWithCompletionStatus = sorted.map(u => ({
           ...u,
           is_completed: state.selectedOperation === 'ARM'
             ? !!u.arm_fecha_fin
@@ -82,12 +111,13 @@ export default function SeleccionarUnionesPage() {
   };
 
   // Handle continue button click
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (state.selectedUnions.length === 0) {
       // Show zero-selection modal
       setShowZeroModal(true);
     } else {
-      // Navigate to confirmar with selections
+      // Set submitting state and navigate to confirmar with selections
+      setSubmitting(true);
       setState({ pulgadasCompletadas: selectedPulgadas });
       router.push('/confirmar');
     }
@@ -113,6 +143,16 @@ export default function SeleccionarUnionesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Loading Bar During Submission */}
+      {submitting && (
+        <div className="fixed top-0 left-0 right-0 z-50">
+          <div className="bg-blue-500 text-white text-center py-2">
+            Guardando...
+          </div>
+          <div className="h-1 bg-blue-600 animate-pulse" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b-2 border-gray-200 px-6 py-4">
         <h1 className="text-2xl font-bold text-gray-900">
@@ -141,7 +181,14 @@ export default function SeleccionarUnionesPage() {
       {error && !loading && (
         <div className="mx-6 mt-6">
           <div className="bg-red-50 border border-red-200 rounded p-4">
-            <p className="text-red-700">{error}</p>
+            <p className="text-red-700 mb-2">{error}</p>
+            <Button
+              variant="cancel"
+              onClick={() => window.location.reload()}
+              className="h-12"
+            >
+              Reintentar
+            </Button>
           </div>
         </div>
       )}
