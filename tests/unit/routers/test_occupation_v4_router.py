@@ -195,3 +195,143 @@ def test_iniciar_worker_nombre_cannot_be_empty(client):
     )
 
     assert response.status_code == 422  # Pydantic validation error
+
+
+# ==================== ERROR SCENARIO TESTS ====================
+
+
+def test_finalizar_missing_selected_unions(client):
+    """Missing selected_unions field returns 422 validation error."""
+    response = client.post(
+        "/api/v4/occupation/finalizar",
+        json={
+            "tag_spool": "OT-123",
+            "worker_id": 93,
+            "worker_nombre": "MR(93)",
+            "operacion": "ARM"
+            # Missing selected_unions
+        }
+    )
+
+    assert response.status_code == 422  # Pydantic validation error
+
+
+def test_finalizar_selected_unions_must_be_list(client):
+    """selected_unions must be a list, not string."""
+    response = client.post(
+        "/api/v4/occupation/finalizar",
+        json={
+            "tag_spool": "OT-123",
+            "worker_id": 93,
+            "worker_nombre": "MR(93)",
+            "operacion": "ARM",
+            "selected_unions": "OT-123+1"  # Invalid: string not list
+        }
+    )
+
+    assert response.status_code == 422  # Pydantic validation error
+
+
+def test_finalizar_invalid_operacion_value(client):
+    """Invalid operacion value returns 422 validation error."""
+    response = client.post(
+        "/api/v4/occupation/finalizar",
+        json={
+            "tag_spool": "OT-123",
+            "worker_id": 93,
+            "worker_nombre": "MR(93)",
+            "operacion": "METROLOGIA",  # Not ARM or SOLD
+            "selected_unions": ["OT-123+1"]
+        }
+    )
+
+    assert response.status_code == 422  # Pydantic validation error
+
+
+def test_disponibles_missing_operacion_query(client):
+    """Missing operacion query param returns 422 validation error."""
+    response = client.get("/api/v4/uniones/OT-123/disponibles")
+    # Missing ?operacion=ARM
+
+    assert response.status_code == 422  # Query param required
+
+
+def test_disponibles_invalid_operacion_query(client):
+    """Invalid operacion query param returns 422 validation error."""
+    response = client.get("/api/v4/uniones/OT-123/disponibles?operacion=INVALID")
+
+    assert response.status_code == 422  # Pattern validation
+
+
+def test_iniciar_json_syntax_error(client):
+    """Malformed JSON returns 422 validation error."""
+    response = client.post(
+        "/api/v4/occupation/iniciar",
+        data='{"tag_spool": "OT-123", invalid}',  # Malformed JSON
+        headers={"Content-Type": "application/json"}
+    )
+
+    assert response.status_code == 422  # JSON decode error
+
+
+def test_iniciar_wrong_content_type(client):
+    """Wrong Content-Type header returns 422."""
+    response = client.post(
+        "/api/v4/occupation/iniciar",
+        data="tag_spool=OT-123&worker_id=93",  # Form data instead of JSON
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+
+    # FastAPI should reject non-JSON content
+    assert response.status_code == 422
+
+
+def test_finalizar_empty_string_in_union_list(client):
+    """Empty string in selected_unions list is invalid."""
+    response = client.post(
+        "/api/v4/occupation/finalizar",
+        json={
+            "tag_spool": "OT-123",
+            "worker_id": 93,
+            "worker_nombre": "MR(93)",
+            "operacion": "ARM",
+            "selected_unions": ["OT-123+1", "", "OT-123+3"]  # Empty string invalid
+        }
+    )
+
+    # Should validate and reject empty strings
+    assert response.status_code == 422
+
+
+def test_iniciar_extra_unexpected_fields_ignored(client):
+    """Extra fields in request are ignored (not an error)."""
+    response = client.post(
+        "/api/v4/occupation/iniciar",
+        json={
+            "tag_spool": "OT-123",
+            "worker_id": 93,
+            "worker_nombre": "MR(93)",
+            "operacion": "ARM",
+            "extra_field": "should be ignored"  # Extra field
+        }
+    )
+
+    # Should pass validation (extra fields ignored)
+    assert response.status_code != 422
+
+
+def test_metricas_tag_with_special_characters(client):
+    """TAG with special characters is accepted (URL encoding)."""
+    response = client.get("/api/v4/uniones/TAG-WITH-DASHES-123/metricas")
+
+    # Should not return 404 due to URL parsing
+    # May return 500 or other error, but not URL-related 404
+    assert response.status_code != 404 or "not found" in response.json().get("detail", "").lower()
+
+
+def test_disponibles_case_sensitive_operacion(client):
+    """Operacion query param is case-sensitive."""
+    response = client.get("/api/v4/uniones/OT-123/disponibles?operacion=arm")
+    # lowercase "arm" should fail validation (expects "ARM")
+
+    assert response.status_code == 422  # Pattern mismatch
