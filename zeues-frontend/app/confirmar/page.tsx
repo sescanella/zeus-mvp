@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
+import { Modal } from '@/components/Modal';
 import {
   tomarOcupacion,
   pausarOcupacion,
@@ -13,7 +14,8 @@ import {
   tomarReparacion,
   pausarReparacion,
   completarReparacion,
-  cancelarReparacion
+  cancelarReparacion,
+  finalizarSpool
 } from '@/lib/api';
 import type {
   TomarRequest,
@@ -40,6 +42,12 @@ const formatDateDDMMYYYY = (date: Date): string => {
   return `${day}-${month}-${year}`;
 };
 
+interface ErrorModalState {
+  title: string;
+  message: string;
+  action: () => void;
+}
+
 function ConfirmarContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,6 +61,8 @@ function ConfirmarContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errorType, setErrorType] = useState<'network' | 'not-found' | 'validation' | 'forbidden' | 'server' | 'generic'>('generic');
+  const [errorModal, setErrorModal] = useState<ErrorModalState | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const isBatchMode = state.batchMode && state.selectedSpools.length > 0;
 
@@ -66,13 +76,89 @@ function ConfirmarContent() {
     }
   }, [state, tipo, router]);
 
+  // Countdown effect for auto-reload (409 case)
+  useEffect(() => {
+    if (countdown !== null && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      router.push('/seleccionar-uniones');
+    }
+  }, [countdown, router]);
+
+  // Clear error modal on unmount
+  useEffect(() => {
+    return () => {
+      setErrorModal(null);
+    };
+  }, []);
+
+  const handleApiError = (error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+
+    if (errorMessage.includes('409') || errorMessage.includes('Conflicto')) {
+      // Race condition - unions changed, need to reload
+      setCountdown(2);
+      setErrorModal({
+        title: 'Datos desactualizados',
+        message: `Las uniones disponibles han cambiado. Recargando${countdown !== null ? ` en ${countdown}s` : ''}...`,
+        action: () => {
+          router.push('/seleccionar-uniones');
+        }
+      });
+    } else if (errorMessage.includes('403') || errorMessage.includes('autorizado') || errorMessage.includes('permisos')) {
+      // Ownership validation failed
+      setErrorModal({
+        title: 'Error de permisos',
+        message: 'No eres el dueño de este spool. Este spool está ocupado por otro trabajador.',
+        action: () => router.push('/seleccionar-spool')
+      });
+    } else {
+      // Generic error
+      setErrorModal({
+        title: 'Error',
+        message: errorMessage || 'Ocurrió un error. Por favor intenta nuevamente.',
+        action: () => setErrorModal(null)
+      });
+    }
+  };
+
   const handleConfirm = async () => {
     try {
       setLoading(true);
       setError('');
       setErrorType('generic');
 
-      if (isBatchMode) {
+      // Check for v4.0 FINALIZAR flow (single mode only)
+      if (state.accion === 'FINALIZAR' && !isBatchMode) {
+        // v4.0: FINALIZAR flow with union selection
+        const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
+        const worker_id = state.selectedWorker!.id;
+        const tag_spool = state.selectedSpool!;
+        const operacion = state.selectedOperation as 'ARM' | 'SOLD';
+
+        const payload = {
+          tag_spool,
+          worker_id,
+          worker_nombre,
+          operacion,
+          selected_unions: state.selectedUnions,
+          fecha_operacion: new Date().toISOString().split('T')[0] // YYYY-MM-DD
+        };
+
+        const response = await finalizarSpool(payload);
+
+        // Store pulgadas for success page
+        setState({ pulgadasCompletadas: response.pulgadas_completadas || 0 });
+
+        // Clear session storage on success
+        if (state.selectedSpool) {
+          sessionStorage.removeItem(`unions_selection_${state.selectedSpool}`);
+        }
+
+        // Navigate to success
+        router.push('/exito');
+      } else if (isBatchMode) {
         // v3.0: Batch mode - procesar múltiples spools
         const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
         const worker_id = state.selectedWorker!.id;
@@ -332,35 +418,40 @@ function ConfirmarContent() {
         router.push('/exito');
       }
     } catch (err) {
-      // v3.0: Manejar errores específicos según código HTTP (incluye nuevos códigos)
-      const errorMessage = err instanceof Error ? err.message : 'Error al procesar acción';
-
-      if (errorMessage.includes('red') || errorMessage.includes('conexión') || errorMessage.includes('Failed to fetch')) {
-        setErrorType('network');
-        setError('Error de conexión con el servidor. Verifica que el backend esté disponible.');
-      } else if (errorMessage.includes('ocupado') || errorMessage.includes('409')) {
-        // v3.0: 409 CONFLICT - Spool occupied by another worker (LOC-04 requirement)
-        setErrorType('forbidden');
-        setError('Este spool está siendo usado por otro trabajador. Intenta más tarde.');
-      } else if (errorMessage.includes('expiró') || errorMessage.includes('410')) {
-        // v3.0: 410 GONE - Lock expired (worker took too long)
-        setErrorType('validation');
-        setError('La operación tardó demasiado tiempo. Por favor vuelve a intentar.');
-      } else if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
-        setErrorType('not-found');
-        setError(errorMessage);
-      } else if (errorMessage.includes('400') || errorMessage.includes('ya iniciada') || errorMessage.includes('ya completada') || errorMessage.includes('dependencias') || errorMessage.includes('Requisitos')) {
-        setErrorType('validation');
-        setError(errorMessage);
-      } else if (errorMessage.includes('403') || errorMessage.includes('autorizado') || errorMessage.includes('completar')) {
-        setErrorType('forbidden');
-        setError(errorMessage);
-      } else if (errorMessage.includes('503') || errorMessage.includes('Sheets') || errorMessage.includes('servidor')) {
-        setErrorType('server');
-        setError('Error del servidor de Google Sheets. Intenta más tarde.');
+      // v4.0: Use new error handler for FINALIZAR, fallback to v3.0 for other actions
+      if (state.accion === 'FINALIZAR') {
+        handleApiError(err);
       } else {
-        setErrorType('generic');
-        setError(errorMessage);
+        // v3.0: Manejar errores específicos según código HTTP (incluye nuevos códigos)
+        const errorMessage = err instanceof Error ? err.message : 'Error al procesar acción';
+
+        if (errorMessage.includes('red') || errorMessage.includes('conexión') || errorMessage.includes('Failed to fetch')) {
+          setErrorType('network');
+          setError('Error de conexión con el servidor. Verifica que el backend esté disponible.');
+        } else if (errorMessage.includes('ocupado') || errorMessage.includes('409')) {
+          // v3.0: 409 CONFLICT - Spool occupied by another worker (LOC-04 requirement)
+          setErrorType('forbidden');
+          setError('Este spool está siendo usado por otro trabajador. Intenta más tarde.');
+        } else if (errorMessage.includes('expiró') || errorMessage.includes('410')) {
+          // v3.0: 410 GONE - Lock expired (worker took too long)
+          setErrorType('validation');
+          setError('La operación tardó demasiado tiempo. Por favor vuelve a intentar.');
+        } else if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
+          setErrorType('not-found');
+          setError(errorMessage);
+        } else if (errorMessage.includes('400') || errorMessage.includes('ya iniciada') || errorMessage.includes('ya completada') || errorMessage.includes('dependencias') || errorMessage.includes('Requisitos')) {
+          setErrorType('validation');
+          setError(errorMessage);
+        } else if (errorMessage.includes('403') || errorMessage.includes('autorizado') || errorMessage.includes('completar')) {
+          setErrorType('forbidden');
+          setError(errorMessage);
+        } else if (errorMessage.includes('503') || errorMessage.includes('Sheets') || errorMessage.includes('servidor')) {
+          setErrorType('server');
+          setError('Error del servidor de Google Sheets. Intenta más tarde.');
+        } else {
+          setErrorType('generic');
+          setError(errorMessage);
+        }
       }
     } finally {
       setLoading(false);
@@ -507,6 +598,25 @@ function ConfirmarContent() {
                 </div>
               </div>
 
+              {/* v4.0: Show selected unions count for FINALIZAR */}
+              {state.accion === 'FINALIZAR' && (
+                <div className="border-4 border-white/30 p-6 mb-8 bg-white/5">
+                  <div className="text-center mb-4">
+                    <span className="text-sm font-black text-white/50 font-mono">UNIONES SELECCIONADAS:</span>
+                  </div>
+                  <div className="text-center mb-2">
+                    <span className="text-4xl font-black text-white font-mono">{state.selectedUnions.length}</span>
+                    <span className="text-lg font-black text-white/60 font-mono ml-2">uniones</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-2xl font-black text-zeues-orange font-mono">
+                      {state.pulgadasCompletadas.toFixed(1)}&quot;
+                    </span>
+                    <span className="text-sm font-black text-white/60 font-mono ml-2">pulgadas-diámetro</span>
+                  </div>
+                </div>
+              )}
+
               {/* Fecha si es completar */}
               {tipo === 'completar' && (
                 <div className="border-2 border-white/30 p-4 mb-8 text-center">
@@ -554,6 +664,30 @@ function ConfirmarContent() {
           </div>
         </div>
       </div>
+
+      {/* Error Modal (v4.0) */}
+      {errorModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setErrorModal(null)}
+          onBackdropClick={null}
+        >
+          <div className="text-center">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">
+              {errorModal.title}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {errorModal.message}
+            </p>
+            <button
+              onClick={errorModal.action}
+              className="h-14 px-8 bg-zeues-orange border-4 border-zeues-orange text-white font-mono font-black active:bg-zeues-orange/80 transition-all"
+            >
+              {errorModal.title === 'Datos desactualizados' ? 'Recargar' : 'Aceptar'}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
