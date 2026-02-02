@@ -33,6 +33,7 @@ from backend.services.conflict_service import ConflictService
 from backend.services.redis_event_service import RedisEventService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
+from backend.services.union_service import UnionService
 from backend.models.occupation import (
     TomarRequest,
     PausarRequest,
@@ -78,7 +79,8 @@ class OccupationService:
         conflict_service: ConflictService,
         redis_event_service: RedisEventService,
         union_repository=None,  # Optional dependency for v4.0 operations
-        validation_service=None  # Optional dependency for v4.0 validations
+        validation_service=None,  # Optional dependency for v4.0 validations
+        union_service: Optional[UnionService] = None  # Optional dependency for v4.0 batch + granular logging
     ):
         """
         Initialize occupation service with injected dependencies.
@@ -91,6 +93,7 @@ class OccupationService:
             redis_event_service: Service for publishing real-time events
             union_repository: Repository for union-level operations (v4.0)
             validation_service: Service for business rule validation (v4.0)
+            union_service: Service for batch union updates with metadata logging (v4.0)
         """
         self.redis_lock_service = redis_lock_service
         self.sheets_repository = sheets_repository
@@ -99,6 +102,7 @@ class OccupationService:
         self.redis_event_service = redis_event_service
         self.union_repository = union_repository
         self.validation_service = validation_service
+        self.union_service = union_service
         logger.info("OccupationService initialized with Redis lock + optimistic locking")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
