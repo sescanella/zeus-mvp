@@ -50,6 +50,8 @@ from backend.routers import sse_router
 from backend.routers import dashboard_router
 # v3.0 Phase 5: Router METROLOGIA implementado (instant binary inspection)
 from backend.routers import metrologia
+# v4.0 Phase 9: Router DIAGNOSTIC implementado (version detection diagnostics)
+from backend.routers import diagnostic
 
 
 # ============================================================================
@@ -408,6 +410,9 @@ app.include_router(dashboard_router.router, tags=["Dashboard"])
 
 # v3.0 Phase 5: Router METROLOGIA registrado (instant binary inspection)
 app.include_router(metrologia.router, prefix="/api/metrologia", tags=["Metrologia"])
+
+# v4.0 Phase 9: Router DIAGNOSTIC registrado (version detection diagnostics)
+app.include_router(diagnostic.router, prefix="/api", tags=["Diagnostic"])
 
 
 # ============================================================================
