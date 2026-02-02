@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 13 of 13 (Performance Validation & Optimization)
-Plan: 2 of 6 in current phase
+Plan: 1 of 6 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 13-02-PLAN.md
+Last activity: 2026-02-02 — Completed 13-01-PLAN.md
 
-Progress: [████████████░] 100% v4.0 implementation (58 of 62 total plans complete)
+Progress: [████████████░] 95% v4.0 implementation (57 of 62 total plans complete)
 
 ## Performance Metrics
 
@@ -44,10 +44,10 @@ Progress: [████████████░] 100% v4.0 implementation (58
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
 | 12. Frontend Union Selection UX | 8 | 28.7 min | 3.6 min |
-| 13. Performance Validation & Optimization | 2/6 | 8.4 min | 4.2 min |
+| 13. Performance Validation & Optimization | 1/6 | 6.3 min | 6.3 min |
 
 **Recent Trend:**
-- Last 5 plans: [3.8, 3.4, 4.0, 6.4, 4.4] min (avg: 4.4 min)
+- Last 5 plans: [3.4, 4.0, 6.4, 6.3] min (avg: 5.0 min)
 - Trend: Phase 13 in progress (2 of 6 plans, 4.2-min average so far)
 
 *Updated after each plan completion*
@@ -186,6 +186,11 @@ Recent decisions affecting v4.0 work:
 - **D116 (12-07)**: INICIAR navigation calls iniciarSpool API directly, skips union selection (simplified v4.0 workflow)
 - **D117 (12-07)**: Type assertions for backend fields (Ocupado_Por) not in Spool interface (backend data completeness)
 - **D118 (12-07)**: Default to v3.0 on version detection error (safer legacy workflow fallback)
+- **D119 (13-01)**: Use numpy.percentile for statistical calculations (battle-tested, handles edge cases)
+- **D120 (13-01)**: Mock latency with realistic variance using uniform distribution (simpler than lognormal)
+- **D121 (13-01)**: 100 iterations for percentile tests provides statistical significance
+- **D122 (13-01)**: 20% regression threshold balances sensitivity with noise tolerance
+- **D123 (13-01)**: Pytest markers @pytest.mark.performance and @pytest.mark.slow for CI/CD control
 
 ### Pending Todos
 
@@ -302,6 +307,16 @@ None yet.
     - "Continuar con Mismo Spool" button for FINALIZAR workflow
     - Session storage cleanup on successful workflow completion
     - Worker and timestamp information display
+- **✅ Phase 13 (1/6 plans)**: Performance Validation & Optimization
+  - 13-01 ✓: Percentile-Based Latency Validation (6.3 min)
+    - Created tests/performance/conftest.py with numpy percentile utilities
+    - Implemented test_batch_latency.py with 4 comprehensive tests
+    - PERF-01/PERF-02 validation: p95 < 1s, p99 < 2s (100 iterations)
+    - Cold vs warm cache performance comparison
+    - 50-union stress test with memory profiling
+    - Performance regression detection (20% threshold vs Phase 8 baseline)
+    - Added pytest markers: @pytest.mark.performance, @pytest.mark.slow
+    - Installed psutil for memory profiling
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -313,7 +328,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 12 (all 8 plans executed successfully)
-Resume file: None - Phase 12 complete
+Stopped at: Completed 13-01-PLAN.md
+Resume file: None
 
-**Phase 12 Complete (8/8 plans, 28.7 min, 3.6-min avg):** Frontend Union Selection UX complete. All 7 success criteria verified through codebase inspection and build validation. Dual workflows (v3.0 3-button vs v4.0 2-button), union selection checkboxes, real-time pulgadas counter, zero-selection modal, version detection with session storage caching, action-based spool filtering, and dynamic success messages all implemented and verified. TypeScript/ESLint/Build all passing. Next: Phase 13 (final phase) for performance validation and optimization.
+**Plan 13-01 Complete (6.3 min):** Percentile-based latency validation infrastructure complete. Created conftest.py with numpy.percentile utilities (calculate_performance_percentiles, print_performance_report, mock latency helpers). Implemented test_batch_latency.py with 4 tests: (1) PERF-01/PERF-02 validation (100 iterations), (2) cold vs warm cache comparison, (3) 50-union stress test with memory profiling, (4) performance regression detection (20% threshold). Added pytest markers (@pytest.mark.performance, @pytest.mark.slow), installed psutil. All tests passing with mock infrastructure. Next: 13-02 for API call efficiency validation.
