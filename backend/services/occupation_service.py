@@ -923,6 +923,80 @@ class OccupationService:
         else:
             return "PAUSAR"
 
+    def should_trigger_metrologia(self, tag_spool: str) -> bool:
+        """
+        Determine if spool should automatically transition to metrología queue.
+
+        Metrología triggers when ALL work is complete:
+        - FW unions (ARM-only): All have ARM_FECHA_FIN != NULL
+        - SOLD-required unions (BW/BR/SO/FILL/LET): All have SOL_FECHA_FIN != NULL
+
+        Args:
+            tag_spool: TAG_SPOOL value to check
+
+        Returns:
+            bool: True if all work complete and metrología should trigger
+
+        Raises:
+            ValueError: If UnionRepository not configured
+        """
+        if self.union_repository is None:
+            raise ValueError("UnionRepository not configured for metrología detection")
+
+        logger.info(f"Checking metrología trigger for {tag_spool}")
+
+        try:
+            # Get all unions for this spool
+            all_unions = self.union_repository.get_by_spool(tag_spool)
+
+            if not all_unions:
+                logger.warning(f"No unions found for {tag_spool}, cannot trigger metrología")
+                return False
+
+            # SOLD_REQUIRED_TYPES: Union types that need SOLD operation
+            # FW unions are ARM-only (no SOLD needed)
+            from backend.services.union_service import SOLD_REQUIRED_TYPES
+
+            # Separate unions into FW (ARM-only) and SOLD-required
+            fw_unions = [u for u in all_unions if u.tipo_union not in SOLD_REQUIRED_TYPES]
+            sold_required_unions = [u for u in all_unions if u.tipo_union in SOLD_REQUIRED_TYPES]
+
+            logger.debug(
+                f"Union breakdown for {tag_spool}: "
+                f"{len(fw_unions)} FW (ARM-only), {len(sold_required_unions)} SOLD-required"
+            )
+
+            # Check FW unions: All must have ARM_FECHA_FIN != NULL
+            for union in fw_unions:
+                if union.arm_fecha_fin is None:
+                    logger.debug(
+                        f"FW union {union.id} ARM incomplete (arm_fecha_fin=None), "
+                        f"cannot trigger metrología"
+                    )
+                    return False
+
+            # Check SOLD-required unions: All must have SOL_FECHA_FIN != NULL
+            for union in sold_required_unions:
+                if union.sol_fecha_fin is None:
+                    logger.debug(
+                        f"SOLD-required union {union.id} SOLD incomplete (sol_fecha_fin=None), "
+                        f"cannot trigger metrología"
+                    )
+                    return False
+
+            # All checks passed - metrología should trigger
+            logger.info(
+                f"✅ All work complete for {tag_spool}: "
+                f"{len(fw_unions)} FW ARM'd, {len(sold_required_unions)} SOLD'd - "
+                f"triggering metrología"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to check metrología trigger for {tag_spool}: {e}")
+            # Don't block operation on metrología check failure
+            return False
+
     async def finalizar_spool(self, request: FinalizarRequest) -> OccupationResponse:
         """
         Finalizar trabajo en un spool (v4.0 FINALIZAR operation).
