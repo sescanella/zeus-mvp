@@ -150,6 +150,11 @@ class SpoolServiceV2:
         if soldador == '':
             soldador = None
 
+        # 6. v3.0: Parse Ocupado_Por (columna 64)
+        idx_ocupado_por = self.sheets_service._get_col_idx("Ocupado_Por", fallback_idx=64)
+        ocupado_por_raw = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
+        ocupado_por = ocupado_por_raw if ocupado_por_raw else None
+
         return Spool(
             tag_spool=tag_spool,
             nv=nv,
@@ -161,21 +166,29 @@ class SpoolServiceV2:
             fecha_soldadura=fecha_soldadura,
             soldador=soldador,
             fecha_qc_metrologia=fecha_qc_metrologia,
-            proyecto=None
+            proyecto=None,
+            ocupado_por=ocupado_por  # v3.0: Current occupation lock
         )
 
     def get_spools_disponibles_para_iniciar_arm(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR ARM (v2.1 Direct Read).
+        Obtiene spools disponibles para INICIAR ARM (v3.0 Occupation-Based).
 
-        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        REGLA DE NEGOCIO v3.0 (Occupation-Based - 2026-01-30):
         - Fecha_Materiales: CON DATO (prerequisito cumplido)
-        - Armador: SIN DATO (operación no iniciada)
+        - Ocupado_Por: SIN DATO (spool no está ocupado actualmente)
+
+        Incluye spools:
+        - PENDIENTE: nunca iniciados (Armador=None, Ocupado_Por=None)
+        - PAUSADO: pausados (Armador!=None, Ocupado_Por=None)
+
+        Compatible con v4.0: En v4.0 este método será reemplazado por
+        UnionService, pero la lógica de Ocupado_Por se mantiene.
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2.1] Retrieving spools available for INICIAR ARM (Direct Read)")
+        logger.info("[V3.0] Retrieving spools available for INICIAR ARM (Occupation-Based)")
 
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -184,12 +197,12 @@ class SpoolServiceV2:
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA v2.1: Fecha_Materiales llena Y Armador vacío (Direct Read from columns)
-                if spool.fecha_materiales is not None and spool.armador is None:
+                # REGLA v3.0: Fecha_Materiales llena Y Ocupado_Por vacío (Occupation-Based)
+                if spool.fecha_materiales is not None and spool.ocupado_por is None:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2.1] Spool {spool.tag_spool} disponible INICIAR ARM: "
-                        f"fecha_materiales={spool.fecha_materiales}, armador={spool.armador}"
+                        f"[V3.0] Spool {spool.tag_spool} disponible INICIAR ARM: "
+                        f"fecha_materiales={spool.fecha_materiales}, ocupado_por={spool.ocupado_por}, armador={spool.armador}"
                     )
 
             except ValueError as e:
@@ -236,16 +249,23 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_iniciar_sold(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR SOLD (v2.1 Direct Read).
+        Obtiene spools disponibles para INICIAR SOLD (v3.0 Occupation-Based).
 
-        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
+        REGLA DE NEGOCIO v3.0 (Occupation-Based - 2026-01-30):
         - Fecha_Armado: CON DATO (prerequisito ARM completado)
-        - Soldador: SIN DATO (operación SOLD no iniciada)
+        - Ocupado_Por: SIN DATO (spool no está ocupado actualmente)
+
+        Incluye spools:
+        - PENDIENTE: nunca iniciados (Soldador=None, Ocupado_Por=None)
+        - PAUSADO: pausados (Soldador!=None, Ocupado_Por=None)
+
+        Compatible con v4.0: En v4.0 este método será reemplazado por
+        UnionService.get_disponibles(), pero la lógica de Ocupado_Por se mantiene.
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2.1] Retrieving spools available for INICIAR SOLD (Direct Read)")
+        logger.info("[V3.0] Retrieving spools available for INICIAR SOLD (Occupation-Based)")
 
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
@@ -254,12 +274,12 @@ class SpoolServiceV2:
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA v2.1: Fecha_Armado llena Y Soldador vacío (Direct Read from columns)
-                if spool.fecha_armado is not None and spool.soldador is None:
+                # REGLA v3.0: Fecha_Armado llena Y Ocupado_Por vacío (Occupation-Based)
+                if spool.fecha_armado is not None and spool.ocupado_por is None:
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2.1] Spool {spool.tag_spool} disponible INICIAR SOLD: "
-                        f"fecha_armado={spool.fecha_armado}, soldador={spool.soldador}"
+                        f"[V3.0] Spool {spool.tag_spool} disponible INICIAR SOLD: "
+                        f"fecha_armado={spool.fecha_armado}, ocupado_por={spool.ocupado_por}, soldador={spool.soldador}"
                     )
 
             except ValueError as e:
