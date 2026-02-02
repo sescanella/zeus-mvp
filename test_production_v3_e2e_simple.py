@@ -13,7 +13,7 @@ Usage:
 import requests
 import json
 import time
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List
 from pathlib import Path
 
@@ -95,7 +95,8 @@ def completar(worker_id: int, worker_nombre: str, operacion: str, resultado: str
         "tag_spool": TEST_SPOOL,
         "worker_id": worker_id,
         "worker_nombre": worker_nombre,
-        "operacion": operacion
+        "operacion": operacion,
+        "fecha_operacion": date.today().isoformat()
     }
     if resultado:
         payload["resultado"] = resultado
@@ -257,11 +258,17 @@ def test_5_history_endpoint() -> bool:
 
         history = result["body"]
 
-        # Handle both list and dict{"history": [...]} formats
-        if isinstance(history, dict) and "history" in history:
-            events = history["history"]
+        # Handle production API format: {"tag_spool": "...", "sessions": [...]}
+        if isinstance(history, dict):
+            if "sessions" in history:
+                events = history["sessions"]  # Production format
+            elif "history" in history:
+                events = history["history"]  # Legacy format (if exists)
+            else:
+                print_error(f"Unexpected history format: missing 'sessions' or 'history' key")
+                return False
         elif isinstance(history, list):
-            events = history
+            events = history  # Direct list format
         else:
             print_error(f"Unexpected history format: {type(history)}")
             return False
@@ -389,6 +396,25 @@ def main():
     print(f"Environment: {BASE_URL}")
     print(f"Test Spool: {TEST_SPOOL}")
     print(f"Timestamp: {datetime.now().isoformat()}")
+    print()
+
+    # Pre-check: Verify Redis is healthy before running tests
+    print_info("Pre-check: Verifying Redis health...")
+    redis_health = api_call("GET", "/api/redis-health")
+
+    if redis_health["status"] != 200:
+        print_error(f"Cannot reach Redis health endpoint (status {redis_health['status']})")
+        print_error("Tests will likely fail. Consider fixing Redis connectivity first.")
+    else:
+        redis_status = redis_health["body"].get("status", "unknown")
+        if redis_status != "healthy":
+            print_error(f"Redis is UNHEALTHY: {redis_status}")
+            print_error("Occupation tests (TOMAR/PAUSAR/COMPLETAR) will fail.")
+            print_info("Consider restarting Redis or running Phase 1 recovery first.")
+            print()
+        else:
+            print_success("Redis health check passed")
+
     print()
 
     # Fetch active workers
