@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 8 of 13 (Backend Data Layer)
-Plan: 4 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 08-04-PLAN.md (Metadata batch logging with n_union field, 3.5 min duration)
+Last activity: 2026-02-02 — Completed 08-03-PLAN.md (Metrics aggregation methods, 3 min duration)
 
-Progress: [████████░░░░░] 62% (7 of 13 phases complete, Phase 8 in progress: 4/5 plans done)
+Progress: [████████░░░░░] 64% (7 of 13 phases complete, Phase 8 in progress: 3/5 plans done)
 
 ## Performance Metrics
 
@@ -39,11 +39,11 @@ Progress: [████████░░░░░] 62% (7 of 13 phases complete
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 7. Data Model Foundation | 7 | 21 min | 3.0 min |
-| 8. Backend Data Layer | 4 | 14 min | 3.5 min |
+| 8. Backend Data Layer | 3 | 10.5 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [3.0, 8.0, 1.0, 2.0, 3.5] min
-- Trend: Phase 8 in progress (Backend Data Layer: Union CRUD + Metadata batch logging)
+- Last 5 plans: [1.0, 2.0, 3.5, 4.0, 3.0] min
+- Trend: Phase 8 in progress (Backend Data Layer: OT queries + Metadata batch logging + metrics aggregation complete, 2 plans remaining)
 
 *Updated after each plan completion*
 
@@ -78,11 +78,17 @@ Recent decisions affecting v4.0 work:
 - **D22 (07-06)**: Accept Uniones validation failure as expected (Engineering dependency documented in blockers)
 - **D23 (07-07)**: Document Uniones requirements instead of auto-populating data (Engineering owns union-level data, system provides structure)
 - **D24 (07-07)**: Optional --fix flag to add headers (structure only, not data) - Engineering chooses manual or automated structure setup
-- **D25 (08-04)**: N_UNION field appended as column K (position 11) in Metadata sheet
-- **D26 (08-04)**: Auto-chunk batch_log_events at 900 rows for Google Sheets safety
-- **D27 (08-04)**: build_union_events extracts n_union from union_id format (OT-123+5)
-- **D28 (08-04)**: New event types UNION_ARM_REGISTRADA, UNION_SOLD_REGISTRADA, SPOOL_CANCELADO
-- **D29 (08-04)**: Backward compatibility for v3.0 events (n_union=None, 10-column rows)
+- **D25 (08-02)**: Add ot field to Union model (OT as primary foreign key per v4.0 architecture)
+- **D26 (08-02)**: Existing methods auto-updated to use get_by_ot (linter pattern recognition)
+- **D27 (08-04)**: N_UNION field appended as column K (position 11) in Metadata sheet
+- **D28 (08-04)**: Auto-chunk batch_log_events at 900 rows for Google Sheets safety
+- **D29 (08-04)**: build_union_events extracts n_union from union_id format (OT-123+5)
+- **D30 (08-04)**: New event types UNION_ARM_REGISTRADA, UNION_SOLD_REGISTRADA, SPOOL_CANCELADO
+- **D31 (08-04)**: Backward compatibility for v3.0 events (n_union=None, 10-column rows)
+- **D32 (08-03)**: Use 2 decimal precision for pulgadas sums (breaking change from 1 decimal)
+- **D33 (08-03)**: No caching for metrics - always calculate fresh for consistency
+- **D34 (08-03)**: Bulk calculate_metrics method for efficient single-call aggregation
+- **D35 (08-03)**: Metrics methods use get_by_ot() not get_by_spool() for v4.0 OT-based queries
 
 ### Pending Todos
 
@@ -108,7 +114,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 08-04-PLAN.md (Metadata batch logging with n_union field, 3.5 min duration)
+Stopped at: Completed 08-03-PLAN.md (Metrics aggregation methods with 2 decimal precision, 3 min duration)
 Resume file: None
 
-**Phase 8 Progress:** 4 of 5 plans complete. Union model with OT-based queries (08-01, 08-02, 08-03) complete. Metadata batch logging with n_union field (08-04) complete. Next: 08-05 metrics aggregation.
+**Phase 8 Progress:** 3 of 5 plans complete. Union model with OT-based queries (08-01, 08-02) complete. Metrics aggregation methods (08-03) complete with 2 decimal precision. Next: 08-04 Union write operations (batch update ARM/SOLD).
