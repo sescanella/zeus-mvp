@@ -36,6 +36,10 @@ export default function ExitoPage() {
     router.push('/tipo-interaccion');
   }, [resetV4State, router]);
 
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
+
   useEffect(() => {
     // Redirect if accessed directly without completing workflow
     if (!selectedWorker || !selectedSpool) {
@@ -245,6 +249,16 @@ export default function ExitoPage() {
               NUEVO TRABAJO
             </span>
           </button>
+
+          {/* Print option (optional) */}
+          <div className="text-center pt-2">
+            <button
+              onClick={handlePrint}
+              className="text-white/60 hover:text-white text-sm underline font-mono"
+            >
+              IMPRIMIR COMPROBANTE
+            </button>
+          </div>
         </div>
       </div>
     </div>
