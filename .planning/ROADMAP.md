@@ -92,10 +92,14 @@ Plans:
   5. ValidationService enforces ARM-before-SOLD rule: SOLD requires at least 1 union with ARM_FECHA_FIN != NULL
   6. System triggers automatic transition to metrología queue when SOLD is 100% complete
   7. System allows 0 unions selected in FINALIZAR after modal confirmation (logs SPOOL_CANCELADO event)
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 10-01: [TBD during phase planning]
+- [x] 10-01-PLAN.md — Create UnionService for batch operations
+- [x] 10-02-PLAN.md — Enhance OccupationService with INICIAR/FINALIZAR
+- [x] 10-03-PLAN.md — Add ARM-before-SOLD validation
+- [x] 10-04-PLAN.md — Implement metrología auto-transition
+- [x] 10-05-PLAN.md — Integration tests and performance validation
 
 #### Phase 11: API Endpoints & Metrics
 **Goal**: REST API exposes union workflows with INICIAR/FINALIZAR endpoints and maintains v3.0 compatibility
@@ -162,11 +166,11 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 7. Data Model Foundation | v4.0 | 7/7 | Complete | 2026-02-02 |
 | 8. Backend Data Layer | v4.0 | 5/5 | Complete | 2026-02-02 |
 | 9. Redis & Version Detection | v4.0 | 6/6 | Complete | 2026-02-02 |
-| 10. Backend Services & Validation | v4.0 | 0/TBD | Not started | - |
+| 10. Backend Services & Validation | v4.0 | 5/5 | Complete | 2026-02-02 |
 | 11. API Endpoints & Metrics | v4.0 | 0/TBD | Not started | - |
 | 12. Frontend Union Selection UX | v4.0 | 0/TBD | Not started | - |
 | 13. Performance Validation & Optimization | v4.0 | 0/TBD | Not started | - |
 
 ---
 
-*Last updated: 2026-02-02*
+*Last updated: 2026-02-02 (Phase 10 complete)*
