@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Worker, BatchActionResponse } from './types';
+import { Worker, BatchActionResponse, Union } from './types';
 
 interface AppState {
   allWorkers: Worker[];  // v2.0: Cache de todos los trabajadores (fetch en P1, filtrar en P2)
@@ -22,6 +22,11 @@ interface AppContextType {
   state: AppState;
   setState: (partial: Partial<AppState>) => void;
   resetState: () => void;
+  // v4.0: Helper functions for union-level workflow
+  resetV4State: () => void;
+  calculatePulgadas: (unions: Union[], selectedUnionNumbers: number[]) => number;
+  toggleUnionSelection: (unionNumber: number, isSelected: boolean) => void;
+  selectAllAvailableUnions: (availableUnionNumbers: number[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -54,8 +59,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStateInternal(initialState);
   }, []);
 
+  // v4.0: Reset only v4.0-specific state (preserves worker, operation, spool selection)
+  const resetV4State = useCallback(() => {
+    setStateInternal(prev => ({
+      ...prev,
+      accion: null,
+      selectedUnions: [],
+      pulgadasCompletadas: 0,
+    }));
+  }, []);
+
+  // v4.0: Calculate total pulgadas-diámetro for selected unions
+  const calculatePulgadas = useCallback((unions: Union[], selectedUnionNumbers: number[]): number => {
+    if (selectedUnionNumbers.length === 0) return 0;
+
+    const total = unions
+      .filter(u => selectedUnionNumbers.includes(u.n_union))
+      .reduce((sum, u) => sum + u.dn_union, 0);
+
+    return Math.round(total * 10) / 10; // 1 decimal precision (service layer presentation)
+  }, []);
+
+  // v4.0: Toggle single union selection
+  const toggleUnionSelection = useCallback((unionNumber: number, isSelected: boolean) => {
+    setStateInternal(prev => {
+      const newSelected = isSelected
+        ? [...prev.selectedUnions, unionNumber]
+        : prev.selectedUnions.filter(n => n !== unionNumber);
+
+      return {
+        ...prev,
+        selectedUnions: newSelected,
+      };
+    });
+  }, []);
+
+  // v4.0: Select all available unions at once
+  const selectAllAvailableUnions = useCallback((availableUnionNumbers: number[]) => {
+    setStateInternal(prev => ({
+      ...prev,
+      selectedUnions: [...availableUnionNumbers],
+    }));
+  }, []);
+
   return (
-    <AppContext.Provider value={{ state, setState, resetState }}>
+    <AppContext.Provider value={{
+      state,
+      setState,
+      resetState,
+      resetV4State,
+      calculatePulgadas,
+      toggleUnionSelection,
+      selectAllAvailableUnions,
+    }}>
       {children}
     </AppContext.Provider>
   );
