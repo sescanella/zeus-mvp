@@ -15,7 +15,13 @@ import {
   OccupationResponse,
   BatchOccupationResponse,
   VersionInfo,
-  VersionResponse
+  VersionResponse,
+  DisponiblesResponse,
+  MetricasResponse,
+  IniciarRequest,
+  IniciarResponse,
+  FinalizarRequest,
+  FinalizarResponse
 } from './types';
 
 // ============= CONSTANTS =============
@@ -1302,4 +1308,287 @@ export async function getSpoolVersion(tag: string): Promise<VersionInfo> {
 export function detectVersionFromSpool(spool: Spool): 'v3.0' | 'v4.0' {
   // Frontend detection logic: count > 0 = v4.0, count = 0 = v3.0
   return (spool.total_uniones && spool.total_uniones > 0) ? 'v4.0' : 'v3.0';
+}
+
+// ==========================================
+// v4.0 UNION-LEVEL API FUNCTIONS (Phase 12)
+// ==========================================
+
+/**
+ * GET /api/v4/uniones/{tag}/metricas (v4.0)
+ * Obtiene métricas de pulgadas-diámetro para un spool.
+ *
+ * Returns performance metrics including total unions, completed unions,
+ * and pulgadas-diámetro sums for ARM and SOLD operations.
+ *
+ * Used for version detection on P3 (tipo-interaccion page).
+ * If union count > 0, spool is v4.0; otherwise v3.0.
+ *
+ * @param tag - TAG_SPOOL identifier
+ * @returns Promise<MetricasResponse> with 6 metric fields
+ * @throws Error if:
+ *   - 404: Spool not found
+ *   - Network error or backend unavailable
+ *
+ * @example
+ * const metricas = await getUnionMetricas('TEST-02');
+ * console.log(metricas);
+ * // {
+ * //   tag_spool: "TEST-02",
+ * //   total_uniones: 8,
+ * //   uniones_arm_completadas: 3,
+ * //   uniones_sold_completadas: 2,
+ * //   pulgadas_arm: 12.5,
+ * //   pulgadas_sold: 8.2
+ * // }
+ */
+export async function getUnionMetricas(tag: string): Promise<MetricasResponse> {
+  try {
+    const url = `${API_URL}/api/v4/uniones/${tag}/metricas`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool no encontrado.');
+    }
+
+    return await handleResponse<MetricasResponse>(res);
+  } catch (error) {
+    console.error('getUnionMetricas error:', error);
+    throw error;
+  }
+}
+
+/**
+ * GET /api/v4/uniones/{tag}/disponibles?operacion={ARM|SOLD} (v4.0)
+ * Obtiene uniones disponibles para selección en un spool.
+ *
+ * Returns list of unions that haven't been completed yet for the given operation.
+ * Used on P5 (union selection page) after INICIAR is clicked.
+ *
+ * Filtering logic:
+ * - ARM: Returns unions where arm_fecha_fin is None
+ * - SOLD: Returns unions where sol_fecha_fin is None AND arm_fecha_fin is not None
+ *
+ * @param tag - TAG_SPOOL identifier
+ * @param operacion - Operation type ('ARM' or 'SOLD')
+ * @returns Promise<DisponiblesResponse> with available unions list
+ * @throws Error if:
+ *   - 404: Spool not found
+ *   - 400: Invalid operacion parameter
+ *   - Network error or backend unavailable
+ *
+ * @example
+ * const disponibles = await getDisponiblesUnions('TEST-02', 'ARM');
+ * console.log(disponibles);
+ * // {
+ * //   tag_spool: "TEST-02",
+ * //   operacion: "ARM",
+ * //   uniones: [
+ * //     { n_union: 1, dn_union: 2.5, tipo_union: "BW", ... },
+ * //     { n_union: 2, dn_union: 3.0, tipo_union: "SO", ... }
+ * //   ],
+ * //   total_uniones: 8,
+ * //   disponibles_count: 2
+ * // }
+ */
+export async function getDisponiblesUnions(
+  tag: string,
+  operacion: 'ARM' | 'SOLD'
+): Promise<DisponiblesResponse> {
+  try {
+    const url = `${API_URL}/api/v4/uniones/${tag}/disponibles?operacion=${operacion}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool no encontrado.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Operación inválida.');
+    }
+
+    return await handleResponse<DisponiblesResponse>(res);
+  } catch (error) {
+    console.error('getDisponiblesUnions error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/v4/occupation/iniciar (v4.0)
+ * Inicia ocupación de spool sin selección de uniones.
+ *
+ * First step of v4.0 two-button workflow (INICIAR → FINALIZAR).
+ * Acquires persistent Redis lock without TTL and updates Ocupado_Por/Fecha_Ocupacion.
+ * No union-level work is recorded yet - that happens in FINALIZAR.
+ *
+ * Validations:
+ * - Spool must be v4.0 (total_uniones > 0)
+ * - For SOLD: ARM prerequisite must be satisfied (100% ARM complete)
+ * - Spool must not be occupied
+ *
+ * @param payload - IniciarRequest with tag_spool, worker_id, worker_nombre, operacion
+ * @returns Promise<IniciarResponse> with success status
+ * @throws Error if:
+ *   - 400: Not a v4.0 spool or validation failed
+ *   - 403: ARM prerequisite not met for SOLD
+ *   - 404: Spool not found
+ *   - 409: Spool already occupied
+ *
+ * @example
+ * const result = await iniciarSpool({
+ *   tag_spool: 'TEST-02',
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)',
+ *   operacion: 'ARM'
+ * });
+ * console.log(result);
+ * // {
+ * //   success: true,
+ * //   message: "Spool tomado por MR(93) - selecciona uniones para completar",
+ * //   tag_spool: "TEST-02",
+ * //   ocupado_por: "MR(93)"
+ * // }
+ */
+export async function iniciarSpool(payload: IniciarRequest): Promise<IniciarResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/v4/occupation/iniciar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    // v4.0 specific error handling
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Error de validación. Verifica los datos.');
+    }
+
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Requisitos no cumplidos para SOLD. Completa ARM primero.');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool no encontrado.');
+    }
+
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool ocupado por otro trabajador. Intenta más tarde.');
+    }
+
+    return await handleResponse<IniciarResponse>(res);
+  } catch (error) {
+    console.error('iniciarSpool error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/v4/occupation/finalizar (v4.0)
+ * Completa trabajo con selección de uniones y auto-determinación de PAUSAR/COMPLETAR.
+ *
+ * Second step of v4.0 two-button workflow (INICIAR → FINALIZAR).
+ * Records union-level work, calculates pulgadas-diámetro, and auto-determines:
+ * - COMPLETAR: All available unions selected (100% for operation)
+ * - PAUSAR: Partial selection (work can be resumed later)
+ * - CANCELAR: No unions selected (releases occupation)
+ *
+ * Updates:
+ * - Uniones sheet: arm_fecha_fin/sol_fecha_fin for selected unions
+ * - Operaciones sheet: Uniones_ARM_Completadas, Pulgadas_ARM, etc.
+ * - Releases Redis lock on COMPLETAR or CANCELAR (keeps on PAUSAR)
+ * - May trigger automatic metrología transition if SOLD 100% complete
+ *
+ * @param payload - FinalizarRequest with tag_spool, worker_id, operacion, selected_unions[], fecha_operacion
+ * @returns Promise<FinalizarResponse> with action result and metrics
+ * @throws Error if:
+ *   - 400: Validation failed (invalid unions selected)
+ *   - 403: Worker doesn't own the spool
+ *   - 404: Spool not found
+ *   - 409: Race condition (selected unions > available unions)
+ *
+ * @example
+ * // Partial completion (PAUSAR)
+ * const result = await finalizarSpool({
+ *   tag_spool: 'TEST-02',
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)',
+ *   operacion: 'ARM',
+ *   selected_unions: [1, 2, 3],
+ *   fecha_operacion: '2026-02-02'
+ * });
+ * console.log(result);
+ * // {
+ * //   success: true,
+ * //   message: "3 uniones completadas (3/8). Trabajo pausado.",
+ * //   action: "PAUSAR",
+ * //   pulgadas_completadas: 7.5,
+ * //   uniones_completadas: 3
+ * // }
+ *
+ * @example
+ * // Full completion (COMPLETAR)
+ * const result = await finalizarSpool({
+ *   tag_spool: 'TEST-02',
+ *   worker_id: 93,
+ *   worker_nombre: 'MR(93)',
+ *   operacion: 'ARM',
+ *   selected_unions: [1, 2, 3, 4, 5, 6, 7, 8],
+ *   fecha_operacion: '2026-02-02'
+ * });
+ * console.log(result);
+ * // {
+ * //   success: true,
+ * //   message: "ARM completado (8/8 uniones)",
+ * //   action: "COMPLETAR",
+ * //   pulgadas_completadas: 20.0,
+ * //   uniones_completadas: 8
+ * // }
+ */
+export async function finalizarSpool(payload: FinalizarRequest): Promise<FinalizarResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/v4/occupation/finalizar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    // v4.0 specific error handling
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Error de validación. Verifica las uniones seleccionadas.');
+    }
+
+    if (res.status === 403) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'No estás autorizado. Solo quien inició puede finalizar.');
+    }
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Spool no encontrado.');
+    }
+
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || 'Conflicto: algunas uniones ya fueron completadas por otro trabajador.');
+    }
+
+    return await handleResponse<FinalizarResponse>(res);
+  } catch (error) {
+    console.error('finalizarSpool error:', error);
+    throw error;
+  }
 }
