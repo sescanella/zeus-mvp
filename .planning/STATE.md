@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 12 of 13 (Frontend Union Selection UX)
-Plan: 6 of 7 in current phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 12-05-PLAN.md (API Integration & Error Handling for P5)
+Plan: 7 of 7 in current phase
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 12-07-PLAN.md (P4 Spool Filtering & Version Badges)
 
-Progress: [███████████░░] 94% (53 of 53 total plans complete)
+Progress: [███████████░░] 98% (55 of 56 total plans complete)
 
 ## Performance Metrics
 
@@ -43,10 +43,10 @@ Progress: [███████████░░] 94% (53 of 53 total plans co
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
 | 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
-| 12. Frontend Union Selection UX | 6 (in progress) | 20.9 min | 3.5 min |
+| 12. Frontend Union Selection UX | 6 (in progress) | 24.3 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: [2.0, 2.1, 5.0, 2.0, 3.8] min
+- Last 5 plans: [2.1, 5.0, 2.0, 3.8, 3.4] min
 - Trend: Phase 12 in progress (6 of 7 plans, 3.5-min average - 40% faster than Phase 11's 5.8-min average)
 
 *Updated after each plan completion*
@@ -175,6 +175,11 @@ Recent decisions affecting v4.0 work:
 - **D106 (12-05)**: 403 ownership error shows clear message and redirects to spool selection
 - **D107 (12-05)**: Clear session storage on successful FINALIZAR submission
 - **D108 (12-05)**: Display pulgadas-diámetro with 1 decimal precision on confirmar
+- **D109 (12-06)**: Version detected inline (total_uniones > 0) instead of using detectSpoolVersion helper (avoids type casting issues)
+- **D110 (12-06)**: Session cache checked before API call (avoids unnecessary network latency)
+- **D111 (12-06)**: Error defaults to v3.0 with retry button (backward compatible + user recovery path)
+- **D112 (12-06)**: v4.0 INICIAR routes to /seleccionar-spool, FINALIZAR routes to /seleccionar-uniones (skip P4 for FINALIZAR)
+- **D113 (12-06)**: Both button sets use consistent styling (h-20 for v4.0 full-width, h-40 for v3.0 grid)
 
 ### Pending Todos
 
@@ -284,7 +289,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 12-05-PLAN.md (API Integration & Error Handling for P5)
+Stopped at: Completed 12-06-PLAN.md (P3 Version Detection & Dual Button Sets)
 Resume file: None - continuing Phase 12 execution
 
-**Phase 12 Progress:** P5 API integration complete with comprehensive error handling. 409 auto-reload with countdown, 403 ownership errors, session storage resilience. Confirmar page handles v4.0 FINALIZAR flow. Next: remaining Phase 12 plans for complete v4.0 frontend workflow.
+**Phase 12 Progress:** P3 version detection complete. P3 detects spool version via metricas API, shows dual button sets (v4.0: INICIAR/FINALIZAR, v3.0: TOMAR/PAUSAR/COMPLETAR), caches version in session storage. Visual indicators with help text. Context updates for v4.0 workflow. Next: Plan 12-07 (final plan in Phase 12) for P4 skip logic.
