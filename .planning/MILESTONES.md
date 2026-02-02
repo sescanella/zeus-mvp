@@ -1,5 +1,36 @@
 # Project Milestones: ZEUES Manufacturing Traceability System
 
+## v4.0 Uniones System (Shipped: 2026-02-02)
+
+**Delivered:** Union-level tracking with pulgadas-diámetro as primary business metric, enabling partial completion workflows with INICIAR/FINALIZAR operations, comprehensive audit trail with batch + granular metadata logging, and dual v3.0/v4.0 workflow support.
+
+**Phases completed:** 7-13 (42 plans total)
+
+**Key accomplishments:**
+
+- Union-level data model with 18-column Uniones sheet (audit fields + ARM/SOLD timestamps), 5 new metrics columns in Operaciones (Total_Uniones, Pulgadas_ARM, Pulgadas_SOLD), and N_UNION column in Metadata for granular audit trail
+- Backend data layer with batch operations achieving <1s p95 latency (mock tested), gspread.batch_update() for single-API-call updates, OT-based queries for union filtering, and 900-row metadata chunking
+- Persistent Redis locks (no TTL) supporting 5-8 hour work sessions, lazy cleanup removing abandoned locks >24h old, startup reconciliation from Sheets.Ocupado_Por, and version detection routing v3.0 vs v4.0 workflows
+- Business logic with UnionService orchestrating batch + metadata operations, OccupationService auto-determining PAUSAR vs COMPLETAR based on selection count, ARM-before-SOLD validation, and metrología auto-trigger at SOLD 100% completion
+- REST API with GET /disponibles (ARM/SOLD filtering), GET /metricas (5-field aggregates), POST /iniciar (occupation only), POST /finalizar (auto-determination), and v3.0 backward compatibility at /api/v3/ endpoints
+- Mobile-first union selection UX with P5 checkboxes showing N_UNION/DN_UNION/TIPO_UNION, live counter "Seleccionadas: 7/10 | Pulgadas: 18.5", zero-selection modal confirmation, completion badges, and dual v3.0/v4.0 button sets on P3
+- Performance validation infrastructure with percentile-based latency tests, API call efficiency validation (max 2 calls per FINALIZAR), RateLimitMonitor with sliding window tracking, comprehensive load testing scenarios, and CI/CD workflow for regression detection
+
+**Stats:**
+
+- 197 commits
+- 535,506 lines of code (Python + TypeScript)
+- 7 phases, 42 plans, 244 tests passing
+- 1 day intensive development (2026-02-02)
+
+**Git range:** `a08b3d3` → `80ed222`
+
+**Tech Debt:** 5 minor items (performance validation uses mock latency, RateLimitMonitor not runtime-integrated, FastAPI deprecation warnings) - no critical blockers
+
+**What's next:** Week 1 production monitoring to validate real Google Sheets API performance, establish production baselines for p95/p99 latency, and execute load testing with 30-50 concurrent workers
+
+---
+
 ## v3.0 Real-Time Location Tracking (Shipped: 2026-01-28)
 
 **Delivered:** Real-time spool occupation tracking with Redis-backed atomic locks, hierarchical state machines, SSE streaming for sub-10s dashboard updates, instant metrología inspection, and bounded reparación cycles with supervisor override.
