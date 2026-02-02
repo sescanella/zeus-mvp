@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
 import { useAppState } from '@/lib/context';
+import { getUnionMetricas } from '@/lib/api';
+import { cacheSpoolVersion, getCachedVersion } from '@/lib/version';
 
 export default function TipoInteraccionPage() {
   const router = useRouter();
   const { state, setState } = useAppState();
+  const [spoolVersion, setSpoolVersion] = useState<'v3.0' | 'v4.0' | null>(null);
+  const [loadingVersion, setLoadingVersion] = useState(true);
 
   useEffect(() => {
     // Redirect check
@@ -20,8 +24,46 @@ export default function TipoInteraccionPage() {
     // METROLOGÍA bypass - skip P3, go directly to resultado
     if (state.selectedOperation === 'METROLOGIA') {
       router.push('/resultado-metrologia');
+      return;
     }
-  }, [state, router]);
+
+    // Version detection for v4.0 workflow
+    const detectVersion = async () => {
+      if (!state.selectedSpool) {
+        router.push('/seleccionar-spool');
+        return;
+      }
+
+      // Check cache first
+      const cached = getCachedVersion(state.selectedSpool);
+      if (cached) {
+        setSpoolVersion(cached);
+        setLoadingVersion(false);
+        return;
+      }
+
+      try {
+        setLoadingVersion(true);
+
+        // Call metricas endpoint
+        const metrics = await getUnionMetricas(state.selectedSpool);
+        // Detect version based on total_uniones field
+        const version = metrics.total_uniones > 0 ? 'v4.0' : 'v3.0';
+
+        setSpoolVersion(version);
+        cacheSpoolVersion(state.selectedSpool, version);
+
+      } catch (error) {
+        console.error('Error detecting version:', error);
+        // Default to v3.0 on error (backward compatible)
+        setSpoolVersion('v3.0');
+      } finally {
+        setLoadingVersion(false);
+      }
+    };
+
+    detectVersion();
+  }, [state.selectedWorker, state.selectedOperation, state.selectedSpool, router]);
 
   const handleSelectTipo = (tipo: 'tomar' | 'pausar' | 'completar' | 'cancelar') => {
     setState({ selectedTipo: tipo });
@@ -29,6 +71,17 @@ export default function TipoInteraccionPage() {
   };
 
   if (!state.selectedWorker || !state.selectedOperation) return null;
+
+  // Loading state while detecting version
+  if (loadingVersion) {
+    return (
+      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center">
+        <div className="text-white text-xl font-mono tracking-[0.15em]">
+          Detectando versión...
+        </div>
+      </div>
+    );
+  }
 
   const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
                         state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
