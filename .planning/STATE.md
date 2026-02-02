@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 11 of 13 (API Endpoints & Metrics)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 11-05-PLAN.md (Integration Tests & Validation)
+Plan: 6 of 6 in current phase
+Status: Phase 11 COMPLETE
+Last activity: 2026-02-02 — Completed 11-06-PLAN.md (Fix Metadata Batch + Granular Logging - Gap closure)
 
-Progress: [███████████░░] 87% (Phase 11 complete, 45 of 52 total plans)
+Progress: [███████████░░] 88% (Phase 11 complete, 46 of 53 total plans)
 
 ## Performance Metrics
 
@@ -42,11 +42,11 @@ Progress: [███████████░░] 87% (Phase 11 complete, 45 o
 | 8. Backend Data Layer | 5 | 25.5 min | 5.1 min |
 | 9. Redis & Version Detection | 6 | 32 min | 5.3 min |
 | 10. Backend Services & Validation | 5 | 28.5 min | 5.7 min |
-| 11. API Endpoints & Metrics | 5 | 29.9 min | 6.0 min |
+| 11. API Endpoints & Metrics | 6 | 34.9 min | 5.8 min |
 
 **Recent Trend:**
-- Last 5 plans: [5.2, 2.9, 5.2, 6.0, 10.6] min
-- Trend: Phase 11 complete (5 of 5 plans, 6.0-min average - 5% faster than Phase 10's 5.7-min average, longer final plan due to comprehensive testing)
+- Last 5 plans: [2.9, 5.2, 6.0, 10.6, 5.0] min
+- Trend: Phase 11 complete (6 of 6 plans, 5.8-min average - 2% faster than Phase 10's 5.7-min average)
 
 *Updated after each plan completion*
 
@@ -151,6 +151,9 @@ Recent decisions affecting v4.0 work:
 - **D83 (11-05)**: Skipped workflow tests documented as pytest test cases (searchable, version-controlled, can be unskipped later)
 - **D84 (11-05)**: Manual validation guide provides comprehensive testing (14 scenarios with curl commands)
 - **D85 (11-05)**: pytest.ini updated for v4.0 (testpaths=tests, pythonpath=., maintains v3.0 compatibility)
+- **D86 (11-06)**: Delegate union processing to UnionService for batch + granular metadata logging
+- **D87 (11-06)**: Skip spool-level metadata logging when UnionService handles it (avoid duplicates)
+- **D88 (11-06)**: Inject UnionService at router level instead of dependency.py (v4.0 specific)
 
 ### Pending Todos
 
@@ -183,7 +186,7 @@ None yet.
   - 10-05 ✓: Integration tests and performance validation (6.0 min)
   - Test coverage: 34 new v4.0 integration/performance tests (100% passing)
   - Performance: <1s for 10-union batches (p95 requirement MET)
-- **✅ Phase 11 Complete**: API Endpoints & Metrics (5/5 plans, 29.9 min total, 6.0-min avg)
+- **✅ Phase 11 Complete**: API Endpoints & Metrics (6/6 plans, 34.9 min total, 5.8-min avg)
   - 11-01 ✓: API Versioning & V3 Migration (5.2 min)
     - Created occupation_v3.py router with v3.0 endpoints at /api/v3/
     - Maintained legacy routes at /api/ for backward compatibility
@@ -207,17 +210,19 @@ None yet.
     - Calculates pulgadas-diámetro from union metrics (2 decimal precision)
     - Error handling: 400/403/404/409/500 status codes
     - Race condition detection (409 CONFLICT)
-  - 11-05 ✓: Integration Tests & Validation (10.6 min, this session)
+  - 11-05 ✓: Integration Tests & Validation (10.6 min)
     - 35 passing smoke tests (endpoint existence, validation, OpenAPI)
     - 12 skipped workflow tests (documented manual procedures)
     - Manual validation guide (14 comprehensive curl-based scenarios)
     - Updated pytest.ini for v4.0 test structure
     - Test coverage: v4.0 endpoints, versioning, error handling
-  - Test coverage: 47 new tests (35 passing, 12 skipped with manual procedures)
-  - All v4.0 API endpoints implemented and validated
-    - Metrología auto-trigger support
-    - 7 comprehensive tests (19 total in test_union_router.py)
-  - 11-05 pending: Integration tests for v4.0 API
+  - 11-06 ✓: Fix Metadata Batch + Granular Event Logging (5.0 min, gap closure)
+    - Refactored OccupationService.finalizar_spool() to use UnionService.process_selection()
+    - Fixed metadata logging gap: 1 batch + N granular events per FINALIZAR
+    - Satisfied METRIC-03/METRIC-04 requirements
+    - Added test coverage for batch + granular metadata logging pattern
+  - Test coverage: 48 new tests (36 passing, 12 skipped with manual procedures)
+  - All v4.0 API endpoints implemented, validated, and metadata logging complete
 
 **v3.0 Technical Debt:**
 - 4 failing tests in test_occupation_service.py (CompletarRequest schema change requires operacion field)
@@ -229,7 +234,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 11-04-PLAN.md (FINALIZAR Workflow Endpoint, 6.0 min duration)
-Resume file: None
+Stopped at: Completed 11-06-PLAN.md (Phase 11 complete - all v4.0 API endpoints and metadata logging ready)
+Resume file: None - ready for Phase 12 planning
 
-**Phase 11 Plan 04 Complete:** FINALIZAR endpoint implemented. POST /api/v4/occupation/finalizar accepts selected_unions array and auto-determines PAUSAR/COMPLETAR/CANCELADO. Calculates pulgadas-diámetro from union metrics (2 decimal precision). Enhanced OccupationResponse with pulgadas field (backward compatible). Error handling: 400 (v3.0 rejection), 403 (ownership), 404 (not found), 409 (race condition), 500 (errors). 7 comprehensive tests (PAUSAR, COMPLETAR, CANCELADO, race, not owner, metrología trigger, v3.0 rejection). All 19 tests passing. Ready for Phase 11-05 integration tests.
+**Phase 11 Complete:** All v4.0 API endpoints implemented with correct batch + granular metadata logging. Gap closure plan 11-06 successfully refactored OccupationService.finalizar_spool() to delegate to UnionService.process_selection(), ensuring 1 batch + N granular metadata events per FINALIZAR operation. METRIC-03 and METRIC-04 requirements fully satisfied.
