@@ -367,3 +367,238 @@ class TestArmToSoldWorkflow:
         # Should succeed (ARM unions are completed in mock data)
         response = await occupation_service.iniciar_spool(request)
         assert response.success is True
+
+
+class TestMetrologiaAutoTransition:
+    """Test metrología auto-transition scenarios with mixed union types."""
+
+    @pytest.mark.asyncio
+    async def test_metrologia_triggers_when_all_work_complete(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Metrología should trigger when FW ARM'd and SOLD-required SOLD'd.
+
+        Scenario:
+        1. Spool has mixed union types (FW + BW/BR/SO)
+        2. Complete all FW unions via ARM
+        3. Complete all SOLD-required unions via SOLD
+        4. FINALIZAR should trigger metrología auto-transition
+        5. Estado_Detalle should update to "En Cola Metrología"
+        """
+        # Setup: Get all unions
+        all_unions = union_repo.get_by_ot("001")
+
+        # Manually set all unions as complete for this test
+        from backend.services.occupation_service import SOLD_REQUIRED_TYPES
+
+        for union in all_unions:
+            # Complete ARM for all
+            union.arm_fecha_fin = datetime.now()
+
+            # Complete SOLD only for SOLD-required types
+            if union.tipo_union in SOLD_REQUIRED_TYPES:
+                union.sol_fecha_fin = datetime.now()
+
+        # Mock get_by_spool to return our modified unions
+        with patch.object(union_repo, 'get_by_spool', return_value=all_unions):
+            # Check should_trigger_metrologia
+            should_trigger = occupation_service.should_trigger_metrologia("OT-001")
+            assert should_trigger is True
+
+    @pytest.mark.asyncio
+    async def test_metrologia_does_not_trigger_with_incomplete_arm(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Metrología should NOT trigger if FW ARM incomplete.
+
+        Scenario:
+        1. Spool has FW unions
+        2. Some FW unions not ARM'd
+        3. All SOLD complete
+        4. Should NOT trigger metrología
+        """
+        # Setup: Get all unions
+        all_unions = union_repo.get_by_ot("001")
+
+        from backend.services.occupation_service import SOLD_REQUIRED_TYPES
+
+        # Complete SOLD for all SOLD-required types
+        for union in all_unions:
+            if union.tipo_union in SOLD_REQUIRED_TYPES:
+                union.arm_fecha_fin = datetime.now()
+                union.sol_fecha_fin = datetime.now()
+            else:
+                # Leave some FW incomplete
+                union.arm_fecha_fin = None
+
+        # Mock get_by_spool
+        with patch.object(union_repo, 'get_by_spool', return_value=all_unions):
+            should_trigger = occupation_service.should_trigger_metrologia("OT-001")
+            assert should_trigger is False
+
+    @pytest.mark.asyncio
+    async def test_metrologia_does_not_trigger_with_incomplete_sold(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Metrología should NOT trigger if SOLD-required unions incomplete.
+
+        Scenario:
+        1. All FW ARM'd
+        2. Some BW/BR/SO SOLD incomplete
+        3. Should NOT trigger metrología
+        """
+        # Setup
+        all_unions = union_repo.get_by_ot("001")
+
+        from backend.services.occupation_service import SOLD_REQUIRED_TYPES
+
+        # Complete all ARM
+        for union in all_unions:
+            union.arm_fecha_fin = datetime.now()
+
+            # Leave some SOLD-required unions incomplete
+            if union.tipo_union in SOLD_REQUIRED_TYPES:
+                union.sol_fecha_fin = None  # Incomplete
+
+        # Mock get_by_spool
+        with patch.object(union_repo, 'get_by_spool', return_value=all_unions):
+            should_trigger = occupation_service.should_trigger_metrologia("OT-001")
+            assert should_trigger is False
+
+    @pytest.mark.asyncio
+    async def test_finalizar_triggers_metrologia_and_logs_event(
+        self,
+        occupation_service,
+        union_repo,
+        metadata_repo
+    ):
+        """
+        FINALIZAR should trigger metrología and log METROLOGIA_AUTO_TRIGGERED event.
+
+        Scenario:
+        1. FINALIZAR completes the last SOLD union
+        2. All work now complete (FW ARM'd + SOLD-required SOLD'd)
+        3. Metrología auto-transition should trigger
+        4. METROLOGIA_AUTO_TRIGGERED event should be logged
+        5. Response should include metrologia_triggered flag
+        """
+        # Setup: Complete all unions except one
+        all_unions = union_repo.get_by_ot("001")
+
+        from backend.services.occupation_service import SOLD_REQUIRED_TYPES
+
+        # Complete everything except last SOLD union
+        sold_required_unions = [
+            u for u in all_unions
+            if u.tipo_union in SOLD_REQUIRED_TYPES
+        ]
+
+        for union in all_unions:
+            union.arm_fecha_fin = datetime.now()
+
+            if union.tipo_union in SOLD_REQUIRED_TYPES:
+                # Leave last one incomplete
+                if union.id == sold_required_unions[-1].id:
+                    union.sol_fecha_fin = None
+                else:
+                    union.sol_fecha_fin = datetime.now()
+
+        # Get the last disponible SOLD union
+        last_union = sold_required_unions[-1]
+
+        # Mock StateService trigger_metrologia_transition
+        with patch('backend.services.occupation_service.StateService') as MockStateService:
+            mock_state_service = AsyncMock()
+            mock_state_service.trigger_metrologia_transition.return_value = "pendiente_metrologia"
+            MockStateService.return_value = mock_state_service
+
+            # Mock batch update
+            with patch.object(union_repo, 'batch_update_sold', return_value=1):
+                # Mock get_by_spool to return updated unions
+                updated_unions = all_unions.copy()
+                for u in updated_unions:
+                    if u.id == last_union.id:
+                        u.sol_fecha_fin = datetime.now()
+
+                with patch.object(union_repo, 'get_by_spool', return_value=updated_unions):
+                    # Execute: FINALIZAR with last union
+                    request = FinalizarRequest(
+                        tag_spool="OT-001",
+                        worker_id=93,
+                        worker_nombre="MR(93)",
+                        operacion=Operacion.SOLD,
+                        selected_unions=[last_union.id]
+                    )
+
+                    response = await occupation_service.finalizar_spool(request)
+
+                    # Verify: Metrología triggered
+                    assert response.success is True
+                    assert response.metrologia_triggered is True
+                    assert response.new_state == "pendiente_metrologia"
+                    assert "(Listo para metrología)" in response.message
+
+                    # Verify: METROLOGIA_AUTO_TRIGGERED event logged
+                    # Check that log_event was called with METROLOGIA_AUTO_TRIGGERED
+                    log_event_calls = metadata_repo.log_event.call_args_list
+                    metrologia_event_logged = any(
+                        "METROLOGIA_AUTO_TRIGGERED" in str(call)
+                        for call in log_event_calls
+                    )
+                    assert metrologia_event_logged
+
+    @pytest.mark.asyncio
+    async def test_metrologia_does_not_trigger_on_pausar(
+        self,
+        occupation_service,
+        union_repo
+    ):
+        """
+        Metrología should NOT check on PAUSAR (only on COMPLETAR).
+
+        Scenario:
+        1. FINALIZAR with partial selection (triggers PAUSAR)
+        2. Metrología check should NOT run
+        3. Response should not have metrologia_triggered flag
+        """
+        # Setup: Partial FINALIZAR
+        disponibles = union_repo.get_disponibles_sold_by_ot("001")
+
+        from backend.services.occupation_service import SOLD_REQUIRED_TYPES
+        sold_required = [
+            u for u in disponibles
+            if u.tipo_union in SOLD_REQUIRED_TYPES
+        ]
+
+        if not sold_required:
+            pytest.skip("No SOLD-required unions available")
+
+        # Select partial (not all)
+        selected = [u.id for u in sold_required[:1]]  # Just 1 out of many
+
+        # Mock batch update
+        with patch.object(union_repo, 'batch_update_sold', return_value=1):
+            request = FinalizarRequest(
+                tag_spool="OT-001",
+                worker_id=93,
+                worker_nombre="MR(93)",
+                operacion=Operacion.SOLD,
+                selected_unions=selected
+            )
+
+            response = await occupation_service.finalizar_spool(request)
+
+            # Verify: PAUSAR triggered (not COMPLETAR)
+            assert response.action_taken == "PAUSAR"
+
+            # Verify: No metrología triggered
+            assert response.metrologia_triggered is None or response.metrologia_triggered is False
