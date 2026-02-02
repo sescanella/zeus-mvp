@@ -340,10 +340,11 @@ class MetadataRepository:
         operacion: str,
         accion: str,
         fecha_operacion: Optional[date] = None,
-        metadata_json: Optional[str] = None
+        metadata_json: Optional[str] = None,
+        n_union: Optional[int] = None
     ) -> str:
         """
-        Log an occupation event to Metadata sheet (v3.0 convenience method).
+        Log an occupation event to Metadata sheet (v3.0 convenience method, v4.0 enhanced).
 
         Args:
             evento_tipo: Event type (e.g., "TOMAR_ARM", "PAUSAR_SOLD")
@@ -354,6 +355,7 @@ class MetadataRepository:
             accion: Action (TOMAR/PAUSAR/COMPLETAR)
             fecha_operacion: Date of operation (default: today)
             metadata_json: Additional JSON metadata
+            n_union: Union number within spool (1-20) for v4.0 union-level granularity (optional)
 
         Returns:
             str: Event UUID
@@ -390,7 +392,8 @@ class MetadataRepository:
             operacion=operacion,
             accion=Accion(accion),
             fecha_operacion=fecha_operacion_str,
-            metadata_json=metadata_json or "{}"
+            metadata_json=metadata_json or "{}",
+            n_union=n_union
         )
 
         # Append to Metadata sheet
