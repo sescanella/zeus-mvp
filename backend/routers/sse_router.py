@@ -26,22 +26,26 @@ router = APIRouter(prefix="/api/sse", tags=["sse"])
 
 def get_redis() -> aioredis.Redis:
     """
-    Dependency: Get Redis client for SSE streaming.
+    Dependency: Get Redis pubsub client for SSE streaming.
+
+    Uses dedicated pubsub connection pool (60 connections) separate from
+    main operations pool (20 connections) to prevent SSE long-lived
+    connections from exhausting pool used for lock operations.
 
     Returns:
-        Redis: Async Redis client instance
+        Redis: Async Redis pubsub client instance
 
     Raises:
-        HTTPException: If Redis not connected
+        HTTPException: If Redis pubsub client not connected
     """
     redis_repo = RedisRepository()
-    client = redis_repo.get_client()
+    client = redis_repo.get_pubsub_client()
 
     if client is None:
         from fastapi import HTTPException
         raise HTTPException(
             status_code=503,
-            detail="Redis service unavailable"
+            detail="Redis pubsub service unavailable"
         )
 
     return client
