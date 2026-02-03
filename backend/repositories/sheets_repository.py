@@ -1032,10 +1032,22 @@ class SheetsRepository:
                 fecha_ocupacion_value = None
                 estado_detalle_value = None
 
+            # v4.0: Parse Total_Uniones with validation
+            total_uniones_raw = get_col_value("Total_Uniones")
+            total_uniones = None
+            if total_uniones_raw:
+                try:
+                    total_uniones = int(total_uniones_raw)
+                    if total_uniones < 0:
+                        total_uniones = None
+                except (ValueError, TypeError):
+                    total_uniones = None
+
             spool = Spool(
                 tag_spool=tag_spool,
                 ot=get_col_value("OT"),  # v4.0: Orden de Trabajo (columna B)
                 nv=get_col_value("NV"),
+                total_uniones=total_uniones,  # v4.0: version detection field
                 fecha_materiales=parse_date(get_col_value("Fecha_Materiales")),
                 fecha_armado=parse_date(get_col_value("Fecha_Armado")),
                 fecha_soldadura=parse_date(get_col_value("Fecha_Soldadura")),

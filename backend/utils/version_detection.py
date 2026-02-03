@@ -15,24 +15,25 @@ def is_v4_spool(spool_data: dict) -> bool:
     """
     Detect if spool is v4.0 (has unions) or v3.0 (no unions).
 
-    A spool is considered v4.0 if it has Total_Uniones > 0.
+    A spool is considered v4.0 if it has total_uniones > 0.
     This indicates that union-level tracking is enabled.
 
     Args:
-        spool_data: Dictionary with spool data (must include Total_Uniones key)
+        spool_data: Dictionary with spool data (must include total_uniones key from Pydantic model)
 
     Returns:
         bool: True if v4.0 spool (has unions), False if v3.0 spool (no unions)
 
     Example:
-        >>> is_v4_spool({"TAG_SPOOL": "OT-123", "Total_Uniones": "5"})
+        >>> is_v4_spool({"tag_spool": "OT-123", "total_uniones": 5})
         True
-        >>> is_v4_spool({"TAG_SPOOL": "TEST-02", "Total_Uniones": "0"})
+        >>> is_v4_spool({"tag_spool": "TEST-02", "total_uniones": 0})
         False
-        >>> is_v4_spool({"TAG_SPOOL": "TEST-02", "Total_Uniones": None})
+        >>> is_v4_spool({"tag_spool": "TEST-02", "total_uniones": None})
         False
     """
-    total_uniones = spool_data.get("Total_Uniones")
+    # Try both snake_case (Pydantic model) and PascalCase (raw Sheets data)
+    total_uniones = spool_data.get("total_uniones") or spool_data.get("Total_Uniones")
 
     # None or empty string = v3.0 spool
     if total_uniones is None or total_uniones == "":
