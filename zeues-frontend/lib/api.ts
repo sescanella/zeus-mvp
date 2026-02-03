@@ -1486,17 +1486,29 @@ export async function iniciarSpool(payload: IniciarRequest): Promise<IniciarResp
 
     if (res.status === 403) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Requisitos no cumplidos para SOLD. Completa ARM primero.');
+      // Handle both string and object detail (ARM_PREREQUISITE, NO_AUTORIZADO return nested objects)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Requisitos no cumplidos para SOLD. Completa ARM primero.';
+      throw new Error(errorMessage);
     }
 
     if (res.status === 404) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Spool no encontrado.');
+      // Handle both string and object detail (for consistency)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Spool no encontrado.';
+      throw new Error(errorMessage);
     }
 
     if (res.status === 409) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Spool ocupado por otro trabajador. Intenta más tarde.');
+      // Handle both string and object detail (SPOOL_OCCUPIED returns nested object)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Spool ocupado por otro trabajador. Intenta más tarde.';
+      throw new Error(errorMessage);
     }
 
     return await handleResponse<IniciarResponse>(res);
@@ -1579,22 +1591,38 @@ export async function finalizarSpool(payload: FinalizarRequest): Promise<Finaliz
     // v4.0 specific error handling
     if (res.status === 400) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Error de validación. Verifica las uniones seleccionadas.');
+      // Handle both string and object detail (for consistency)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Error de validación. Verifica las uniones seleccionadas.';
+      throw new Error(errorMessage);
     }
 
     if (res.status === 403) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'No estás autorizado. Solo quien inició puede finalizar.');
+      // Handle both string and object detail (for consistency)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'No estás autorizado. Solo quien inició puede finalizar.';
+      throw new Error(errorMessage);
     }
 
     if (res.status === 404) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Spool no encontrado.');
+      // Handle both string and object detail (for consistency)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Spool no encontrado.';
+      throw new Error(errorMessage);
     }
 
     if (res.status === 409) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Conflicto: algunas uniones ya fueron completadas por otro trabajador.');
+      // Handle both string and object detail (consistent with iniciarSpool)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Conflicto: algunas uniones ya fueron completadas por otro trabajador.';
+      throw new Error(errorMessage);
     }
 
     return await handleResponse<FinalizarResponse>(res);
