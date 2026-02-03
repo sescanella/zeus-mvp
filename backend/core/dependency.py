@@ -499,12 +499,14 @@ def get_occupation_service_v4(
     conflict_service: ConflictService = Depends(get_conflict_service),
     redis_event_service: RedisEventService = Depends(get_redis_event_service),
     union_repo: UnionRepository = Depends(get_union_repository),
+    validation_service: ValidationService = Depends(get_validation_service)
 ) -> OccupationService:
     """
-    Factory for OccupationService with v4.0 union support (FINALIZAR workflow).
+    Factory for OccupationService with v4.0 union support (INICIAR/FINALIZAR workflows).
 
-    Used by POST /api/v4/occupation/finalizar. Builds UnionService and OccupationService
-    with union_repository and union_service for batch union updates.
+    Used by POST /api/v4/occupation/iniciar and POST /api/v4/occupation/finalizar.
+    Builds UnionService and OccupationService with union_repository, validation_service,
+    and union_service for v4.0 operations.
     """
     union_service = UnionService(
         union_repo=union_repo,
@@ -518,6 +520,7 @@ def get_occupation_service_v4(
         conflict_service=conflict_service,
         redis_event_service=redis_event_service,
         union_repository=union_repo,
+        validation_service=validation_service,
         union_service=union_service,
     )
 

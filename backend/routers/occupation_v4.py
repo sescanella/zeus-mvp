@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Annotated
 
 from backend.core.dependency import (
-    get_occupation_service,
+    get_occupation_service_v4,
     get_sheets_repository,
     get_worker_service
 )
@@ -50,7 +50,7 @@ router = APIRouter(
 @router.post("/iniciar", response_model=OccupationResponse)
 async def iniciar_v4(
     request: IniciarRequest,
-    occupation_service: Annotated[OccupationService, Depends(get_occupation_service)],
+    occupation_service: Annotated[OccupationService, Depends(get_occupation_service_v4)],
     sheets_repo: Annotated[SheetsRepository, Depends(get_sheets_repository)]
 ):
     """
