@@ -1,8 +1,8 @@
 ---
-status: verifying
+status: resolved
 trigger: "v4.0 INICIAR endpoint returning HTTP 400 Bad Request. Frontend showing 'iniciarSpool error: Error: [object Object]'"
 created: 2026-02-03T17:31:26Z
-updated: 2026-02-03T21:06:30Z
+updated: 2026-02-03T21:07:00Z
 ---
 
 ## Current Focus
