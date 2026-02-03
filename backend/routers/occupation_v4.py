@@ -173,6 +173,10 @@ async def iniciar_v4(
             detail=e.message
         )
 
+    except HTTPException:
+        # Re-raise HTTPException (400, 403, 404, 409) without wrapping in 500
+        raise
+
     except Exception as e:
         # Unexpected error - return 500
         logger.error(f"Unexpected error during INICIAR for {tag_spool}: {e}", exc_info=True)
