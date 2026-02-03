@@ -260,13 +260,14 @@ function SeleccionarSpoolContent() {
       }
     });
 
-    // v4.0: INICIAR workflow - call API directly and navigate to success
+    // v4.0: INICIAR workflow - call API to occupy spool, then navigate to union selection
     if (state.accion === 'INICIAR' && selectedCount === 1 && state.selectedWorker && state.selectedOperation) {
       try {
         setLoading(true);
         const tag = state.selectedSpools[0];
         const workerNombre = `${state.selectedWorker.nombre.charAt(0)}${(state.selectedWorker.apellido || '').charAt(0)}(${state.selectedWorker.id})`;
 
+        // Call INICIAR API to occupy spool (sets Ocupado_Por, creates Redis lock)
         await iniciarSpool({
           tag_spool: tag,
           worker_id: state.selectedWorker.id,
@@ -274,8 +275,17 @@ function SeleccionarSpoolContent() {
           operacion: state.selectedOperation as 'ARM' | 'SOLD'
         });
 
-        // Navigate to success page
-        router.push('/exito');
+        // Set single spool selection and change accion to FINALIZAR
+        // (INICIAR is complete, next step is FINALIZAR after union selection)
+        setState({
+          selectedSpool: tag,
+          selectedSpools: [],
+          batchMode: false,
+          accion: 'FINALIZAR'  // Change from INICIAR to FINALIZAR for next step
+        });
+
+        // Navigate to union selection (P5) - NOT to success page
+        router.push('/seleccionar-uniones');
         return;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
