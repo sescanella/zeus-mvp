@@ -1477,7 +1477,11 @@ export async function iniciarSpool(payload: IniciarRequest): Promise<IniciarResp
     // v4.0 specific error handling
     if (res.status === 400) {
       const errorData = await res.json();
-      throw new Error(errorData.detail || 'Error de validación. Verifica los datos.');
+      // Handle both string and object detail (WRONG_VERSION returns nested object)
+      const errorMessage = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : errorData.detail?.message || 'Error de validación. Verifica los datos.';
+      throw new Error(errorMessage);
     }
 
     if (res.status === 403) {

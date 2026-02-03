@@ -147,12 +147,15 @@ function SeleccionarSpoolContent() {
       let filtered = spoolsWithVersion;
 
       if (accion === 'INICIAR') {
-        // Show only disponibles (not occupied)
-        // Criteria: STATUS_NV='ABIERTA' AND Status_Spool='EN_PROCESO' AND Ocupado_Por IN ('','DISPONIBLE',null)
+        // Show only v4.0 spools that are disponibles (not occupied)
+        // v4.0 INICIAR endpoint requires total_uniones > 0
+        // Criteria: version='v4.0' AND STATUS_NV='ABIERTA' AND Status_Spool='EN_PROCESO' AND Ocupado_Por IN ('','DISPONIBLE',null)
         // Note: Spool type doesn't include all backend fields, using type assertion
         filtered = spoolsWithVersion.filter(spool => {
           const ocupadoPor = (spool as { Ocupado_Por?: string }).Ocupado_Por;
-          return !ocupadoPor || ocupadoPor === 'DISPONIBLE' || ocupadoPor === '';
+          const isDisponible = !ocupadoPor || ocupadoPor === 'DISPONIBLE' || ocupadoPor === '';
+          const isV4 = spool.version === 'v4.0';
+          return isDisponible && isV4;
         });
       } else if (accion === 'FINALIZAR') {
         // Show only occupied by current worker
