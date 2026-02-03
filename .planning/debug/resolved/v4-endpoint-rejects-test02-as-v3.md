@@ -1,8 +1,8 @@
 ---
-status: verifying
+status: resolved
 trigger: "v4-endpoint-rejects-test02-as-v3"
 created: 2026-02-03T18:30:00Z
-updated: 2026-02-03T18:30:00Z
+updated: 2026-02-03T21:40:00Z
 ---
 
 ## Current Focus
