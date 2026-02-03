@@ -73,7 +73,7 @@ async def get_disponibles(
             raise HTTPException(status_code=404, detail=f"Spool {tag} not found")
 
         # Extract OT from spool
-        ot = spool.get("OT")
+        ot = spool.ot
         if not ot:
             logger.error(f"Spool {tag} missing OT field")
             raise HTTPException(
@@ -158,7 +158,7 @@ async def get_metricas(
             raise HTTPException(status_code=404, detail=f"Spool {tag} not found")
 
         # Extract OT from spool
-        ot = spool.get("OT")
+        ot = spool.ot
         if not ot:
             logger.error(f"Spool {tag} missing OT field")
             raise HTTPException(
