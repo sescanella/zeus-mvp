@@ -1034,6 +1034,7 @@ class SheetsRepository:
 
             spool = Spool(
                 tag_spool=tag_spool,
+                ot=get_col_value("OT"),  # v4.0: Orden de Trabajo (columna B)
                 nv=get_col_value("NV"),
                 fecha_materiales=parse_date(get_col_value("Fecha_Materiales")),
                 fecha_armado=parse_date(get_col_value("Fecha_Armado")),
@@ -1140,6 +1141,7 @@ class SheetsRepository:
                     # Build Spool object for filtered row
                     spool = Spool(
                         tag_spool=tag_spool,
+                        ot=get_col_value(row_data, "OT"),  # v4.0: Orden de Trabajo
                         nv=get_col_value(row_data, "NV"),
                         fecha_materiales=parse_date(get_col_value(row_data, "Fecha_Materiales")),
                         fecha_armado=fecha_armado,
@@ -1228,6 +1230,7 @@ class SheetsRepository:
 
                 spool = Spool(
                     tag_spool=tag_spool,
+                    ot=get_col_value(row_data, "OT"),  # v4.0: Orden de Trabajo
                     nv=get_col_value(row_data, "NV"),
                     fecha_materiales=parse_date(get_col_value(row_data, "Fecha_Materiales")),
                     fecha_armado=parse_date(get_col_value(row_data, "Fecha_Armado")),

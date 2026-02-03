@@ -21,6 +21,13 @@ class Spool(BaseModel):
         examples=["MK-1335-CW-25238-011"]
     )
 
+    # v4.0: Orden de Trabajo (OT) - Foreign key para Uniones sheet
+    ot: Optional[str] = Field(
+        None,
+        description="Número de Orden de Trabajo (columna B en Sheets)",
+        examples=["001", "123", "MK-1335"]
+    )
+
     # v2.0: Número de Nota de Venta para filtrado multidimensional
     nv: Optional[str] = Field(
         None,
