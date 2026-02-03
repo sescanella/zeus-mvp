@@ -103,13 +103,15 @@ class SpoolServiceV2:
         """
         # Obtener índices dinámicamente por nombre de columna (column_map ya inicializado en constructor)
         idx_tag_spool = self.sheets_service._get_col_idx("TAG_SPOOL", fallback_idx=6)
-        idx_nv = self.sheets_service._get_col_idx("NV", fallback_idx=1)
+        idx_ot = self.sheets_service._get_col_idx("OT", fallback_idx=1)
+        idx_nv = self.sheets_service._get_col_idx("NV", fallback_idx=7)
         idx_fecha_materiales = self.sheets_service._get_col_idx("Fecha_Materiales", fallback_idx=32)
         idx_fecha_armado = self.sheets_service._get_col_idx("Fecha_Armado", fallback_idx=33)
         idx_armador = self.sheets_service._get_col_idx("Armador", fallback_idx=34)
         idx_fecha_soldadura = self.sheets_service._get_col_idx("Fecha_Soldadura", fallback_idx=35)
         idx_soldador = self.sheets_service._get_col_idx("Soldador", fallback_idx=36)
         idx_fecha_qc_metrologia = self.sheets_service._get_col_idx("Fecha_QC_Metrología", fallback_idx=37)
+        idx_total_uniones = self.sheets_service._get_col_idx("Total_Uniones", fallback_idx=67)
 
         logger.debug(
             f"Column indices: TAG_SPOOL={idx_tag_spool}, "
@@ -117,7 +119,7 @@ class SpoolServiceV2:
         )
 
         # Validar y rellenar fila si es corta
-        required_len = max(idx_tag_spool, idx_fecha_armado, idx_armador, idx_soldador, idx_fecha_qc_metrologia) + 1
+        required_len = max(idx_tag_spool, idx_fecha_armado, idx_armador, idx_soldador, idx_fecha_qc_metrologia, idx_total_uniones) + 1
         if len(row) < required_len:
             row = row + [''] * (required_len - len(row))
 
@@ -126,22 +128,27 @@ class SpoolServiceV2:
         if not tag_spool:
             raise ValueError("TAG_SPOOL vacío")
 
-        # 2. NV (opcional)
+        # 2. OT (opcional) - v4.0 Foreign key para Uniones sheet
+        ot = row[idx_ot].strip() if idx_ot < len(row) and row[idx_ot] else None
+        if ot == '':
+            ot = None
+
+        # 3. NV (opcional)
         nv = row[idx_nv].strip() if idx_nv < len(row) and row[idx_nv] else None
         if nv == '':
             nv = None
 
-        # 3. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
+        # 4. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
         arm_status = ActionStatus.PENDIENTE
         sold_status = ActionStatus.PENDIENTE
 
-        # 4. Parsear fechas usando SheetsService.parse_date()
+        # 5. Parsear fechas usando SheetsService.parse_date()
         fecha_materiales = SheetsService.parse_date(row[idx_fecha_materiales] if idx_fecha_materiales < len(row) else "")
         fecha_armado = SheetsService.parse_date(row[idx_fecha_armado] if idx_fecha_armado < len(row) else "")
         fecha_soldadura = SheetsService.parse_date(row[idx_fecha_soldadura] if idx_fecha_soldadura < len(row) else "")
         fecha_qc_metrologia = SheetsService.parse_date(row[idx_fecha_qc_metrologia] if idx_fecha_qc_metrologia < len(row) else "")
 
-        # 5. Parsear trabajadores
+        # 6. Parsear trabajadores
         armador = row[idx_armador].strip() if idx_armador < len(row) and row[idx_armador] else None
         if armador == '':
             armador = None
@@ -150,14 +157,29 @@ class SpoolServiceV2:
         if soldador == '':
             soldador = None
 
-        # 6. v3.0: Parse Ocupado_Por (columna 64)
+        # 7. v4.0: Parse Total_Uniones (columna 68) con validación
+        total_uniones_raw = row[idx_total_uniones] if idx_total_uniones < len(row) and row[idx_total_uniones] else None
+        total_uniones = None
+        if total_uniones_raw:
+            try:
+                total_uniones = int(total_uniones_raw)
+                if total_uniones < 0:
+                    logger.warning(f"Negative Total_Uniones for {tag_spool}: {total_uniones}, defaulting to None")
+                    total_uniones = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Total_Uniones for {tag_spool}: {total_uniones_raw}, defaulting to None")
+                total_uniones = None
+
+        # 8. v3.0: Parse Ocupado_Por (columna 64)
         idx_ocupado_por = self.sheets_service._get_col_idx("Ocupado_Por", fallback_idx=64)
         ocupado_por_raw = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
         ocupado_por = ocupado_por_raw if ocupado_por_raw else None
 
         return Spool(
             tag_spool=tag_spool,
+            ot=ot,  # v4.0: Orden de Trabajo (FK para Uniones)
             nv=nv,
+            total_uniones=total_uniones,  # v4.0: version detection field
             arm=arm_status,
             sold=sold_status,
             fecha_materiales=fecha_materiales,

@@ -1228,10 +1228,22 @@ class SheetsRepository:
                 if not tag_spool:
                     continue  # Skip rows without TAG_SPOOL
 
+                # v4.0: Parse Total_Uniones con validación
+                total_uniones_raw = get_col_value(row_data, "Total_Uniones")
+                total_uniones = None
+                if total_uniones_raw:
+                    try:
+                        total_uniones = int(total_uniones_raw)
+                        if total_uniones < 0:
+                            total_uniones = None
+                    except (ValueError, TypeError):
+                        total_uniones = None
+
                 spool = Spool(
                     tag_spool=tag_spool,
                     ot=get_col_value(row_data, "OT"),  # v4.0: Orden de Trabajo
                     nv=get_col_value(row_data, "NV"),
+                    total_uniones=total_uniones,  # v4.0: version detection field
                     fecha_materiales=parse_date(get_col_value(row_data, "Fecha_Materiales")),
                     fecha_armado=parse_date(get_col_value(row_data, "Fecha_Armado")),
                     fecha_soldadura=parse_date(get_col_value(row_data, "Fecha_Soldadura")),

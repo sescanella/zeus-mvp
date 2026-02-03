@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
-import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool, getUnionMetricas } from '@/lib/api';
-import { getCachedVersion, cacheSpoolVersion, detectSpoolVersion } from '@/lib/version';
+import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
 import type { Spool, SSEEvent } from '@/lib/types';
 import { useSSE } from '@/lib/hooks/useSSE';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -21,7 +20,6 @@ function SeleccionarSpoolContent() {
   const [error, setError] = useState('');
   const [spools, setSpools] = useState<Spool[]>([]);
   const [raceConditionError, setRaceConditionError] = useState<string>('');
-  const [detectingVersions, setDetectingVersions] = useState(false);
 
   // Local filter states
   const [searchNV, setSearchNV] = useState('');
@@ -138,56 +136,12 @@ function SeleccionarSpoolContent() {
         return;
       }
 
-      // Detect version for each spool with caching and batch processing (v4.0 Phase 12-07)
-      setDetectingVersions(true);
-
-      // Helper to batch promises (process 5 spools at a time)
-      const batchPromises = async <T,>(
-        items: T[],
-        batchSize: number,
-        fn: (item: T) => Promise<{ item: T; result: 'v3.0' | 'v4.0' }>
-      ) => {
-        const results = [];
-        for (let i = 0; i < items.length; i += batchSize) {
-          const batch = items.slice(i, i + batchSize);
-          const batchResults = await Promise.all(batch.map(fn));
-          results.push(...batchResults);
-        }
-        return results;
-      };
-
-      const spoolsWithVersion = await batchPromises(
-        fetchedSpools,
-        5, // Process 5 spools at a time to avoid overwhelming the API
-        async (spool) => {
-          // Check cache first
-          const cached = getCachedVersion(spool.tag_spool);
-          if (cached) {
-            return { item: spool, result: cached };
-          }
-
-          try {
-            // Fetch metrics for version detection
-            const metrics = await getUnionMetricas(spool.tag_spool);
-            const version = detectSpoolVersion(metrics as { total_uniones: number });
-
-            // Cache the result
-            cacheSpoolVersion(spool.tag_spool, version);
-
-            return { item: spool, result: version };
-          } catch (error) {
-            // Default to v3.0 on error (safer legacy workflow)
-            console.error(`Error detecting version for ${spool.tag_spool}:`, error);
-            const defaultVersion = 'v3.0' as const;
-            cacheSpoolVersion(spool.tag_spool, defaultVersion);
-            return { item: spool, result: defaultVersion };
-          }
-        }
-      ).then(results =>
-        results.map(({ item, result }) => ({ ...item, version: result }))
-      );
-
-      setDetectingVersions(false);
+      // v4.0: Detect version from spool.total_uniones (no API calls needed)
+      // Optimized: O(1) instead of O(N) API calls
+      const spoolsWithVersion = fetchedSpools.map(spool => ({
+        ...spool,
+        version: (spool.total_uniones && spool.total_uniones > 0) ? 'v4.0' as const : 'v3.0' as const
+      }));
 
       // v4.0: Apply filtering based on action type (INICIAR vs FINALIZAR)
       let filtered = spoolsWithVersion;
@@ -498,16 +452,6 @@ function SeleccionarSpoolContent() {
           </div>
         )}
 
-        {/* Version Detection Indicator */}
-        {detectingVersions && !loading && (
-          <div className="mb-4 border-4 border-zeues-orange p-4 bg-zeues-orange/10">
-            <div className="flex items-center gap-3">
-              <Loader2 size={24} className="text-zeues-orange animate-spin" strokeWidth={3} />
-              <span className="text-sm font-black text-zeues-orange font-mono">DETECTANDO VERSIONES...</span>
-            </div>
-          </div>
-        )}
-
         {/* Error State */}
         {error && !loading && (
           <div className="border-4 border-red-500 p-8 mb-6 bg-red-500/10">
@@ -561,16 +505,27 @@ function SeleccionarSpoolContent() {
           <>
             {/* Version Info Message */}
             {(() => {
-              const allSameVersion = spools.every(
-                s => s.version === spools[0]?.version
-              );
-              return allSameVersion && spools.length > 0 && (
-                <div className="mb-4 border-2 border-white/30 p-3 bg-white/5">
-                  <span className="text-sm font-black text-white/70 font-mono">
-                    Todos los spools son versión {spools[0].version}
-                  </span>
-                </div>
-              );
+              const allSameVersion = spools.every(s => s.version === spools[0]?.version);
+              const v4Count = spools.filter(s => s.version === 'v4.0').length;
+
+              if (allSameVersion && spools.length > 0) {
+                return (
+                  <div className="mb-4 border-2 border-white/30 p-3 bg-white/5">
+                    <span className="text-sm font-black text-white/70 font-mono">
+                      Todos los spools son versión {spools[0].version}
+                    </span>
+                  </div>
+                );
+              } else if (v4Count > 0) {
+                return (
+                  <div className="mb-4 border-2 border-green-500/50 p-3 bg-green-500/10">
+                    <span className="text-sm font-black text-green-400 font-mono">
+                      {v4Count} spool{v4Count !== 1 ? 's' : ''} v4.0 (con uniones), {spools.length - v4Count} v3.0
+                    </span>
+                  </div>
+                );
+              }
+              return null;
             })()}
 
             <div className="mb-6 tablet:mb-4">

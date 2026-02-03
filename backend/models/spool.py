@@ -35,6 +35,14 @@ class Spool(BaseModel):
         examples=["001", "002", "NV-123"]
     )
 
+    # v4.0: Columna de métricas de uniones (col 68)
+    total_uniones: Optional[int] = Field(
+        None,
+        description="Total de uniones en el spool (columna 68 'Total_Uniones')",
+        ge=0,
+        examples=[0, 8, 12]
+    )
+
     # Estados de acciones (columnas V, W)
     arm: ActionStatus = Field(
         ActionStatus.PENDIENTE,
