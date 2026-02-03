@@ -66,7 +66,7 @@ export default function SeleccionarUnionesPage() {
         );
 
         // Sort by n_union ascending
-        const sorted = response.uniones.sort((a, b) => a.n_union - b.n_union);
+        const sorted = response.unions.sort((a, b) => a.n_union - b.n_union);
 
         // Mark completed unions based on operation
         const unionsWithCompletionStatus = sorted.map(u => ({

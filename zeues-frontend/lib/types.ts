@@ -251,9 +251,8 @@ export interface Union {
 export interface DisponiblesResponse {
   tag_spool: string;
   operacion: string;
-  uniones: Union[];
-  total_uniones: number;
-  disponibles_count: number;
+  unions: Union[];  // English field name to match backend Pydantic model
+  count: number;    // Backend returns 'count' not 'disponibles_count'
 }
 
 /**
