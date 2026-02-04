@@ -216,15 +216,6 @@ function SeleccionarSpoolContent() {
     s.tag_spool.toLowerCase().includes(searchTag.toLowerCase())
   );
 
-  // Debug logging (v2.1.2)
-  console.log('[FILTER DEBUG v2.1.2]', {
-    totalSpools: spools.length,
-    filteredCount: spoolsFiltrados.length,
-    searchTag,
-    searchNV,
-    filteredTags: spoolsFiltrados.map(s => s.tag_spool)
-  });
-
   // Toggle selection
   const toggleSelect = (tag: string) => {
     const currentSelected = state.selectedSpools || [];
@@ -603,9 +594,7 @@ function SeleccionarSpoolContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Render only filtered spools (v2.1.3 - debug render) */}
-                    {spoolsFiltrados.map((spool, index) => {
-                      console.log(`[RENDER v2.1.3] Row ${index}:`, spool.tag_spool);
+                    {spoolsFiltrados.map((spool) => {
                       const isSelected = (state.selectedSpools || []).includes(spool.tag_spool);
                       const isBloqueado = tipo === 'reparacion' && (spool as unknown as { bloqueado?: boolean }).bloqueado;
                       const cycle = tipo === 'reparacion' ? (spool as unknown as { cycle?: number }).cycle : null;
