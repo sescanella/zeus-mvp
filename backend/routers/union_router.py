@@ -285,7 +285,7 @@ async def finalizar_v4(
             )
 
         # Step 2: Derive worker_nombre from worker_id
-        worker = worker_service.get_worker_by_id(request.worker_id)
+        worker = worker_service.find_worker_by_id(request.worker_id)
         if not worker:
             raise HTTPException(
                 status_code=404,
