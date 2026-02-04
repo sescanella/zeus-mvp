@@ -150,20 +150,19 @@ function SeleccionarSpoolContent() {
         // Show all available spools (disponibles, not occupied)
         // Backend will validate version compatibility and return clear error if v3.0 spool is used
         // Criteria: STATUS_NV='ABIERTA' AND Status_Spool='EN_PROCESO' AND Ocupado_Por IN ('','DISPONIBLE',null)
-        // Note: Spool type doesn't include all backend fields, using type assertion
         filtered = spoolsWithVersion.filter(spool => {
-          const ocupadoPor = (spool as { Ocupado_Por?: string }).Ocupado_Por;
-          const isDisponible = !ocupadoPor || ocupadoPor === 'DISPONIBLE' || ocupadoPor === '';
+          const isDisponible = !spool.ocupado_por || spool.ocupado_por === 'DISPONIBLE' || spool.ocupado_por === '';
           return isDisponible;
         });
       } else if (accion === 'FINALIZAR') {
         // Show only occupied by current worker
         // Criteria: Ocupado_Por contains worker_id
+        // NOTE: Backend /api/spools/ocupados already filters by worker_id
+        // This client-side filter is redundant but kept for safety
         if (selectedWorker) {
           const workerPattern = `(${selectedWorker.id})`;
           filtered = spoolsWithVersion.filter(spool => {
-            const ocupadoPor = (spool as { Ocupado_Por?: string }).Ocupado_Por;
-            return ocupadoPor && ocupadoPor.includes(workerPattern);
+            return spool.ocupado_por && spool.ocupado_por.includes(workerPattern);
           });
         } else {
           filtered = [];

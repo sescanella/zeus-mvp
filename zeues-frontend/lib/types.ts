@@ -22,6 +22,8 @@ export interface Spool {
   fecha_soldadura?: string;
   soldador?: string;  // v2.1: Formato "INICIALES(ID)" ej: "MG(94)"
   fecha_qc_metrologia?: string | null;  // v2.1: Fecha QC/Metrología completada
+  ocupado_por?: string | null;  // v3.0: Worker ocupando el spool (formato: "MR(93)"), v4.0: Usado para FINALIZAR
+  fecha_ocupacion?: string | null;  // v3.0: Timestamp de ocupación (DD-MM-YYYY HH:MM:SS)
   total_uniones?: number;  // v4.0: Column 68 - Total union count
   version?: 'v3.0' | 'v4.0';  // v4.0: Derived from total_uniones (>0 = v4.0, 0 = v3.0)
 }
