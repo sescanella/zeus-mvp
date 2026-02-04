@@ -59,29 +59,28 @@ OPERACIONES_V4_COLUMNS = {
 }
 
 UNIONES_V4_COLUMNS = [
-    # Core fields (1-5)
+    # Core fields (1-6)
     "ID",
-    "TAG_SPOOL",
+    "OT",
     "N_UNION",
+    "TAG_SPOOL",
     "DN_UNION",
     "TIPO_UNION",
-    # ARM operation (6-8)
+    # ARM operation (7-9)
     "ARM_FECHA_INICIO",
     "ARM_FECHA_FIN",
     "ARM_WORKER",
-    # SOLD operation (9-11)
+    # SOLD operation (10-12)
     "SOL_FECHA_INICIO",
     "SOL_FECHA_FIN",
     "SOL_WORKER",
-    # NDT inspection (12-13)
+    # NDT inspection (13-16)
+    "NDT_UNION",
+    "R_NDT_UNION",
     "NDT_FECHA",
     "NDT_STATUS",
-    # Audit columns (14-18)
-    "version",
-    "Creado_Por",
-    "Fecha_Creacion",
-    "Modificado_Por",
-    "Fecha_Modificacion"
+    # Version control (17)
+    "version"
 ]
 
 METADATA_V4_COLUMNS = {
