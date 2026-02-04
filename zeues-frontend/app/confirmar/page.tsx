@@ -23,7 +23,8 @@ import type {
   CompletarRequest,
   BatchTomarRequest,
   BatchOccupationResponse,
-  BatchActionResponse
+  BatchActionResponse,
+  FinalizarRequest
 } from '@/lib/types';
 
 /**
@@ -136,18 +137,15 @@ function ConfirmarContent() {
       // Check for v4.0 FINALIZAR flow (single mode only)
       if (state.accion === 'FINALIZAR' && !isBatchMode) {
         // v4.0: FINALIZAR flow with union selection
-        const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
         const worker_id = state.selectedWorker!.id;
         const tag_spool = state.selectedSpool!;
         const operacion = state.selectedOperation as 'ARM' | 'SOLD';
 
-        const payload = {
+        const payload: FinalizarRequest = {
           tag_spool,
           worker_id,
-          worker_nombre,
           operacion,
-          selected_unions: state.selectedUnions,
-          fecha_operacion: new Date().toISOString().split('T')[0] // YYYY-MM-DD
+          selected_unions: state.selectedUnions, // Already union IDs (format: "OT-123+5")
         };
 
         const response = await finalizarSpool(payload);

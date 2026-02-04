@@ -97,7 +97,7 @@ export default function SeleccionarUnionesPage() {
     if (state.selectedUnions.length === 0) return 0;
 
     const total = unions
-      .filter(u => state.selectedUnions.includes(u.n_union))
+      .filter(u => state.selectedUnions.includes(u.id))
       .reduce((sum, u) => sum + u.dn_union, 0);
 
     return Math.round(total * 10) / 10; // 1 decimal precision
@@ -105,8 +105,8 @@ export default function SeleccionarUnionesPage() {
 
   // Handle "Seleccionar Todas" button
   const handleSelectAll = () => {
-    const availableNumbers = availableUnions.map(u => u.n_union);
-    setState({ selectedUnions: availableNumbers });
+    const availableIds = availableUnions.map(u => u.id);
+    setState({ selectedUnions: availableIds });
   };
 
   // Handle continue button click
@@ -131,7 +131,7 @@ export default function SeleccionarUnionesPage() {
   };
 
   // Handle selection change from UnionTable
-  const handleSelectionChange = (newSelection: number[]) => {
+  const handleSelectionChange = (newSelection: string[]) => {
     setState({ selectedUnions: newSelection });
   };
 

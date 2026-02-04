@@ -231,6 +231,7 @@ export interface VersionResponse {
  * Used for union-level tracking and selection workflows.
  */
 export interface Union {
+  id: string; // Composite ID: TAG_SPOOL+N_UNION (e.g., 'OT-123+5')
   n_union: number;
   dn_union: number;
   tipo_union: string;
@@ -301,10 +302,8 @@ export interface IniciarResponse {
 export interface FinalizarRequest {
   tag_spool: string;
   worker_id: number;
-  worker_nombre: string;
   operacion: 'ARM' | 'SOLD';
-  selected_unions: number[];
-  fecha_operacion: string; // YYYY-MM-DD format
+  selected_unions: string[]; // Union IDs (format: "OT-123+5")
 }
 
 /**

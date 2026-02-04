@@ -14,7 +14,7 @@ interface AppState {
   batchResults: BatchActionResponse | null;  // v2.0: Resultados de batch operation
   // v4.0: Union-level workflow fields
   accion: 'INICIAR' | 'FINALIZAR' | null;  // v4.0: Workflow action (replaces selectedTipo for v4.0 spools)
-  selectedUnions: number[];  // v4.0: Selected union numbers (N_UNION values)
+  selectedUnions: string[];  // v4.0: Selected union IDs (format: "OT-123+5")
   pulgadasCompletadas: number;  // v4.0: Calculated pulgadas-diámetro for selected unions
 }
 
@@ -24,9 +24,9 @@ interface AppContextType {
   resetState: () => void;
   // v4.0: Helper functions for union-level workflow
   resetV4State: () => void;
-  calculatePulgadas: (unions: Union[], selectedUnionNumbers: number[]) => number;
-  toggleUnionSelection: (unionNumber: number, isSelected: boolean) => void;
-  selectAllAvailableUnions: (availableUnionNumbers: number[]) => void;
+  calculatePulgadas: (unions: Union[], selectedUnionIds: string[]) => number;
+  toggleUnionSelection: (unionId: string, isSelected: boolean) => void;
+  selectAllAvailableUnions: (availableUnionIds: string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -70,22 +70,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // v4.0: Calculate total pulgadas-diámetro for selected unions
-  const calculatePulgadas = useCallback((unions: Union[], selectedUnionNumbers: number[]): number => {
-    if (selectedUnionNumbers.length === 0) return 0;
+  const calculatePulgadas = useCallback((unions: Union[], selectedUnionIds: string[]): number => {
+    if (selectedUnionIds.length === 0) return 0;
 
     const total = unions
-      .filter(u => selectedUnionNumbers.includes(u.n_union))
+      .filter(u => selectedUnionIds.includes(u.id))
       .reduce((sum, u) => sum + u.dn_union, 0);
 
     return Math.round(total * 10) / 10; // 1 decimal precision (service layer presentation)
   }, []);
 
   // v4.0: Toggle single union selection
-  const toggleUnionSelection = useCallback((unionNumber: number, isSelected: boolean) => {
+  const toggleUnionSelection = useCallback((unionId: string, isSelected: boolean) => {
     setStateInternal(prev => {
       const newSelected = isSelected
-        ? [...prev.selectedUnions, unionNumber]
-        : prev.selectedUnions.filter(n => n !== unionNumber);
+        ? [...prev.selectedUnions, unionId]
+        : prev.selectedUnions.filter(id => id !== unionId);
 
       return {
         ...prev,
@@ -95,10 +95,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // v4.0: Select all available unions at once
-  const selectAllAvailableUnions = useCallback((availableUnionNumbers: number[]) => {
+  const selectAllAvailableUnions = useCallback((availableUnionIds: string[]) => {
     setStateInternal(prev => ({
       ...prev,
-      selectedUnions: [...availableUnionNumbers],
+      selectedUnions: [...availableUnionIds],
     }));
   }, []);
 

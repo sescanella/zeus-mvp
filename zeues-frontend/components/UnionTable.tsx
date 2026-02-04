@@ -4,6 +4,7 @@ import React from 'react';
 import { CheckSquare, Square, Lock } from 'lucide-react';
 
 interface Union {
+  id: string; // Composite ID: TAG_SPOOL+N_UNION (e.g., 'OT-123+5')
   n_union: number;
   dn_union: number;
   tipo_union: string;
@@ -15,8 +16,8 @@ interface Union {
 interface UnionTableProps {
   unions: Union[];
   operacion: 'ARM' | 'SOLD';
-  selectedUnions?: number[];
-  onSelectionChange?: (selected: number[]) => void;
+  selectedUnions?: string[]; // Union IDs (format: "OT-123+5")
+  onSelectionChange?: (selected: string[]) => void;
   disabled?: boolean;
 }
 
@@ -31,11 +32,11 @@ export function UnionTable({
   const sortedUnions = [...unions].sort((a, b) => a.n_union - b.n_union);
 
   // Handle checkbox selection change
-  const handleCheckboxChange = (n_union: number, isChecked: boolean) => {
+  const handleCheckboxChange = (unionId: string, isChecked: boolean) => {
     if (onSelectionChange) {
       const newSelection = isChecked
-        ? [...selectedUnions, n_union]
-        : selectedUnions.filter(n => n !== n_union);
+        ? [...selectedUnions, unionId]
+        : selectedUnions.filter(id => id !== unionId);
       onSelectionChange(newSelection);
     }
   };
@@ -79,13 +80,13 @@ export function UnionTable({
         <tbody>
           {sortedUnions.map((union) => {
             const isCompleted = isUnionCompleted(union);
-            const isSelected = selectedUnions.includes(union.n_union);
+            const isSelected = selectedUnions.includes(union.id);
             const isRowDisabled = disabled || isCompleted;
 
             return (
               <tr
-                key={union.n_union}
-                onClick={() => !isRowDisabled && handleCheckboxChange(union.n_union, !isSelected)}
+                key={union.id}
+                onClick={() => !isRowDisabled && handleCheckboxChange(union.id, !isSelected)}
                 className={`
                   border-t-2 border-white/30 transition-colors cursor-pointer
                   ${isCompleted ? 'opacity-30 cursor-not-allowed' : ''}
