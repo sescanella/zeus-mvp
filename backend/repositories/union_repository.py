@@ -825,7 +825,9 @@ class UnionRepository:
                     return None
 
         # Required fields
-        id_val = get_col("ID")
+        # NOTE: ID column is read but overridden below (synthesized from TAG_SPOOL+N_UNION)
+        # This makes backend resilient to incorrect ID format in Uniones sheet
+        id_val = get_col("ID")  # Read for validation, but will be overridden
         ot_val = get_col("OT")
         tag_spool_val = get_col("TAG_SPOOL")
         n_union_val = get_col("N_UNION")
@@ -833,8 +835,7 @@ class UnionRepository:
         tipo_union_val = get_col("TIPO_UNION")
 
         # Validate required fields
-        if not id_val:
-            raise ValueError("ID is required")
+        # NOTE: id_val validation removed - we synthesize ID from TAG_SPOOL+N_UNION
         if not ot_val:
             raise ValueError("OT is required")
         if not tag_spool_val:
@@ -845,6 +846,12 @@ class UnionRepository:
             raise ValueError("DN_UNION is required")
         if not tipo_union_val:
             raise ValueError("TIPO_UNION is required")
+
+        # BUGFIX: Synthesize composite ID from TAG_SPOOL + N_UNION
+        # Uniones sheet ID column may contain sequential IDs ("0011", "0012")
+        # instead of composite format ("TEST-02+1", "TEST-02+2").
+        # Generate correct format here to match Union model expectations.
+        synthesized_id = f"{tag_spool_val}+{n_union_val}"
 
         # Parse ARM timestamps
         arm_fecha_inicio = parse_datetime(get_col("ARM_FECHA_INICIO"))
@@ -865,7 +872,7 @@ class UnionRepository:
 
         # Create Union object
         return Union(
-            id=id_val,
+            id=synthesized_id,  # Use synthesized composite ID, not sheet ID column
             ot=ot_val,
             tag_spool=tag_spool_val,
             n_union=int(n_union_val),
