@@ -319,40 +319,40 @@ export async function getSpoolsDisponible(
 }
 
 /**
- * GET /api/spools/ocupados?worker_id={id}&operacion={ARM|SOLD|REPARACION} (v3.0)
- * Obtiene spools OCUPADOS por el trabajador (para PAUSAR/COMPLETAR).
+ * GET /api/spools/ocupados?operacion={ARM|SOLD|REPARACION}&worker_id={id}
+ * Obtiene spools ocupados por el trabajador (v3.0/v4.0 unified).
  *
- * Usado por P4 cuando tipo=pausar/completar/cancelar. Muestra spools que el trabajador
- * actualmente tiene tomados.
+ * REGLA UNIFICADA:
+ * - Filtra por Ocupado_Por contiene "(worker_id)"
+ * - Funciona para v3.0 (TOMAR/PAUSAR/COMPLETAR) y v4.0 (INICIAR/FINALIZAR)
+ * - Independiente de versión del spool
+ *
+ * Usado por P4 cuando tipo=pausar/completar/cancelar (v3.0) o accion=FINALIZAR (v4.0).
+ * Muestra spools que el trabajador actualmente tiene ocupados.
  *
  * @param workerId - ID numérico del trabajador
- * @param operacion - Tipo de operación ("ARM", "SOLD", or "REPARACION")
+ * @param operacion - Tipo de operación ("ARM", "SOLD", o "REPARACION")
  * @returns Promise<Spool[]> - Array de spools ocupados por el trabajador
- * @throws Error si worker no encontrado o falla request
+ * @throws Error si operación inválida o falla request
  *
  * @example
  * const spools = await getSpoolsOcupados(93, 'ARM');
- * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "JP(93)", ...}]
+ * console.log(spools); // [{tag_spool: "TEST-02", ocupado_por: "MR(93)", ...}]
  */
 export async function getSpoolsOcupados(
   workerId: number,
   operacion: 'ARM' | 'SOLD' | 'REPARACION'
 ): Promise<Spool[]> {
   try {
-    // Use existing /completar endpoint (returns spools owned by worker)
-    // This works for PAUSAR/COMPLETAR because both need worker's occupied spools
-    if (operacion === 'REPARACION') {
-      // For REPARACION, no dedicated "ocupados" endpoint yet
-      // Use /reparacion and filter client-side (or backend creates one)
-      // For now, return empty - backend should create GET /api/spools/ocupados endpoint
-      throw new Error('getSpoolsOcupados for REPARACION not yet implemented by backend');
-    }
+    const url = `${API_URL}/api/spools/ocupados?operacion=${operacion}&worker_id=${workerId}`;
 
-    // For ARM/SOLD, use /completar endpoint (filters by worker ownership)
-    // We need worker nombre_completo for the API call
-    // Since we only have workerId, we'll use /cancelar endpoint instead
-    // which accepts worker_id directly
-    return await getSpoolsParaCancelar(operacion, workerId);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await handleResponse<{ spools: Spool[], total: number, filtro_aplicado: string }>(res);
+    return data.spools;
   } catch (error) {
     console.error('getSpoolsOcupados error:', error);
     throw new Error(`No se pudieron cargar tus spools de ${operacion}.`);

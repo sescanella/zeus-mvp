@@ -428,6 +428,50 @@ class SpoolServiceV2:
         logger.info(f"Found {len(spools_disponibles)} spools for CANCELAR SOLD by worker_id={worker_id}")
         return spools_disponibles
 
+    def get_spools_ocupados_por_worker(self, worker_id: int, operacion: str) -> list[Spool]:
+        """
+        Obtiene spools ocupados por un trabajador (v3.0/v4.0 unified).
+
+        REGLA DE NEGOCIO UNIFICADA (v3.0 + v4.0):
+        - Ocupado_Por: Contiene formato "(worker_id)" (ej: "MR(93)")
+        - Independiente de versión del spool
+        - Reemplaza get_spools_disponibles_para_cancelar_arm/sold (obsoletos)
+
+        Esta función unifica el filtrado para ambas versiones:
+        - v3.0: Spools ocupados con TOMAR (Ocupado_Por seteado)
+        - v4.0: Spools ocupados con INICIAR (Ocupado_Por seteado)
+
+        Args:
+            worker_id: ID numérico del trabajador para filtrar ownership
+            operacion: Tipo de operación (ARM, SOLD, REPARACION) - para logging
+
+        Returns:
+            Lista de spools ocupados por el trabajador específico
+        """
+        logger.info(f"[UNIFIED] Retrieving spools occupied by worker_id={worker_id} operacion={operacion}")
+
+        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+        spools_ocupados = []
+
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            try:
+                spool = self.parse_spool_row(row)
+
+                # REGLA UNIFICADA: Ocupado_Por contiene "(worker_id)"
+                if spool.ocupado_por and f"({worker_id})" in spool.ocupado_por:
+                    spools_ocupados.append(spool)
+                    logger.debug(
+                        f"[UNIFIED] Spool {spool.tag_spool} occupied by worker: "
+                        f"ocupado_por={spool.ocupado_por}, worker_id={worker_id}"
+                    )
+
+            except ValueError as e:
+                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
+                continue
+
+        logger.info(f"Found {len(spools_ocupados)} occupied spools for worker_id={worker_id} operacion={operacion}")
+        return spools_ocupados
+
     def get_spools_disponibles_para_iniciar_metrologia(self) -> list[Spool]:
         """
         Obtiene spools disponibles para INICIAR METROLOGIA/QC (v2.1 Direct Read).
