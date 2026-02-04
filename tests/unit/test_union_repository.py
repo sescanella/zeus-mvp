@@ -300,11 +300,11 @@ class TestUnionRepository:
         assert len(unions_1) == len(unions_2)
 
     def test_uses_tag_spool_as_foreign_key(self, mock_sheets_repository):
-        """Test repository uses TAG_SPOOL (not OT) for queries."""
+        """Test repository uses TAG_SPOOL for queries but synthesizes ID from OT+N_UNION."""
         # Use same header and row structure as main fixture (19 cols, OT required)
         header = mock_sheets_repository.read_worksheet.return_value[0]
         row_special = [
-            "SPECIAL-001+1",          # ID
+            "9999",                   # ID (sequential, will be overridden by synthesis)
             "SPECIAL",                # OT
             "SPECIAL-001",            # TAG_SPOOL
             "1", "6.0", "Tipo D",     # N_UNION, DN_UNION, TIPO_UNION
@@ -324,7 +324,8 @@ class TestUnionRepository:
 
         assert len(unions) == 1
         assert unions[0].tag_spool == "SPECIAL-001"
-        assert unions[0].id == "SPECIAL-001+1"
+        # ID is synthesized as OT+N_UNION, NOT TAG_SPOOL+N_UNION
+        assert unions[0].id == "SPECIAL+1"
 
     def test_row_to_union_validates_required_fields(self, mock_sheets_repository):
         """Test _row_to_union raises ValueError for missing required fields."""

@@ -582,29 +582,39 @@ class UnionRepository:
                 return name.lower().replace(" ", "").replace("_", "")
 
             tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
-            id_col_idx = column_map.get(normalize("ID"))
+            ot_col_idx = column_map.get(normalize("OT"))
+            n_union_col_idx = column_map.get(normalize("N_UNION"))
             arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
             arm_worker_col_idx = column_map.get(normalize("ARM_WORKER"))
 
-            if any(idx is None for idx in [tag_spool_col_idx, id_col_idx, arm_fecha_fin_col_idx, arm_worker_col_idx]):
+            if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, arm_worker_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
 
             union_id_to_row = {}
             for row_idx, row_data in enumerate(all_rows[1:], start=2):
-                if not row_data or len(row_data) <= max(tag_spool_col_idx, id_col_idx, arm_fecha_fin_col_idx):
+                if not row_data or len(row_data) <= max(tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx):
                     continue
 
                 row_tag_spool = row_data[tag_spool_col_idx] if tag_spool_col_idx < len(row_data) else None
                 if row_tag_spool != tag_spool:
                     continue
 
-                row_id = row_data[id_col_idx] if id_col_idx < len(row_data) else None
-                if row_id in union_ids:
+                # CRITICAL FIX: Synthesize union ID from OT+N_UNION instead of reading raw ID column
+                # Sheet ID column contains sequential IDs like "0011", but union_ids from frontend use "OT+N_UNION" format
+                row_ot = row_data[ot_col_idx] if ot_col_idx < len(row_data) else None
+                row_n_union = row_data[n_union_col_idx] if n_union_col_idx < len(row_data) else None
+
+                if not row_ot or not row_n_union:
+                    continue
+
+                synthesized_union_id = f"{row_ot}+{row_n_union}"
+
+                if synthesized_union_id in union_ids:
                     arm_fecha_fin = row_data[arm_fecha_fin_col_idx] if arm_fecha_fin_col_idx < len(row_data) else None
                     if arm_fecha_fin and str(arm_fecha_fin).strip():
-                        self.logger.warning(f"Skipping union {row_id} - already ARM completed")
+                        self.logger.warning(f"Skipping union {synthesized_union_id} - already ARM completed")
                         continue
-                    union_id_to_row[row_id] = row_idx
+                    union_id_to_row[synthesized_union_id] = row_idx
 
             if not union_id_to_row:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
@@ -693,36 +703,46 @@ class UnionRepository:
                 return name.lower().replace(" ", "").replace("_", "")
 
             tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
-            id_col_idx = column_map.get(normalize("ID"))
+            ot_col_idx = column_map.get(normalize("OT"))
+            n_union_col_idx = column_map.get(normalize("N_UNION"))
             arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
             sol_fecha_fin_col_idx = column_map.get(normalize("SOL_FECHA_FIN"))
             sol_worker_col_idx = column_map.get(normalize("SOL_WORKER"))
 
-            if any(idx is None for idx in [tag_spool_col_idx, id_col_idx, arm_fecha_fin_col_idx, sol_fecha_fin_col_idx, sol_worker_col_idx]):
+            if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, sol_fecha_fin_col_idx, sol_worker_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
 
             union_id_to_row = {}
             for row_idx, row_data in enumerate(all_rows[1:], start=2):
-                if not row_data or len(row_data) <= max(tag_spool_col_idx, id_col_idx, arm_fecha_fin_col_idx, sol_fecha_fin_col_idx):
+                if not row_data or len(row_data) <= max(tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, sol_fecha_fin_col_idx):
                     continue
 
                 row_tag_spool = row_data[tag_spool_col_idx] if tag_spool_col_idx < len(row_data) else None
                 if row_tag_spool != tag_spool:
                     continue
 
-                row_id = row_data[id_col_idx] if id_col_idx < len(row_data) else None
-                if row_id in union_ids:
+                # CRITICAL FIX: Synthesize union ID from OT+N_UNION instead of reading raw ID column
+                # Sheet ID column contains sequential IDs like "0011", but union_ids from frontend use "OT+N_UNION" format
+                row_ot = row_data[ot_col_idx] if ot_col_idx < len(row_data) else None
+                row_n_union = row_data[n_union_col_idx] if n_union_col_idx < len(row_data) else None
+
+                if not row_ot or not row_n_union:
+                    continue
+
+                synthesized_union_id = f"{row_ot}+{row_n_union}"
+
+                if synthesized_union_id in union_ids:
                     arm_fecha_fin = row_data[arm_fecha_fin_col_idx] if arm_fecha_fin_col_idx < len(row_data) else None
                     if not arm_fecha_fin or not str(arm_fecha_fin).strip():
-                        self.logger.warning(f"Skipping union {row_id} - ARM not yet completed")
+                        self.logger.warning(f"Skipping union {synthesized_union_id} - ARM not yet completed")
                         continue
 
                     sol_fecha_fin = row_data[sol_fecha_fin_col_idx] if sol_fecha_fin_col_idx < len(row_data) else None
                     if sol_fecha_fin and str(sol_fecha_fin).strip():
-                        self.logger.warning(f"Skipping union {row_id} - already SOLD completed")
+                        self.logger.warning(f"Skipping union {synthesized_union_id} - already SOLD completed")
                         continue
 
-                    union_id_to_row[row_id] = row_idx
+                    union_id_to_row[synthesized_union_id] = row_idx
 
             if not union_id_to_row:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
@@ -825,7 +845,7 @@ class UnionRepository:
                     return None
 
         # Required fields
-        # NOTE: ID column is read but overridden below (synthesized from OT+N_UNION)
+        # NOTE: ID column is read but overridden below (synthesized from TAG_SPOOL+N_UNION)
         # This makes backend resilient to incorrect ID format in Uniones sheet
         id_val = get_col("ID")  # Read for validation, but will be overridden
         ot_val = get_col("OT")
@@ -849,8 +869,12 @@ class UnionRepository:
 
         # BUGFIX: Synthesize composite ID from OT + N_UNION
         # Uniones sheet ID column may contain sequential IDs ("0011", "0012")
-        # instead of composite format ("OT123+1", "OT123+2").
+        # instead of composite format ("001+1", "001+2").
         # Generate correct format here to match Union model expectations.
+        # CRITICAL: Use OT not TAG_SPOOL, because:
+        # 1. Union IDs in Uniones sheet are OT+N_UNION (e.g., "001+1")
+        # 2. Multiple spools can share same OT (many-to-one relationship)
+        # 3. Union ID uniquely identifies union within an OT
         synthesized_id = f"{ot_val}+{n_union_val}"
 
         # Parse ARM timestamps
