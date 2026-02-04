@@ -22,7 +22,6 @@ from backend.domain.state_machines.metrologia_machine import MetrologiaStateMach
 from backend.services.validation_service import ValidationService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
-from backend.services.redis_event_service import RedisEventService
 from backend.exceptions import SpoolNoEncontradoError
 from backend.models.enums import EventoTipo
 
@@ -38,15 +37,15 @@ class MetrologiaService:
     - State machine transitions (aprobar/rechazar)
     - Fecha_QC_Metrologia column updates
     - Metadata event logging
-    - SSE event publishing for dashboard
+
+    Single-user mode: No SSE event publishing needed.
     """
 
     def __init__(
         self,
         validation_service: ValidationService,
         sheets_repository: SheetsRepository,
-        metadata_repository: MetadataRepository,
-        redis_event_service: RedisEventService
+        metadata_repository: MetadataRepository
     ):
         """
         Initialize metrología service with injected dependencies.
@@ -55,12 +54,10 @@ class MetrologiaService:
             validation_service: Service for prerequisite validation
             sheets_repository: Repository for Sheets reads/writes
             metadata_repository: Repository for audit logging
-            redis_event_service: Service for real-time event publishing
         """
         self.validation_service = validation_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
-        self.redis_event_service = redis_event_service
         logger.info("MetrologiaService initialized with instant completion workflow")
 
     async def completar(
@@ -162,18 +159,6 @@ class MetrologiaService:
             sold_state="completado",  # SOLD always complete for metrología
             metrologia_state=metrologia_machine.get_state_id()
         )
-
-        # Step 6: Publish SSE event for dashboard (best-effort)
-        try:
-            await self.redis_event_service.publish_spool_update(
-                event_type="COMPLETAR_METROLOGIA",
-                tag_spool=tag_spool,
-                worker_nombre=worker_nombre,
-                estado_detalle=estado_detalle,
-                additional_data={"resultado": resultado, "operacion": "METROLOGIA"}
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish SSE event for {tag_spool}: {e}")
 
         logger.info(f"✅ MetrologiaService.completar: {tag_spool} -> {resultado}")
         return {

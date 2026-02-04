@@ -26,8 +26,8 @@ export default defineConfig({
 
   /* Configuración compartida para todos los proyectos */
   use: {
-    /* Base URL del frontend */
-    baseURL: 'http://localhost:3001',
+    /* Base URL del frontend - configurable via env para testing en producción */
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001',
 
     /* Screenshots EN TODOS los tests para documentación */
     screenshot: 'on',
@@ -50,6 +50,21 @@ export default defineConfig({
       },
     },
 
+    /* Brave Browser - para testing con Claude Code */
+    {
+      name: 'brave',
+      use: {
+        ...devices['Desktop Chrome'],
+        /* Path al ejecutable de Brave en macOS */
+        channel: 'chrome' as const,
+        launchOptions: {
+          executablePath: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+        },
+        /* Viewport tablet (uso principal en producción) */
+        viewport: { width: 768, height: 1024 }
+      },
+    },
+
     /* Opcional: descomentar para testing multi-browser */
     // {
     //   name: 'firefox',
@@ -67,8 +82,8 @@ export default defineConfig({
     // },
   ],
 
-  /* Dev server: levantar Next.js antes de los tests */
-  webServer: {
+  /* Dev server: levantar Next.js antes de los tests (solo para local) */
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: 'PORT=3001 npm run dev',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,

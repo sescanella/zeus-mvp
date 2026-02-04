@@ -23,9 +23,9 @@ from backend.services.validation_service import ValidationService
 from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
-from backend.services.redis_event_service import RedisEventService
 from backend.exceptions import SpoolNoEncontradoError
 from backend.models.enums import EventoTipo
+# RedisEventService removed - single-user mode doesn't need real-time events
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,11 @@ class ReparacionService:
     """
     Service for reparación workflow with occupation management and cycle tracking.
 
-    Orchestrates:
+    Simplified for single-user mode:
     - Cycle validation (max 3 consecutive rejections)
     - State machine transitions (tomar/pausar/completar/cancelar)
     - Ocupado_Por, Fecha_Ocupacion, Estado_Detalle column updates
     - Metadata event logging
-    - SSE event publishing for dashboard
     """
 
     def __init__(
@@ -47,8 +46,7 @@ class ReparacionService:
         validation_service: ValidationService,
         cycle_counter_service: CycleCounterService,
         sheets_repository: SheetsRepository,
-        metadata_repository: MetadataRepository,
-        redis_event_service: RedisEventService
+        metadata_repository: MetadataRepository
     ):
         """
         Initialize reparación service with injected dependencies.
@@ -58,14 +56,12 @@ class ReparacionService:
             cycle_counter_service: Service for cycle counting and BLOQUEADO enforcement
             sheets_repository: Repository for Sheets reads/writes
             metadata_repository: Repository for audit logging
-            redis_event_service: Service for real-time event publishing
         """
         self.validation_service = validation_service
         self.cycle_counter = cycle_counter_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
-        self.redis_event_service = redis_event_service
-        logger.info("ReparacionService initialized with cycle tracking")
+        logger.info("ReparacionService initialized with cycle tracking (single-user mode)")
 
     async def tomar_reparacion(
         self,
@@ -168,18 +164,6 @@ class ReparacionService:
             worker_nombre
         )
 
-        # Step 7: Publish SSE event for dashboard (best-effort)
-        try:
-            await self.redis_event_service.publish_spool_update(
-                event_type="TOMAR_REPARACION",
-                tag_spool=tag_spool,
-                worker_nombre=worker_nombre,
-                estado_detalle=estado_detalle,
-                additional_data={"operacion": "REPARACION", "cycle": current_cycle}
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish SSE event for {tag_spool}: {e}")
-
         logger.info(f"✅ ReparacionService.tomar_reparacion: {tag_spool}")
         return {
             "success": True,
@@ -280,18 +264,6 @@ class ReparacionService:
             "reparacion_pausada",
             current_cycle
         )
-
-        # Step 6: Publish SSE event for dashboard (best-effort)
-        try:
-            await self.redis_event_service.publish_spool_update(
-                event_type="PAUSAR_REPARACION",
-                tag_spool=tag_spool,
-                worker_nombre=None,  # No longer occupied
-                estado_detalle=estado_detalle,
-                additional_data={"operacion": "REPARACION", "cycle": current_cycle}
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish SSE event for {tag_spool}: {e}")
 
         logger.info(f"✅ ReparacionService.pausar_reparacion: {tag_spool}")
         return {
@@ -396,18 +368,6 @@ class ReparacionService:
         # Step 5: Build estado_detalle for SSE event
         estado_detalle = "PENDIENTE_METROLOGIA"
 
-        # Step 6: Publish SSE event for dashboard (best-effort)
-        try:
-            await self.redis_event_service.publish_spool_update(
-                event_type="COMPLETAR_REPARACION",
-                tag_spool=tag_spool,
-                worker_nombre=None,  # No longer occupied
-                estado_detalle=estado_detalle,
-                additional_data={"operacion": "REPARACION", "cycle": current_cycle}
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish SSE event for {tag_spool}: {e}")
-
         logger.info(f"✅ ReparacionService.completar_reparacion: {tag_spool} -> PENDIENTE_METROLOGIA")
         return {
             "success": True,
@@ -502,18 +462,6 @@ class ReparacionService:
 
         # Step 5: Build estado_detalle for SSE event
         estado_detalle = self.cycle_counter.build_rechazado_estado(current_cycle)
-
-        # Step 6: Publish SSE event for dashboard (best-effort)
-        try:
-            await self.redis_event_service.publish_spool_update(
-                event_type="CANCELAR_REPARACION",
-                tag_spool=tag_spool,
-                worker_nombre=None,  # No longer occupied
-                estado_detalle=estado_detalle,
-                additional_data={"operacion": "REPARACION", "cycle": current_cycle}
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish SSE event for {tag_spool}: {e}")
 
         logger.info(f"✅ ReparacionService.cancelar_reparacion: {tag_spool} -> RECHAZADO")
         return {

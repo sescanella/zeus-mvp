@@ -1,23 +1,21 @@
 """
 OccupationService - Core business logic for TOMAR/PAUSAR/COMPLETAR operations.
 
-v3.0 occupation tracking:
-- TOMAR: Acquire Redis lock + write Ocupado_Por/Fecha_Ocupacion to Operaciones
-- PAUSAR: Update state to "parcial (pausado)" + release Redis lock
-- COMPLETAR: Write fecha_armado/soldadura + release Redis lock
+Simplified for single-user mode (1 tablet, 1 worker):
+- TOMAR: Write Ocupado_Por/Fecha_Ocupacion to Operaciones
+- PAUSAR: Update state to "parcial (pausado)" and clear occupation
+- COMPLETAR: Write fecha_armado/soldadura and clear occupation
 
 Orchestrates:
-- RedisLockService: Atomic lock acquisition/release
 - SheetsRepository: Write to Operaciones sheet
 - MetadataRepository: Audit trail logging
-- ConflictService: Optimistic locking with retry (v3.0)
+- ConflictService: Version-aware updates with retry
 """
 
 import logging
 import json
 from typing import Optional
 from datetime import date, datetime
-from redis.exceptions import RedisError
 
 from backend.utils.date_formatter import format_date_for_sheets, format_datetime_for_sheets, today_chile, now_chile
 from tenacity import (
@@ -28,9 +26,7 @@ from tenacity import (
     before_sleep_log
 )
 
-from backend.services.redis_lock_service import RedisLockService
 from backend.services.conflict_service import ConflictService
-from backend.services.redis_event_service import RedisEventService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.union_service import UnionService
@@ -65,19 +61,17 @@ logger = logging.getLogger(__name__)
 
 class OccupationService:
     """
-    Service for spool occupation operations with Redis locking and Sheets updates.
+    Service for spool occupation operations with Sheets updates.
 
-    Implements TOMAR/PAUSAR/COMPLETAR with proper dependency injection and
-    optimistic locking via ConflictService (v3.0).
+    Simplified for single-user mode: No Redis locks needed with 1 tablet.
+    Implements TOMAR/PAUSAR/COMPLETAR with version-aware updates via ConflictService.
     """
 
     def __init__(
         self,
-        redis_lock_service: RedisLockService,
         sheets_repository: SheetsRepository,
         metadata_repository: MetadataRepository,
         conflict_service: ConflictService,
-        redis_event_service: RedisEventService,
         union_repository=None,  # Optional dependency for v4.0 operations
         validation_service=None,  # Optional dependency for v4.0 validations
         union_service: Optional[UnionService] = None  # Optional dependency for v4.0 batch + granular logging
@@ -86,32 +80,30 @@ class OccupationService:
         Initialize occupation service with injected dependencies.
 
         Args:
-            redis_lock_service: Service for Redis lock operations
             sheets_repository: Repository for Sheets writes
             metadata_repository: Repository for audit logging
             conflict_service: Service for version conflict handling and retry
-            redis_event_service: Service for publishing real-time events
             union_repository: Repository for union-level operations (v4.0)
             validation_service: Service for business rule validation (v4.0)
             union_service: Service for batch union updates with metadata logging (v4.0)
         """
-        self.redis_lock_service = redis_lock_service
         self.sheets_repository = sheets_repository
         self.metadata_repository = metadata_repository
         self.conflict_service = conflict_service
-        self.redis_event_service = redis_event_service
         self.union_repository = union_repository
         self.validation_service = validation_service
         self.union_service = union_service
-        logger.info("OccupationService initialized with Redis lock + optimistic locking")
+        logger.info("OccupationService initialized (single-user mode)")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
         """
-        Take a spool (acquire occupation lock).
+        Take a spool (mark as occupied in Sheets).
+
+        Simplified for single-user mode: No locks needed with 1 tablet.
 
         Flow:
         1. Validate spool exists and has Fecha_Materiales prerequisite
-        2. Acquire Redis lock (atomic, will fail if already occupied)
+        2. Check if already occupied in Sheets (Ocupado_Por != NULL)
         3. Update Ocupado_Por and Fecha_Ocupacion in Operaciones sheet
         4. Log TOMAR event to Metadata sheet
         5. Return success response
@@ -125,9 +117,8 @@ class OccupationService:
         Raises:
             SpoolNoEncontradoError: If spool doesn't exist
             DependenciasNoSatisfechasError: If Fecha_Materiales is missing
-            SpoolOccupiedError: If spool already locked by another worker (409)
+            SpoolOccupiedError: If spool already occupied (409)
             SheetsUpdateError: If Sheets write fails
-            RedisError: If Redis operation fails
         """
         tag_spool = request.tag_spool
         worker_id = request.worker_id
@@ -154,30 +145,16 @@ class OccupationService:
                     detalle="El spool debe tener materiales registrados antes de ocuparlo"
                 )
 
-            # Step 1.5: Lazy cleanup (best effort, don't block on failure)
-            # Clean up one abandoned lock >24h old before acquiring new lock
-            try:
-                await self.redis_lock_service.lazy_cleanup_one_abandoned_lock()
-            except Exception as e:
-                # Log warning but continue with TOMAR operation
-                logger.warning(f"Lazy cleanup failed during TOMAR: {e}")
-
-            # Step 2: Acquire Redis lock (atomic operation)
-            try:
-                lock_token = await self.redis_lock_service.acquire_lock(
+            # Step 2: Check if already occupied (single-user validation)
+            if spool.ocupado_por and spool.ocupado_por != "DISPONIBLE":
+                raise SpoolOccupiedError(
                     tag_spool=tag_spool,
-                    worker_id=worker_id,
-                    worker_nombre=worker_nombre
+                    owner_id=worker_id,  # In single-user mode, always same worker
+                    owner_name=spool.ocupado_por
                 )
-            except SpoolOccupiedError:
-                # Re-raise to be mapped to 409 by router
-                raise
 
-            # Step 3: Update Operaciones sheet with occupation data (with version retry)
+            # Step 3: Update Operaciones sheet with occupation data
             try:
-                # Write Ocupado_Por (column 64) and Fecha_Ocupacion (column 65)
-                # CRITICAL: Use format_datetime_for_sheets() for timestamp with time component
-                # Format: "DD-MM-YYYY HH:MM:SS" (e.g., "30-01-2026 14:30:00")
                 fecha_ocupacion_str = format_datetime_for_sheets(now_chile())
 
                 # Use ConflictService for version-aware update with automatic retry
@@ -198,27 +175,19 @@ class OccupationService:
                 )
 
             except VersionConflictError as e:
-                # Max retries exhausted - rollback Redis lock
-                logger.error(
-                    f"Version conflict persists after retries, rolling back Redis lock: {e}"
-                )
-                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
+                logger.error(f"Version conflict persists after retries: {e}")
                 raise
             except Exception as e:
-                # Rollback: release Redis lock if Sheets update fails
-                logger.error(f"Sheets update failed, rolling back Redis lock: {e}")
-                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
+                logger.error(f"Sheets update failed: {e}")
                 raise SheetsUpdateError(
                     f"Failed to update occupation in Sheets: {e}",
                     updates={"ocupado_por": worker_nombre, "fecha_ocupacion": fecha_ocupacion_str}
                 )
 
-            # Step 4: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
+            # Step 4: Log to Metadata (audit trail - MANDATORY)
             try:
-                # v3.0: Use operation-agnostic TOMAR_SPOOL event type
                 evento_tipo = EventoTipo.TOMAR_SPOOL.value
                 metadata_json = json.dumps({
-                    "lock_token": lock_token,
                     "fecha_ocupacion": fecha_ocupacion_str
                 })
 
@@ -236,30 +205,10 @@ class OccupationService:
                 logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
 
             except Exception as e:
-                # CRITICAL: Metadata logging is mandatory for audit compliance
-                # Log error with full details to aid debugging
                 logger.error(
                     f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
                     exc_info=True
                 )
-                # Continue operation but log prominently - metadata writes should be investigated
-                # Note: In future, consider making this a hard failure if regulatory compliance requires it
-
-            # Step 4.5: Publish real-time event (best effort)
-            try:
-                # Estado_Detalle will be built by StateService, use simple format for now
-                estado_detalle = f"Ocupado por {worker_nombre} - {operacion}"
-                await self.redis_event_service.publish_spool_update(
-                    event_type="TOMAR",
-                    tag_spool=tag_spool,
-                    worker_nombre=worker_nombre,
-                    estado_detalle=estado_detalle,
-                    additional_data={"operacion": operacion}
-                )
-                logger.info(f"✅ Real-time event published: TOMAR for {tag_spool}")
-            except Exception as e:
-                # Best effort - log but don't fail operation
-                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
             # Step 5: Return success
             message = f"Spool {tag_spool} tomado por {worker_nombre}"
@@ -272,7 +221,6 @@ class OccupationService:
             )
 
         except (SpoolNoEncontradoError, DependenciasNoSatisfechasError, SpoolOccupiedError):
-            # Re-raise business exceptions for router to handle
             raise
         except Exception as e:
             logger.error(f"❌ TOMAR operation failed: {e}")
@@ -280,18 +228,16 @@ class OccupationService:
 
     async def pausar(self, request: PausarRequest) -> OccupationResponse:
         """
-        Pause work on a spool (mark as partially complete and release lock).
+        Pause work on a spool (mark as partially complete and clear occupation).
+
+        Simplified for single-user mode: No lock ownership check needed.
 
         Flow:
-        1. Verify worker owns the Redis lock
+        1. Validate spool exists and is occupied
         2. Update spool state in Operaciones sheet to "ARM parcial (pausado)" or "SOLD parcial (pausado)"
         3. Clear Ocupado_Por and Fecha_Ocupacion columns
-        4. Release Redis lock
-        5. Log PAUSAR event to Metadata sheet
-        6. Return success response
-
-        Note: The exact column name for paused state will be determined based on v3.0 schema.
-        For now, we'll add a new column "Estado_Ocupacion" or reuse an existing status column.
+        4. Log PAUSAR event to Metadata sheet
+        5. Return success response
 
         Args:
             request: PAUSAR request with tag_spool, worker_id, worker_nombre
@@ -301,8 +247,7 @@ class OccupationService:
 
         Raises:
             SpoolNoEncontradoError: If spool doesn't exist
-            NoAutorizadoError: If worker doesn't own the lock
-            LockExpiredError: If lock no longer exists
+            NoAutorizadoError: If spool not occupied
             SheetsUpdateError: If Sheets write fails
         """
         tag_spool = request.tag_spool
@@ -314,43 +259,31 @@ class OccupationService:
         )
 
         try:
-            # Step 1: Verify lock ownership
-            lock_owner = await self.redis_lock_service.get_lock_owner(tag_spool)
-
-            if lock_owner is None:
-                raise LockExpiredError(tag_spool)
-
-            owner_id, lock_token = lock_owner
-
-            if owner_id != worker_id:
-                raise NoAutorizadoError(
-                    tag_spool=tag_spool,
-                    trabajador_esperado=f"Worker {owner_id}",
-                    trabajador_solicitante=worker_nombre,
-                    operacion="PAUSAR"
-                )
-
-            # Step 2: Determine operation type from spool state
+            # Step 1: Validate spool exists and is occupied
             spool = self.sheets_repository.get_spool_by_tag(tag_spool)
             if not spool:
                 raise SpoolNoEncontradoError(tag_spool)
 
-            # Determine which operation is being paused based on current state
-            # For v3.0: This will be enhanced with proper state tracking
-            # For now, we'll use a simple approach: check which operation is in progress
-            operacion = "ARM"  # Default, will be enhanced in future
+            # Check if spool is occupied
+            if not spool.ocupado_por or spool.ocupado_por == "DISPONIBLE":
+                raise NoAutorizadoError(
+                    tag_spool=tag_spool,
+                    trabajador_esperado="Ninguno",
+                    trabajador_solicitante=worker_nombre,
+                    operacion="PAUSAR"
+                )
+
+            # Determine which operation is being paused
+            operacion = "ARM"  # Default, will be enhanced with state tracking
             estado_pausado = f"{operacion} parcial (pausado)"
 
-            # Step 3: Update Sheets - mark as paused and clear occupation (with version retry)
+            # Step 2: Clear occupation fields
             try:
-                # Note: Estado_Ocupacion column will be added to v3.0 schema
-                # For now, we'll clear occupation fields
                 updates_dict = {
-                    "Ocupado_Por": "",  # Clear occupation
+                    "Ocupado_Por": "",
                     "Fecha_Ocupacion": ""
                 }
 
-                # Use ConflictService for version-aware update with automatic retry
                 new_version = await self.conflict_service.update_with_retry(
                     tag_spool=tag_spool,
                     updates=updates_dict,
@@ -363,7 +296,6 @@ class OccupationService:
                 )
 
             except VersionConflictError as e:
-                # Max retries exhausted
                 logger.error(f"Version conflict persists after retries for PAUSAR: {e}")
                 raise
             except Exception as e:
@@ -373,39 +305,11 @@ class OccupationService:
                     updates={"estado": estado_pausado, "ocupado_por": None}
                 )
 
-            # Step 4: Release Redis lock
+            # Step 3: Log to Metadata (audit trail - MANDATORY)
             try:
-                released = await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
-                if not released:
-                    logger.warning(
-                        f"⚠️ Lock release returned False for {tag_spool} "
-                        f"(may have already expired)"
-                    )
-            except Exception as e:
-                logger.error(f"Failed to release lock for {tag_spool}: {e}")
-                # Continue - Sheets already updated, lock will expire naturally
-
-            # Step 4.5: Publish real-time event (best effort)
-            try:
-                await self.redis_event_service.publish_spool_update(
-                    event_type="PAUSAR",
-                    tag_spool=tag_spool,
-                    worker_nombre=None,  # No longer occupied
-                    estado_detalle=estado_pausado,
-                    additional_data={"operacion": operacion}
-                )
-                logger.info(f"✅ Real-time event published: PAUSAR for {tag_spool}")
-            except Exception as e:
-                # Best effort - log but don't fail operation
-                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
-
-            # Step 5: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
-            try:
-                # v3.0: Use operation-agnostic PAUSAR_SPOOL event type
                 evento_tipo = EventoTipo.PAUSAR_SPOOL.value
                 metadata_json = json.dumps({
-                    "estado": estado_pausado,
-                    "lock_released": True
+                    "estado": estado_pausado
                 })
 
                 self.metadata_repository.log_event(
@@ -422,16 +326,12 @@ class OccupationService:
                 logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
 
             except Exception as e:
-                # CRITICAL: Metadata logging is mandatory for audit compliance
-                # Log error with full details to aid debugging
                 logger.error(
                     f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
                     exc_info=True
                 )
-                # Continue operation but log prominently - metadata writes should be investigated
-                # Note: In future, consider making this a hard failure if regulatory compliance requires it
 
-            # Step 6: Return success
+            # Step 4: Return success
             message = f"Trabajo pausado en {tag_spool}"
             logger.info(f"✅ PAUSAR completed successfully: {message}")
 
@@ -441,7 +341,7 @@ class OccupationService:
                 message=message
             )
 
-        except (SpoolNoEncontradoError, NoAutorizadoError, LockExpiredError):
+        except (SpoolNoEncontradoError, NoAutorizadoError):
             raise
         except Exception as e:
             logger.error(f"❌ PAUSAR operation failed: {e}")
@@ -561,21 +461,6 @@ class OccupationService:
                 logger.error(f"Failed to release lock for {tag_spool}: {e}")
                 # Continue - Sheets already updated, lock will expire naturally
 
-            # Step 4.5: Publish real-time event (best effort)
-            try:
-                # Build estado_detalle based on operation completed
-                estado_detalle = f"{operacion} completado - Disponible"
-                await self.redis_event_service.publish_spool_update(
-                    event_type="COMPLETAR",
-                    tag_spool=tag_spool,
-                    worker_nombre=worker_nombre,
-                    estado_detalle=estado_detalle,
-                    additional_data={"operacion": operacion, "fecha_operacion": fecha_str}
-                )
-                logger.info(f"✅ Real-time event published: COMPLETAR for {tag_spool}")
-            except Exception as e:
-                # Best effort - log but don't fail operation
-                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
             # Step 5: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
@@ -723,19 +608,24 @@ class OccupationService:
 
     async def iniciar_spool(self, request: IniciarRequest) -> OccupationResponse:
         """
-        Iniciar trabajo en un spool (v4.0 INICIAR operation).
+        Iniciar trabajo en un spool (P5 Confirmation workflow).
 
-        Ocupa el spool mediante persistent Redis lock sin tocar la hoja Uniones.
-        El worker debe seleccionar uniones después mediante FINALIZAR.
+        Called from P5 (Confirmation screen) when user confirms INICIAR action.
+        Writes Ocupado_Por, Fecha_Ocupacion, and Estado_Detalle to Operaciones sheet.
 
-        Flow:
+        Flow (P5 Confirmation):
         1. Validate spool exists and has Fecha_Materiales prerequisite
-        1.6. Validate ARM prerequisite for SOLD operations (v4.0)
-        2. Acquire persistent Redis lock (no TTL)
-        3. Update Ocupado_Por and Fecha_Ocupacion in Operaciones sheet
-        4. Log TOMAR_SPOOL event to Metadata (same event as v3.0 TOMAR)
-        5. Return success response with lock token
-        6. DO NOT touch Uniones sheet at all
+        2. Validate ARM prerequisite for SOLD operations (v4.0)
+        3. NO validate if already occupied (trust P4 filters, accept LWW race)
+        4. Build Estado_Detalle with EstadoDetalleBuilder (hardcoded states)
+        5. Write Ocupado_Por + Fecha_Ocupacion + Estado_Detalle to Sheets (with retry)
+        6. Log INICIAR_SPOOL event to Metadata (minimal fields)
+        7. Return success response
+        8. DO NOT touch Uniones sheet (no union selection in INICIAR)
+
+        Version Compatibility:
+        - v2.1 spools: Write only v3.0 fields (Ocupado_Por, Fecha_Ocupacion, Estado_Detalle)
+        - v4.0 spools: Same as v2.1 (no Uniones modification until FINALIZAR)
 
         Args:
             request: INICIAR request with tag_spool, worker_id, worker_nombre, operacion
@@ -744,12 +634,11 @@ class OccupationService:
             OccupationResponse with success status and message
 
         Raises:
-            SpoolNoEncontradoError: If spool doesn't exist
-            DependenciasNoSatisfechasError: If Fecha_Materiales is missing
+            SpoolNoEncontradoError: If spool doesn't exist (404)
+            DependenciasNoSatisfechasError: If Fecha_Materiales is missing (400)
             ArmPrerequisiteError: If SOLD operation without ARM completion (403)
-            SpoolOccupiedError: If spool already locked by another worker (409)
-            SheetsUpdateError: If Sheets write fails
-            RedisError: If Redis operation fails
+            SpoolOccupiedError: If spool already occupied (race condition) (409)
+            SheetsUpdateError: If Sheets write fails (500)
         """
         tag_spool = request.tag_spool
         worker_id = request.worker_id
@@ -757,7 +646,7 @@ class OccupationService:
         operacion = request.operacion.value
 
         logger.info(
-            f"INICIAR operation started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
+            f"[P5 INICIAR] Started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
             f"for {operacion}"
         )
 
@@ -766,6 +655,11 @@ class OccupationService:
             spool = self.sheets_repository.get_spool_by_tag(tag_spool)
             if not spool:
                 raise SpoolNoEncontradoError(tag_spool)
+
+            # Detect spool version (v2.1 vs v4.0)
+            is_v21 = spool.total_uniones is None
+            version_str = "v2.1" if is_v21 else "v4.0"
+            logger.info(f"Spool {tag_spool} detected as {version_str}")
 
             # Check Fecha_Materiales prerequisite
             if not spool.fecha_materiales:
@@ -776,7 +670,7 @@ class OccupationService:
                     detalle="El spool debe tener materiales registrados antes de ocuparlo"
                 )
 
-            # Step 1.6: Validate ARM prerequisite for SOLD operations (v4.0)
+            # Step 2: Validate ARM prerequisite for SOLD operations (v4.0)
             if operacion == "SOLD":
                 if self.validation_service is None:
                     logger.warning("ValidationService not configured, skipping ARM prerequisite check")
@@ -792,73 +686,107 @@ class OccupationService:
                         logger.warning(f"ARM prerequisite validation failed for {tag_spool}")
                         raise
 
-            # Step 1.7: Lazy cleanup (best effort, don't block on failure)
-            # Clean up one abandoned lock >24h old before acquiring new lock
-            try:
-                await self.redis_lock_service.lazy_cleanup_one_abandoned_lock()
-            except Exception as e:
-                # Log warning but continue with INICIAR operation
-                logger.warning(f"Lazy cleanup failed during INICIAR: {e}")
+            # Step 3: NO validate if already occupied (decision: trust P4 filters, accept LWW)
+            # If race condition occurs, last-write-wins (LWW)
+            # Error detected when P4 re-reads and spool disappears from available list
 
-            # Step 2: Acquire persistent Redis lock (no TTL)
-            try:
-                lock_token = await self.redis_lock_service.acquire_lock(
-                    tag_spool=tag_spool,
-                    worker_id=worker_id,
-                    worker_nombre=worker_nombre
-                )
-            except SpoolOccupiedError:
-                # Re-raise to be mapped to 409 by router
-                raise
+            # Step 4: Build Estado_Detalle with EstadoDetalleBuilder
+            from backend.services.estado_detalle_builder import EstadoDetalleBuilder
 
-            # Step 3: Update Operaciones sheet with occupation data (with version retry)
+            # Hardcoded states based on operacion
+            if operacion == "ARM":
+                arm_state = "en_progreso"
+                sold_state = "pendiente"
+            elif operacion == "SOLD":
+                arm_state = "completado"
+                sold_state = "en_progreso"
+            else:  # METROLOGIA, REPARACION, etc.
+                arm_state = "completado"
+                sold_state = "completado"
+
+            builder = EstadoDetalleBuilder()
+            estado_detalle = builder.build(
+                ocupado_por=worker_nombre,
+                arm_state=arm_state,
+                sold_state=sold_state,
+                operacion_actual=operacion
+            )
+
+            logger.info(f"Estado_Detalle built: '{estado_detalle}'")
+
+            # Step 5: Write to Operaciones sheet (with @retry_on_sheets_error)
             try:
-                # Write Ocupado_Por (column 64) and Fecha_Ocupacion (column 65)
-                # CRITICAL: Use format_datetime_for_sheets() for timestamp with time component
-                # Format: "DD-MM-YYYY HH:MM:SS" (e.g., "30-01-2026 14:30:00")
                 fecha_ocupacion_str = format_datetime_for_sheets(now_chile())
 
-                # Use ConflictService for version-aware update with automatic retry
+                # Build updates dict
                 updates_dict = {
-                    "Ocupado_Por": worker_nombre,
-                    "Fecha_Ocupacion": fecha_ocupacion_str
+                    "Ocupado_Por": worker_nombre,          # Column 64
+                    "Fecha_Ocupacion": fecha_ocupacion_str,  # Column 65
+                    "Estado_Detalle": estado_detalle       # Column 67
                 }
 
-                new_version = await self.conflict_service.update_with_retry(
-                    tag_spool=tag_spool,
-                    updates=updates_dict,
-                    operation="INICIAR"
+                # Get spool row number for batch update
+                from backend.core.column_map_cache import ColumnMapCache
+                from backend.config import config
+
+                column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
+
+                def normalize(name: str) -> str:
+                    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+                # Find TAG_SPOOL column
+                tag_column_index = None
+                for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+                    normalized = normalize(col_name)
+                    if normalized in column_map:
+                        tag_column_index = column_map[normalized]
+                        break
+
+                if tag_column_index is None:
+                    tag_column_index = 6  # Fallback to column G
+
+                column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
+
+                row_num = self.sheets_repository.find_row_by_column_value(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    column_letter=column_letter,
+                    value=tag_spool
+                )
+
+                if row_num is None:
+                    raise SpoolNoEncontradoError(tag_spool)
+
+                # Prepare batch update
+                batch_updates = [
+                    {"row": row_num, "column_name": key, "value": value}
+                    for key, value in updates_dict.items()
+                ]
+
+                # Execute batch update with automatic retry (@retry_on_sheets_error)
+                self.sheets_repository.batch_update_by_column_name(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    updates=batch_updates
                 )
 
                 logger.info(
                     f"✅ Sheets updated: {tag_spool} occupied by {worker_nombre} "
-                    f"on {fecha_ocupacion_str} (version: {new_version})"
+                    f"on {fecha_ocupacion_str}"
                 )
 
-            except VersionConflictError as e:
-                # Max retries exhausted - rollback Redis lock
-                logger.error(
-                    f"Version conflict persists after retries, rolling back Redis lock: {e}"
-                )
-                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
-                raise
             except Exception as e:
-                # Rollback: release Redis lock if Sheets update fails
-                logger.error(f"Sheets update failed, rolling back Redis lock: {e}")
-                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
+                logger.error(f"Sheets update failed for INICIAR: {e}")
                 raise SheetsUpdateError(
                     f"Failed to update occupation in Sheets: {e}",
                     updates={"ocupado_por": worker_nombre, "fecha_ocupacion": fecha_ocupacion_str}
                 )
 
-            # Step 4: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
+            # Step 6: Log to Metadata (minimal fields only)
             try:
-                # v4.0 INICIAR uses same TOMAR_SPOOL event type as v3.0 TOMAR
-                evento_tipo = EventoTipo.TOMAR_SPOOL.value
+                evento_tipo = EventoTipo.INICIAR_SPOOL.value  # NEW event type
                 metadata_json = json.dumps({
-                    "lock_token": lock_token,
-                    "fecha_ocupacion": fecha_ocupacion_str,
-                    "v4_operation": "INICIAR"
+                    "ocupado_por": worker_nombre,
+                    "fecha_ocupacion": fecha_ocupacion_str
+                    # NO include: lock_token, v4_operation, spool_version (minimalismo)
                 })
 
                 self.metadata_repository.log_event(
@@ -867,7 +795,7 @@ class OccupationService:
                     worker_id=worker_id,
                     worker_nombre=worker_nombre,
                     operacion=operacion,
-                    accion="TOMAR",
+                    accion="INICIAR",
                     fecha_operacion=format_date_for_sheets(today_chile()),
                     metadata_json=metadata_json
                 )
@@ -876,33 +804,16 @@ class OccupationService:
 
             except Exception as e:
                 # CRITICAL: Metadata logging is mandatory for audit compliance
-                # Log error with full details to aid debugging
                 logger.error(
                     f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
                     exc_info=True
                 )
-                # Continue operation but log prominently - metadata writes should be investigated
-                # Note: In future, consider making this a hard failure if regulatory compliance requires it
+                # Continue operation - metadata write failures should be investigated
+                # but don't block user workflow
 
-            # Step 4.5: Publish real-time event (best effort)
-            try:
-                # Estado_Detalle will be built by StateService, use simple format for now
-                estado_detalle = f"Ocupado por {worker_nombre} - {operacion}"
-                await self.redis_event_service.publish_spool_update(
-                    event_type="TOMAR",
-                    tag_spool=tag_spool,
-                    worker_nombre=worker_nombre,
-                    estado_detalle=estado_detalle,
-                    additional_data={"operacion": operacion, "v4_operation": "INICIAR"}
-                )
-                logger.info(f"✅ Real-time event published: INICIAR for {tag_spool}")
-            except Exception as e:
-                # Best effort - log but don't fail operation
-                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
-
-            # Step 5: Return success
+            # Step 7: Return success
             message = f"Spool {tag_spool} iniciado por {worker_nombre}"
-            logger.info(f"✅ INICIAR completed successfully: {message}")
+            logger.info(f"✅ [P5 INICIAR] Completed successfully: {message}")
 
             return OccupationResponse(
                 success=True,
@@ -914,7 +825,7 @@ class OccupationService:
             # Re-raise business exceptions for router to handle
             raise
         except Exception as e:
-            logger.error(f"❌ INICIAR operation failed: {e}")
+            logger.error(f"❌ [P5 INICIAR] Operation failed: {e}", exc_info=True)
             raise
 
     def _determine_action(
@@ -1070,26 +981,14 @@ class OccupationService:
         selected_unions = request.selected_unions
 
         logger.info(
-            f"FINALIZAR operation started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
+            f"[P5 FINALIZAR] Started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
             f"for {operacion}, {len(selected_unions)} unions selected"
         )
 
         try:
-            # Step 1: Verify lock ownership
-            lock_owner = await self.redis_lock_service.get_lock_owner(tag_spool)
-
-            if lock_owner is None:
-                raise LockExpiredError(tag_spool)
-
-            owner_id, lock_token = lock_owner
-
-            if owner_id != worker_id:
-                raise NoAutorizadoError(
-                    tag_spool=tag_spool,
-                    trabajador_esperado=f"Worker {owner_id}",
-                    trabajador_solicitante=worker_nombre,
-                    operacion="FINALIZAR"
-                )
+            # Step 1: NO verify lock ownership (decision: trust P4 filters)
+            # FINALIZAR can only be called if spool appeared in P4 filtered list
+            # (Ocupado_Por = worker_actual), so lock validation is redundant
 
             # Step 2: Validate spool exists
             spool = self.sheets_repository.get_spool_by_tag(tag_spool)
@@ -1148,17 +1047,6 @@ class OccupationService:
                 except Exception as e:
                     logger.error(f"❌ CRITICAL: Metadata logging failed for cancellation: {e}")
 
-                # Publish real-time event
-                try:
-                    await self.redis_event_service.publish_spool_update(
-                        event_type="CANCELAR",
-                        tag_spool=tag_spool,
-                        worker_nombre=None,
-                        estado_detalle="Disponible",
-                        additional_data={"operacion": operacion}
-                    )
-                except Exception as e:
-                    logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
                 return OccupationResponse(
                     success=True,
@@ -1222,8 +1110,10 @@ class OccupationService:
                     # Don't block operation on metrología check failure
                     metrologia_triggered = False
 
-            # Step 6: Process union selection through UnionService
+            # Step 6: Process union selection through UnionService OR direct repository
             skip_metadata_logging = False
+            pulgadas = 0.0  # Initialize for metadata logging
+
             try:
                 if self.union_service:
                     # Use UnionService for batch update + metadata logging
@@ -1247,25 +1137,50 @@ class OccupationService:
                     # Skip manual metadata logging since UnionService handled it
                     skip_metadata_logging = True
                 else:
-                    # Fallback to direct UnionRepository (v3.0 compatibility)
-                    timestamp = now_chile()
+                    # Direct UnionRepository with full timestamp support (P5 workflow)
+                    # CRITICAL: timestamp_inicio from Fecha_Ocupacion, timestamp_fin from now()
+
+                    # Parse Fecha_Ocupacion from spool
+                    if not spool.fecha_ocupacion:
+                        logger.warning(f"Spool {tag_spool} missing Fecha_Ocupacion, using now() as fallback")
+                        timestamp_inicio = now_chile()
+                    else:
+                        # Parse formato: "DD-MM-YYYY HH:MM:SS"
+                        from datetime import datetime as dt
+                        try:
+                            timestamp_inicio = dt.strptime(spool.fecha_ocupacion, "%d-%m-%Y %H:%M:%S")
+                            logger.info(f"Parsed Fecha_Ocupacion: {spool.fecha_ocupacion} → {timestamp_inicio}")
+                        except ValueError as e:
+                            logger.warning(f"Failed to parse Fecha_Ocupacion '{spool.fecha_ocupacion}': {e}, using now()")
+                            timestamp_inicio = now_chile()
+
+                    timestamp_fin = now_chile()
 
                     if operacion == "ARM":
-                        updated_count = self.union_repository.batch_update_arm(
+                        updated_count = self.union_repository.batch_update_arm_full(
                             tag_spool=tag_spool,
                             union_ids=selected_unions,
                             worker=worker_nombre,
-                            timestamp=timestamp
+                            timestamp_inicio=timestamp_inicio,  # From Fecha_Ocupacion
+                            timestamp_fin=timestamp_fin          # Current time
                         )
                     elif operacion == "SOLD":
-                        updated_count = self.union_repository.batch_update_sold(
+                        updated_count = self.union_repository.batch_update_sold_full(
                             tag_spool=tag_spool,
                             union_ids=selected_unions,
                             worker=worker_nombre,
-                            timestamp=timestamp
+                            timestamp_inicio=timestamp_inicio,  # From Fecha_Ocupacion
+                            timestamp_fin=timestamp_fin          # Current time
                         )
 
-                    logger.info(f"✅ Batch update: {updated_count} unions updated in Uniones sheet")
+                    # Calculate pulgadas for metadata
+                    processed_unions = self.union_repository.get_by_ids(selected_unions)
+                    pulgadas = sum([u.dn_union for u in processed_unions if u.dn_union])
+
+                    logger.info(
+                        f"✅ Batch update: {updated_count} unions updated in Uniones sheet, "
+                        f"{pulgadas} pulgadas"
+                    )
                     skip_metadata_logging = False
 
             except Exception as e:
@@ -1275,31 +1190,80 @@ class OccupationService:
                     updates={"unions": selected_unions}
                 )
 
-            # Step 7: Release Redis lock and clear occupation
-            try:
-                await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
-            except Exception as e:
-                logger.error(f"Failed to release lock for {tag_spool}: {e}")
-                # Continue - Sheets already updated
-
-            # Clear occupation fields (with version retry)
+            # Step 7: Clear occupation fields in Operaciones sheet
+            # Build updates dict (varies by PAUSAR vs COMPLETAR)
             try:
                 updates_dict = {
                     "Ocupado_Por": "",
                     "Fecha_Ocupacion": ""
                 }
 
-                await self.conflict_service.update_with_retry(
-                    tag_spool=tag_spool,
-                    updates=updates_dict,
-                    operation="FINALIZAR"
+                # If COMPLETAR: add fecha_operacion + worker + contadores v4.0
+                if action_taken == "COMPLETAR":
+                    if operacion == "ARM":
+                        updates_dict.update({
+                            "Fecha_Armado": format_date_for_sheets(today_chile()),
+                            "Armador": worker_nombre,
+                            "Uniones_ARM_Completadas": total_available,
+                            "Pulgadas_ARM": pulgadas
+                        })
+                    elif operacion == "SOLD":
+                        updates_dict.update({
+                            "Fecha_Soldadura": format_date_for_sheets(today_chile()),
+                            "Soldador": worker_nombre,
+                            "Uniones_SOLD_Completadas": total_available,
+                            "Pulgadas_SOLD": pulgadas
+                        })
+
+                    updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
+                else:  # PAUSAR
+                    updates_dict["Estado_Detalle"] = f"{operacion} parcial (pausado)"
+
+                # Use batch_update_by_column_name with automatic retry
+                from backend.core.column_map_cache import ColumnMapCache
+                from backend.config import config
+
+                column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
+
+                def normalize(name: str) -> str:
+                    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+                # Find TAG_SPOOL column
+                tag_column_index = None
+                for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+                    normalized = normalize(col_name)
+                    if normalized in column_map:
+                        tag_column_index = column_map[normalized]
+                        break
+
+                if tag_column_index is None:
+                    tag_column_index = 6  # Fallback
+
+                column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
+                row_num = self.sheets_repository.find_row_by_column_value(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    column_letter=column_letter,
+                    value=tag_spool
                 )
 
-                logger.info(f"✅ Occupation cleared for {tag_spool}")
+                if row_num is None:
+                    raise SpoolNoEncontradoError(tag_spool)
+
+                batch_updates = [
+                    {"row": row_num, "column_name": key, "value": value}
+                    for key, value in updates_dict.items()
+                ]
+
+                self.sheets_repository.batch_update_by_column_name(
+                    sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                    updates=batch_updates
+                )
+
+                logger.info(f"✅ Occupation cleared for {tag_spool} ({action_taken})")
 
             except Exception as e:
                 logger.error(f"Failed to clear occupation: {e}")
-                # Continue - unions already updated, lock already released
+                # Continue - unions already updated
 
             # Step 8: Log appropriate event to Metadata (only if not handled by UnionService)
             if not skip_metadata_logging:
@@ -1316,10 +1280,9 @@ class OccupationService:
                             evento_tipo = evento_tipo_str
 
                     metadata_json = json.dumps({
-                        "v4_operation": "FINALIZAR",
-                        "action_taken": action_taken,
                         "unions_processed": updated_count,
-                        "selected_unions": selected_unions
+                        "selected_unions": selected_unions,
+                        "pulgadas": pulgadas  # ALWAYS include (both PAUSAR and COMPLETAR)
                     })
 
                     self.metadata_repository.log_event(
@@ -1353,8 +1316,7 @@ class OccupationService:
                     state_service = StateService(
                         occupation_service=self,
                         sheets_repository=self.sheets_repository,
-                        metadata_repository=self.metadata_repository,
-                        redis_event_service=self.redis_event_service
+                        metadata_repository=self.metadata_repository
                     )
 
                     # Trigger metrología transition
@@ -1409,23 +1371,6 @@ class OccupationService:
                     )
                     # Don't block FINALIZAR operation on metrología trigger failure
 
-            # Step 8.5: Publish real-time event
-            try:
-                estado_detalle = f"{operacion} {'completado' if action_taken == 'COMPLETAR' else 'parcial (pausado)'}"
-                await self.redis_event_service.publish_spool_update(
-                    event_type=action_taken,
-                    tag_spool=tag_spool,
-                    worker_nombre=None,
-                    estado_detalle=estado_detalle,
-                    additional_data={
-                        "operacion": operacion,
-                        "v4_operation": "FINALIZAR",
-                        "unions_processed": updated_count
-                    }
-                )
-                logger.info(f"✅ Real-time event published: FINALIZAR ({action_taken}) for {tag_spool}")
-            except Exception as e:
-                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
             # Step 9: Return success response
             if action_taken == "COMPLETAR":

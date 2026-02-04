@@ -912,3 +912,284 @@ class UnionRepository:
             ndt_status=ndt_status,
             version=version,
         )
+
+    def batch_update_arm_full(
+        self,
+        tag_spool: str,
+        union_ids: list[str],
+        worker: str,
+        timestamp_inicio: datetime,
+        timestamp_fin: datetime
+    ) -> int:
+        """
+        Batch update ARM with INICIO + FIN + WORKER for P5 FINALIZAR workflow.
+
+        Writes 3 columns per union:
+        - ARM_WORKER: Worker who completed ARM
+        - ARM_FECHA_INICIO: When spool was taken (from Fecha_Ocupacion)
+        - ARM_FECHA_FIN: When FINALIZAR was confirmed
+
+        Performance: Updates 10 unions (30 cells) in < 1 second using gspread.batch_update().
+
+        Args:
+            tag_spool: TAG_SPOOL value to filter unions (e.g., "OT-123")
+            union_ids: List of union IDs to mark as ARM complete
+            worker: Worker who completed ARM in format 'INICIALES(ID)'
+            timestamp_inicio: Start timestamp (from Fecha_Ocupacion)
+            timestamp_fin: End timestamp (when FINALIZAR confirmed)
+
+        Returns:
+            int: Number of unions successfully updated
+
+        Raises:
+            SheetsConnectionError: If Google Sheets write fails
+            ValueError: If validation fails
+        """
+        if not union_ids:
+            self.logger.warning("batch_update_arm_full called with empty union_ids")
+            return 0
+
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+            if not all_rows or len(all_rows) < 2:
+                return 0
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "")
+
+            tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
+            ot_col_idx = column_map.get(normalize("OT"))
+            n_union_col_idx = column_map.get(normalize("N_UNION"))
+            arm_fecha_inicio_col_idx = column_map.get(normalize("ARM_FECHA_INICIO"))
+            arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
+            arm_worker_col_idx = column_map.get(normalize("ARM_WORKER"))
+
+            if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_inicio_col_idx, arm_fecha_fin_col_idx, arm_worker_col_idx]):
+                raise ValueError("Required columns not found in Uniones sheet")
+
+            union_id_to_row = {}
+            for row_idx, row_data in enumerate(all_rows[1:], start=2):
+                if not row_data or len(row_data) <= max(tag_spool_col_idx, ot_col_idx, n_union_col_idx):
+                    continue
+
+                row_tag_spool = row_data[tag_spool_col_idx] if tag_spool_col_idx < len(row_data) else None
+                if row_tag_spool != tag_spool:
+                    continue
+
+                # Synthesize union ID from OT+N_UNION
+                row_ot = row_data[ot_col_idx] if ot_col_idx < len(row_data) else None
+                row_n_union = row_data[n_union_col_idx] if n_union_col_idx < len(row_data) else None
+
+                if not row_ot or not row_n_union:
+                    continue
+
+                synthesized_union_id = f"{row_ot}+{row_n_union}"
+
+                if synthesized_union_id in union_ids:
+                    arm_fecha_fin = row_data[arm_fecha_fin_col_idx] if arm_fecha_fin_col_idx < len(row_data) else None
+                    if arm_fecha_fin and str(arm_fecha_fin).strip():
+                        self.logger.warning(f"Skipping union {synthesized_union_id} - already ARM completed")
+                        continue
+                    union_id_to_row[synthesized_union_id] = row_idx
+
+            if not union_id_to_row:
+                self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
+                return 0
+
+            from backend.utils.date_formatter import format_datetime_for_sheets
+            formatted_timestamp_inicio = format_datetime_for_sheets(timestamp_inicio)
+            formatted_timestamp_fin = format_datetime_for_sheets(timestamp_fin)
+
+            def col_idx_to_letter(idx: int) -> str:
+                result = ""
+                idx += 1
+                while idx > 0:
+                    idx -= 1
+                    result = chr(65 + (idx % 26)) + result
+                    idx //= 26
+                return result
+
+            batch_data = []
+            for union_id, row_num in union_id_to_row.items():
+                # Write ARM_WORKER
+                arm_worker_letter = col_idx_to_letter(arm_worker_col_idx)
+                batch_data.append({
+                    'range': f'{arm_worker_letter}{row_num}',
+                    'values': [[worker]]
+                })
+                # Write ARM_FECHA_INICIO
+                arm_fecha_inicio_letter = col_idx_to_letter(arm_fecha_inicio_col_idx)
+                batch_data.append({
+                    'range': f'{arm_fecha_inicio_letter}{row_num}',
+                    'values': [[formatted_timestamp_inicio]]
+                })
+                # Write ARM_FECHA_FIN
+                arm_fecha_fin_letter = col_idx_to_letter(arm_fecha_fin_col_idx)
+                batch_data.append({
+                    'range': f'{arm_fecha_fin_letter}{row_num}',
+                    'values': [[formatted_timestamp_fin]]
+                })
+
+            from backend.repositories.sheets_repository import retry_on_sheets_error
+
+            @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+            def _execute_batch():
+                worksheet = self.sheets_repo._get_worksheet(self._sheet_name)
+                worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
+
+            _execute_batch()
+            ColumnMapCache.invalidate(self._sheet_name)
+
+            updated_count = len(union_id_to_row)
+            self.logger.info(f"✅ batch_update_arm_full: {updated_count} unions updated for TAG_SPOOL {tag_spool} (INICIO={formatted_timestamp_inicio}, FIN={formatted_timestamp_fin})")
+            return updated_count
+
+        except Exception as e:
+            self.logger.error(f"Failed to batch update ARM full for TAG_SPOOL {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to batch update ARM full: {e}")
+
+    def batch_update_sold_full(
+        self,
+        tag_spool: str,
+        union_ids: list[str],
+        worker: str,
+        timestamp_inicio: datetime,
+        timestamp_fin: datetime
+    ) -> int:
+        """
+        Batch update SOLD with INICIO + FIN + WORKER for P5 FINALIZAR workflow.
+
+        Writes 3 columns per union:
+        - SOL_WORKER: Worker who completed SOLD
+        - SOL_FECHA_INICIO: When spool was taken (from Fecha_Ocupacion)
+        - SOL_FECHA_FIN: When FINALIZAR was confirmed
+
+        CRITICAL: Validates ARM completion before allowing SOLD update.
+
+        Args:
+            tag_spool: TAG_SPOOL value to filter unions
+            union_ids: List of union IDs to mark as SOLD complete
+            worker: Worker who completed SOLD in format 'INICIALES(ID)'
+            timestamp_inicio: Start timestamp (from Fecha_Ocupacion)
+            timestamp_fin: End timestamp (when FINALIZAR confirmed)
+
+        Returns:
+            int: Number of unions successfully updated
+
+        Raises:
+            SheetsConnectionError: If Google Sheets write fails
+            ValueError: If validation fails (ARM not complete)
+        """
+        if not union_ids:
+            self.logger.warning("batch_update_sold_full called with empty union_ids")
+            return 0
+
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+            if not all_rows or len(all_rows) < 2:
+                return 0
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "")
+
+            tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
+            ot_col_idx = column_map.get(normalize("OT"))
+            n_union_col_idx = column_map.get(normalize("N_UNION"))
+            arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
+            sol_fecha_inicio_col_idx = column_map.get(normalize("SOL_FECHA_INICIO"))
+            sol_fecha_fin_col_idx = column_map.get(normalize("SOL_FECHA_FIN"))
+            sol_worker_col_idx = column_map.get(normalize("SOL_WORKER"))
+
+            if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, sol_fecha_inicio_col_idx, sol_fecha_fin_col_idx, sol_worker_col_idx]):
+                raise ValueError("Required columns not found in Uniones sheet")
+
+            union_id_to_row = {}
+            for row_idx, row_data in enumerate(all_rows[1:], start=2):
+                if not row_data or len(row_data) <= max(tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx):
+                    continue
+
+                row_tag_spool = row_data[tag_spool_col_idx] if tag_spool_col_idx < len(row_data) else None
+                if row_tag_spool != tag_spool:
+                    continue
+
+                # Synthesize union ID from OT+N_UNION
+                row_ot = row_data[ot_col_idx] if ot_col_idx < len(row_data) else None
+                row_n_union = row_data[n_union_col_idx] if n_union_col_idx < len(row_data) else None
+
+                if not row_ot or not row_n_union:
+                    continue
+
+                synthesized_union_id = f"{row_ot}+{row_n_union}"
+
+                if synthesized_union_id in union_ids:
+                    # CRITICAL: Validate ARM completion before SOLD
+                    arm_fecha_fin = row_data[arm_fecha_fin_col_idx] if arm_fecha_fin_col_idx < len(row_data) else None
+                    if not arm_fecha_fin or not str(arm_fecha_fin).strip():
+                        raise ValueError(f"Union {synthesized_union_id} ARM not completed - cannot update SOLD")
+
+                    sol_fecha_fin = row_data[sol_fecha_fin_col_idx] if sol_fecha_fin_col_idx < len(row_data) else None
+                    if sol_fecha_fin and str(sol_fecha_fin).strip():
+                        self.logger.warning(f"Skipping union {synthesized_union_id} - already SOLD completed")
+                        continue
+
+                    union_id_to_row[synthesized_union_id] = row_idx
+
+            if not union_id_to_row:
+                self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
+                return 0
+
+            from backend.utils.date_formatter import format_datetime_for_sheets
+            formatted_timestamp_inicio = format_datetime_for_sheets(timestamp_inicio)
+            formatted_timestamp_fin = format_datetime_for_sheets(timestamp_fin)
+
+            def col_idx_to_letter(idx: int) -> str:
+                result = ""
+                idx += 1
+                while idx > 0:
+                    idx -= 1
+                    result = chr(65 + (idx % 26)) + result
+                    idx //= 26
+                return result
+
+            batch_data = []
+            for union_id, row_num in union_id_to_row.items():
+                # Write SOL_WORKER
+                sol_worker_letter = col_idx_to_letter(sol_worker_col_idx)
+                batch_data.append({
+                    'range': f'{sol_worker_letter}{row_num}',
+                    'values': [[worker]]
+                })
+                # Write SOL_FECHA_INICIO
+                sol_fecha_inicio_letter = col_idx_to_letter(sol_fecha_inicio_col_idx)
+                batch_data.append({
+                    'range': f'{sol_fecha_inicio_letter}{row_num}',
+                    'values': [[formatted_timestamp_inicio]]
+                })
+                # Write SOL_FECHA_FIN
+                sol_fecha_fin_letter = col_idx_to_letter(sol_fecha_fin_col_idx)
+                batch_data.append({
+                    'range': f'{sol_fecha_fin_letter}{row_num}',
+                    'values': [[formatted_timestamp_fin]]
+                })
+
+            from backend.repositories.sheets_repository import retry_on_sheets_error
+
+            @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+            def _execute_batch():
+                worksheet = self.sheets_repo._get_worksheet(self._sheet_name)
+                worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
+
+            _execute_batch()
+            ColumnMapCache.invalidate(self._sheet_name)
+
+            updated_count = len(union_id_to_row)
+            self.logger.info(f"✅ batch_update_sold_full: {updated_count} unions updated for TAG_SPOOL {tag_spool} (INICIO={formatted_timestamp_inicio}, FIN={formatted_timestamp_fin})")
+            return updated_count
+
+        except Exception as e:
+            self.logger.error(f"Failed to batch update SOLD full for TAG_SPOOL {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to batch update SOLD full: {e}")

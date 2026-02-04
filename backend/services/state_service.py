@@ -19,7 +19,6 @@ from backend.services.state_machines.arm_state_machine import ARMStateMachine
 from backend.services.state_machines.sold_state_machine import SOLDStateMachine
 from backend.services.occupation_service import OccupationService
 from backend.services.estado_detalle_builder import EstadoDetalleBuilder
-from backend.services.redis_event_service import RedisEventService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.occupation import TomarRequest, PausarRequest, CompletarRequest, OccupationResponse
@@ -36,31 +35,30 @@ class StateService:
 
     Coordinates:
     - ARM and SOLD state machines (per-operation)
-    - OccupationService (Redis locks, Phase 2)
+    - OccupationService (single-user mode)
     - Estado_Detalle updates (display string via builder)
     - Hydration logic to sync state machines with Sheets reality
+
+    Single-user mode: No SSE event publishing needed.
     """
 
     def __init__(
         self,
         occupation_service: OccupationService,
         sheets_repository: SheetsRepository,
-        metadata_repository: MetadataRepository,
-        redis_event_service: RedisEventService
+        metadata_repository: MetadataRepository
     ):
         """
         Initialize state service with injected dependencies.
 
         Args:
-            occupation_service: Service for Redis locks and occupation operations
+            occupation_service: Service for occupation operations
             sheets_repository: Repository for Sheets reads/writes
             metadata_repository: Repository for audit logging
-            redis_event_service: Service for real-time event publishing
         """
         self.occupation_service = occupation_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
-        self.redis_event_service = redis_event_service
         self.estado_builder = EstadoDetalleBuilder()
         logger.info("StateService initialized with state machine orchestration")
 
@@ -410,24 +408,6 @@ class StateService:
             sold_state=sold_machine.get_state_id()
         )
 
-        # Publish STATE_CHANGE event (best effort)
-        try:
-            await self.redis_event_service.publish_spool_update(
-                event_type="STATE_CHANGE",
-                tag_spool=tag_spool,
-                worker_nombre=request.worker_nombre,
-                estado_detalle=nuevo_estado_detalle,
-                additional_data={
-                    "operacion": operacion.value,
-                    "arm_state": arm_machine.get_state_id(),
-                    "sold_state": sold_machine.get_state_id()
-                }
-            )
-            logger.info(f"✅ Real-time event published: STATE_CHANGE for {tag_spool}")
-        except Exception as e:
-            # Best effort - log but don't fail operation
-            logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
-
         # Update Estado_Detalle - now available since operation completed
         self._update_estado_detalle(
             tag_spool=tag_spool,
@@ -694,23 +674,6 @@ class StateService:
                 logger.info(f"✅ Estado_Detalle updated to '{estado_detalle}' for {tag_spool}")
             else:
                 logger.warning(f"Could not find row for {tag_spool} to update Estado_Detalle")
-
-            # Step 5: Publish real-time event (best effort)
-            try:
-                await self.redis_event_service.publish_spool_update(
-                    event_type="METROLOGIA_READY",
-                    tag_spool=tag_spool,
-                    worker_nombre=None,
-                    estado_detalle=estado_detalle,
-                    additional_data={
-                        "metrologia_state": current_state,
-                        "auto_triggered": True
-                    }
-                )
-                logger.info(f"✅ Real-time event published: METROLOGIA_READY for {tag_spool}")
-            except Exception as e:
-                # Best effort - log but don't fail operation
-                logger.warning(f"⚠️ Event publishing failed (non-critical): {e}")
 
             logger.info(f"✅ Metrología auto-transition complete for {tag_spool}")
             return current_state

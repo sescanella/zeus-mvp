@@ -3,9 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { useSSE } from '@/lib/hooks/useSSE';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import type { SSEEvent } from '@/lib/types';
 
 interface OccupiedSpool {
   tag_spool: string;
@@ -52,47 +49,7 @@ export default function DashboardPage() {
     fetchInitialState();
   }, []);
 
-  // Handle real-time SSE updates
-  const handleSSEMessage = (event: SSEEvent) => {
-    setSpools(prevSpools => {
-      const newSpools = new Map(prevSpools);
-
-      if (event.type === 'TOMAR') {
-        // Add spool to occupied list
-        newSpools.set(event.tag_spool, {
-          tag_spool: event.tag_spool,
-          worker_nombre: event.worker || '',
-          estado_detalle: event.estado_detalle || '',
-          fecha_ocupacion: event.timestamp
-        });
-      } else if (event.type === 'PAUSAR' || event.type === 'COMPLETAR') {
-        // Remove spool from occupied list
-        newSpools.delete(event.tag_spool);
-      } else if (event.type === 'STATE_CHANGE') {
-        // Update estado_detalle if spool exists
-        const existing = newSpools.get(event.tag_spool);
-        if (existing) {
-          newSpools.set(event.tag_spool, {
-            ...existing,
-            estado_detalle: event.estado_detalle || existing.estado_detalle
-          });
-        }
-      }
-
-      return newSpools;
-    });
-  };
-
-  // Connect to SSE stream
-  const { isConnected } = useSSE(`${process.env.NEXT_PUBLIC_API_URL}/api/sse/stream`, {
-    onMessage: handleSSEMessage,
-    onError: (error) => {
-      console.error('SSE connection error:', error);
-    },
-    onConnectionChange: (connected) => {
-      console.log('SSE connection status:', connected);
-    }
-  });
+  // SSE removed - single-user mode doesn't need real-time updates
 
   // Calculate time occupied
   const getTimeOccupied = (fecha: string): string => {
@@ -127,9 +84,6 @@ export default function DashboardPage() {
         backgroundSize: '50px 50px'
       }}
     >
-      {/* Connection Status */}
-      <ConnectionStatus connected={isConnected} />
-
       {/* Header with Back Button */}
       <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b-4 border-white/30">
         <button

@@ -220,38 +220,83 @@ async def finalizar_v4(
     occupation_service: OccupationService = Depends(get_occupation_service_v4),
 ):
     """
-    v4.0 FINALIZAR - Process selected unions and auto-determine action.
+    FINALIZAR - P5 Confirmation Endpoint (processes unions + auto PAUSAR/COMPLETAR).
 
-    This endpoint processes the selected unions and auto-determines whether to
-    PAUSAR (partial completion), COMPLETAR (full completion), or CANCELADO
-    (zero unions selected).
+    ⚠️  ARCHITECTURE: Called ONLY from P5 (confirmation screen) after user confirms.
+    All validation happens in P4 UI filters. Backend trusts P4 and writes directly.
+
+    What this endpoint does:
+    1. Writes selected unions to Uniones sheet (ARM_WORKER + timestamps)
+    2. Auto-determines action: PAUSAR (partial), COMPLETAR (full), or CANCELADO (0 unions)
+    3. Clears Ocupado_Por + Fecha_Ocupacion if PAUSAR or COMPLETAR
+    4. Updates Fecha_Armado/Soldadura and v4.0 counters if COMPLETAR
+    5. Logs UNION_ARM_REGISTRADA/UNION_SOLD_REGISTRADA events to Metadata
+    6. Triggers metrología auto-transition if all work complete (Phase 10)
+    7. NO Redis locks, NO optimistic locking
 
     Version Requirements:
-    - Only accepts v4.0 spools (Total_Uniones > 0)
-    - Rejects v3.0 spools with 400 Bad Request
+    - v4.0 spools only (Total_Uniones > 0)
+    - v2.1 spools rejected with 400 (no Uniones sheet support)
+
+    Auto-Determination Logic:
+    - selected_unions = [] → CANCELADO (clear occupation, no union writes)
+    - selected_unions < total_available → PAUSAR (partial work)
+    - selected_unions = total_available → COMPLETAR (all work done for operation)
+
+    Timestamp Strategy:
+    - ARM_FECHA_INICIO / SOL_FECHA_INICIO: Parsed from Fecha_Ocupacion (when spool was taken)
+    - ARM_FECHA_FIN / SOL_FECHA_FIN: now_chile() (when FINALIZAR confirmed)
 
     Request Body:
-    - tag_spool: Spool TAG identifier
-    - worker_id: Worker ID number
-    - operacion: ARM or SOLD
-    - selected_unions: List of union IDs (empty = cancellation)
+    {
+        "tag_spool": "OT-123",         // Spool TAG identifier
+        "worker_id": 93,               // Worker ID number
+        "operacion": "ARM",            // ARM or SOLD
+        "selected_unions": ["U1", "U2", "U3"]  // Union IDs (empty = cancellation)
+    }
 
     Success Response (200):
     {
         "success": true,
         "tag_spool": "OT-123",
         "message": "Trabajo pausado - 3 uniones procesadas",
-        "action_taken": "PAUSAR",
+        "action_taken": "PAUSAR",      // CANCELADO, PAUSAR, or COMPLETAR
         "unions_processed": 3,
-        "pulgadas": 16.50,
-        "metrologia_triggered": false
+        "pulgadas": 16.50,             // Sum of DN_UNION for processed unions
+        "metrologia_triggered": false, // True if COMPLETAR + all work done
+        "new_state": "ARM_EN_PROGRESO" // Estado_Detalle value after operation
     }
 
     Error Responses:
-    - 400: Spool is v3.0 (use /api/v3/occupation/completar instead)
-    - 403: Worker doesn't own the spool
-    - 404: Spool not found
-    - 409: Race condition (some unions no longer available)
+    - 400 Bad Request (WRONG_VERSION):
+      {
+          "error": "WRONG_VERSION",
+          "message": "Spool is v2.1, use /api/v3/occupation/completar instead",
+          "spool_version": "v2.1",
+          "correct_endpoint": "/api/v3/occupation/completar"
+      }
+
+    - 403 Forbidden (NO_AUTORIZADO):
+      {
+          "error": "NO_AUTORIZADO",
+          "message": "Worker MR(93) does not own spool OT-123 (currently occupied by JP(45))"
+      }
+
+    - 404 Not Found (SPOOL_NO_ENCONTRADO):
+      {
+          "error": "SPOOL_NO_ENCONTRADO",
+          "message": "Spool OT-123 not found"
+      }
+
+    - 409 Conflict (race condition):
+      {
+          "error": "RACE_CONDITION",
+          "message": "Selected 5 unions but only 3 remain available (2 completed by another worker)",
+          "requested": 5,
+          "available": 3
+      }
+
+    - 500 Internal Server Error - Sheets write failed after 3 retries
     """
     tag_spool = request.tag_spool
 
@@ -261,7 +306,7 @@ async def finalizar_v4(
     )
 
     try:
-        # Step 1: Version detection - reject v3.0 spools
+        # Step 1: Version detection - reject v2.1 spools
         spool = sheets_repo.get_spool_by_tag(tag_spool)
         if not spool:
             raise HTTPException(
@@ -271,15 +316,15 @@ async def finalizar_v4(
 
         if not is_v4_spool(spool.model_dump()):
             logger.warning(
-                f"v3.0 spool {tag_spool} rejected from v4.0 FINALIZAR endpoint "
+                f"v2.1 spool {tag_spool} rejected from v4.0 FINALIZAR endpoint "
                 f"(Total_Uniones={spool.total_uniones})"
             )
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "WRONG_VERSION",
-                    "message": "Spool is v3.0, use /api/v3/occupation/completar instead",
-                    "spool_version": "v3.0",
+                    "message": "Spool is v2.1, use /api/v3/occupation/completar instead",
+                    "spool_version": "v2.1",
                     "correct_endpoint": "/api/v3/occupation/completar"
                 }
             )
@@ -295,7 +340,7 @@ async def finalizar_v4(
         # Format worker_nombre as APELLIDO(ID)
         worker_nombre = f"{worker.apellido}({request.worker_id})"
 
-        # Step 3: Build Phase 10 FinalizarRequest
+        # Step 3: Build P5 FinalizarRequest
         finalizar_request = FinalizarRequest(
             tag_spool=request.tag_spool,
             worker_id=request.worker_id,
@@ -304,7 +349,15 @@ async def finalizar_v4(
             selected_unions=request.selected_unions
         )
 
-        # Step 4: Call service layer
+        # Step 4: Call service layer (P5 confirmation workflow)
+        # Service handles:
+        # - Union batch writes (WORKER + INICIO + FIN timestamps)
+        # - Auto-determination (CANCELADO / PAUSAR / COMPLETAR)
+        # - Occupation clearing (Ocupado_Por, Fecha_Ocupacion)
+        # - v4.0 counters and dates (if COMPLETAR)
+        # - Metadata event logging (UNION_ARM_REGISTRADA / UNION_SOLD_REGISTRADA)
+        # - Metrología auto-trigger (if all work complete)
+        # - Automatic retry on transient errors (3 attempts)
         result = await occupation_service.finalizar_spool(finalizar_request)
 
         # Extract metrics from result

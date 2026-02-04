@@ -1,17 +1,32 @@
 """
-v4.0 Occupation Router - INICIAR/FINALIZAR workflows with union-level tracking.
+v4.0 Occupation Router - P5 Confirmation Workflow (INICIAR/FINALIZAR).
+
+⚠️  CRITICAL ARCHITECTURE CHANGE (v4.0 Phase 8):
+All endpoints in this router are called ONLY from P5 (confirmation screen).
+No writes occur until user confirms in P5.
+
+Workflow:
+- P4 (Spool Selection): UI filters spools and validates eligibility
+- P5 (Confirmation): User confirms → API writes to Operaciones/Uniones/Metadata
 
 Endpoints:
-- POST /api/v4/occupation/iniciar - Occupy spool (works for v3.0 and v4.0)
-- POST /api/v4/occupation/finalizar - Process selected unions with auto-determination
+- POST /api/v4/occupation/iniciar - Occupy spool (writes Ocupado_Por + Fecha_Ocupacion)
+- POST /api/v4/occupation/finalizar - Process unions + auto PAUSAR/COMPLETAR
 
 Version Compatibility:
-- INICIAR: Accepts both v3.0 and v4.0 spools
-- FINALIZAR: Union selection only for v4.0 spools (v3.0 goes direct to confirmation)
+- INICIAR: Works for v2.1 and v4.0 spools (v2.1 skips Uniones writes)
+- FINALIZAR: Union selection for v4.0 only (v2.1 unsupported)
+
+Key Differences from v3.0:
+- ❌ NO Redis locks (infrastructure removed)
+- ❌ NO optimistic locking (version column not updated)
+- ❌ NO backend validation before write (trust P4 filters)
+- ✅ Last-Write-Wins (LWW) for race conditions
+- ✅ Automatic retry on transient Sheets errors (3 attempts)
 
 References:
-- Plan: 11-03-PLAN.md (INICIAR endpoint)
-- Service: backend/services/occupation_service.py (iniciar_spool, finalizar_spool methods)
+- Architecture: .planning/P5-CONFIRMATION-ARCHITECTURE.md
+- Service: backend/services/occupation_service.py (iniciar_spool, finalizar_spool)
 """
 
 import logging
@@ -54,37 +69,75 @@ async def iniciar_v4(
     sheets_repo: Annotated[SheetsRepository, Depends(get_sheets_repository)]
 ):
     """
-    INICIAR - Occupy spool without touching unions (v3.0 and v4.0 compatible).
+    INICIAR - P5 Confirmation Endpoint (occupies spool, writes Ocupado_Por + Fecha_Ocupacion).
 
-    This endpoint occupies a spool with a persistent Redis lock and updates
-    the Ocupado_Por/Fecha_Ocupacion fields in the Operaciones sheet WITHOUT
-    modifying the Uniones sheet.
+    ⚠️  ARCHITECTURE: Called ONLY from P5 (confirmation screen) after user confirms.
+    All validation happens in P4 UI filters. Backend trusts P4 and writes directly.
+
+    What this endpoint does:
+    1. Validates spool exists (404 if not found)
+    2. Validates ARM prerequisite for SOLD (403 if not met)
+    3. Writes Ocupado_Por, Fecha_Ocupacion, Estado_Detalle to Operaciones sheet
+    4. Logs INICIAR_SPOOL event to Metadata sheet
+    5. NO Redis locks, NO optimistic locking, NO backend validation of occupation status
 
     Version Compatibility:
-    - v3.0 spools: INICIAR occupies, FINALIZAR goes direct to confirmation
-    - v4.0 spools: INICIAR occupies, FINALIZAR requires union selection first
+    - v2.1 spools: Writes Ocupado_Por + Fecha_Ocupacion only (no Uniones)
+    - v4.0 spools: Same as v2.1 + sets Estado_Detalle with EstadoDetalleBuilder
 
-    ARM Prerequisite:
-    - SOLD operations require ARM to be 100% complete
+    ARM Prerequisite Validation:
+    - SOLD operations require ARM to be 100% complete (validated via Uniones sheet for v4.0)
     - Returns 403 Forbidden if ARM prerequisite not met
 
+    Race Condition Handling:
+    - Last-Write-Wins (LWW) strategy - no validation before write
+    - If race occurs, P4 will detect occupied spool when re-reading table
+    - Frontend shows 409 error with occupant information
+
     Request Body:
-    - tag_spool: Spool TAG identifier
-    - worker_id: Worker ID number
-    - worker_nombre: Worker name (format: INICIALES(ID))
-    - operacion: ARM or SOLD
+    {
+        "tag_spool": "OT-123",        // Spool TAG identifier
+        "worker_id": 93,              // Worker ID number
+        "worker_nombre": "MR(93)",    // Worker name (format: INICIALES(ID))
+        "operacion": "ARM"            // ARM or SOLD
+    }
 
     Success Response (200):
     {
         "success": true,
         "tag_spool": "OT-123",
-        "message": "Spool OT-123 iniciado por MR(93)"
+        "message": "Spool OT-123 iniciado por MR(93)",
+        "data": {
+            "worker_nombre": "MR(93)",
+            "operacion": "ARM",
+            "fecha_ocupacion": "04-02-2026 14:30:00"
+        }
     }
 
     Error Responses:
-    - 403: ARM prerequisite not met for SOLD operation
-    - 404: Spool not found
-    - 409: Spool already occupied by another worker
+    - 403 Forbidden (ARM_PREREQUISITE):
+      {
+          "error": "ARM_PREREQUISITE",
+          "message": "Cannot start SOLD - ARM must be 100% complete first",
+          "tag_spool": "OT-123",
+          "operacion": "SOLD"
+      }
+
+    - 404 Not Found (SPOOL_NO_ENCONTRADO):
+      {
+          "error": "SPOOL_NO_ENCONTRADO",
+          "message": "Spool OT-123 not found"
+      }
+
+    - 409 Conflict (SPOOL_OCCUPIED) - detected AFTER write during P4 re-read:
+      {
+          "error": "SPOOL_OCCUPIED",
+          "message": "Spool OT-123 already occupied by JP(45)",
+          "occupied_by": "JP(45)",
+          "occupied_since": "04-02-2026 14:29:55"
+      }
+
+    - 500 Internal Server Error - Sheets write failed after 3 retries
     """
     tag_spool = request.tag_spool
 
@@ -94,7 +147,7 @@ async def iniciar_v4(
     )
 
     try:
-        # Step 1: Validate spool exists (no version check - accepts v3.0 and v4.0)
+        # Step 1: Validate spool exists (accepts v2.1 and v4.0)
         spool = sheets_repo.get_spool_by_tag(tag_spool)
         if not spool:
             raise HTTPException(
@@ -102,8 +155,12 @@ async def iniciar_v4(
                 detail=f"Spool {tag_spool} not found"
             )
 
-        # Step 2: Call service layer (works for both v3.0 and v4.0)
-        # Service handles ARM prerequisite, lock acquisition, etc.
+        # Step 2: Call service layer (P5 confirmation workflow)
+        # Service handles:
+        # - ARM prerequisite validation
+        # - Ocupado_Por + Fecha_Ocupacion + Estado_Detalle writes
+        # - INICIAR_SPOOL metadata event logging
+        # - Automatic retry on transient errors (3 attempts)
         result = await occupation_service.iniciar_spool(request)
 
         logger.info(

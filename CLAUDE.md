@@ -4,29 +4,57 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ZEUES v3.0** - Real-Time Location Tracking System for Pipe Spools
+**ZEUES v4.0-single-user** - Simplified Location Tracking System for Pipe Spools
 
-**Current Status:** v4.0 IN DEVELOPMENT - Phase 7/13 Complete (2026-02-02)
-- Core Value v3.0: "WHO has WHICH spool right now?" (real-time occupation tracking)
-- Core Value v4.0: Track work at the union level with correct business metric (pulgadas-diámetro)
-- Tech: FastAPI + Next.js + Google Sheets + Redis
-- Progress: 54% complete (7 of 13 phases), pending Engineering handoff for Uniones sheet population
+**Current Status:** Single-User Mode (2026-02-04)
+- **Core Value:** "WHO has WHICH spool right now?" (occupation tracking)
+- **Architecture:** Simplified for 1 tablet, 1 worker - No distributed locks or real-time sync needed
+- **Tech:** FastAPI + Next.js + Google Sheets (source of truth)
+- **Deployment:** Railway (backend) + Vercel (frontend)
 
-**Shipped v3.0 Features:**
-- TOMAR/PAUSAR/COMPLETAR workflows (Redis locks, 1-hour TTL)
-- SSE streaming (<10s latency for real-time updates)
+**Key Features:**
+- TOMAR/PAUSAR/COMPLETAR workflows (direct Sheets updates, no Redis locks)
+- Union-level tracking (Uniones sheet)
+- INICIAR/FINALIZAR workflows (auto-determination of PAUSAR vs COMPLETAR)
 - Metrología instant inspection (APROBADO/RECHAZADO)
 - Reparación bounded cycles (max 3 before BLOQUEADO)
-- Hierarchical state machines (6 states, not 27)
-
-**v4.0 In Development:**
-- Union-level tracking (18-column Uniones sheet)
-- INICIAR/FINALIZAR workflows (auto-determination of PAUSAR vs COMPLETAR)
+- Hierarchical state machines
 - Pulgadas-diámetro business metric (DN_UNION sums)
-- Batch operations with gspread.batch_update() for <1s performance
-- Schema migrations complete (Operaciones: 72 cols, Metadata: 11 cols)
 
-**See `.planning/PROJECT.md` for complete v3.0 requirements and architecture details.**
+**Architectural Simplifications (Feb 2026):**
+- ❌ Removed Redis (no distributed locks needed with 1 user)
+- ❌ Removed SSE streaming (no real-time sync needed)
+- ❌ Removed optimistic locking (version column not updated in P5 workflow)
+- ✅ Direct Google Sheets validation (Ocupado_Por column check)
+- ✅ P5 Confirmation Workflow (all writes at confirmation, trust P4 filters)
+
+**P5 Confirmation Workflow (v4.0 Phase 8 - Feb 2026):**
+
+INICIAR/FINALIZAR now write ONLY when user confirms in P5 (confirmation screen):
+
+**INICIAR (`POST /api/v4/occupation/iniciar`):**
+- Writes: `Ocupado_Por`, `Fecha_Ocupacion`, `Estado_Detalle` (EstadoDetalleBuilder)
+- Trust P4 filters (no backend validation before write)
+- Last-Write-Wins (LWW) for race conditions
+- Automatic retry (3 attempts) on transient errors
+- Logs `INICIAR_SPOOL` event with minimal metadata
+- Works for v2.1 and v4.0 spools
+
+**FINALIZAR (`POST /api/v4/occupation/finalizar`):**
+- Writes unions with `batch_update_arm_full()` / `batch_update_sold_full()`
+- Timestamps: INICIO from `Fecha_Ocupacion` (when taken), FIN from now()
+- Auto-determines: CANCELADO (0 unions) | PAUSAR (partial) | COMPLETAR (all)
+- COMPLETAR updates: `Fecha_Armado`/`Soldadura`, v4.0 counters, pulgadas
+- PAUSAR clears: `Ocupado_Por`, `Fecha_Ocupacion` (no dates/counters)
+- Metadata ALWAYS includes pulgadas (sum of DN_UNION)
+- No version column updates (no optimistic locking)
+
+**Key Changes:**
+- Service: `backend/services/occupation_service.py` (iniciar_spool, finalizar_spool refactored)
+- Repository: `backend/repositories/union_repository.py` (new batch_update_full methods)
+- Routers: Updated docs in `occupation_v4.py` and `union_router.py`
+- Tests: `tests/unit/services/test_occupation_service_p5_workflow.py` (17 tests, 100% passing)
+- Architecture: `.planning/P5-CONFIRMATION-ARCHITECTURE.md`
 
 ## CRITICAL: Python Virtual Environment
 
@@ -50,10 +78,12 @@ pip freeze > requirements.txt
 
 ## Tech Stack
 
-- **Backend:** Python 3.11 + FastAPI + gspread + python-statemachine==2.5.0 + redis==5.0.1
+- **Backend:** Python 3.11 + FastAPI + gspread + python-statemachine==2.5.0
 - **Frontend:** Next.js 14 + TypeScript + Tailwind CSS
-- **Data:** Google Sheets (source of truth) + Redis (locks + pub/sub)
+- **Data:** Google Sheets (single source of truth)
 - **Deploy:** Railway (backend) + Vercel (frontend)
+
+**Note:** Redis removed in Feb 2026 - Single-user mode doesn't need distributed locks or real-time pub/sub.
 
 ## Essential Commands
 
@@ -94,6 +124,111 @@ npx playwright test
 npx playwright show-report
 ```
 
+## Browser Testing with MCP (Model Context Protocol)
+
+**Claude Code has MCP browser tools for visual testing and production debugging.**
+
+### Available Capabilities
+
+**Browser Control:**
+```bash
+mcp__MCP_DOCKER__browser_navigate        # Navigate to URL
+mcp__MCP_DOCKER__browser_snapshot        # Capture accessibility tree (better than screenshot)
+mcp__MCP_DOCKER__browser_take_screenshot # Take visual screenshot
+mcp__MCP_DOCKER__browser_click           # Click elements
+mcp__MCP_DOCKER__browser_type            # Type into inputs
+mcp__MCP_DOCKER__browser_wait_for        # Wait for conditions
+mcp__MCP_DOCKER__browser_console_messages # Read console errors/warnings
+```
+
+### When to Use Browser Testing
+
+**✅ USE browser tools for:**
+- **Visual verification** of production deployments (Vercel/Railway)
+- **UX/UI inspection** without running local servers
+- **Google Sheets observation** (read-only - verify data structure)
+- **API documentation** browsing (Swagger UI at `/api/docs`)
+- **Console error detection** in production
+- **Cross-environment debugging** (staging vs production)
+- **Screenshot generation** for documentation
+
+**❌ DON'T USE browser tools for:**
+- **Local development testing** (use Playwright tests instead)
+- **Editing Google Sheets** (use gspread API via backend)
+- **API endpoint testing** (use `curl` or Bash tool instead)
+- **Performance testing** (use dedicated load testing tools)
+
+### Production URLs
+
+**Frontend (Vercel):**
+```bash
+mcp__MCP_DOCKER__browser_navigate https://zeues-frontend.vercel.app
+# Verify: Worker selection flow, operation buttons, spool listings
+```
+
+**Backend API (Railway):**
+```bash
+mcp__MCP_DOCKER__browser_navigate https://zeues-backend-mvp-production.up.railway.app/api/docs
+# Verify: Swagger UI loads, all endpoints documented, schemas visible
+```
+
+**Google Sheets (Read-Only):**
+```bash
+mcp__MCP_DOCKER__browser_navigate https://docs.google.com/spreadsheets/d/17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ/edit
+# Verify: Sheet structure (Operaciones, Metadata, Uniones tabs), column headers
+# IMPORTANT: Can VIEW only - NEVER attempt to edit via browser
+```
+
+### Usage Examples
+
+**Example 1: Verify production deployment**
+```bash
+# After deploying to Vercel, check if app loads correctly
+mcp__MCP_DOCKER__browser_navigate https://zeues-frontend.vercel.app
+mcp__MCP_DOCKER__browser_wait_for --time 3
+mcp__MCP_DOCKER__browser_snapshot
+# Expected: See "SELECCIONA OPERACIÓN" with 4 operation buttons
+```
+
+**Example 2: Check API documentation**
+```bash
+# Verify Railway backend is running and docs are accessible
+mcp__MCP_DOCKER__browser_navigate https://zeues-backend-mvp-production.up.railway.app/api/docs
+mcp__MCP_DOCKER__browser_wait_for --time 3
+mcp__MCP_DOCKER__browser_snapshot
+# Expected: Swagger UI with Health, Workers, Spools, Actions sections
+```
+
+**Example 3: Inspect Google Sheets structure**
+```bash
+# Verify Uniones sheet has correct 17-column structure
+mcp__MCP_DOCKER__browser_navigate https://docs.google.com/spreadsheets/d/17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ/edit
+mcp__MCP_DOCKER__browser_click [Uniones tab]
+mcp__MCP_DOCKER__browser_snapshot
+# Expected: See ID, OT, N_UNION, TAG_SPOOL, DN_UNION, etc.
+# READ-ONLY: Cannot edit cells, only verify structure
+```
+
+**Example 4: Debug console errors**
+```bash
+# Check for JavaScript errors in production
+mcp__MCP_DOCKER__browser_navigate https://zeues-frontend.vercel.app
+mcp__MCP_DOCKER__browser_console_messages --level error
+# Expected: No critical errors (favicon 404 is acceptable)
+```
+
+### Important Notes
+
+- **Google Sheets Access:** Claude Code can VIEW sheets but CANNOT EDIT them
+  - Use browser tools to verify schema, inspect data structure
+  - Use `backend/repositories/sheets_repository.py` + gspread for writes
+- **Browser Configuration:** Playwright configured with Brave browser support
+  - See `zeues-frontend/playwright.config.ts` for settings
+  - Environment variable: `PLAYWRIGHT_BASE_URL` for production testing
+- **Accessibility First:** Prefer `browser_snapshot` over `browser_take_screenshot`
+  - Snapshots return structured data (YAML) for better analysis
+  - Screenshots are visual only, harder to parse programmatically
+
 ## GSD Workflow Commands
 
 **Start here when beginning work:**
@@ -119,9 +254,9 @@ npx playwright show-report
 
 ```
 main.py
-├── routers/           # API endpoints (occupation, sse, history, metrologia)
+├── routers/           # API endpoints (occupation, history, metrologia)
 ├── services/          # Business logic (state, occupation, validation)
-├── repositories/      # Data access (sheets, redis, metadata)
+├── repositories/      # Data access (sheets, metadata)
 ├── state_machines/    # ARM, SOLD, Metrologia, Reparacion
 ├── models/            # Pydantic schemas
 └── exceptions.py      # Custom exceptions
@@ -130,8 +265,8 @@ main.py
 **Key Patterns:**
 - Service Layer + Repository Pattern
 - Hierarchical State Machines (python-statemachine 2.5.0)
-- Optimistic Locking (UUID4 version tokens)
-- SSE Streaming (sse-starlette)
+- Version-aware updates (ConflictService with retry)
+- Direct Sheets validation (Ocupado_Por column check)
 - Event Sourcing (Metadata sheet)
 
 ### Frontend (Next.js App Router)
@@ -180,10 +315,6 @@ lib/
 - Trabajadores (4 cols): Id, Nombre, Apellido, Activo
 - Roles (3 cols): Id, Rol, Activo (multi-role support)
 - Metadata (11 cols - v4.0): Event Sourcing audit trail + N_UNION column
-
-**Redis:**
-- Occupation locks: `spool:{tag}:lock` (1-hour TTL)
-- Pub/sub: Real-time SSE updates
 
 **CRITICAL:** Use dynamic header mapping - NEVER hardcode column indices
 ```python
@@ -237,10 +368,7 @@ HOJA_METADATA_NOMBRE=Metadata
 GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
-# v3.0 Redis
-REDIS_URL=redis://...
-REDIS_PASSWORD=...
-OCCUPATION_LOCK_TTL=3600
+# Redis removed - single-user mode
 ```
 
 **Frontend (.env.local):**
@@ -253,7 +381,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000  # Dev
 
 ### API Endpoints
 
-**v3.0 Endpoints (Production):**
+**Active Endpoints (single-user mode):**
 ```bash
 # Occupation
 POST /api/occupation/tomar
@@ -261,153 +389,29 @@ POST /api/occupation/pausar
 POST /api/occupation/completar
 GET  /api/occupation/diagnostic/{tag}
 
-# SSE Streaming
-GET /api/sse/disponible?operacion=ARM
-GET /api/sse/quien-tiene-que
-
 # History
 GET /api/history/{tag_spool}
+
+# Health (Sheets only, no Redis)
+GET /api/health
 
 # Cache
 POST /api/cache/clear
 ```
 
-**v4.0 Endpoints (Planned):**
+**Removed (Feb 2026):**
+- `GET /api/sse/*` - SSE streaming endpoints (no real-time sync needed)
+- `GET /api/redis-health` - Redis health check
+- `GET /api/redis-connection-stats` - Redis monitoring
+
+**v4.0 Endpoints (Phase 8 - P5 Workflow):**
 ```bash
-# Union-level workflows
-POST /api/iniciar          # Occupies spool without touching Uniones
-POST /api/finalizar        # Union selection + auto PAUSAR/COMPLETAR
-GET  /api/unions/{tag}     # List available unions for spool
-
-# Metrics
-GET /api/metrics/{tag}     # Pulgadas-diámetro performance data
+# INICIAR/FINALIZAR (P5 Confirmation)
+POST /api/v4/occupation/iniciar    # Writes Ocupado_Por at P5 confirmation
+POST /api/v4/occupation/finalizar  # Processes unions + auto PAUSAR/COMPLETAR
+GET  /api/v4/unions/{tag}          # List available unions for spool
+GET  /api/v4/metricas/{tag}        # Pulgadas-diámetro metrics
 ```
-
-### COMPLETAR Operation Schema
-
-**Endpoint:** `POST /api/occupation/completar`
-
-**Required Fields:**
-```json
-{
-  "tag_spool": "TEST-02",
-  "worker_id": 93,
-  "worker_nombre": "MR(93)",
-  "operacion": "ARM",                // REQUIRED: ARM, SOLD, or METROLOGIA
-  "fecha_operacion": "2026-02-02"   // REQUIRED: YYYY-MM-DD format
-}
-```
-
-**Optional Fields:**
-```json
-{
-  "resultado": "APROBADO"  // Required for METROLOGIA only (APROBADO/RECHAZADO)
-}
-```
-
-**Common Errors:**
-- **422 Validation Error:** Missing `fecha_operacion` or `operacion` field
-- **403 Forbidden:** Worker doesn't own the spool (ownership validation failed)
-- **409 Conflict:** Spool not in correct state for completion
-- **500 Internal Server Error:** Backend model mismatch (check Pydantic schema)
-
-### Redis Debugging
-
-```bash
-# Check lock
-redis-cli GET "spool:TEST-01:lock"
-
-# Check TTL
-redis-cli TTL "spool:TEST-01:lock"
-
-# List all locks
-redis-cli KEYS "spool:*:lock"
-
-# Emergency release (use with caution)
-redis-cli DEL "spool:TEST-01:lock"
-```
-
-## Redis Troubleshooting
-
-### Connection Pool Exhaustion
-
-**Symptoms:**
-- "Too many connections" error in Railway logs
-- 500 Internal Server Error on TOMAR/PAUSAR/COMPLETAR endpoints
-- `/api/redis-health` returns `{"status": "unhealthy"}`
-- High error rate on occupation operations
-
-**Quick Fix (Emergency):**
-```bash
-# Restart Redis service in Railway Dashboard
-# Railway → Project → Redis → Restart
-# Wait 1-2 minutes for service to restart
-
-# Verify health
-curl https://zeues-backend-mvp-production.up.railway.app/api/redis-health
-# Expected: {"status": "healthy", "operational": true}
-```
-
-**Permanent Fix (Implemented in v3.0):**
-- Connection pool singleton pattern (`backend/core/redis_client.py`)
-- Max connections: 20 (Railway-safe limit)
-- Automatic connection reuse and health checks
-- Monitoring endpoint: `/api/redis-connection-stats`
-
-**Prevention:**
-```bash
-# Monitor connection usage
-curl https://zeues-backend-mvp-production.up.railway.app/api/redis-connection-stats
-
-# Expected response:
-# {
-#   "max_connections": 20,
-#   "active_connections": 8,
-#   "available_connections": 12,
-#   "utilization_percent": 40.0
-# }
-
-# Alert if utilization > 80%
-```
-
-**Connection Pool Configuration:**
-```python
-# backend/config.py
-REDIS_POOL_MAX_CONNECTIONS = 20  # Railway limit-safe
-REDIS_SOCKET_TIMEOUT = 5
-REDIS_SOCKET_CONNECT_TIMEOUT = 5
-REDIS_HEALTH_CHECK_INTERVAL = 30
-```
-
-**Common Causes:**
-1. Connection leaks (fixed in Phase 2 - February 2026)
-2. Not using singleton pool (fixed in Phase 2)
-3. High concurrent load (30-50 workers + SSE streams)
-4. Long-lived SSE connections holding pools open
-5. Missing connection pool configuration
-
-**Debugging Commands:**
-```bash
-# Check Railway Redis logs
-# Railway Dashboard → Redis → Logs
-
-# Test basic Redis operation
-curl -X POST https://zeues-backend-mvp-production.up.railway.app/api/occupation/tomar \
-  -H "Content-Type: application/json" \
-  -d '{"tag_spool": "TEST-02", "worker_id": 93, "worker_nombre": "MR(93)", "operacion": "ARM"}'
-
-# Monitor connection stats real-time (requires jq)
-watch -n 5 'curl -s https://zeues-backend-mvp-production.up.railway.app/api/redis-connection-stats | jq'
-
-# Check Redis health
-curl https://zeues-backend-mvp-production.up.railway.app/api/redis-health
-```
-
-**Incident History:**
-- **2026-02-02:** Redis Crisis - Connection pool exhaustion causing 500 errors
-  - Root cause: Missing connection pooling configuration
-  - Resolution: Singleton pool with max 20 connections
-  - See: `INCIDENT-POSTMORTEM-REDIS-CRISIS.md`
 
 ### Common Issues
 
@@ -417,15 +421,11 @@ source venv/bin/activate
 PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest
 ```
 
-**Redis connection:**
+**Google Sheets connection:**
 ```bash
-redis-cli ping  # Should return PONG
-python -c "import redis; r = redis.from_url('redis://localhost:6379'); print(r.ping())"
-```
-
-**SSE streaming test:**
-```bash
-curl -N http://localhost:8000/api/sse/disponible?operacion=ARM
+# Test health endpoint
+curl http://localhost:8000/api/health
+# Expected: {"status": "healthy", "operational": true, "sheets_connection": "ok"}
 ```
 
 ## Schema Validation & Startup Checks
@@ -448,34 +448,11 @@ python backend/scripts/validate_uniones_sheet.py --fix
 - Deployment fails fast if schema incomplete
 - Extra columns allowed, only missing columns cause failure
 
-## Current Blockers & Technical Debt
-
-**v4.0 Pre-Deployment Blockers:**
-- ⚠️ **CRITICAL:** Uniones sheet missing 9 columns (ID, TAG_SPOOL, NDT fields, audit fields)
-- Engineering handoff documentation ready: `docs/engineering-handoff.md`
-- Optional automated fix available: `validate_uniones_sheet.py --fix`
-- Phase 8+ blocked until Uniones data populated
-
-**v3.0 Technical Debt (Non-Blocking):**
-- Phase 4 missing formal VERIFICATION.md
-- Frontend metrología/reparación integration unverified
-- No dedicated reparación router
-- No E2E SSE test with real infrastructure
-- v2.1 7-day rollback window EXPIRED 2026-02-02 (backup archived)
-
 ## Production URLs
 
 - Frontend: https://zeues-frontend.vercel.app
-- Backend API: https://zeues-backend-mvp-production.up.railway.app
+- Backend: https://zeues-backend-mvp-production.up.railway.app
 - API Docs: https://zeues-backend-mvp-production.up.railway.app/docs
-
-## Git Workflow
-
-- **Current Branch:** `main` (v3.0 in production)
-- **Git Tag:** `v3.0` (2026-01-28)
-- **Commits:** 158 commits in v3.0 milestone
-
-**GSD creates atomic commits automatically per plan.**
 
 ## Key Constraints
 
@@ -491,5 +468,5 @@ python backend/scripts/validate_uniones_sheet.py --fix
 
 ---
 
-**Last updated:** 2026-02-02 (v4.0 Phase 7 complete, Engineering handoff pending)
-**Document version:** 2.0
+**Last updated:** 2026-02-04 (v4.0 Phase 8 complete - P5 Confirmation Workflow)
+**Document version:** 3.0

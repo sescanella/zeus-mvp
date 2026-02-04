@@ -68,6 +68,9 @@ class EventoTipo(str, Enum):
     TOMAR_SPOOL = "TOMAR_SPOOL"
     PAUSAR_SPOOL = "PAUSAR_SPOOL"
 
+    # v4.0 Events (P5 confirmation workflow)
+    INICIAR_SPOOL = "INICIAR_SPOOL"  # Worker confirms INICIAR in P5 (writes Ocupado_Por)
+
     # Phase 6 Events (Reparación)
     TOMAR_REPARACION = "TOMAR_REPARACION"
     PAUSAR_REPARACION = "PAUSAR_REPARACION"

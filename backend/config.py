@@ -39,20 +39,7 @@ class Config:
     # Cache configuration
     CACHE_TTL_SECONDS: int = int(os.getenv('CACHE_TTL_SECONDS', '300'))  # 5 minutos default
 
-    # Redis configuration (v3.0)
-    REDIS_URL: str = os.getenv('REDIS_URL', 'redis://localhost:6379')
-    REDIS_LOCK_TTL_SECONDS: int = int(os.getenv('REDIS_LOCK_TTL_SECONDS', '3600'))  # 1 hour default (v3.0 compatibility)
-    REDIS_MAX_CONNECTIONS: int = int(os.getenv('REDIS_MAX_CONNECTIONS', '50'))
-
-    # v4.0 Persistent Lock Configuration
-    REDIS_PERSISTENT_LOCKS: bool = os.getenv('REDIS_PERSISTENT_LOCKS', 'true').lower() == 'true'  # Default True for v4.0
-    REDIS_SAFETY_TTL: int = int(os.getenv('REDIS_SAFETY_TTL', '10'))  # Safety TTL for initial acquisition (seconds)
-
-    # Redis Connection Pool Configuration (Phase 2: Crisis Recovery)
-    REDIS_POOL_MAX_CONNECTIONS: int = int(os.getenv('REDIS_POOL_MAX_CONNECTIONS', '20'))  # Conservative limit for Railway
-    REDIS_SOCKET_TIMEOUT: int = int(os.getenv('REDIS_SOCKET_TIMEOUT', '5'))  # Prevents hanging connections
-    REDIS_SOCKET_CONNECT_TIMEOUT: int = int(os.getenv('REDIS_SOCKET_CONNECT_TIMEOUT', '5'))  # Fail fast if unreachable
-    REDIS_HEALTH_CHECK_INTERVAL: int = int(os.getenv('REDIS_HEALTH_CHECK_INTERVAL', '30'))  # Proactive health checks
+    # Redis removed - single-user mode doesn't need distributed locks or SSE
 
     # Environment
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'development')

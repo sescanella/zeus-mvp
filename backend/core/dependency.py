@@ -33,10 +33,8 @@ from fastapi import Depends
 
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
-from backend.repositories.redis_repository import RedisRepository
 from backend.repositories.union_repository import UnionRepository
 from backend.services.sheets_service import SheetsService
-from backend.services.redis_lock_service import RedisLockService
 from backend.services.conflict_service import ConflictService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.services.validation_service import ValidationService
@@ -48,7 +46,6 @@ from backend.services.occupation_service import OccupationService
 from backend.services.union_service import UnionService
 from backend.services.state_service import StateService
 from backend.services.history_service import HistoryService
-from backend.services.redis_event_service import RedisEventService
 from backend.services.metrologia_service import MetrologiaService
 from backend.services.reparacion_service import ReparacionService
 from backend.services.cycle_counter_service import CycleCounterService
@@ -61,7 +58,7 @@ from backend.config import config
 
 _sheets_repo_singleton: Optional[SheetsRepository] = None
 _sheets_service_singleton: Optional[SheetsService] = None
-_redis_repo_singleton: Optional[RedisRepository] = None
+# Redis removed - single-user mode
 
 
 # ============================================================================
@@ -94,35 +91,6 @@ def get_sheets_repository() -> SheetsRepository:
         _sheets_repo_singleton = SheetsRepository(compatibility_mode="v3.0")
 
     return _sheets_repo_singleton
-
-
-def get_redis_repository() -> RedisRepository:
-    """
-    Factory para RedisRepository (singleton).
-
-    Retorna la misma instancia de RedisRepository en todos los requests.
-    Lazy initialization: se crea solo al primer uso.
-
-    Razón del singleton:
-    - Una sola connection pool compartida por toda la aplicación
-    - Evita crear múltiples conexiones a Redis innecesariamente
-    - Singleton pattern ya implementado en RedisRepository.__new__
-
-    Returns:
-        Instancia singleton de RedisRepository.
-
-    Usage:
-        redis_repo: RedisRepository = Depends(get_redis_repository)
-
-    Note:
-        Connection lifecycle gestionado en app startup/shutdown events.
-    """
-    global _redis_repo_singleton
-
-    if _redis_repo_singleton is None:
-        _redis_repo_singleton = RedisRepository()
-
-    return _redis_repo_singleton
 
 
 def get_sheets_service(
@@ -359,30 +327,6 @@ def get_action_service(
     )
 
 
-def get_redis_lock_service(
-    redis_repo: RedisRepository = Depends(get_redis_repository)
-) -> RedisLockService:
-    """
-    Factory para RedisLockService (nueva instancia por request).
-
-    v3.0: RedisLockService para operaciones atómicas de lock en spools.
-
-    RedisLockService implementa:
-    - Atomic lock acquisition (SET NX EX)
-    - Safe lock release (Lua script with ownership verification)
-    - Lock extension for long operations
-    - Owner query for error messages
-
-    Args:
-        redis_repo: Repositorio Redis (inyectado automáticamente).
-
-    Returns:
-        Nueva instancia de RedisLockService con Redis client.
-
-    Usage:
-        redis_lock_service: RedisLockService = Depends(get_redis_lock_service)
-    """
-    return RedisLockService(redis_client=redis_repo.get_client())
 
 
 def get_conflict_service(
@@ -416,60 +360,28 @@ def get_conflict_service(
     return ConflictService(sheets_repository=sheets_repo)
 
 
-def get_redis_event_service(
-    redis_repo: RedisRepository = Depends(get_redis_repository)
-) -> RedisEventService:
-    """
-    Factory para RedisEventService (nueva instancia por request) - v3.0 PHASE 4.
-
-    v3.0 Phase 4: RedisEventService publishes real-time events for SSE streaming.
-
-    RedisEventService provides:
-    - Event publishing to Redis pub/sub channel "spools:updates"
-    - JSON message serialization with timestamps
-    - Best-effort event delivery (logs errors, doesn't block operations)
-
-    Args:
-        redis_repo: Repository for Redis pub/sub operations (injected).
-
-    Returns:
-        Nueva instancia de RedisEventService con Redis client.
-
-    Usage:
-        redis_event_service: RedisEventService = Depends(get_redis_event_service)
-
-    Note:
-        v3.0 Phase 4: Real-time event streaming infrastructure for dashboard.
-    """
-    return RedisEventService(redis_client=redis_repo.get_client())
 
 
 def get_occupation_service(
-    redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
     metadata_repository: MetadataRepository = Depends(get_metadata_repository),
-    conflict_service: ConflictService = Depends(get_conflict_service),
-    redis_event_service: RedisEventService = Depends(get_redis_event_service)
+    conflict_service: ConflictService = Depends(get_conflict_service)
 ) -> OccupationService:
     """
-    Factory para OccupationService (nueva instancia por request) - v3.0 CORE.
+    Factory para OccupationService (nueva instancia por request) - Single-user mode.
 
-    v3.0: OccupationService orchestrates TOMAR/PAUSAR/COMPLETAR operations
-    with Redis locking, optimistic locking, and Sheets updates.
+    Single-user: OccupationService orchestrates TOMAR/PAUSAR/COMPLETAR operations
+    with direct Sheets validation and optimistic locking.
 
     OccupationService coordinates:
-    - Redis lock acquisition/release (RedisLockService) - PRIMARY defense
-    - Version-aware updates with retry (ConflictService) - SECONDARY defense
+    - Version-aware updates with retry (ConflictService)
     - Sheets writes to Ocupado_Por/Fecha_Ocupacion (SheetsRepository)
     - Audit logging to Metadata (MetadataRepository)
-    - Real-time event publishing (RedisEventService) - v3.0 Phase 4
 
     Args:
-        redis_lock_service: Service for atomic lock operations (injected).
         sheets_repo: Repository for Sheets writes (injected).
         metadata_repository: Repository for audit logging (injected).
         conflict_service: Service for version conflict handling (injected).
-        redis_event_service: Service for real-time event publishing (injected).
 
     Returns:
         Nueva instancia de OccupationService con todas las dependencias.
@@ -478,26 +390,20 @@ def get_occupation_service(
         occupation_service: OccupationService = Depends(get_occupation_service)
 
     Note:
-        v3.0 Core: Two-layer defense against race conditions:
-        1. Redis locks prevent concurrent TOMAR
-        2. Version tokens prevent data corruption from concurrent sheet updates
-        v3.0 Phase 4: Real-time events broadcast all state changes
+        Single-user mode: No distributed locks needed (1 tablet, 1 worker).
+        Version tokens provide data consistency for concurrent operations.
     """
     return OccupationService(
-        redis_lock_service=redis_lock_service,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository,
-        conflict_service=conflict_service,
-        redis_event_service=redis_event_service
+        conflict_service=conflict_service
     )
 
 
 def get_occupation_service_v4(
-    redis_lock_service: RedisLockService = Depends(get_redis_lock_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
     metadata_repository: MetadataRepository = Depends(get_metadata_repository),
     conflict_service: ConflictService = Depends(get_conflict_service),
-    redis_event_service: RedisEventService = Depends(get_redis_event_service),
     union_repo: UnionRepository = Depends(get_union_repository),
     validation_service: ValidationService = Depends(get_validation_service)
 ) -> OccupationService:
@@ -507,6 +413,8 @@ def get_occupation_service_v4(
     Used by POST /api/v4/occupation/iniciar and POST /api/v4/occupation/finalizar.
     Builds UnionService and OccupationService with union_repository, validation_service,
     and union_service for v4.0 operations.
+
+    Single-user mode: No distributed locks or SSE event publishing.
     """
     union_service = UnionService(
         union_repo=union_repo,
@@ -514,11 +422,9 @@ def get_occupation_service_v4(
         sheets_repo=sheets_repo,
     )
     return OccupationService(
-        redis_lock_service=redis_lock_service,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository,
         conflict_service=conflict_service,
-        redis_event_service=redis_event_service,
         union_repository=union_repo,
         validation_service=validation_service,
         union_service=union_service,
@@ -528,26 +434,21 @@ def get_occupation_service_v4(
 def get_state_service(
     occupation_service: OccupationService = Depends(get_occupation_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
-    redis_event_service: RedisEventService = Depends(get_redis_event_service)
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
 ) -> StateService:
     """
-    Factory para StateService (nueva instancia por request) - v3.0 PHASE 3.
-
-    v3.0 Phase 3: StateService orchestrates state machines with OccupationService.
+    Factory para StateService (nueva instancia por request) - Single-user mode.
 
     StateService coordinates:
     - ARM and SOLD state machines (per-operation)
-    - OccupationService (Redis locks + occupation tracking)
+    - OccupationService (occupation tracking)
     - Estado_Detalle updates (combined state display)
     - Hydration logic (sync state machines with Sheets columns)
-    - Real-time event publishing (RedisEventService) - v3.0 Phase 4
 
     Args:
         occupation_service: Service for occupation operations (injected).
         sheets_repo: Repository for Sheets reads/writes (injected).
         metadata_repository: Repository for audit logging (injected).
-        redis_event_service: Service for real-time event publishing (injected).
 
     Returns:
         Nueva instancia de StateService con todas las dependencias.
@@ -556,15 +457,12 @@ def get_state_service(
         state_service: StateService = Depends(get_state_service)
 
     Note:
-        v3.0 Phase 3: StateService wraps OccupationService and adds state machine
-        orchestration on top of Phase 2 Redis locking infrastructure.
-        v3.0 Phase 4: Real-time events broadcast state machine transitions.
+        Single-user mode: No SSE event publishing needed.
     """
     return StateService(
         occupation_service=occupation_service,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository,
-        redis_event_service=redis_event_service
+        metadata_repository=metadata_repository
     )
 
 
@@ -604,13 +502,10 @@ def get_history_service(
 def get_metrologia_service(
     validation_service: ValidationService = Depends(get_validation_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
-    redis_event_service: RedisEventService = Depends(get_redis_event_service)
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
 ) -> MetrologiaService:
     """
-    Factory para MetrologiaService (nueva instancia por request) - v3.0 PHASE 5.
-
-    v3.0 Phase 5: MetrologiaService implements instant binary inspection workflow.
+    Factory para MetrologiaService (nueva instancia por request) - Single-user mode.
 
     MetrologiaService provides:
     - Instant completion (no occupation phase, no TOMAR)
@@ -618,13 +513,11 @@ def get_metrologia_service(
     - Prerequisite validation (ARM + SOLD complete, not occupied)
     - Fecha_QC_Metrologia column updates
     - Metadata audit logging with resultado
-    - Real-time SSE event publishing
 
     Args:
         validation_service: Service for prerequisite checks (injected).
         sheets_repo: Repository for Sheets reads/writes (injected).
         metadata_repository: Repository for audit logging (injected).
-        redis_event_service: Service for real-time event publishing (injected).
 
     Returns:
         Nueva instancia de MetrologiaService con todas las dependencias.
@@ -633,26 +526,23 @@ def get_metrologia_service(
         metrologia_service: MetrologiaService = Depends(get_metrologia_service)
 
     Note:
-        v3.0 Phase 5: Skips occupation workflow entirely - inspection completes atomically.
+        Skips occupation workflow entirely - inspection completes atomically.
+        Single-user mode: No SSE event publishing needed.
     """
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository,
-        redis_event_service=redis_event_service
+        metadata_repository=metadata_repository
     )
 
 
 def get_reparacion_service(
     validation_service: ValidationService = Depends(get_validation_service),
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
-    redis_event_service: RedisEventService = Depends(get_redis_event_service)
+    metadata_repository: MetadataRepository = Depends(get_metadata_repository)
 ) -> ReparacionService:
     """
-    Factory para ReparacionService (nueva instancia por request) - v3.0 PHASE 6.
-
-    v3.0 Phase 6: ReparacionService implements reparación workflow with cycle tracking.
+    Factory para ReparacionService (nueva instancia por request) - Single-user mode.
 
     ReparacionService provides:
     - TOMAR/PAUSAR/COMPLETAR/CANCELAR operations for RECHAZADO spools
@@ -665,7 +555,6 @@ def get_reparacion_service(
         validation_service: Service for prerequisite checks (injected).
         sheets_repo: Repository for Sheets reads/writes (injected).
         metadata_repository: Repository for audit logging (injected).
-        redis_event_service: Service for real-time event publishing (injected).
 
     Returns:
         Nueva instancia de ReparacionService con todas las dependencias.
@@ -674,15 +563,15 @@ def get_reparacion_service(
         reparacion_service: ReparacionService = Depends(get_reparacion_service)
 
     Note:
-        v3.0 Phase 6: Cycle tracking embedded in Estado_Detalle (no schema changes).
+        Cycle tracking embedded in Estado_Detalle (no schema changes).
+        Single-user mode: No SSE event publishing needed.
     """
     cycle_counter = CycleCounterService()
     return ReparacionService(
         validation_service=validation_service,
         cycle_counter_service=cycle_counter,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository,
-        redis_event_service=redis_event_service
+        metadata_repository=metadata_repository
     )
 
 
@@ -707,9 +596,7 @@ def reset_singletons() -> None:
             reset_singletons()
             # Ahora los singletons se recrearán en el próximo uso
     """
-    global _sheets_repo_singleton, _sheets_service_singleton, _validation_service_singleton, _redis_repo_singleton
+    global _sheets_repo_singleton, _sheets_service_singleton
 
     _sheets_repo_singleton = None
     _sheets_service_singleton = None
-    _validation_service_singleton = None
-    _redis_repo_singleton = None

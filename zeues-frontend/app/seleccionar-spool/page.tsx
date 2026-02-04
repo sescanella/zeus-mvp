@@ -6,9 +6,7 @@ import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
-import type { Spool, SSEEvent } from '@/lib/types';
-import { useSSE } from '@/lib/hooks/useSSE';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
+import type { Spool } from '@/lib/types';
 
 function SeleccionarSpoolContent() {
   const router = useRouter();
@@ -26,48 +24,7 @@ function SeleccionarSpoolContent() {
   const [searchTag, setSearchTag] = useState('');
   const [shouldRefresh, setShouldRefresh] = useState(0);
 
-  // SSE real-time updates
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-  const handleSSEMessage = useCallback((event: SSEEvent) => {
-    const { type, tag_spool, estado_detalle } = event;
-
-    switch (type) {
-      case 'TOMAR':
-        // Another worker took this spool - remove from available list
-        setSpools(currentSpools => currentSpools.filter(s => s.tag_spool !== tag_spool));
-        break;
-
-      case 'PAUSAR':
-        // Spool released - refresh list to potentially add it back
-        setShouldRefresh(prev => prev + 1);
-        break;
-
-      case 'COMPLETAR':
-        // Operation completed - remove from available list
-        setSpools(currentSpools => currentSpools.filter(s => s.tag_spool !== tag_spool));
-        break;
-
-      case 'STATE_CHANGE':
-        // Update estado_detalle for context display
-        setSpools(currentSpools =>
-          currentSpools.map(s =>
-            s.tag_spool === tag_spool
-              ? { ...s, estado_detalle }
-              : s
-          )
-        );
-        break;
-    }
-  }, []);
-
-  const { isConnected } = useSSE(`${API_URL}/api/sse/stream`, {
-    onMessage: handleSSEMessage,
-    onError: (error) => {
-      console.error('SSE connection error:', error);
-    },
-    openWhenHidden: false  // Close connection when page backgrounded
-  });
+  // SSE removed - single-user mode doesn't need real-time updates
 
   const fetchSpools = useCallback(async () => {
     try {
@@ -443,9 +400,6 @@ function SeleccionarSpoolContent() {
         backgroundSize: '50px 50px'
       }}
     >
-      {/* Connection Status */}
-      <ConnectionStatus connected={isConnected} />
-
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image

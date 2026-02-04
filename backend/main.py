@@ -34,7 +34,6 @@ from backend.models.error import ErrorResponse
 from backend.utils.logger import setup_logger
 from backend.core.column_map_cache import ColumnMapCache
 from backend.core.dependency import get_sheets_repository
-from backend.repositories.redis_repository import RedisRepository
 
 # FASE 2: Routers READ-ONLY implementados (health, workers, spools)
 from backend.routers import health, workers, spools
@@ -44,8 +43,6 @@ from backend.routers import actions
 from backend.routers import occupation
 # v3.0 Phase 3: Router HISTORY implementado (occupation history timeline)
 from backend.routers import history
-# v3.0 Phase 4: Router SSE implementado (real-time event streaming)
-from backend.routers import sse_router
 # v3.0 Phase 4: Router DASHBOARD implementado (occupied spools for initial load)
 from backend.routers import dashboard_router
 # v3.0 Phase 5: Router METROLOGIA implementado (instant binary inspection)
@@ -273,49 +270,7 @@ async def startup_event():
     logging.info(f"CORS Origins: {config.ALLOWED_ORIGINS}")
     logging.info("API versioning enabled: v3.0 endpoints at /api/v3/, v4.0 endpoints at /api/v4/ (future)")
 
-    # v3.0: Connect to Redis for occupation locking
-    try:
-        logging.info("🔄 Connecting to Redis for occupation locking...")
-        redis_repo = RedisRepository()
-        await redis_repo.connect()
-        logging.info("✅ Redis connected successfully")
-
-        # v4.0: Reconcile Redis locks from Sheets (auto-recovery)
-        try:
-            from backend.services.redis_lock_service import RedisLockService
-            import asyncio
-
-            logging.info("🔄 Reconciling Redis locks from Sheets.Ocupado_Por...")
-            sheets_repo = get_sheets_repository()
-            lock_service = RedisLockService(redis_repo.client, sheets_repo)
-
-            # Reconcile with timeout (10 seconds max)
-            results = await asyncio.wait_for(
-                lock_service.reconcile_from_sheets(sheets_repo),
-                timeout=10.0
-            )
-
-            logging.info(
-                f"✅ Redis reconciliation complete: {results['reconciled']} locks created, "
-                f"{results['skipped']} old locks skipped"
-            )
-        except asyncio.TimeoutError:
-            logging.warning(
-                "⚠️ Redis reconciliation timed out after 10s. "
-                "Locks will be created on-demand."
-            )
-        except Exception as reconcile_error:
-            logging.warning(
-                f"⚠️ Redis reconciliation failed: {reconcile_error}. "
-                f"Locks will be created on-demand."
-            )
-
-    except Exception as e:
-        # Log error but don't block startup - API works without Redis (degraded mode)
-        logging.warning(
-            f"⚠️  Failed to connect to Redis: {e}. "
-            f"API will start but occupation locking will not work."
-        )
+    # Single-user mode: No Redis connections needed
 
     # v2.1: Pre-warm column map cache para hoja Operaciones
     try:
@@ -410,16 +365,7 @@ async def shutdown_event():
     """
     logging.info("🔴 ZEUES API shutting down...")
 
-    # v3.0: Disconnect from Redis
-    try:
-        redis_repo = RedisRepository()
-        if redis_repo.client is not None:
-            await redis_repo.disconnect()
-            logging.info("✅ Redis disconnected cleanly")
-        else:
-            logging.debug("Redis was not connected, skipping disconnect")
-    except Exception as e:
-        logging.warning(f"⚠️  Error disconnecting from Redis: {e}")
+    # Single-user mode: No Redis cleanup needed
 
 
 # ============================================================================
@@ -442,9 +388,6 @@ app.include_router(occupation_v4.router, prefix="/api/v4", tags=["v4-occupation"
 
 # v3.0 Phase 3: Router HISTORY registrado (occupation history timeline)
 app.include_router(history.router, prefix="/api", tags=["History"])
-
-# v3.0 Phase 4: Router SSE registrado (real-time event streaming)
-app.include_router(sse_router.router, tags=["SSE"])
 
 # v3.0 Phase 4: Router DASHBOARD registrado (occupied spools for initial load)
 app.include_router(dashboard_router.router, tags=["Dashboard"])

@@ -14,7 +14,6 @@ from datetime import datetime
 
 from backend.core.dependency import get_sheets_repository
 from backend.repositories.sheets_repository import SheetsRepository
-from backend.repositories.redis_repository import RedisRepository
 from backend.config import config
 import logging
 
@@ -28,16 +27,16 @@ async def health_check(
     sheets_repo: SheetsRepository = Depends(get_sheets_repository)
 ):
     """
-    Health check endpoint para monitoreo del sistema (Phase 2: Enhanced with Redis).
+    Health check endpoint para monitoreo del sistema.
+
+    Simplified for single-user mode: Only checks Google Sheets.
 
     Verifica:
     - Estado general de la API (si responde, está "alive")
     - Conexión con Google Sheets (intenta leer hoja Trabajadores)
-    - Conexión con Redis (v3.0 - Phase 2 Crisis Recovery)
 
     Status logic:
-    - "healthy": Sheets OK AND Redis OK
-    - "degraded": Sheets OK BUT Redis FAIL (occupation features unavailable)
+    - "healthy": Sheets OK
     - "unhealthy": Sheets FAIL (core features unavailable)
 
     Args:
@@ -45,13 +44,11 @@ async def health_check(
 
     Returns:
         Dict con:
-        - status: "healthy", "degraded", or "unhealthy"
+        - status: "healthy" or "unhealthy"
         - operational: Boolean indicating if core features work
         - timestamp: Timestamp UTC actual (ISO 8601 format)
         - environment: Ambiente de ejecución (development/production)
         - sheets_connection: "ok" si Sheets responde, "error" si falla
-        - redis_connection: "ok" si Redis responde, "error" si falla
-        - redis_pool_stats: Connection pool statistics (if Redis connected)
         - version: Versión de la API
 
     Raises:
@@ -62,12 +59,10 @@ async def health_check(
         {
             "status": "healthy",
             "operational": true,
-            "timestamp": "2026-02-02T14:30:00Z",
+            "timestamp": "2026-02-04T14:30:00Z",
             "environment": "production",
             "sheets_connection": "ok",
-            "redis_connection": "ok",
-            "redis_pool_stats": {"max_connections": 20, "status": "ok"},
-            "version": "3.0.0"
+            "version": "4.0.0-single-user"
         }
         ```
 
@@ -76,7 +71,7 @@ async def health_check(
         curl http://localhost:8000/api/health
         ```
     """
-    logger.info("Health check requested (Phase 2: Sheets + Redis)")
+    logger.info("Health check requested (single-user mode)")
 
     # Test conexión Google Sheets (intentar leer 1 fila de Trabajadores)
     sheets_status = "ok"
@@ -89,60 +84,27 @@ async def health_check(
         sheets_status = "error"
         sheets_error = str(e)
 
-    # Test conexión Redis (v3.0 - Phase 2)
-    redis_status = "ok"
-    redis_error = None
-    redis_pool_stats = None
-    try:
-        redis_repo = RedisRepository()
-        if redis_repo.client is not None:
-            # Test PING
-            await redis_repo.client.ping()
-            # Get pool stats
-            redis_pool_stats = redis_repo.get_connection_stats()
-            logger.debug("Redis connection test successful")
-        else:
-            redis_status = "error"
-            redis_error = "Redis client not connected"
-            logger.warning("Redis health check: client not connected")
-    except Exception as e:
-        logger.error(f"Health check failed: Redis connection error - {str(e)}")
-        redis_status = "error"
-        redis_error = str(e)
-
-    # Determine overall status
-    if sheets_status == "ok" and redis_status == "ok":
-        status = "healthy"
+    # Determine overall status (simplified: only Sheets matters)
+    if sheets_status == "ok":
+        status_value = "healthy"
         operational = True
-    elif sheets_status == "ok" and redis_status == "error":
-        status = "degraded"
-        operational = False  # Occupation features unavailable
     else:
-        status = "unhealthy"
-        operational = False  # Core features unavailable
+        status_value = "unhealthy"
+        operational = False
 
     # Construir response
     response = {
-        "status": status,
+        "status": status_value,
         "operational": operational,
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "environment": config.ENVIRONMENT,
         "sheets_connection": sheets_status,
-        "redis_connection": redis_status,
-        "version": "3.0.0"
+        "version": "4.0.0-single-user"
     }
 
     # Add error details if present
-    if sheets_error or redis_error:
-        response["details"] = {}
-        if sheets_error:
-            response["details"]["sheets_error"] = sheets_error
-        if redis_error:
-            response["details"]["redis_error"] = redis_error
-
-    # Add pool stats if available
-    if redis_pool_stats:
-        response["redis_pool_stats"] = redis_pool_stats
+    if sheets_error:
+        response["details"] = {"sheets_error": sheets_error}
 
     return response
 
@@ -625,151 +587,4 @@ async def clear_cache():
         }
 
 
-@router.get("/redis-connection-stats", status_code=status.HTTP_200_OK)
-async def redis_connection_stats():
-    """
-    Redis connection pool statistics endpoint (Phase 2: Crisis Recovery).
-
-    Provides real-time monitoring of connection pool health and utilization.
-    Use this endpoint to detect connection exhaustion before it causes issues.
-
-    Returns:
-        Dict with:
-        - status: "ok", "pool_not_initialized", or "error"
-        - max_connections: Maximum connections in pool
-        - pool_created: Boolean indicating if pool is initialized
-        - alert: "CRITICAL" if pool not initialized, None if OK
-        - timestamp: Current timestamp
-
-    Example response (healthy):
-        ```json
-        {
-            "status": "ok",
-            "max_connections": 20,
-            "pool_created": true,
-            "alert": null,
-            "timestamp": "2026-02-02T14:30:00Z"
-        }
-        ```
-
-    Example response (critical):
-        ```json
-        {
-            "status": "pool_not_initialized",
-            "max_connections": 0,
-            "pool_created": false,
-            "alert": "CRITICAL",
-            "timestamp": "2026-02-02T14:30:00Z"
-        }
-        ```
-
-    Usage:
-        ```bash
-        curl http://localhost:8000/api/redis-connection-stats
-        ```
-
-    Note:
-        Use this for monitoring/alerting. Alert if:
-        - status != "ok"
-        - alert == "CRITICAL"
-    """
-    logger.info("Redis connection stats requested")
-
-    redis_repo = RedisRepository()
-    stats = redis_repo.get_connection_stats()
-
-    # Add timestamp
-    stats["timestamp"] = datetime.utcnow().isoformat() + "Z"
-
-    return stats
-
-
-@router.get("/redis-health", status_code=status.HTTP_200_OK)
-async def redis_health():
-    """
-    Redis health check endpoint for monitoring Redis connection status.
-
-    Checks:
-    - If Redis client is connected
-    - If Redis responds to PING command
-    - Redis server info (version, clients, memory, uptime)
-
-    Returns:
-        Dict with:
-        - status: "healthy" if connected and responding, "unhealthy" if not responding, "disconnected" if not connected
-        - message: Human-readable status description
-        - operational: Boolean indicating if Redis is operational
-        - redis_version: Redis server version (if connected)
-        - connected_clients: Number of connected clients (if connected)
-        - used_memory_human: Human-readable memory usage (if connected)
-        - uptime_in_seconds: Redis server uptime (if connected)
-
-    Example response (healthy):
-        ```json
-        {
-            "status": "healthy",
-            "message": "Redis connected and responding",
-            "operational": true,
-            "redis_version": "7.2.3",
-            "connected_clients": 5,
-            "used_memory_human": "1.2M",
-            "uptime_in_seconds": 86400
-        }
-        ```
-
-    Example response (disconnected):
-        ```json
-        {
-            "status": "disconnected",
-            "message": "Redis client not connected",
-            "operational": false
-        }
-        ```
-
-    Usage:
-        ```bash
-        curl http://localhost:8000/api/redis-health
-        ```
-    """
-    logger.info("Redis health check requested")
-
-    redis_repo = RedisRepository()
-
-    # Check if client is connected
-    if redis_repo.client is None:
-        logger.warning("Redis health check: client not connected")
-        return {
-            "status": "disconnected",
-            "message": "Redis client not connected",
-            "operational": False
-        }
-
-    # Perform health check with PING
-    health_result = await redis_repo.health_check()
-
-    if health_result["status"] == "healthy":
-        # Get Redis info stats
-        try:
-            info = await redis_repo.get_info()
-            logger.debug("Redis health check: healthy")
-            return {
-                "status": "healthy",
-                "message": "Redis connected and responding",
-                "operational": True,
-                **info  # Include version, connected_clients, used_memory_human, uptime_in_seconds
-            }
-        except Exception as e:
-            logger.warning(f"Redis health check: failed to get info - {e}")
-            return {
-                "status": "healthy",
-                "message": "Redis connected and responding (info unavailable)",
-                "operational": True
-            }
-    else:
-        # Unhealthy - not responding to PING
-        logger.warning(f"Redis health check: unhealthy - {health_result.get('error', 'unknown')}")
-        return {
-            "status": "unhealthy",
-            "message": f"Redis not responding: {health_result.get('error', 'unknown')}",
-            "operational": False
-        }
+# Redis endpoints removed - single-user mode doesn't need Redis
