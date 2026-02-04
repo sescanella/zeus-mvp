@@ -308,11 +308,19 @@ export interface FinalizarRequest {
 
 /**
  * Response for POST /api/v4/occupation/finalizar endpoint
+ *
+ * IMPORTANT: Field names must match backend FinalizarResponseV4 model exactly:
+ * - action_taken (not "action")
+ * - unions_processed (not "uniones_completadas")
+ * - pulgadas (not "pulgadas_completadas")
  */
 export interface FinalizarResponse {
   success: boolean;
+  tag_spool: string;
   message: string;
-  action: 'PAUSAR' | 'COMPLETAR' | 'CANCELAR';
-  pulgadas_completadas: number;
-  uniones_completadas: number;
+  action_taken: 'PAUSAR' | 'COMPLETAR' | 'CANCELADO';  // Backend returns "CANCELADO" not "CANCELAR"
+  unions_processed: number;  // Backend field name
+  pulgadas: number | null;   // Backend field name (nullable)
+  metrologia_triggered: boolean;
+  new_state: string | null;  // Backend field name (nullable)
 }

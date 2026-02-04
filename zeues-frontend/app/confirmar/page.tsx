@@ -150,8 +150,8 @@ function ConfirmarContent() {
 
         const response = await finalizarSpool(payload);
 
-        // Store pulgadas for success page
-        setState({ pulgadasCompletadas: response.pulgadas_completadas || 0 });
+        // Store pulgadas for success page (backend field name is "pulgadas", not "pulgadas_completadas")
+        setState({ pulgadasCompletadas: response.pulgadas || 0 });
 
         // Clear session storage on success
         if (state.selectedSpool) {

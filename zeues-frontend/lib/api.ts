@@ -1547,18 +1547,19 @@ export async function iniciarSpool(payload: IniciarRequest): Promise<IniciarResp
  * const result = await finalizarSpool({
  *   tag_spool: 'TEST-02',
  *   worker_id: 93,
- *   worker_nombre: 'MR(93)',
  *   operacion: 'ARM',
- *   selected_unions: [1, 2, 3],
- *   fecha_operacion: '2026-02-02'
+ *   selected_unions: ['OT-123+1', 'OT-123+2', 'OT-123+3']
  * });
  * console.log(result);
  * // {
  * //   success: true,
- * //   message: "3 uniones completadas (3/8). Trabajo pausado.",
- * //   action: "PAUSAR",
- * //   pulgadas_completadas: 7.5,
- * //   uniones_completadas: 3
+ * //   tag_spool: "TEST-02",
+ * //   message: "Trabajo pausado - 3 uniones procesadas",
+ * //   action_taken: "PAUSAR",
+ * //   unions_processed: 3,
+ * //   pulgadas: 7.5,
+ * //   metrologia_triggered: false,
+ * //   new_state: null
  * // }
  *
  * @example
@@ -1566,18 +1567,19 @@ export async function iniciarSpool(payload: IniciarRequest): Promise<IniciarResp
  * const result = await finalizarSpool({
  *   tag_spool: 'TEST-02',
  *   worker_id: 93,
- *   worker_nombre: 'MR(93)',
  *   operacion: 'ARM',
- *   selected_unions: [1, 2, 3, 4, 5, 6, 7, 8],
- *   fecha_operacion: '2026-02-02'
+ *   selected_unions: ['OT-123+1', 'OT-123+2', 'OT-123+3', 'OT-123+4', 'OT-123+5', 'OT-123+6', 'OT-123+7', 'OT-123+8']
  * });
  * console.log(result);
  * // {
  * //   success: true,
- * //   message: "ARM completado (8/8 uniones)",
- * //   action: "COMPLETAR",
- * //   pulgadas_completadas: 20.0,
- * //   uniones_completadas: 8
+ * //   tag_spool: "TEST-02",
+ * //   message: "Operación completada - 8 uniones procesadas",
+ * //   action_taken: "COMPLETAR",
+ * //   unions_processed: 8,
+ * //   pulgadas: 20.0,
+ * //   metrologia_triggered: false,
+ * //   new_state: null
  * // }
  */
 export async function finalizarSpool(payload: FinalizarRequest): Promise<FinalizarResponse> {
