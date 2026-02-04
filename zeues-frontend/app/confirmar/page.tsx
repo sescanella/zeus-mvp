@@ -67,11 +67,15 @@ function ConfirmarContent() {
   const isBatchMode = state.batchMode && state.selectedSpools.length > 0;
 
   useEffect(() => {
-    // Validar flujo: debe tener worker, operación, tipo, y al menos un spool (single o batch)
+    // Validar flujo: debe tener worker, operación, y al menos un spool (single o batch)
     const hasSingleSpool = state.selectedSpool !== null;
     const hasBatchSpools = state.selectedSpools.length > 0;
 
-    if (!state.selectedWorker || !state.selectedOperation || !tipo || (!hasSingleSpool && !hasBatchSpools)) {
+    // v4.0: FINALIZAR flow doesn't use 'tipo', it uses state.accion
+    const isV4FinalizarFlow = state.accion === 'FINALIZAR';
+    const hasValidTipo = tipo !== null || isV4FinalizarFlow;
+
+    if (!state.selectedWorker || !state.selectedOperation || !hasValidTipo || (!hasSingleSpool && !hasBatchSpools)) {
       router.push('/');
     }
   }, [state, tipo, router]);
@@ -469,12 +473,17 @@ function ConfirmarContent() {
   const hasSingleSpool = state.selectedSpool !== null;
   const hasBatchSpools = state.selectedSpools.length > 0;
 
-  if (!state.selectedWorker || !state.selectedOperation || (!hasSingleSpool && !hasBatchSpools)) {
+  // v4.0: FINALIZAR flow doesn't use 'tipo', it uses state.accion
+  const isV4FinalizarFlow = state.accion === 'FINALIZAR';
+  const hasValidTipo = tipo !== null || isV4FinalizarFlow;
+
+  if (!state.selectedWorker || !state.selectedOperation || !hasValidTipo || (!hasSingleSpool && !hasBatchSpools)) {
     return null;
   }
 
-  // v3.0: Action labels for UI
+  // v3.0/v4.0: Action labels for UI
   const actionLabel =
+    state.accion === 'FINALIZAR' ? 'FINALIZAR' :
     tipo === 'tomar' ? 'TOMAR' :
     tipo === 'pausar' ? 'PAUSAR' :
     tipo === 'completar' ? 'COMPLETAR' :
