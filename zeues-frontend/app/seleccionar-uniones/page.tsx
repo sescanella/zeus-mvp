@@ -25,6 +25,12 @@ export default function SeleccionarUnionesPage() {
     }
   }, [state.selectedSpool, state.selectedOperation, router]);
 
+  // Clear any legacy selections on mount (before session storage restoration)
+  useEffect(() => {
+    setState({ selectedUnions: [], pulgadasCompletadas: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
+
   // Restore selection from session storage on mount if exists
   useEffect(() => {
     if (state.selectedSpool) {
