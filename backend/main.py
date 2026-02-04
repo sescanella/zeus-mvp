@@ -362,7 +362,9 @@ async def startup_event():
         logging.info("🔄 Validating v4.0 schema (Operaciones, Uniones, Metadata)...")
         from backend.scripts.validate_schema_startup import validate_v4_schema
 
-        success, details = validate_v4_schema()
+        # Reuse singleton sheets_repo to leverage cached data from Redis reconciliation and pre-warm
+        sheets_repo = get_sheets_repository()
+        success, details = validate_v4_schema(repo=sheets_repo)
 
         if not success:
             # Identify which sheets failed
