@@ -36,28 +36,18 @@ def mock_metadata_repo():
 
 
 @pytest.fixture
-def mock_redis_event_service():
-    """Mock RedisEventService."""
-    from unittest.mock import AsyncMock
-    service = AsyncMock()
-    service.publish_spool_update = AsyncMock(return_value=True)
-    return service
-
-
-@pytest.fixture
 def validation_service():
     """Real ValidationService without role_service for testing."""
     return ValidationService(role_service=None)
 
 
 @pytest.fixture
-def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo, mock_redis_event_service):
-    """MetrologiaService with mocked dependencies."""
+def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo):
+    """MetrologiaService with mocked dependencies (single-user mode: no Redis)."""
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo,
-        redis_event_service=mock_redis_event_service
+        metadata_repository=mock_metadata_repo
     )
 
 
@@ -229,48 +219,12 @@ async def test_completar_logs_metadata_event(metrologia_service, mock_sheets_rep
 
 
 @pytest.mark.asyncio
-async def test_completar_publishes_sse_event(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
-    """Test that SSE event is published on completion."""
-    mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
-
-    await metrologia_service.completar(
-        tag_spool="TEST-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="RECHAZADO"
-    )
-
-    # Verify SSE event was published
-    mock_redis_event_service.publish_spool_update.assert_called_once()
-    call_args = mock_redis_event_service.publish_spool_update.call_args
-    assert call_args[1]["additional_data"]["resultado"] == "RECHAZADO"
-
-
-@pytest.mark.asyncio
 async def test_completar_continues_on_metadata_failure(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
     """Test that operation continues even if metadata logging fails (best-effort)."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
     mock_metadata_repo.append_event = Mock(side_effect=Exception("Metadata API error"))
 
     # Should still succeed despite metadata failure
-    result = await metrologia_service.completar(
-        tag_spool="TEST-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="APROBADO"
-    )
-
-    assert result["success"] is True
-
-
-@pytest.mark.asyncio
-async def test_completar_continues_on_sse_failure(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
-    """Test that operation continues even if SSE publishing fails (best-effort)."""
-    from unittest.mock import AsyncMock
-    mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
-    mock_redis_event_service.publish_spool_update = AsyncMock(side_effect=Exception("Redis error"))
-
-    # Should still succeed despite SSE failure
     result = await metrologia_service.completar(
         tag_spool="TEST-001",
         worker_id=95,

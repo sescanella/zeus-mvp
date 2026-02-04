@@ -14,7 +14,6 @@ from backend.services.validation_service import ValidationService
 from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
-from backend.services.redis_event_service import RedisEventService
 from backend.models.spool import Spool
 from backend.exceptions import SpoolNoEncontradoError, SpoolBloqueadoError
 
@@ -61,28 +60,18 @@ def mock_metadata_repo():
 
 
 @pytest.fixture
-def mock_redis_event_service():
-    """Mock RedisEventService."""
-    service = AsyncMock(spec=RedisEventService)
-    service.publish_spool_update.return_value = True
-    return service
-
-
-@pytest.fixture
 def reparacion_service(
     mock_validation_service,
     mock_cycle_counter,
     mock_sheets_repo,
-    mock_metadata_repo,
-    mock_redis_event_service
+    mock_metadata_repo
 ):
-    """ReparacionService with all dependencies mocked."""
+    """ReparacionService with all dependencies mocked (single-user mode: no Redis)."""
     return ReparacionService(
         validation_service=mock_validation_service,
         cycle_counter_service=mock_cycle_counter,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo,
-        redis_event_service=mock_redis_event_service
+        metadata_repository=mock_metadata_repo
     )
 
 
@@ -167,54 +156,6 @@ async def test_tomar_checks_blocking(reparacion_service, mock_sheets_repo, mock_
     mock_cycle_counter.should_block.assert_called_once_with(1)
 
 
-@pytest.mark.asyncio
-async def test_tomar_publishes_sse_event(reparacion_service, mock_sheets_repo, mock_redis_event_service, rechazado_spool):
-    """Should publish SSE event when taking spool for repair."""
-    tag_spool = rechazado_spool.tag_spool
-    worker_id = 95
-    worker_nombre = "CP(95)"
-
-    mock_sheets_repo.get_spool_by_tag.return_value = rechazado_spool
-
-    with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
-        mock_machine.current_state.id = "en_reparacion"
-        mock_machine.get_state_id.return_value = "en_reparacion"
-        MockStateMachine.return_value = mock_machine
-
-        result = await reparacion_service.tomar_reparacion(tag_spool, worker_id, worker_nombre)
-
-    # Verify SSE event published
-    mock_redis_event_service.publish_spool_update.assert_called_once()
-    call_kwargs = mock_redis_event_service.publish_spool_update.call_args[1]
-    assert call_kwargs["event_type"] == "TOMAR_REPARACION"
-    assert call_kwargs["tag_spool"] == tag_spool
-    assert call_kwargs["worker_nombre"] == worker_nombre
-    assert "cycle" in call_kwargs["additional_data"]
-
-
-@pytest.mark.asyncio
-async def test_tomar_sse_failure_does_not_block(reparacion_service, mock_sheets_repo, mock_redis_event_service, rechazado_spool):
-    """Should continue operation even if SSE publishing fails (best-effort pattern)."""
-    tag_spool = rechazado_spool.tag_spool
-    worker_id = 95
-    worker_nombre = "CP(95)"
-
-    mock_sheets_repo.get_spool_by_tag.return_value = rechazado_spool
-    mock_redis_event_service.publish_spool_update.side_effect = Exception("Redis connection failed")
-
-    with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
-        mock_machine.current_state.id = "en_reparacion"
-        mock_machine.get_state_id.return_value = "en_reparacion"
-        MockStateMachine.return_value = mock_machine
-
-        # Should NOT raise exception despite SSE failure
-        result = await reparacion_service.tomar_reparacion(tag_spool, worker_id, worker_nombre)
-
-    assert result["success"] is True
-
-
 # ============================================================================
 # PAUSAR REPARACION TESTS
 # ============================================================================
@@ -244,29 +185,6 @@ async def test_pausar_clears_occupation(
     assert "REPARACION_PAUSADA" in result["estado_detalle"]
 
 
-@pytest.mark.asyncio
-async def test_pausar_publishes_sse_event(reparacion_service, mock_sheets_repo, mock_redis_event_service, en_reparacion_spool):
-    """Should publish SSE event when pausing repair."""
-    tag_spool = en_reparacion_spool.tag_spool
-    worker_id = 95
-
-    mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
-
-    with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
-        mock_machine.current_state.id = "reparacion_pausada"
-        mock_machine.get_state_id.return_value = "reparacion_pausada"
-        MockStateMachine.return_value = mock_machine
-
-        result = await reparacion_service.pausar_reparacion(tag_spool, worker_id)
-
-    # Verify SSE event published
-    mock_redis_event_service.publish_spool_update.assert_called_once()
-    call_kwargs = mock_redis_event_service.publish_spool_update.call_args[1]
-    assert call_kwargs["event_type"] == "PAUSAR_REPARACION"
-    assert call_kwargs["worker_nombre"] is None  # No longer occupied
-
-
 # ============================================================================
 # COMPLETAR REPARACION TESTS
 # ============================================================================
@@ -293,29 +211,6 @@ async def test_completar_sets_pendiente_metrologia(reparacion_service, mock_shee
     assert result["estado_detalle"] == "PENDIENTE_METROLOGIA"
 
 
-@pytest.mark.asyncio
-async def test_completar_publishes_sse_event(reparacion_service, mock_sheets_repo, mock_redis_event_service, en_reparacion_spool):
-    """Should publish SSE event when completing repair."""
-    tag_spool = en_reparacion_spool.tag_spool
-    worker_id = 95
-    worker_nombre = "CP(95)"
-
-    mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
-
-    with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
-        mock_machine.current_state.id = "pendiente_metrologia"
-        mock_machine.get_state_id.return_value = "pendiente_metrologia"
-        MockStateMachine.return_value = mock_machine
-
-        result = await reparacion_service.completar_reparacion(tag_spool, worker_id, worker_nombre)
-
-    # Verify SSE event published
-    mock_redis_event_service.publish_spool_update.assert_called_once()
-    call_kwargs = mock_redis_event_service.publish_spool_update.call_args[1]
-    assert call_kwargs["event_type"] == "COMPLETAR_REPARACION"
-
-
 # ============================================================================
 # CANCELAR REPARACION TESTS
 # ============================================================================
@@ -340,28 +235,6 @@ async def test_cancelar_returns_to_rechazado(reparacion_service, mock_sheets_rep
     assert result["success"] is True
     # Verify build_rechazado_estado called to construct estado_detalle
     mock_cycle_counter.build_rechazado_estado.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_cancelar_publishes_sse_event(reparacion_service, mock_sheets_repo, mock_redis_event_service, en_reparacion_spool):
-    """Should publish SSE event when cancelling repair."""
-    tag_spool = en_reparacion_spool.tag_spool
-    worker_id = 95
-
-    mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
-
-    with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
-        mock_machine.current_state.id = "rechazado"
-        mock_machine.get_state_id.return_value = "rechazado"
-        MockStateMachine.return_value = mock_machine
-
-        result = await reparacion_service.cancelar_reparacion(tag_spool, worker_id)
-
-    # Verify SSE event published
-    mock_redis_event_service.publish_spool_update.assert_called_once()
-    call_kwargs = mock_redis_event_service.publish_spool_update.call_args[1]
-    assert call_kwargs["event_type"] == "CANCELAR_REPARACION"
 
 
 # ============================================================================

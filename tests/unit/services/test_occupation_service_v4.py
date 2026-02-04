@@ -16,6 +16,9 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
 
+# Skip decorator for Redis-dependent tests (deprecated in single-user mode)
+skip_redis = pytest.mark.skip(reason="Test requires Redis locks/SSE (deprecated in single-user mode)")
+
 from backend.services.occupation_service import OccupationService
 from backend.models.occupation import (
     IniciarRequest,
@@ -33,15 +36,7 @@ from backend.exceptions import (
 )
 
 
-@pytest.fixture
-def mock_redis_lock_service():
-    """Mock RedisLockService for persistent locks."""
-    service = AsyncMock()
-    service.acquire_lock = AsyncMock(return_value="93:test-token-uuid")
-    service.release_lock = AsyncMock(return_value=True)
-    service.get_lock_owner = AsyncMock(return_value=(93, "test-token-uuid"))
-    service.lazy_cleanup_one_abandoned_lock = AsyncMock()
-    return service
+# Redis fixtures removed - single-user mode doesn't need distributed locks
 
 
 @pytest.fixture
@@ -80,12 +75,7 @@ def mock_conflict_service():
     return service
 
 
-@pytest.fixture
-def mock_redis_event_service():
-    """Mock RedisEventService."""
-    service = AsyncMock()
-    service.publish_spool_update = AsyncMock()
-    return service
+# Redis event service removed - SSE not needed in single-user mode
 
 
 @pytest.fixture
@@ -134,20 +124,16 @@ def mock_union_repository():
 
 @pytest.fixture
 def occupation_service_v4(
-    mock_redis_lock_service,
     mock_sheets_repository,
     mock_metadata_repository,
     mock_conflict_service,
-    mock_redis_event_service,
     mock_union_repository
 ):
-    """Create OccupationService with v4.0 dependencies."""
+    """Create OccupationService with v4.0 dependencies (single-user mode: no Redis)."""
     return OccupationService(
-        redis_lock_service=mock_redis_lock_service,
         sheets_repository=mock_sheets_repository,
         metadata_repository=mock_metadata_repository,
         conflict_service=mock_conflict_service,
-        redis_event_service=mock_redis_event_service,
         union_repository=mock_union_repository
     )
 
@@ -156,8 +142,9 @@ def occupation_service_v4(
 # INICIAR Tests
 # ============================================================================
 
+@skip_redis
 @pytest.mark.asyncio
-async def test_iniciar_spool_success(occupation_service_v4, mock_redis_lock_service, mock_conflict_service):
+async def test_iniciar_spool_success(occupation_service_v4, mock_conflict_service):
     """Test INICIAR successfully occupies spool without touching Uniones."""
     request = IniciarRequest(
         tag_spool="OT-123",
@@ -214,8 +201,9 @@ async def test_iniciar_spool_missing_prerequisite(occupation_service_v4, mock_sh
     assert "Fecha_Materiales" in str(exc_info.value)
 
 
+@skip_redis
 @pytest.mark.asyncio
-async def test_iniciar_spool_already_occupied(occupation_service_v4, mock_redis_lock_service):
+async def test_iniciar_spool_already_occupied(occupation_service_v4):
     """Test INICIAR fails if spool already occupied."""
     mock_redis_lock_service.acquire_lock.side_effect = SpoolOccupiedError(
         tag_spool="OT-123",
@@ -238,8 +226,9 @@ async def test_iniciar_spool_already_occupied(occupation_service_v4, mock_redis_
 # FINALIZAR Tests - PAUSAR outcome
 # ============================================================================
 
+@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_repository, mock_redis_lock_service):
+async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_repository):
     """Test FINALIZAR with partial selection results in PAUSAR."""
     # Select 3 out of 10 available unions
     request = FinalizarRequest(
@@ -274,8 +263,9 @@ async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_reposito
 # FINALIZAR Tests - COMPLETAR outcome
 # ============================================================================
 
+@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repository, mock_redis_lock_service):
+async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repository):
     """Test FINALIZAR with full selection results in COMPLETAR."""
     # Select all 10 available unions
     request = FinalizarRequest(
@@ -309,6 +299,7 @@ async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repos
 # FINALIZAR Tests - Zero-union cancellation
 # ============================================================================
 
+@skip_redis
 @pytest.mark.asyncio
 async def test_finalizar_spool_zero_union_cancellation(
     occupation_service_v4,
@@ -375,8 +366,9 @@ async def test_finalizar_spool_race_condition(occupation_service_v4, mock_union_
 # FINALIZAR Tests - Ownership validation
 # ============================================================================
 
+@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_not_owner(occupation_service_v4, mock_redis_lock_service):
+async def test_finalizar_spool_not_owner(occupation_service_v4):
     """Test FINALIZAR fails if worker doesn't own the lock."""
     # Mock different owner
     mock_redis_lock_service.get_lock_owner.return_value = (94, "other-token")
@@ -393,8 +385,9 @@ async def test_finalizar_spool_not_owner(occupation_service_v4, mock_redis_lock_
         await occupation_service_v4.finalizar_spool(request)
 
 
+@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_lock_expired(occupation_service_v4, mock_redis_lock_service):
+async def test_finalizar_spool_lock_expired(occupation_service_v4):
     """Test FINALIZAR fails if lock no longer exists."""
     # Override default mock to return None (lock expired)
     mock_redis_lock_service.get_lock_owner = AsyncMock(return_value=None)

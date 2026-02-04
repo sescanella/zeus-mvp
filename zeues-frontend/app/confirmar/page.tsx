@@ -15,6 +15,7 @@ import {
   pausarReparacion,
   completarReparacion,
   cancelarReparacion,
+  iniciarSpool,
   finalizarSpool
 } from '@/lib/api';
 import type {
@@ -24,6 +25,7 @@ import type {
   BatchTomarRequest,
   BatchOccupationResponse,
   BatchActionResponse,
+  IniciarRequest,
   FinalizarRequest
 } from '@/lib/types';
 
@@ -72,9 +74,9 @@ function ConfirmarContent() {
     const hasSingleSpool = state.selectedSpool !== null;
     const hasBatchSpools = state.selectedSpools.length > 0;
 
-    // v4.0: FINALIZAR flow doesn't use 'tipo', it uses state.accion
-    const isV4FinalizarFlow = state.accion === 'FINALIZAR';
-    const hasValidTipo = tipo !== null || isV4FinalizarFlow;
+    // v4.0: INICIAR/FINALIZAR flows don't use 'tipo', they use state.accion
+    const isV4Flow = state.accion === 'INICIAR' || state.accion === 'FINALIZAR';
+    const hasValidTipo = tipo !== null || isV4Flow;
 
     if (!state.selectedWorker || !state.selectedOperation || !hasValidTipo || (!hasSingleSpool && !hasBatchSpools)) {
       router.push('/');
@@ -134,8 +136,26 @@ function ConfirmarContent() {
       setError('');
       setErrorType('generic');
 
-      // Check for v4.0 FINALIZAR flow (single mode only)
-      if (state.accion === 'FINALIZAR' && !isBatchMode) {
+      // Check for v4.0 INICIAR flow (single mode only)
+      if (state.accion === 'INICIAR' && !isBatchMode) {
+        // v4.0: INICIAR flow - occupy spool with Ocupado_Por + Fecha_Ocupacion
+        const worker_id = state.selectedWorker!.id;
+        const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
+        const tag_spool = state.selectedSpool!;
+        const operacion = state.selectedOperation as 'ARM' | 'SOLD';
+
+        const payload: IniciarRequest = {
+          tag_spool,
+          worker_id,
+          worker_nombre,
+          operacion,
+        };
+
+        await iniciarSpool(payload);
+
+        // Navigate to success (no need to store extra data for INICIAR)
+        router.push('/exito');
+      } else if (state.accion === 'FINALIZAR' && !isBatchMode) {
         // v4.0: FINALIZAR flow with union selection
         const worker_id = state.selectedWorker!.id;
         const tag_spool = state.selectedSpool!;
@@ -420,8 +440,8 @@ function ConfirmarContent() {
         router.push('/exito');
       }
     } catch (err) {
-      // v4.0: Use new error handler for FINALIZAR, fallback to v3.0 for other actions
-      if (state.accion === 'FINALIZAR') {
+      // v4.0: Use new error handler for INICIAR/FINALIZAR, fallback to v3.0 for other actions
+      if (state.accion === 'INICIAR' || state.accion === 'FINALIZAR') {
         handleApiError(err);
       } else {
         // v3.0: Manejar errores específicos según código HTTP (incluye nuevos códigos)
@@ -471,9 +491,9 @@ function ConfirmarContent() {
   const hasSingleSpool = state.selectedSpool !== null;
   const hasBatchSpools = state.selectedSpools.length > 0;
 
-  // v4.0: FINALIZAR flow doesn't use 'tipo', it uses state.accion
-  const isV4FinalizarFlow = state.accion === 'FINALIZAR';
-  const hasValidTipo = tipo !== null || isV4FinalizarFlow;
+  // v4.0: INICIAR/FINALIZAR flows don't use 'tipo', they use state.accion
+  const isV4Flow = state.accion === 'INICIAR' || state.accion === 'FINALIZAR';
+  const hasValidTipo = tipo !== null || isV4Flow;
 
   if (!state.selectedWorker || !state.selectedOperation || !hasValidTipo || (!hasSingleSpool && !hasBatchSpools)) {
     return null;
@@ -481,6 +501,7 @@ function ConfirmarContent() {
 
   // v3.0/v4.0: Action labels for UI
   const actionLabel =
+    state.accion === 'INICIAR' ? 'INICIAR' :
     state.accion === 'FINALIZAR' ? 'FINALIZAR' :
     tipo === 'tomar' ? 'TOMAR' :
     tipo === 'pausar' ? 'PAUSAR' :

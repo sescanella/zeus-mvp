@@ -22,7 +22,7 @@ function SeleccionarSpoolContent() {
   // Local filter states
   const [searchNV, setSearchNV] = useState('');
   const [searchTag, setSearchTag] = useState('');
-  const [shouldRefresh, setShouldRefresh] = useState(0);
+  // const [shouldRefresh, setShouldRefresh] = useState(0); // Unused - SSE removed
 
   // SSE removed - single-user mode doesn't need real-time updates
 
@@ -159,12 +159,12 @@ function SeleccionarSpoolContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Refresh when SSE triggers PAUSAR event
-  useEffect(() => {
-    if (shouldRefresh > 0) {
-      fetchSpools();
-    }
-  }, [shouldRefresh, fetchSpools]);
+  // SSE removed - refresh logic no longer needed
+  // useEffect(() => {
+  //   if (shouldRefresh > 0) {
+  //     fetchSpools();
+  //   }
+  // }, [shouldRefresh, fetchSpools]);
 
   // Filter spools locally (v2.1.2 - renamed variable to force rebuild)
   const spoolsFiltrados = spools.filter(s =>
