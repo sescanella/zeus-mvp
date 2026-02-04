@@ -2,12 +2,12 @@
 v4.0 Occupation Router - INICIAR/FINALIZAR workflows with union-level tracking.
 
 Endpoints:
-- POST /api/v4/occupation/iniciar - Occupy spool without modifying Uniones sheet
+- POST /api/v4/occupation/iniciar - Occupy spool (works for v3.0 and v4.0)
 - POST /api/v4/occupation/finalizar - Process selected unions with auto-determination
 
-Version Detection:
-- Rejects v3.0 spools (400 Bad Request with helpful error)
-- Only accepts spools with Total_Uniones > 0
+Version Compatibility:
+- INICIAR: Accepts both v3.0 and v4.0 spools
+- FINALIZAR: Union selection only for v4.0 spools (v3.0 goes direct to confirmation)
 
 References:
 - Plan: 11-03-PLAN.md (INICIAR endpoint)
@@ -31,7 +31,7 @@ from backend.models.occupation import (
     FinalizarRequest,
     OccupationResponse
 )
-from backend.utils.version_detection import is_v4_spool
+# is_v4_spool import removed - no longer rejecting v3.0 spools
 from backend.exceptions import (
     SpoolNoEncontradoError,
     ArmPrerequisiteError,
@@ -54,16 +54,15 @@ async def iniciar_v4(
     sheets_repo: Annotated[SheetsRepository, Depends(get_sheets_repository)]
 ):
     """
-    v4.0 INICIAR - Occupy spool without touching unions.
+    INICIAR - Occupy spool without touching unions (v3.0 and v4.0 compatible).
 
     This endpoint occupies a spool with a persistent Redis lock and updates
     the Ocupado_Por/Fecha_Ocupacion fields in the Operaciones sheet WITHOUT
-    modifying the Uniones sheet. The worker must later call FINALIZAR to
-    select which unions they worked on.
+    modifying the Uniones sheet.
 
-    Version Requirements:
-    - Only accepts v4.0 spools (Total_Uniones > 0)
-    - Rejects v3.0 spools with 400 Bad Request
+    Version Compatibility:
+    - v3.0 spools: INICIAR occupies, FINALIZAR goes direct to confirmation
+    - v4.0 spools: INICIAR occupies, FINALIZAR requires union selection first
 
     ARM Prerequisite:
     - SOLD operations require ARM to be 100% complete
@@ -83,7 +82,6 @@ async def iniciar_v4(
     }
 
     Error Responses:
-    - 400: Spool is v3.0 (use /api/v3/occupation/tomar instead)
     - 403: ARM prerequisite not met for SOLD operation
     - 404: Spool not found
     - 409: Spool already occupied by another worker
@@ -91,12 +89,12 @@ async def iniciar_v4(
     tag_spool = request.tag_spool
 
     logger.info(
-        f"v4.0 INICIAR request: {tag_spool} by worker {request.worker_id} "
+        f"INICIAR request: {tag_spool} by worker {request.worker_id} "
         f"({request.worker_nombre}) for {request.operacion}"
     )
 
     try:
-        # Step 1: Version detection - reject v3.0 spools
+        # Step 1: Validate spool exists (no version check - accepts v3.0 and v4.0)
         spool = sheets_repo.get_spool_by_tag(tag_spool)
         if not spool:
             raise HTTPException(
@@ -104,27 +102,12 @@ async def iniciar_v4(
                 detail=f"Spool {tag_spool} not found"
             )
 
-        if not is_v4_spool(spool.model_dump()):
-            logger.warning(
-                f"v3.0 spool {tag_spool} rejected from v4.0 INICIAR endpoint "
-                f"(Total_Uniones={spool.total_uniones})"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "WRONG_VERSION",
-                    "message": "Spool is v3.0, use /api/v3/occupation/tomar instead",
-                    "spool_version": "v3.0",
-                    "correct_endpoint": "/api/v3/occupation/tomar",
-                    "total_uniones": spool.total_uniones or 0
-                }
-            )
-
-        # Step 2: Call service layer (handles ARM prerequisite, lock acquisition, etc.)
+        # Step 2: Call service layer (works for both v3.0 and v4.0)
+        # Service handles ARM prerequisite, lock acquisition, etc.
         result = await occupation_service.iniciar_spool(request)
 
         logger.info(
-            f"✅ v4.0 INICIAR successful: {tag_spool} occupied by {request.worker_nombre}"
+            f"✅ INICIAR successful: {tag_spool} occupied by {request.worker_nombre}"
         )
 
         return result

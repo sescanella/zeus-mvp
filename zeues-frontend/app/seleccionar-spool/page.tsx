@@ -283,14 +283,28 @@ function SeleccionarSpoolContent() {
       }
     }
 
-    // v4.0: FINALIZAR workflow - navigate to union selection
+    // v4.0: FINALIZAR workflow - navigate based on spool version
     if (state.accion === 'FINALIZAR' && selectedCount === 1) {
+      const tag = state.selectedSpools[0];
+
+      // Detect spool version from total_uniones (already in spools list)
+      const selectedSpool = spools.find(s => s.tag_spool === tag);
+      const isV4 = selectedSpool?.total_uniones && selectedSpool.total_uniones > 0;
+
       setState({
-        selectedSpool: state.selectedSpools[0],
+        selectedSpool: tag,
         selectedSpools: [],
         batchMode: false
       });
-      router.push('/seleccionar-uniones');
+
+      // Conditional navigation based on version:
+      // - v4.0: FINALIZAR → Union selection → Confirmation
+      // - v3.0: FINALIZAR → Direct to Confirmation (no union selection)
+      if (isV4) {
+        router.push('/seleccionar-uniones');  // v4.0: Union selection screen
+      } else {
+        router.push('/confirmar');  // v3.0: Direct to confirmation
+      }
       return;
     }
 
