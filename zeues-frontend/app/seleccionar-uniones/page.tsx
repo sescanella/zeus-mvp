@@ -32,9 +32,18 @@ export default function SeleccionarUnionesPage() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          setState({ selectedUnions: parsed });
+          // Validate format: must be array of strings (IDs like "TEST-03+1")
+          // Legacy format was array of numbers [1, 2, 3] - clear those
+          if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+            setState({ selectedUnions: parsed });
+          } else {
+            // Clear legacy number-based selection
+            sessionStorage.removeItem(`unions_selection_${state.selectedSpool}`);
+            setState({ selectedUnions: [] });
+          }
         } catch {
-          // Invalid JSON, ignore
+          // Invalid JSON, ignore and clear
+          sessionStorage.removeItem(`unions_selection_${state.selectedSpool}`);
         }
       }
     }
