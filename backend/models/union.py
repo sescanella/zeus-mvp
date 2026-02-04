@@ -97,27 +97,10 @@ class Union(BaseModel):
         examples=["APROBADO", "RECHAZADO", "PENDIENTE"]
     )
 
-    # Audit fields (optimistic locking + event sourcing)
+    # Audit fields (optimistic locking)
     version: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="UUID4 for optimistic locking (prevents concurrent modifications)"
-    )
-    creado_por: str = Field(
-        ...,
-        description="Worker who created this union record in format 'INICIALES(ID)'",
-        examples=["MR(93)"]
-    )
-    fecha_creacion: datetime = Field(
-        ...,
-        description="Creation timestamp (when record was first created)"
-    )
-    modificado_por: Optional[str] = Field(
-        None,
-        description="Worker who last modified this union record"
-    )
-    fecha_modificacion: Optional[datetime] = Field(
-        None,
-        description="Last modification timestamp"
     )
 
     model_config = ConfigDict(
@@ -125,7 +108,7 @@ class Union(BaseModel):
         str_strip_whitespace=True,
     )
 
-    @field_validator('arm_worker', 'sol_worker', 'creado_por', 'modificado_por')
+    @field_validator('arm_worker', 'sol_worker')
     @classmethod
     def validate_worker_format(cls, v: Optional[str]) -> Optional[str]:
         """

@@ -831,8 +831,6 @@ class UnionRepository:
         n_union_val = get_col("N_UNION")
         dn_union_val = get_col("DN_UNION")
         tipo_union_val = get_col("TIPO_UNION")
-        creado_por_val = get_col("Creado_Por")
-        fecha_creacion_val = get_col("Fecha_Creacion")
 
         # Validate required fields
         if not id_val:
@@ -847,10 +845,6 @@ class UnionRepository:
             raise ValueError("DN_UNION is required")
         if not tipo_union_val:
             raise ValueError("TIPO_UNION is required")
-        if not creado_por_val:
-            raise ValueError("Creado_Por is required")
-        if not fecha_creacion_val:
-            raise ValueError("Fecha_Creacion is required")
 
         # Parse ARM timestamps
         arm_fecha_inicio = parse_datetime(get_col("ARM_FECHA_INICIO"))
@@ -866,10 +860,8 @@ class UnionRepository:
         ndt_fecha = parse_datetime(get_col("NDT_FECHA"))
         ndt_status = get_col("NDT_STATUS")
 
-        # Parse audit fields
+        # Parse version field for optimistic locking
         version = get_col("version") or ""  # Default to empty if missing
-        modificado_por = get_col("Modificado_Por")
-        fecha_modificacion = parse_datetime(get_col("Fecha_Modificacion"))
 
         # Create Union object
         return Union(
@@ -888,8 +880,4 @@ class UnionRepository:
             ndt_fecha=ndt_fecha,
             ndt_status=ndt_status,
             version=version,
-            creado_por=creado_por_val,
-            fecha_creacion=parse_datetime(fecha_creacion_val) or now_chile(),
-            modificado_por=modificado_por,
-            fecha_modificacion=fecha_modificacion,
         )

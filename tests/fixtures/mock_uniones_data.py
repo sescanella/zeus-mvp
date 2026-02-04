@@ -25,12 +25,12 @@ def generate_mock_uniones(num_ots: int = 10, unions_per_ot: int = 10) -> list[li
     Returns:
         list[list]: Mock sheet rows including header row
     """
-    # Header row (22 columns - v4.0 complete structure)
+    # Header row (17 columns - v4.0 simplified structure without audit fields)
     headers = [
         "ID",              # A: Composite PK
         "OT",              # B: Foreign key to Operaciones.OT
-        "TAG_SPOOL",       # C: Legacy FK to Operaciones.TAG_SPOOL
-        "N_UNION",         # D: Union number (1-20)
+        "N_UNION",         # C: Union number (1-20)
+        "TAG_SPOOL",       # D: TAG_SPOOL identifier
         "DN_UNION",        # E: Diameter in inches
         "TIPO_UNION",      # F: Union type
         "ARM_FECHA_INICIO", # G: ARM start timestamp
@@ -39,17 +39,11 @@ def generate_mock_uniones(num_ots: int = 10, unions_per_ot: int = 10) -> list[li
         "SOL_FECHA_INICIO", # J: SOLD start timestamp
         "SOL_FECHA_FIN",   # K: SOLD end timestamp
         "SOL_WORKER",      # L: SOLD worker
-        "NDT_FECHA",       # M: NDT inspection date
-        "NDT_STATUS",      # N: NDT result
-        "version",         # O: UUID4 for optimistic locking
-        "Creado_Por",      # P: Creator worker
-        "Fecha_Creacion",  # Q: Creation timestamp
-        "Modificado_Por",  # R: Last modifier
-        "Fecha_Modificacion", # S: Last modification timestamp
-        # Extra columns from Engineering (Phase 7)
-        "EXTRA_COL_1",     # T: Extra column 1
-        "EXTRA_COL_2",     # U: Extra column 2
-        "EXTRA_COL_3",     # V: Extra column 3
+        "NDT_UNION",       # M: NDT union identifier
+        "R_NDT_UNION",     # N: NDT repair union
+        "NDT_FECHA",       # O: NDT inspection date
+        "NDT_STATUS",      # P: NDT result
+        "version",         # Q: UUID4 for optimistic locking
     ]
 
     rows = [headers]
@@ -90,24 +84,18 @@ def generate_mock_uniones(num_ots: int = 10, unions_per_ot: int = 10) -> list[li
             sol_worker = None
             ndt_fecha = None
             ndt_status = None
-            modificado_por = None
-            fecha_modificacion = None
 
             if n_union <= 7:
                 # ARM complete
                 arm_fecha_inicio = _chile_timestamp(days_ago=5, hours_ago=n_union)
                 arm_fecha_fin = _chile_timestamp(days_ago=5, hours_ago=n_union-1)
                 arm_worker = workers[(ot_idx + n_union) % len(workers)]
-                modificado_por = arm_worker
-                fecha_modificacion = arm_fecha_fin
 
                 if n_union <= 5:
                     # SOLD complete
                     sol_fecha_inicio = _chile_timestamp(days_ago=3, hours_ago=n_union)
                     sol_fecha_fin = _chile_timestamp(days_ago=3, hours_ago=n_union-1)
                     sol_worker = workers[(ot_idx + n_union + 1) % len(workers)]
-                    modificado_por = sol_worker
-                    fecha_modificacion = sol_fecha_fin
 
                     # NDT for completed SOLD
                     if n_union <= 4:
@@ -117,8 +105,8 @@ def generate_mock_uniones(num_ots: int = 10, unions_per_ot: int = 10) -> list[li
             row = [
                 union_id,                           # ID
                 ot,                                 # OT
-                tag_spool,                          # TAG_SPOOL
                 str(n_union),                       # N_UNION
+                tag_spool,                          # TAG_SPOOL
                 str(dn_union),                      # DN_UNION
                 tipo,                               # TIPO_UNION
                 arm_fecha_inicio or "",             # ARM_FECHA_INICIO
@@ -127,16 +115,11 @@ def generate_mock_uniones(num_ots: int = 10, unions_per_ot: int = 10) -> list[li
                 sol_fecha_inicio or "",             # SOL_FECHA_INICIO
                 sol_fecha_fin or "",                # SOL_FECHA_FIN
                 sol_worker or "",                   # SOL_WORKER
+                "",                                 # NDT_UNION
+                "",                                 # R_NDT_UNION
                 ndt_fecha or "",                    # NDT_FECHA
                 ndt_status or "",                   # NDT_STATUS
                 str(uuid.uuid4()),                  # version
-                creator,                            # Creado_Por
-                _chile_timestamp(days_ago=10),      # Fecha_Creacion
-                modificado_por or "",               # Modificado_Por
-                fecha_modificacion or "",           # Fecha_Modificacion
-                "",                                 # EXTRA_COL_1
-                "",                                 # EXTRA_COL_2
-                "",                                 # EXTRA_COL_3
             ]
 
             rows.append(row)
@@ -158,7 +141,7 @@ def get_by_state(state: str) -> list[list]:
     header = all_rows[0]
     data_rows = all_rows[1:]
 
-    # Column indices
+    # Column indices (updated for 17-column structure)
     arm_fecha_fin_idx = 7
     sol_fecha_fin_idx = 10
 
@@ -212,7 +195,7 @@ def get_disponibles(operacion: str = "ARM") -> list[list]:
     header = all_rows[0]
     data_rows = all_rows[1:]
 
-    # Column indices
+    # Column indices (updated for 17-column structure)
     arm_fecha_fin_idx = 7
     sol_fecha_fin_idx = 10
 

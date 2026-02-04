@@ -168,15 +168,13 @@ lib/
   - `Pulgadas_ARM` (71): Sum of DN_UNION for completed ARM
   - `Pulgadas_SOLD` (72): Sum of DN_UNION for completed SOLD
 
-**Uniones Sheet (18 columns - v4.0 critical, Engineering dependency):**
-- Core fields: ID, TAG_SPOOL (FK), N_UNION, DN_UNION, TIPO_UNION
+**Uniones Sheet (17 columns - v4.0 simplified):**
+- Core fields: ID, OT, N_UNION, TAG_SPOOL, DN_UNION, TIPO_UNION
 - ARM fields: ARM_FECHA_INICIO, ARM_FECHA_FIN, ARM_WORKER
 - SOLD fields: SOL_FECHA_INICIO, SOL_FECHA_FIN, SOL_WORKER
-- NDT fields: NDT_FECHA, NDT_STATUS
-- System fields: version (UUID4)
-- Audit fields: Creado_Por, Fecha_Creacion, Modificado_Por, Fecha_Modificacion
-
-**⚠️ BLOCKER:** Uniones sheet missing 9 columns. See `docs/engineering-handoff.md` for population requirements.
+- NDT fields: NDT_UNION, R_NDT_UNION, NDT_FECHA, NDT_STATUS
+- System fields: version (UUID4 for optimistic locking)
+- **Note:** Audit fields (Creado_Por, Fecha_Creacion, Modificado_Por, Fecha_Modificacion) removed for simplicity
 
 **Other Sheets:**
 - Trabajadores (4 cols): Id, Nombre, Apellido, Activo
@@ -437,7 +435,7 @@ curl -N http://localhost:8000/api/sse/disponible?operacion=ARM
 # Validate v4.0 schema before deployment (critical + v4.0 columns)
 python backend/scripts/validate_schema_startup.py
 
-# Check Uniones sheet structure (18 columns)
+# Check Uniones sheet structure (17 columns)
 python backend/scripts/validate_uniones_sheet.py
 
 # Add missing Uniones headers (structure only, no data)
