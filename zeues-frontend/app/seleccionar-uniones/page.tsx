@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { Puzzle, Flame, ArrowLeft } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { UnionTable } from '@/components/UnionTable';
 import { Modal } from '@/components/Modal';
@@ -141,31 +143,60 @@ export default function SeleccionarUnionesPage() {
     return null;
   }
 
+  // Determine operation icon
+  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle : Flame;
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Loading Bar During Submission */}
       {submitting && (
         <div className="fixed top-0 left-0 right-0 z-50">
-          <div className="bg-blue-500 text-white text-center py-2">
+          <div className="bg-km-blue text-white text-center py-2">
             Guardando...
           </div>
-          <div className="h-1 bg-blue-600 animate-pulse" />
+          <div className="h-1 bg-km-blue animate-pulse" />
         </div>
       )}
 
       {/* Header */}
       <div className="bg-white border-b-2 border-gray-200 px-6 py-4">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Seleccionar Uniones - {state.selectedSpool}
-        </h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Operación: {state.selectedOperation}
-        </p>
+        <div className="flex items-center justify-between mb-2">
+          {/* Logo */}
+          <Image
+            src="/logos/logo-azul-0A4C95.svg"
+            alt="Kronos Mining"
+            width={120}
+            height={40}
+            priority
+          />
+
+          {/* Cancel Button */}
+          <button
+            onClick={() => router.back()}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Volver"
+          >
+            <ArrowLeft size={28} className="text-gray-600" />
+          </button>
+        </div>
+
+        {/* Title with Icon */}
+        <div className="flex items-center gap-3">
+          <OperationIcon size={32} className="text-km-blue" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Seleccionar Uniones - {state.selectedSpool}
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Operación: {state.selectedOperation}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Sticky Counter */}
-      <div className="sticky top-0 z-10 bg-white border-b p-4 shadow-sm">
-        <div className="text-lg font-medium text-gray-900">
+      <div className="sticky top-0 z-10 bg-km-blue text-white border-b-2 border-km-orange p-4 shadow-md">
+        <div className="text-xl font-bold text-center">
           Seleccionadas: {state.selectedUnions.length}/{availableUnions.length} | Pulgadas: {selectedPulgadas.toFixed(1)}&quot;
         </div>
       </div>
@@ -195,16 +226,17 @@ export default function SeleccionarUnionesPage() {
 
       {/* Main Content - Union Selection */}
       {!loading && !error && (
-        <div className="flex-1 px-6 py-4 overflow-auto">
+        <div className="flex-1 px-6 py-6 overflow-auto">
           {/* "Seleccionar Todas" Button */}
           {availableUnions.length > 0 && (
-            <div className="mb-4">
-              <button
+            <div className="mb-6">
+              <Button
                 onClick={handleSelectAll}
-                className="px-6 py-3 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition-colors"
+                variant="iniciar"
+                className="h-16 text-lg font-semibold"
               >
                 Seleccionar Todas ({availableUnions.length} disponibles)
-              </button>
+              </Button>
             </div>
           )}
 
