@@ -81,8 +81,8 @@ export default function TipoInteraccionPage() {
 
   const handleFinalizar = () => {
     setState({ accion: 'FINALIZAR' });
-    // Skip P4 - worker already knows which spool they're working on
-    router.push('/seleccionar-uniones');
+    // Navigate to spool selection to show occupied spools by this worker
+    router.push('/seleccionar-spool');
   };
 
   // Back button with v4.0 cleanup

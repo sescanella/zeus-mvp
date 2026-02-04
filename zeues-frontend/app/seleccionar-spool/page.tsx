@@ -266,17 +266,15 @@ function SeleccionarSpoolContent() {
           operacion: state.selectedOperation as 'ARM' | 'SOLD'
         });
 
-        // Set single spool selection and change accion to FINALIZAR
-        // (INICIAR is complete, next step is FINALIZAR after union selection)
+        // Set single spool selection - INICIAR is complete
         setState({
           selectedSpool: tag,
           selectedSpools: [],
-          batchMode: false,
-          accion: 'FINALIZAR'  // Change from INICIAR to FINALIZAR for next step
+          batchMode: false
         });
 
-        // Navigate to union selection (P5) - NOT to success page
-        router.push('/seleccionar-uniones');
+        // Navigate to success page - worker has successfully occupied the spool
+        router.push('/exito');
         return;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
@@ -284,6 +282,17 @@ function SeleccionarSpoolContent() {
         setLoading(false);
         return;
       }
+    }
+
+    // v4.0: FINALIZAR workflow - navigate to union selection
+    if (state.accion === 'FINALIZAR' && selectedCount === 1) {
+      setState({
+        selectedSpool: state.selectedSpools[0],
+        selectedSpools: [],
+        batchMode: false
+      });
+      router.push('/seleccionar-uniones');
+      return;
     }
 
     // METROLOGIA: Navigate to resultado page (single spool only)
