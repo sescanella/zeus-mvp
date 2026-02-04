@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { CheckSquare, Square, Lock } from 'lucide-react';
 
 interface Union {
   n_union: number;
@@ -39,25 +40,6 @@ export function UnionTable({
     }
   };
 
-  // Determine completion status based on operacion
-  const getCompletionBadge = (union: Union) => {
-    if (operacion === 'ARM' && union.arm_fecha_fin) {
-      return (
-        <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded">
-          ✓ Armada
-        </span>
-      );
-    }
-    if (operacion === 'SOLD' && union.sol_fecha_fin) {
-      return (
-        <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded">
-          ✓ Soldada
-        </span>
-      );
-    }
-    return null;
-  };
-
   const isUnionCompleted = (union: Union) => {
     if (operacion === 'ARM') {
       return !!union.arm_fecha_fin;
@@ -67,32 +49,34 @@ export function UnionTable({
 
   if (unions.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-500 border-2 border-gray-200 rounded-lg">
-        No hay uniones disponibles
+      <div className="border-4 border-white/50 p-8 bg-white/5">
+        <p className="text-lg text-white/70 font-mono text-center">
+          NO HAY UNIONES DISPONIBLES
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-auto border-2 border-gray-300 rounded-lg shadow-sm max-h-[500px]">
+    <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto">
       <table className="w-full border-collapse">
-        <thead className="bg-km-blue text-white border-b-2 border-km-blue sticky top-0 z-10">
+        <thead className="sticky top-0 bg-[#001F3F] border-b-4 border-white z-10">
           <tr>
-            <th scope="col" className="w-20 py-4 text-center text-xs font-bold uppercase tracking-wider">
-              Seleccionar
+            <th scope="col" className="p-3 text-center text-xs font-black text-white/70 font-mono border-r-2 border-white/30">
+              SEL
             </th>
-            <th scope="col" className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider">
-              N° Unión
+            <th scope="col" className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">
+              N° UNIÓN
             </th>
-            <th scope="col" className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider">
+            <th scope="col" className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">
               DN
             </th>
-            <th scope="col" className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider">
-              Tipo
+            <th scope="col" className="p-3 text-left text-xs font-black text-white/70 font-mono">
+              TIPO
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody>
           {sortedUnions.map((union) => {
             const isCompleted = isUnionCompleted(union);
             const isSelected = selectedUnions.includes(union.n_union);
@@ -101,54 +85,42 @@ export function UnionTable({
             return (
               <tr
                 key={union.n_union}
+                onClick={() => !isRowDisabled && handleCheckboxChange(union.n_union, !isSelected)}
                 className={`
-                  border-b transition-colors
-                  ${isCompleted ? 'opacity-50' : 'hover:bg-blue-50 transition-colors'}
+                  border-t-2 border-white/30 transition-colors cursor-pointer
+                  ${isCompleted ? 'opacity-30 cursor-not-allowed' : ''}
+                  ${isSelected && !isCompleted ? 'bg-zeues-orange/20' : 'hover:bg-white/5'}
                 `}
               >
-                <td className="w-20 text-center py-4">
-                  <label className="flex justify-center items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={isRowDisabled}
-                      onChange={(e) => handleCheckboxChange(union.n_union, e.target.checked)}
-                      className="sr-only peer"
-                      aria-label={`Seleccionar unión ${union.n_union}`}
-                    />
-                    {/* Custom Checkbox - Touch-friendly 48x48px */}
-                    <div className={`
-                      w-12 h-12 border-2 rounded-lg flex items-center justify-center transition-all
-                      ${isRowDisabled
-                        ? 'border-gray-300 bg-gray-100 cursor-not-allowed'
-                        : 'border-km-blue hover:border-km-orange hover:scale-105 active:scale-95 cursor-pointer'
-                      }
-                      ${isSelected && !isRowDisabled ? 'bg-km-blue border-km-blue' : 'bg-white'}
-                    `}>
-                      {isSelected && (
-                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                  </label>
+                <td className="p-3 border-r-2 border-white/30 text-center">
+                  {isCompleted ? (
+                    <Lock size={24} className="text-white/30 inline-block" strokeWidth={3} />
+                  ) : isSelected ? (
+                    <CheckSquare size={24} className="text-zeues-orange inline-block" strokeWidth={3} />
+                  ) : (
+                    <Square size={24} className="text-white/50 inline-block" strokeWidth={3} />
+                  )}
                 </td>
-                <td className="px-4 py-4">
-                  <span className={`text-lg font-semibold ${isCompleted ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                <td className="p-3 border-r-2 border-white/30">
+                  <span className={`text-lg font-black font-mono ${isCompleted ? 'line-through text-white/30' : 'text-white'}`}>
                     {union.n_union}
                   </span>
                 </td>
-                <td className="px-4 py-4">
-                  <span className={`text-lg font-medium ${isCompleted ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                <td className="p-3 border-r-2 border-white/30">
+                  <span className={`text-lg font-black font-mono ${isCompleted ? 'line-through text-white/30' : 'text-white'}`}>
                     {union.dn_union}&quot;
                   </span>
                 </td>
-                <td className="px-4 py-4">
+                <td className="p-3">
                   <div className="flex items-center gap-2">
-                    <span className={`text-base font-medium ${isCompleted ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                    <span className={`text-base font-black font-mono ${isCompleted ? 'line-through text-white/30' : 'text-white/70'}`}>
                       {union.tipo_union}
                     </span>
-                    {getCompletionBadge(union)}
+                    {isCompleted && (
+                      <span className="px-2 py-1 text-xs font-black font-mono border-2 border-green-500/50 text-green-400 bg-green-500/10">
+                        ✓ {operacion === 'ARM' ? 'ARMADA' : 'SOLDADA'}
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>
