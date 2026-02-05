@@ -10,7 +10,9 @@ from backend.services.version_detection_service import VersionDetectionService
 from backend.models.version import VersionResponse, VersionInfo
 from backend.core.dependency import get_sheets_repository
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.core.column_map_cache import ColumnMapCache
 from backend.exceptions import SpoolNoEncontradoError
+from backend.config import config
 
 
 logger = logging.getLogger(__name__)
@@ -148,3 +150,76 @@ async def get_spool_version(
                 "message": f"Failed to detect version for spool {tag}: {str(e)}"
             }
         )
+
+
+@router.get("/compatibility-mode", status_code=status.HTTP_200_OK)
+async def get_compatibility_mode(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+):
+    """
+    Returns the current compatibility mode of SheetsRepository singleton.
+
+    Expected: "v3.0" for REPARACION features to work.
+    """
+    return {
+        "compatibility_mode": sheets_repo._compatibility_mode,
+        "expected": "v3.0",
+        "status": "OK" if sheets_repo._compatibility_mode == "v3.0" else "MISMATCH"
+    }
+
+
+@router.get("/test-03-raw", status_code=status.HTTP_200_OK)
+async def get_test_03_raw_data(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+):
+    """
+    Reads TEST-03 spool directly from Google Sheets and shows raw parsing.
+
+    This bypasses filters to show exactly what the repository is reading.
+    """
+    # Get column map
+    column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, sheets_repo)
+
+    # Read all rows
+    all_rows = sheets_repo.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
+
+    # Find TEST-03
+    tag_idx = column_map["tagspool"]
+    estado_idx = column_map["estadodetalle"]
+    ocupado_idx = column_map["ocupadopor"]
+
+    for i, row in enumerate(all_rows[1:], start=2):  # Skip header
+        if len(row) > tag_idx and row[tag_idx] == "TEST-03":
+            tag_value = row[tag_idx] if len(row) > tag_idx else ""
+            estado_value = row[estado_idx] if len(row) > estado_idx else ""
+            ocupado_value = row[ocupado_idx] if len(row) > ocupado_idx else ""
+
+            # Now parse using repository method
+            spool = sheets_repo.get_spool_by_tag("TEST-03")
+
+            return {
+                "found": True,
+                "row_number": i,
+                "raw_data": {
+                    "TAG_SPOOL": tag_value,
+                    "Estado_Detalle_raw": estado_value,
+                    "Ocupado_Por_raw": ocupado_value
+                },
+                "parsed_spool": {
+                    "tag_spool": spool.tag_spool if spool else None,
+                    "estado_detalle": spool.estado_detalle if spool else None,
+                    "ocupado_por": spool.ocupado_por if spool else None
+                },
+                "compatibility_mode": sheets_repo._compatibility_mode,
+                "diagnosis": {
+                    "raw_has_rechazado": "RECHAZADO" in estado_value if estado_value else False,
+                    "parsed_has_rechazado": "RECHAZADO" in spool.estado_detalle if spool and spool.estado_detalle else False,
+                    "should_appear": "RECHAZADO" in estado_value and not ocupado_value
+                }
+            }
+
+    return {
+        "found": False,
+        "message": "TEST-03 not found in Google Sheets",
+        "compatibility_mode": sheets_repo._compatibility_mode
+    }
