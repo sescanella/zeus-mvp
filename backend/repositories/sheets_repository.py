@@ -255,6 +255,8 @@ class SheetsRepository:
         value: any
     ) -> None:
         """
+        DEPRECATED: Use batch_update_by_column_name() for better performance.
+
         Actualiza una celda específica usando USER_ENTERED para formateo correcto.
 
         USER_ENTERED permite que Google Sheets interprete valores como fechas,

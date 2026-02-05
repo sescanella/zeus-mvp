@@ -350,6 +350,10 @@ class SpoolServiceV2:
         """
         Obtiene spools EN_PROGRESO de ARM del trabajador para CANCELAR (v2.1 Direct Read).
 
+        NOTE: Currently not exposed via GET endpoint. Used internally by CANCELAR workflow.
+        POST /api/cancelar-accion exists but no GET /api/spools/cancelar endpoint yet.
+        TODO: Add GET endpoint if UI needs to list cancellable spools.
+
         REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
         - Armador: CON DATO en formato "XX(ID)" donde ID = worker_id
         - Fecha_Armado: SIN DATO (operación no completada)
@@ -390,6 +394,10 @@ class SpoolServiceV2:
     def get_spools_disponibles_para_cancelar_sold(self, worker_id: int) -> list[Spool]:
         """
         Obtiene spools EN_PROGRESO de SOLD del trabajador para CANCELAR (v2.1 Direct Read).
+
+        NOTE: Currently not exposed via GET endpoint. Used internally by CANCELAR workflow.
+        POST /api/cancelar-accion exists but no GET /api/spools/cancelar endpoint yet.
+        TODO: Add GET endpoint if UI needs to list cancellable spools.
 
         REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
         - Soldador: CON DATO en formato "XX(ID)" donde ID = worker_id
