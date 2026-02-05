@@ -173,6 +173,87 @@ class UnionRepository:
             self.logger.error(f"Failed to query unions for {tag_spool}: {e}", exc_info=True)
             raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")
 
+    def get_by_ids(self, union_ids: list[str]) -> list[Union]:
+        """
+        Query unions by their IDs (OT+N_UNION format).
+
+        Used by FINALIZAR workflow to calculate pulgadas for metadata logging.
+
+        Args:
+            union_ids: List of union IDs in format "OT+N_UNION" (e.g., ["001+1", "001+2"])
+
+        Returns:
+            list[Union]: List of matching unions, empty if none found
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        if not union_ids:
+            return []
+
+        try:
+            # Read all rows from Uniones sheet (cached)
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+
+            if not all_rows or len(all_rows) < 2:
+                self.logger.debug(f"Uniones sheet is empty or header-only")
+                return []
+
+            # Get column mapping (dynamic, no hardcoded indices)
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            def normalize(name: str) -> str:
+                """Normalize column name for lookup."""
+                return name.lower().replace(" ", "").replace("_", "")
+
+            # Find OT and N_UNION column indices
+            ot_col_key = normalize("OT")
+            n_union_col_key = normalize("N_UNION")
+
+            if ot_col_key not in column_map or n_union_col_key not in column_map:
+                raise ValueError(f"OT or N_UNION column not found in {self._sheet_name} sheet")
+
+            ot_col_idx = column_map[ot_col_key]
+            n_union_col_idx = column_map[n_union_col_key]
+
+            # Convert union_ids to set for fast lookup
+            union_ids_set = set(union_ids)
+
+            # Filter and convert matching rows
+            unions = []
+            for row_data in all_rows[1:]:  # Skip header (row 0)
+                # Skip empty rows
+                if not row_data or len(row_data) <= max(ot_col_idx, n_union_col_idx):
+                    continue
+
+                # Synthesize union ID from OT+N_UNION
+                row_ot = row_data[ot_col_idx] if ot_col_idx < len(row_data) else None
+                row_n_union = row_data[n_union_col_idx] if n_union_col_idx < len(row_data) else None
+
+                if not row_ot or not row_n_union:
+                    continue
+
+                synthesized_id = f"{row_ot}+{row_n_union}"
+
+                # Check if ID matches
+                if synthesized_id in union_ids_set:
+                    try:
+                        union = self._row_to_union(row_data, column_map)
+                        unions.append(union)
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to parse union row for ID {synthesized_id}: {e}",
+                            exc_info=True
+                        )
+                        continue
+
+            self.logger.debug(f"Found {len(unions)} unions for {len(union_ids)} IDs")
+            return unions
+
+        except Exception as e:
+            self.logger.error(f"Failed to query unions by IDs: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")
+
     def get_disponibles_arm_by_ot(self, ot: str) -> list[Union]:
         """
         Get disponibles unions for ARM operation for a given work order.
