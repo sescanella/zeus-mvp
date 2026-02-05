@@ -35,17 +35,22 @@ async def get_spools_para_iniciar(
     spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
 ):
     """
-    Lista spools disponibles para INICIAR la operación especificada (V2 Dynamic Mapping).
+    Lista spools disponibles para INICIAR la operación especificada (V3 FilterRegistry).
 
-    Aplica reglas de negocio correctas usando mapeo dinámico de columnas:
-    - **ARM**: Fecha_Materiales llena Y Armador vacío
-    - **SOLD**: Fecha_Armado llena Y Soldador vacío
-    - **METROLOGIA**: Fecha_Soldadura llena Y Fecha_QC_Metrología vacía
+    Aplica reglas de negocio usando sistema de filtros centralizado:
+    - **ARM**: Fecha_Materiales llena Y Ocupado_Por vacío
+    - **SOLD**: Fecha_Armado llena Y Ocupado_Por vacío
+    - **METROLOGIA** (v3.0 + v4.0 hybrid):
+      * Fecha_QC_Metrología vacía (no inspeccionado)
+      * SOLD completado:
+        - v3.0 (Total_Uniones=0): Fecha_Soldadura con dato
+        - v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas = Total_Uniones
 
-    V2 mejoras:
-    - Lee header (row 1) para construir mapeo dinámico: nombre_columna → índice
+    V3 mejoras (2026-02-05):
+    - Soporta spools v4.0 con contadores de uniones
+    - Lógica híbrida v3.0/v4.0 (detección automática)
+    - Filtros configurables centralizados (FilterRegistry)
     - Resistente a cambios de estructura en spreadsheet
-    - Reglas de negocio correctas (no depende de estados numéricos obsoletos)
 
     Args:
         operacion: Tipo de operación a iniciar ("ARM", "SOLD" o "METROLOGIA").
@@ -103,7 +108,11 @@ async def get_spools_para_iniciar(
         filtro = "SOLD - Fecha_Armado llena Y Soldador vacío"
     else:  # ActionType.METROLOGIA
         spools = spool_service_v2.get_spools_disponibles_para_iniciar_metrologia()
-        filtro = "METROLOGIA - Fecha_Soldadura llena Y Fecha_QC_Metrología vacía"
+        # METROLOGIA ahora usa lógica híbrida v3.0/v4.0 (FilterRegistry)
+        filtro = (
+            "METROLOGIA - v3.0 (Total_Uniones=0): Fecha_Soldadura con dato | "
+            "v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas=Total_Uniones"
+        )
 
     logger.info(f"Found {len(spools)} spools eligible to start {operacion}")
 

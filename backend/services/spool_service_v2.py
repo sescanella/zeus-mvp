@@ -482,40 +482,99 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_iniciar_metrologia(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR METROLOGIA/QC (v2.1 Direct Read).
+        MIGRATED: Usa get_spools_disponibles("METROLOGIA", "INICIAR") internamente.
 
-        REGLA DE NEGOCIO v2.1 (Direct Read - 2026-01-20):
-        - Fecha_Soldadura: CON DATO (prerequisito SOLD completado)
+        REGLA DE NEGOCIO v3.0 (FilterRegistry - 2026-02-05):
         - Fecha_QC_Metrología: SIN DATO (operación METROLOGIA no completada)
+        - Soldadura completada (v3.0 + v4.0 hybrid):
+          * v3.0 (Total_Uniones=0): Fecha_Soldadura CON dato
+          * v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas = Total_Uniones
 
-        NOTA: METROLOGIA no tiene estado EN_PROGRESO porque no existe columna "Metrólogo".
-        Solo tiene flujo PENDIENTE → COMPLETADO (al llenar Fecha_QC_Metrología).
+        CAMBIOS vs v2.1:
+        - ✅ Soporta spools v4.0 (contadores de uniones)
+        - ✅ Detecta versión automáticamente (Total_Uniones)
+        - ✅ Usa FilterRegistry (lógica centralizada)
+        - ⚠️ NO filtra por Ocupado_Por (puede ver spools ocupados por ARM/SOLD)
+
+        DEPRECATED: Usa get_spools_disponibles("METROLOGIA", "INICIAR") en su lugar.
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V2.1] Retrieving spools available for INICIAR METROLOGIA (Direct Read)")
+        logger.warning(
+            "[DEPRECATED] get_spools_disponibles_para_iniciar_metrologia() "
+            "is deprecated. Use get_spools_disponibles('METROLOGIA', 'INICIAR') instead."
+        )
 
+        # Delegar al método unificado
+        return self.get_spools_disponibles("METROLOGIA", "INICIAR")
+
+    def get_spools_disponibles(self, operation: str, action: str) -> list[Spool]:
+        """
+        Método unificado para obtener spools disponibles usando FilterRegistry (v3.0+).
+
+        Reemplaza métodos individuales (get_spools_disponibles_para_iniciar_*) con
+        un sistema de filtros configurable y centralizado.
+
+        Args:
+            operation: Tipo de operación ("ARM", "SOLD", "METROLOGIA", "REPARACION")
+            action: Tipo de acción ("INICIAR", "FINALIZAR")
+
+        Returns:
+            Lista de spools que pasan TODOS los filtros configurados
+
+        Raises:
+            ValueError: Si la combinación (operation, action) no está soportada
+
+        Example:
+            >>> service.get_spools_disponibles("METROLOGIA", "INICIAR")
+            [Spool(tag_spool="TAG-001", ...), Spool(tag_spool="TAG-002", ...)]
+        """
+        from backend.services.filters import FilterRegistry
+
+        logger.info(f"[FilterRegistry] Retrieving spools disponibles for {operation} {action}")
+
+        # Obtener filtros configurados para esta operación/acción
+        try:
+            filters = FilterRegistry.get_filters(operation, action)
+        except ValueError as e:
+            logger.error(f"Invalid operation/action combination: {operation}/{action}")
+            raise
+
+        # Leer todas las filas de Operaciones
         all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
         spools_disponibles = []
 
+        # Aplicar filtros a cada spool
         for row_idx, row in enumerate(all_rows[1:], start=2):
             try:
                 spool = self.parse_spool_row(row)
 
-                # REGLA v2.1: Fecha_Soldadura llena Y Fecha_QC_Metrología vacía (Direct Read from columns)
-                if spool.fecha_soldadura is not None and spool.fecha_qc_metrologia is None:
+                # Verificar si el spool pasa TODOS los filtros
+                if FilterRegistry.passes_all_filters(spool, filters):
                     spools_disponibles.append(spool)
                     logger.debug(
-                        f"[V2.1] Spool {spool.tag_spool} disponible INICIAR METROLOGIA: "
-                        f"fecha_soldadura={spool.fecha_soldadura}, fecha_qc_metrologia={spool.fecha_qc_metrologia}"
+                        f"[FilterRegistry] Spool {spool.tag_spool} ELEGIBLE para {operation} {action}"
                     )
+                else:
+                    # Log de por qué el spool NO pasa (solo en debug)
+                    for filter_obj in filters:
+                        result = filter_obj.apply(spool)
+                        if not result.passed:
+                            logger.debug(
+                                f"[FilterRegistry] Spool {spool.tag_spool} RECHAZADO: "
+                                f"{filter_obj.name} - {result.reason}"
+                            )
+                            break  # Solo loggear el primer filtro que falla
 
             except ValueError as e:
                 logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
                 continue
 
-        logger.info(f"Found {len(spools_disponibles)} spools for INICIAR METROLOGIA")
+        logger.info(
+            f"[FilterRegistry] Found {len(spools_disponibles)} spools for {operation} {action} "
+            f"(applied {len(filters)} filters)"
+        )
         return spools_disponibles
 
     def find_spool_by_tag(self, tag_spool: str) -> Optional[Spool]:
