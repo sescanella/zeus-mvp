@@ -44,6 +44,29 @@ class UnionRepository:
         self.logger = logging.getLogger(__name__)
         self.sheets_repo = sheets_repo
         self._sheet_name = "Uniones"
+        self._worksheet = None  # Lazy loading
+
+    def _get_worksheet(self):
+        """
+        Get worksheet instance with lazy loading (gspread.Worksheet).
+
+        Returns:
+            gspread.Worksheet for batch_update operations
+
+        Raises:
+            SheetsConnectionError: If sheet not found
+        """
+        if self._worksheet is None:
+            try:
+                spreadsheet = self.sheets_repo._get_spreadsheet()
+                self._worksheet = spreadsheet.worksheet(self._sheet_name)
+                self.logger.debug(f"Worksheet '{self._sheet_name}' loaded (lazy)")
+            except Exception as e:
+                raise SheetsConnectionError(
+                    f"Failed to load worksheet '{self._sheet_name}'",
+                    details=str(e)
+                )
+        return self._worksheet
 
     def get_by_ot(self, ot: str) -> list[Union]:
         """
@@ -730,7 +753,7 @@ class UnionRepository:
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
-                worksheet = self.sheets_repo._get_worksheet(self._sheet_name)
+                worksheet = self._get_worksheet()
                 worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
 
             _execute_batch()
@@ -858,7 +881,7 @@ class UnionRepository:
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
-                worksheet = self.sheets_repo._get_worksheet(self._sheet_name)
+                worksheet = self._get_worksheet()
                 worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
 
             _execute_batch()
@@ -1117,7 +1140,7 @@ class UnionRepository:
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
-                worksheet = self.sheets_repo._get_worksheet(self._sheet_name)
+                worksheet = self._get_worksheet()
                 worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
 
             _execute_batch()
@@ -1261,7 +1284,7 @@ class UnionRepository:
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
-                worksheet = self.sheets_repo._get_worksheet(self._sheet_name)
+                worksheet = self._get_worksheet()
                 worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
 
             _execute_batch()
