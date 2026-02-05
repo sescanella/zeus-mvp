@@ -27,7 +27,7 @@ jobs:
 
       - name: Run tests
         run: |
-          PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest tests/ --cov=backend --cov-report=xml
+          PYTHONPATH=$GITHUB_WORKSPACE pytest tests/ --cov=backend --cov-report=xml
 
       - name: Check coverage
         run: |
