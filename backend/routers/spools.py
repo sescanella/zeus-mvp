@@ -31,7 +31,7 @@ def get_cycle_counter_service() -> CycleCounterService:
 
 @router.get("/spools/iniciar", response_model=SpoolListResponse, status_code=status.HTTP_200_OK)
 async def get_spools_para_iniciar(
-    operacion: str = Query(..., description="Tipo de operación (ARM, SOLD o METROLOGIA)"),
+    operacion: str = Query(..., description="Tipo de operación (ARM, SOLD, METROLOGIA o REPARACION)"),
     spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
 ):
     """
@@ -45,6 +45,9 @@ async def get_spools_para_iniciar(
       * SOLD completado:
         - v3.0 (Total_Uniones=0): Fecha_Soldadura con dato
         - v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas = Total_Uniones
+    - **REPARACION** (v3.0 Phase 6):
+      * Estado_Detalle contiene "RECHAZADO"
+      * Ocupado_Por vacío (no ocupado)
 
     V3 mejoras (2026-02-05):
     - Soporta spools v4.0 con contadores de uniones
@@ -53,7 +56,7 @@ async def get_spools_para_iniciar(
     - Resistente a cambios de estructura en spreadsheet
 
     Args:
-        operacion: Tipo de operación a iniciar ("ARM", "SOLD" o "METROLOGIA").
+        operacion: Tipo de operación a iniciar ("ARM", "SOLD", "METROLOGIA" o "REPARACION").
                    Query param obligatorio.
         spool_service_v2: Servicio de spools V2 (inyectado automáticamente).
 
@@ -64,7 +67,7 @@ async def get_spools_para_iniciar(
         - filtro_aplicado: Descripción del filtro usado
 
     Raises:
-        HTTPException 400: Si operación es inválida (no es ARM, SOLD ni METROLOGIA).
+        HTTPException 400: Si operación es inválida (no es ARM, SOLD, METROLOGIA ni REPARACION).
         HTTPException 503: Si falla conexión Google Sheets.
 
     Example request:
@@ -96,7 +99,7 @@ async def get_spools_para_iniciar(
         logger.warning(f"Invalid operation type: {operacion}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Operación inválida '{operacion}'. Debe ser ARM, SOLD o METROLOGIA."
+            detail=f"Operación inválida '{operacion}'. Debe ser ARM, SOLD, METROLOGIA o REPARACION."
         )
 
     # Obtener spools elegibles para iniciar usando V2
@@ -106,13 +109,16 @@ async def get_spools_para_iniciar(
     elif action_type == ActionType.SOLD:
         spools = spool_service_v2.get_spools_disponibles_para_iniciar_sold()
         filtro = "SOLD - Fecha_Armado llena Y Soldador vacío"
-    else:  # ActionType.METROLOGIA
+    elif action_type == ActionType.METROLOGIA:
         spools = spool_service_v2.get_spools_disponibles_para_iniciar_metrologia()
         # METROLOGIA ahora usa lógica híbrida v3.0/v4.0 (FilterRegistry)
         filtro = (
             "METROLOGIA - v3.0 (Total_Uniones=0): Fecha_Soldadura con dato | "
             "v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas=Total_Uniones"
         )
+    else:  # ActionType.REPARACION
+        spools = spool_service_v2.get_spools_disponibles_para_iniciar_reparacion()
+        filtro = "REPARACION - Estado_Detalle contiene 'RECHAZADO' Y Ocupado_Por vacío"
 
     logger.info(f"Found {len(spools)} spools eligible to start {operacion}")
 

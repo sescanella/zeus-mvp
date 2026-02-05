@@ -240,3 +240,41 @@ class SOLDCompletionFilter(SpoolFilter):
             "v3.0 (Total_Uniones=0): Fecha_Soldadura con dato. "
             "v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas = Total_Uniones"
         )
+
+
+class EstadoDetalleContainsFilter(SpoolFilter):
+    """
+    Filtra spools basándose en si Estado_Detalle contiene una palabra específica.
+
+    Uso principal: REPARACION (buscar "RECHAZADO" en Estado_Detalle).
+    """
+
+    def __init__(self, keyword: str, display_name: Optional[str] = None):
+        """
+        Args:
+            keyword: Palabra clave a buscar en Estado_Detalle (ej: "RECHAZADO")
+            display_name: Nombre legible para logs (default: keyword)
+        """
+        self._keyword = keyword
+        self._display_name = display_name or keyword
+
+    def apply(self, spool: Spool) -> FilterResult:
+        estado = spool.estado_detalle or ""
+
+        if self._keyword in estado:
+            return FilterResult(
+                passed=True,
+                reason=f"Estado_Detalle contiene '{self._keyword}' (estado={estado})"
+            )
+        return FilterResult(
+            passed=False,
+            reason=f"Estado_Detalle NO contiene '{self._keyword}' (estado={estado})"
+        )
+
+    @property
+    def name(self) -> str:
+        return f"EstadoDetalle_Contains_{self._display_name}"
+
+    @property
+    def description(self) -> str:
+        return f"Verifica que Estado_Detalle contenga la palabra '{self._keyword}'"

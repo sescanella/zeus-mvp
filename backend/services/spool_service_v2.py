@@ -552,6 +552,36 @@ class SpoolServiceV2:
         # Delegar al método unificado
         return self.get_spools_disponibles("METROLOGIA", "INICIAR")
 
+    def get_spools_disponibles_para_iniciar_reparacion(self) -> list[Spool]:
+        """
+        MIGRATED: Usa get_spools_disponibles("REPARACION", "INICIAR") internamente.
+
+        REGLA DE NEGOCIO v3.0 Phase 6 (FilterRegistry - 2026-02-05):
+        - Estado_Detalle: CONTIENE "RECHAZADO"
+          * Incluye: "RECHAZADO (Ciclo 1/3)", "RECHAZADO (Ciclo 2/3)", etc.
+          * Incluye: "METROLOGIA RECHAZADO - Pendiente reparación"
+          * Excluye: "BLOQUEADO - Contactar supervisor" (no contiene "RECHAZADO")
+        - Ocupado_Por: SIN DATO (spool no ocupado)
+
+        Estados válidos:
+        - ✅ "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
+        - ✅ "METROLOGIA RECHAZADO - Pendiente reparación"
+        - ❌ "BLOQUEADO - Contactar supervisor"
+        - ❌ "EN_REPARACION (Ciclo 2/3) - Ocupado: MR(93)"
+
+        DEPRECATED: Usa get_spools_disponibles("REPARACION", "INICIAR") en su lugar.
+
+        Returns:
+            Lista de spools que cumplen las condiciones
+        """
+        logger.warning(
+            "[DEPRECATED] get_spools_disponibles_para_iniciar_reparacion() "
+            "is deprecated. Use get_spools_disponibles('REPARACION', 'INICIAR') instead."
+        )
+
+        # Delegar al método unificado
+        return self.get_spools_disponibles("REPARACION", "INICIAR")
+
     def get_spools_disponibles(self, operation: str, action: str) -> list[Spool]:
         """
         Método unificado para obtener spools disponibles usando FilterRegistry (v3.0+).

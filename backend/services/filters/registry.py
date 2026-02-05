@@ -17,7 +17,8 @@ from .common_filters import (
     CompletionFilter,
     StatusNVFilter,
     StatusSpoolFilter,
-    SOLDCompletionFilter
+    SOLDCompletionFilter,
+    EstadoDetalleContainsFilter
 )
 
 
@@ -162,13 +163,27 @@ class FilterRegistry:
     # ============================================================================
     _METROLOGIA_FINALIZAR_FILTERS: List[SpoolFilter] = []
 
-    # REPARACION - INICIAR: Spools rechazados disponibles para reparar
+    # ============================================================================
+    # REPARACION - INICIAR (v3.0 Phase 6)
+    # ============================================================================
+    # LÓGICA:
+    # - Estado_Detalle debe contener "RECHAZADO"
+    # - Incluye todos los ciclos: "RECHAZADO (Ciclo 1/3)", "RECHAZADO (Ciclo 2/3)", etc.
+    # - Incluye "REPARACION_PAUSADA" (estado pausado también contiene "RECHAZADO" internamente)
+    # - EXCLUYE "BLOQUEADO" (ya no contiene "RECHAZADO" en el string)
+    # - EXCLUYE spools ocupados (Ocupado_Por != None)
+    #
+    # NOTA: No se filtra por ciclo aquí - el backend mostrará todos (1/3, 2/3, 3/3)
+    # y el validador rechazará BLOQUEADO en el momento de TOMAR.
+    # ============================================================================
     _REPARACION_INICIAR_FILTERS: List[SpoolFilter] = [
-        # TODO: Definir filtros para REPARACION INICIAR según reglas de negocio
-        # Ejemplo:
-        # - Estado_Detalle contiene "RECHAZADO"
-        # - No ocupado por otro trabajador
-        # - Ciclo de reparación < 3
+        # 1. Estado_Detalle contiene "RECHAZADO"
+        EstadoDetalleContainsFilter(
+            keyword="RECHAZADO",
+            display_name="Rechazado"
+        ),
+        # 2. No ocupado por otro trabajador
+        OcupacionFilter(),
     ]
 
     # REPARACION - FINALIZAR: Spools en reparación ocupados por el trabajador
