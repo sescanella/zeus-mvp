@@ -391,14 +391,15 @@ class SheetsService:
             <ActionStatus.PENDIENTE: 'PENDIENTE'>
         """
         # Rellenar fila si es muy corta (evitar index out of range)
-        # v3.0: Extendido a 68 columnas (65 v2.1 + 3 v3.0)
-        if len(row) < 68:  # Hoja Operaciones tiene ~68 columnas en v3.0
-            row = row + [''] * (68 - len(row))
-            logger.debug(f"Fila corta rellenada a 68 columnas (original: {len(row) - (68 - len(row))})")
+        # v4.0: Extendido a 72 columnas (68 v3.0 + 5 v4.0)
+        if len(row) < 72:  # Hoja Operaciones tiene ~72 columnas en v4.0
+            row = row + [''] * (72 - len(row))
+            logger.debug(f"Fila corta rellenada a 72 columnas (original: {len(row) - (72 - len(row))})")
 
         # 1. Obtener índices usando mapeo dinámico
         idx_tag_spool = self._get_col_idx("SPLIT", fallback_idx=5)  # Real column name in Sheet
-        idx_nv = self._get_col_idx("NV", fallback_idx=1)
+        idx_ot = self._get_col_idx("OT", fallback_idx=1)  # v4.0: Orden de Trabajo
+        idx_nv = self._get_col_idx("NV", fallback_idx=7)
         idx_fecha_materiales = self._get_col_idx("Fecha_Materiales", fallback_idx=32)
         idx_fecha_armado = self._get_col_idx("Fecha_Armado", fallback_idx=33)
         idx_armador = self._get_col_idx("Armador", fallback_idx=34)
@@ -410,6 +411,13 @@ class SheetsService:
         idx_fecha_ocupacion = self._get_col_idx("Fecha_Ocupacion", fallback_idx=65)
         idx_version = self._get_col_idx("version", fallback_idx=66)
         idx_estado_detalle = self._get_col_idx("Estado_Detalle", fallback_idx=67)
+
+        # v4.0: Índices de columnas de métricas de uniones
+        idx_total_uniones = self._get_col_idx("Total_Uniones", fallback_idx=67)
+        idx_uniones_arm = self._get_col_idx("Uniones_ARM_Completadas", fallback_idx=68)
+        idx_uniones_sold = self._get_col_idx("Uniones_SOLD_Completadas", fallback_idx=69)
+        idx_pulgadas_arm = self._get_col_idx("Pulgadas_ARM", fallback_idx=70)
+        idx_pulgadas_sold = self._get_col_idx("Pulgadas_SOLD", fallback_idx=71)
 
         # 2. Parsear SPLIT (spool identifier - obligatorio)
         tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None
@@ -463,11 +471,88 @@ class SheetsService:
         if estado_detalle == '':
             estado_detalle = None
 
-        # 8. Crear objeto Spool con datos base
+        # 8. v4.0: Parse campos de métricas de uniones
+        # OT (Orden de Trabajo)
+        ot = row[idx_ot].strip() if idx_ot < len(row) and row[idx_ot] else None
+        if ot == '':
+            ot = None
+
+        # Total_Uniones (v4.0 version detection field)
+        total_uniones = None
+        total_uniones_raw = row[idx_total_uniones] if idx_total_uniones < len(row) and row[idx_total_uniones] else None
+        if total_uniones_raw:
+            try:
+                total_uniones = int(total_uniones_raw)
+                if total_uniones < 0:
+                    logger.warning(f"Negative Total_Uniones for {tag_spool}: {total_uniones}, defaulting to None")
+                    total_uniones = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Total_Uniones for {tag_spool}: {total_uniones_raw}, defaulting to None")
+                total_uniones = None
+
+        # Uniones_ARM_Completadas
+        uniones_arm_completadas = None
+        uniones_arm_raw = row[idx_uniones_arm] if idx_uniones_arm < len(row) and row[idx_uniones_arm] else None
+        if uniones_arm_raw:
+            try:
+                uniones_arm_completadas = int(uniones_arm_raw)
+                if uniones_arm_completadas < 0:
+                    logger.warning(f"Negative Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_completadas}, defaulting to None")
+                    uniones_arm_completadas = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_raw}, defaulting to None")
+                uniones_arm_completadas = None
+
+        # Uniones_SOLD_Completadas
+        uniones_sold_completadas = None
+        uniones_sold_raw = row[idx_uniones_sold] if idx_uniones_sold < len(row) and row[idx_uniones_sold] else None
+        if uniones_sold_raw:
+            try:
+                uniones_sold_completadas = int(uniones_sold_raw)
+                if uniones_sold_completadas < 0:
+                    logger.warning(f"Negative Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_completadas}, defaulting to None")
+                    uniones_sold_completadas = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_raw}, defaulting to None")
+                uniones_sold_completadas = None
+
+        # Pulgadas_ARM
+        pulgadas_arm = None
+        pulgadas_arm_raw = row[idx_pulgadas_arm] if idx_pulgadas_arm < len(row) and row[idx_pulgadas_arm] else None
+        if pulgadas_arm_raw:
+            try:
+                pulgadas_arm = float(pulgadas_arm_raw)
+                if pulgadas_arm < 0:
+                    logger.warning(f"Negative Pulgadas_ARM for {tag_spool}: {pulgadas_arm}, defaulting to None")
+                    pulgadas_arm = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Pulgadas_ARM for {tag_spool}: {pulgadas_arm_raw}, defaulting to None")
+                pulgadas_arm = None
+
+        # Pulgadas_SOLD
+        pulgadas_sold = None
+        pulgadas_sold_raw = row[idx_pulgadas_sold] if idx_pulgadas_sold < len(row) and row[idx_pulgadas_sold] else None
+        if pulgadas_sold_raw:
+            try:
+                pulgadas_sold = float(pulgadas_sold_raw)
+                if pulgadas_sold < 0:
+                    logger.warning(f"Negative Pulgadas_SOLD for {tag_spool}: {pulgadas_sold}, defaulting to None")
+                    pulgadas_sold = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Pulgadas_SOLD for {tag_spool}: {pulgadas_sold_raw}, defaulting to None")
+                pulgadas_sold = None
+
+        # 9. Crear objeto Spool con datos base
         # NOTA: Los estados reales se reconstruyen en ValidationService desde MetadataRepository
         return Spool(
             tag_spool=tag_spool,
+            ot=ot,  # v4.0: Orden de Trabajo
             nv=nv,  # v2.0: Número de Nota de Venta para filtrado
+            total_uniones=total_uniones,  # v4.0: version detection field
+            uniones_arm_completadas=uniones_arm_completadas,  # v4.0: ARM counter
+            uniones_sold_completadas=uniones_sold_completadas,  # v4.0: SOLD counter
+            pulgadas_arm=pulgadas_arm,  # v4.0: ARM pulgadas-diámetro metric
+            pulgadas_sold=pulgadas_sold,  # v4.0: SOLD pulgadas-diámetro metric
             arm=arm_status,  # DEFAULT: Se reconstruye después
             sold=sold_status,  # DEFAULT: Se reconstruye después
             fecha_materiales=fecha_materiales,
