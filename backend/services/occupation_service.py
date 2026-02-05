@@ -656,10 +656,12 @@ class OccupationService:
             if not spool:
                 raise SpoolNoEncontradoError(tag_spool)
 
-            # Detect spool version (v2.1 vs v4.0)
-            is_v21 = spool.total_uniones is None
-            version_str = "v2.1" if is_v21 else "v4.0"
-            logger.info(f"Spool {tag_spool} detected as {version_str}")
+            # Detect spool version (v2.1/v3.0 vs v4.0)
+            # v3.0: total_uniones = None (no column) or 0 (CONTAR.SI formula with no unions)
+            # v4.0: total_uniones >= 1 (has registered unions in Uniones sheet)
+            is_v21 = spool.total_uniones is None or spool.total_uniones == 0
+            version_str = "v3.0" if is_v21 else "v4.0"
+            logger.info(f"Spool {tag_spool} detected as {version_str} (total_uniones={spool.total_uniones})")
 
             # Check Fecha_Materiales prerequisite
             if not spool.fecha_materiales:
