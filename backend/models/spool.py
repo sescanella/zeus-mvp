@@ -43,6 +43,34 @@ class Spool(BaseModel):
         examples=[0, 8, 12]
     )
 
+    # v4.0: Columnas de contadores de completitud (cols 69-70)
+    uniones_arm_completadas: Optional[int] = Field(
+        None,
+        description="Uniones con ARM completado (columna 69 'Uniones_ARM_Completadas')",
+        ge=0,
+        examples=[0, 3, 8]
+    )
+    uniones_sold_completadas: Optional[int] = Field(
+        None,
+        description="Uniones con SOLD completado (columna 70 'Uniones_SOLD_Completadas')",
+        ge=0,
+        examples=[0, 2, 5]
+    )
+
+    # v4.0: Columnas de métricas pulgadas-diámetro (cols 71-72)
+    pulgadas_arm: Optional[float] = Field(
+        None,
+        description="Suma de DN_UNION para ARM completado (columna 71 'Pulgadas_ARM')",
+        ge=0.0,
+        examples=[0.0, 24.5, 48.0]
+    )
+    pulgadas_sold: Optional[float] = Field(
+        None,
+        description="Suma de DN_UNION para SOLD completado (columna 72 'Pulgadas_SOLD')",
+        ge=0.0,
+        examples=[0.0, 12.0, 36.5]
+    )
+
     # Estados de acciones (columnas V, W)
     arm: ActionStatus = Field(
         ActionStatus.PENDIENTE,

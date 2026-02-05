@@ -1045,11 +1045,59 @@ class SheetsRepository:
                 except (ValueError, TypeError):
                     total_uniones = None
 
+            # v4.0: Parse Uniones_ARM_Completadas (col 69)
+            uniones_arm_completadas_raw = get_col_value("Uniones_ARM_Completadas")
+            uniones_arm_completadas = None
+            if uniones_arm_completadas_raw:
+                try:
+                    uniones_arm_completadas = int(uniones_arm_completadas_raw)
+                    if uniones_arm_completadas < 0:
+                        uniones_arm_completadas = None
+                except (ValueError, TypeError):
+                    uniones_arm_completadas = None
+
+            # v4.0: Parse Uniones_SOLD_Completadas (col 70)
+            uniones_sold_completadas_raw = get_col_value("Uniones_SOLD_Completadas")
+            uniones_sold_completadas = None
+            if uniones_sold_completadas_raw:
+                try:
+                    uniones_sold_completadas = int(uniones_sold_completadas_raw)
+                    if uniones_sold_completadas < 0:
+                        uniones_sold_completadas = None
+                except (ValueError, TypeError):
+                    uniones_sold_completadas = None
+
+            # v4.0: Parse Pulgadas_ARM (col 71)
+            pulgadas_arm_raw = get_col_value("Pulgadas_ARM")
+            pulgadas_arm = None
+            if pulgadas_arm_raw:
+                try:
+                    pulgadas_arm = float(pulgadas_arm_raw)
+                    if pulgadas_arm < 0.0:
+                        pulgadas_arm = None
+                except (ValueError, TypeError):
+                    pulgadas_arm = None
+
+            # v4.0: Parse Pulgadas_SOLD (col 72)
+            pulgadas_sold_raw = get_col_value("Pulgadas_SOLD")
+            pulgadas_sold = None
+            if pulgadas_sold_raw:
+                try:
+                    pulgadas_sold = float(pulgadas_sold_raw)
+                    if pulgadas_sold < 0.0:
+                        pulgadas_sold = None
+                except (ValueError, TypeError):
+                    pulgadas_sold = None
+
             spool = Spool(
                 tag_spool=tag_spool,
                 ot=get_col_value("OT"),  # v4.0: Orden de Trabajo (columna B)
                 nv=get_col_value("NV"),
                 total_uniones=total_uniones,  # v4.0: version detection field
+                uniones_arm_completadas=uniones_arm_completadas,  # v4.0: col 69
+                uniones_sold_completadas=uniones_sold_completadas,  # v4.0: col 70
+                pulgadas_arm=pulgadas_arm,  # v4.0: col 71
+                pulgadas_sold=pulgadas_sold,  # v4.0: col 72
                 fecha_materiales=parse_date(get_col_value("Fecha_Materiales")),
                 fecha_armado=parse_date(get_col_value("Fecha_Armado")),
                 fecha_soldadura=parse_date(get_col_value("Fecha_Soldadura")),
@@ -1253,11 +1301,59 @@ class SheetsRepository:
                     except (ValueError, TypeError):
                         total_uniones = None
 
+                # v4.0: Parse Uniones_ARM_Completadas (col 69)
+                uniones_arm_completadas_raw = get_col_value(row_data, "Uniones_ARM_Completadas")
+                uniones_arm_completadas = None
+                if uniones_arm_completadas_raw:
+                    try:
+                        uniones_arm_completadas = int(uniones_arm_completadas_raw)
+                        if uniones_arm_completadas < 0:
+                            uniones_arm_completadas = None
+                    except (ValueError, TypeError):
+                        uniones_arm_completadas = None
+
+                # v4.0: Parse Uniones_SOLD_Completadas (col 70)
+                uniones_sold_completadas_raw = get_col_value(row_data, "Uniones_SOLD_Completadas")
+                uniones_sold_completadas = None
+                if uniones_sold_completadas_raw:
+                    try:
+                        uniones_sold_completadas = int(uniones_sold_completadas_raw)
+                        if uniones_sold_completadas < 0:
+                            uniones_sold_completadas = None
+                    except (ValueError, TypeError):
+                        uniones_sold_completadas = None
+
+                # v4.0: Parse Pulgadas_ARM (col 71)
+                pulgadas_arm_raw = get_col_value(row_data, "Pulgadas_ARM")
+                pulgadas_arm = None
+                if pulgadas_arm_raw:
+                    try:
+                        pulgadas_arm = float(pulgadas_arm_raw)
+                        if pulgadas_arm < 0.0:
+                            pulgadas_arm = None
+                    except (ValueError, TypeError):
+                        pulgadas_arm = None
+
+                # v4.0: Parse Pulgadas_SOLD (col 72)
+                pulgadas_sold_raw = get_col_value(row_data, "Pulgadas_SOLD")
+                pulgadas_sold = None
+                if pulgadas_sold_raw:
+                    try:
+                        pulgadas_sold = float(pulgadas_sold_raw)
+                        if pulgadas_sold < 0.0:
+                            pulgadas_sold = None
+                    except (ValueError, TypeError):
+                        pulgadas_sold = None
+
                 spool = Spool(
                     tag_spool=tag_spool,
                     ot=get_col_value(row_data, "OT"),  # v4.0: Orden de Trabajo
                     nv=get_col_value(row_data, "NV"),
                     total_uniones=total_uniones,  # v4.0: version detection field
+                    uniones_arm_completadas=uniones_arm_completadas,  # v4.0: col 69
+                    uniones_sold_completadas=uniones_sold_completadas,  # v4.0: col 70
+                    pulgadas_arm=pulgadas_arm,  # v4.0: col 71
+                    pulgadas_sold=pulgadas_sold,  # v4.0: col 72
                     fecha_materiales=parse_date(get_col_value(row_data, "Fecha_Materiales")),
                     fecha_armado=parse_date(get_col_value(row_data, "Fecha_Armado")),
                     fecha_soldadura=parse_date(get_col_value(row_data, "Fecha_Soldadura")),

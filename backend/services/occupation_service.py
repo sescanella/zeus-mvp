@@ -670,21 +670,38 @@ class OccupationService:
                     detalle="El spool debe tener materiales registrados antes de ocuparlo"
                 )
 
-            # Step 2: Validate ARM prerequisite for SOLD operations (v4.0)
+            # Step 2: Validate ARM prerequisite for SOLD operations (simple version-aware logic)
             if operacion == "SOLD":
-                if self.validation_service is None:
-                    logger.warning("ValidationService not configured, skipping ARM prerequisite check")
-                else:
-                    try:
-                        self.validation_service.validate_arm_prerequisite(
+                # Version detection (already done at line 660: is_v21 = spool.total_uniones is None)
+
+                if is_v21:  # v2.1/v3.0 spool - use Fecha_Armado column
+                    if not spool.fecha_armado:
+                        logger.warning(f"ARM prerequisite failed for v3.0 spool {tag_spool}: Fecha_Armado is empty")
+                        raise ArmPrerequisiteError(
                             tag_spool=tag_spool,
-                            ot=spool.ot
+                            message="No se puede iniciar SOLD: ARM no completado (Fecha_Armado vacía)"
                         )
-                        logger.info(f"✅ ARM prerequisite validation passed for {tag_spool}")
-                    except ArmPrerequisiteError:
-                        # Re-raise to be mapped to 403 by router
-                        logger.warning(f"ARM prerequisite validation failed for {tag_spool}")
-                        raise
+                    logger.info(f"✅ ARM prerequisite passed for v3.0 spool {tag_spool} (Fecha_Armado: {spool.fecha_armado})")
+
+                else:  # v4.0 spool - use Uniones_ARM_Completadas column
+                    # Treat None as 0 explicitly (column not initialized yet)
+                    unions_completed = spool.uniones_arm_completadas or 0
+                    total = spool.total_uniones or 0
+
+                    if unions_completed < 1:
+                        logger.warning(
+                            f"ARM prerequisite failed for v4.0 spool {tag_spool}: "
+                            f"{unions_completed}/{total} unions with ARM completed (need >= 1)"
+                        )
+                        raise ArmPrerequisiteError(
+                            tag_spool=tag_spool,
+                            message=f"No se puede iniciar SOLD: {unions_completed}/{total} uniones armadas (requiere >= 1)",
+                            unions_sin_armar=total - unions_completed
+                        )
+                    logger.info(
+                        f"✅ ARM prerequisite passed for v4.0 spool {tag_spool} "
+                        f"({unions_completed}/{total} unions with ARM completed)"
+                    )
 
             # Step 3: NO validate if already occupied (decision: trust P4 filters, accept LWW)
             # If race condition occurs, last-write-wins (LWW)

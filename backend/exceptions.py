@@ -402,12 +402,14 @@ class ArmPrerequisiteError(ZEUSException):
 
     Args:
         tag_spool: Spool identifier
+        message: Custom error message (optional)
         unions_sin_armar: Count of unions without ARM completion
     """
 
-    def __init__(self, tag_spool: str, unions_sin_armar: int = 0):
+    def __init__(self, tag_spool: str, message: str = None, unions_sin_armar: int = 0):
+        default_message = f"Cannot start SOLD: No ARM unions completed for spool '{tag_spool}'"
         super().__init__(
-            message=f"Cannot start SOLD: No ARM unions completed for spool '{tag_spool}'",
+            message=message or default_message,
             error_code="ARM_PREREQUISITE_REQUIRED",
             data={
                 "tag_spool": tag_spool,
