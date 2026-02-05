@@ -31,7 +31,7 @@ from backend.core.dependency import (
     get_worker_service
 )
 from backend.exceptions import SheetsConnectionError, SpoolNoEncontradoError, NoAutorizadoError
-from backend.utils.version_detection import is_v4_spool
+# is_v4_spool import removed - now supporting both v3.0 and v4.0 spools
 
 
 logger = logging.getLogger(__name__)
@@ -234,9 +234,9 @@ async def finalizar_v4(
     6. Triggers metrología auto-transition if all work complete (Phase 10)
     7. NO Redis locks, NO optimistic locking
 
-    Version Requirements:
-    - v4.0 spools only (Total_Uniones > 0)
-    - v2.1 spools rejected with 400 (no Uniones sheet support)
+    Version Compatibility:
+    - v4.0 spools (Total_Uniones > 0): Full union processing with PAUSAR/COMPLETAR
+    - v3.0 spools (Total_Uniones = None): Simplified COMPLETAR (no union tracking)
 
     Auto-Determination Logic:
     - selected_unions = [] → CANCELADO (clear occupation, no union writes)
@@ -306,7 +306,7 @@ async def finalizar_v4(
     )
 
     try:
-        # Step 1: Version detection - reject v2.1 spools
+        # Step 1: Validate spool exists (accepts both v3.0 and v4.0 spools)
         spool = sheets_repo.get_spool_by_tag(tag_spool)
         if not spool:
             raise HTTPException(
@@ -314,20 +314,11 @@ async def finalizar_v4(
                 detail=f"Spool {tag_spool} not found"
             )
 
-        if not is_v4_spool(spool.model_dump()):
-            logger.warning(
-                f"v2.1 spool {tag_spool} rejected from v4.0 FINALIZAR endpoint "
-                f"(Total_Uniones={spool.total_uniones})"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "WRONG_VERSION",
-                    "message": "Spool is v2.1, use /api/v3/occupation/completar instead",
-                    "spool_version": "v2.1",
-                    "correct_endpoint": "/api/v3/occupation/completar"
-                }
-            )
+        # Version detection: v3.0 (total_uniones=None) vs v4.0 (total_uniones>0)
+        # Both versions now supported - v3.0 uses simplified COMPLETAR logic
+        is_v30 = spool.total_uniones is None
+        version_str = "v3.0" if is_v30 else "v4.0"
+        logger.info(f"Spool {tag_spool} detected as {version_str}")
 
         # Step 2: Derive worker_nombre from worker_id
         worker = worker_service.find_worker_by_id(request.worker_id)

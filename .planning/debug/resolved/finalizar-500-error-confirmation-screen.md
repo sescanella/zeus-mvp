@@ -1,8 +1,8 @@
 ---
-status: verifying
+status: resolved
 trigger: "finalizar-500-error-confirmation-screen"
 created: 2026-02-05T00:00:00Z
-updated: 2026-02-05T00:35:00Z
+updated: 2026-02-05T00:40:00Z
 ---
 
 ## Current Focus

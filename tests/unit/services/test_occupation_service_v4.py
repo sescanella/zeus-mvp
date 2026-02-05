@@ -48,7 +48,9 @@ def mock_sheets_repository():
     mock_spool = MagicMock(spec=Spool)
     mock_spool.tag_spool = "OT-123"
     mock_spool.ot = "123"  # v4.0 field (not yet in Spool model)
+    mock_spool.total_uniones = 10  # v4.0 spool (has unions)
     mock_spool.fecha_materiales = "2026-01-20"
+    mock_spool.fecha_ocupacion = "04-02-2026 10:00:00"  # When spool was taken
     mock_spool.armador = None
     mock_spool.soldador = None
     mock_spool.fecha_armado = None
@@ -458,7 +460,11 @@ async def test_finalizar_sold_operation(occupation_service_v4, mock_union_reposi
     mock_union_repository.get_disponibles_sold_by_ot.return_value = [
         MagicMock(tipo_union="BW") for _ in range(5)
     ]
-    mock_union_repository.batch_update_sold.return_value = 2
+    mock_union_repository.batch_update_sold_full.return_value = 2
+    mock_union_repository.get_by_ids.return_value = [
+        MagicMock(dn_union=4.0),
+        MagicMock(dn_union=6.0)
+    ]
 
     response = await occupation_service_v4.finalizar_spool(request)
 
@@ -467,5 +473,5 @@ async def test_finalizar_sold_operation(occupation_service_v4, mock_union_reposi
     assert response.unions_processed == 2
 
     # Verify SOLD batch update called (not ARM)
-    mock_union_repository.batch_update_sold.assert_called_once()
-    mock_union_repository.batch_update_arm.assert_not_called()
+    mock_union_repository.batch_update_sold_full.assert_called_once()
+    mock_union_repository.batch_update_arm_full.assert_not_called()

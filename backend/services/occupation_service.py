@@ -995,7 +995,19 @@ class OccupationService:
             if not spool:
                 raise SpoolNoEncontradoError(tag_spool)
 
-            # Step 3: Handle zero-union cancellation
+            # Step 2.5: Detect v3.0 spools and use simplified COMPLETAR path
+            is_v30 = spool.total_uniones is None
+            if is_v30:
+                logger.info(f"v3.0 spool detected for {tag_spool}, using simplified COMPLETAR logic")
+                return await self._finalizar_v30_spool(
+                    tag_spool=tag_spool,
+                    worker_id=worker_id,
+                    worker_nombre=worker_nombre,
+                    operacion=operacion,
+                    spool=spool
+                )
+
+            # Step 3: Handle zero-union cancellation (v4.0 only)
             if len(selected_unions) == 0:
                 logger.info(f"Zero unions selected - handling as cancellation for {tag_spool}")
 
@@ -1397,4 +1409,154 @@ class OccupationService:
             raise
         except Exception as e:
             logger.error(f"❌ FINALIZAR operation failed: {e}")
+            raise
+
+    async def _finalizar_v30_spool(
+        self,
+        tag_spool: str,
+        worker_id: int,
+        worker_nombre: str,
+        operacion: str,
+        spool
+    ) -> OccupationResponse:
+        """
+        Simplified FINALIZAR for v3.0 spools (no union tracking).
+
+        v3.0 spools don't have union-level tracking, so they use all-or-nothing
+        COMPLETAR logic (like the legacy completar endpoint).
+
+        Flow:
+        1. Update Fecha_Armado or Fecha_Soldadura based on operacion
+        2. Clear Ocupado_Por and Fecha_Ocupacion
+        3. Log COMPLETAR event to Metadata
+        4. Return success with COMPLETAR action
+
+        Args:
+            tag_spool: Spool TAG identifier
+            worker_id: Worker ID number
+            worker_nombre: Worker name
+            operacion: Operation type (ARM or SOLD)
+            spool: Spool object from sheets
+
+        Returns:
+            OccupationResponse with success and COMPLETAR action
+        """
+        logger.info(f"[v3.0 FINALIZAR] Processing {tag_spool} for {operacion}")
+
+        try:
+            # Step 1: Build updates dict (clear occupation + update fecha)
+            updates_dict = {
+                "Ocupado_Por": "",
+                "Fecha_Ocupacion": ""
+            }
+
+            # Add fecha column update based on operacion
+            fecha_str = format_date_for_sheets(today_chile())
+            if operacion == "ARM":
+                updates_dict.update({
+                    "Fecha_Armado": fecha_str,
+                    "Armador": worker_nombre
+                })
+            elif operacion == "SOLD":
+                updates_dict.update({
+                    "Fecha_Soldadura": fecha_str,
+                    "Soldador": worker_nombre
+                })
+            else:
+                # Other operations (METROLOGIA, REPARACION, etc.)
+                updates_dict[f"Fecha_{operacion}"] = fecha_str
+
+            # Update Estado_Detalle
+            updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
+
+            # Step 2: Write to Operaciones sheet with batch update
+            from backend.core.column_map_cache import ColumnMapCache
+            from backend.config import config
+
+            column_map = ColumnMapCache.get_or_build(
+                config.HOJA_OPERACIONES_NOMBRE,
+                self.sheets_repository
+            )
+
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+            # Find TAG_SPOOL column
+            tag_column_index = None
+            for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+                normalized = normalize(col_name)
+                if normalized in column_map:
+                    tag_column_index = column_map[normalized]
+                    break
+
+            if tag_column_index is None:
+                tag_column_index = 6  # Fallback
+
+            column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
+            row_num = self.sheets_repository.find_row_by_column_value(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                column_letter=column_letter,
+                value=tag_spool
+            )
+
+            if row_num is None:
+                raise SpoolNoEncontradoError(tag_spool)
+
+            batch_updates = [
+                {"row": row_num, "column_name": key, "value": value}
+                for key, value in updates_dict.items()
+            ]
+
+            self.sheets_repository.batch_update_by_column_name(
+                sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                updates=batch_updates
+            )
+
+            logger.info(f"✅ Sheets updated for v3.0 spool {tag_spool}: {operacion} completado")
+
+            # Step 3: Log COMPLETAR event to Metadata
+            try:
+                evento_tipo_str = f"COMPLETAR_{operacion}"
+                try:
+                    evento_tipo_enum = EventoTipo(evento_tipo_str)
+                    evento_tipo = evento_tipo_enum.value
+                except ValueError:
+                    evento_tipo = evento_tipo_str
+
+                metadata_json = json.dumps({
+                    "fecha_operacion": fecha_str,
+                    "completed": True,
+                    "spool_version": "v3.0"
+                })
+
+                self.metadata_repository.log_event(
+                    evento_tipo=evento_tipo,
+                    tag_spool=tag_spool,
+                    worker_id=worker_id,
+                    worker_nombre=worker_nombre,
+                    operacion=operacion,
+                    accion="COMPLETAR",
+                    fecha_operacion=format_date_for_sheets(today_chile()),
+                    metadata_json=metadata_json
+                )
+
+                logger.info(f"✅ Metadata logged: {evento_tipo} for v3.0 spool {tag_spool}")
+
+            except Exception as e:
+                logger.error(f"❌ CRITICAL: Metadata logging failed: {e}", exc_info=True)
+
+            # Step 4: Return success
+            message = f"Operación completada en {tag_spool} (v3.0 spool - sin seguimiento de uniones)"
+            logger.info(f"✅ [v3.0 FINALIZAR] Completed: {message}")
+
+            return OccupationResponse(
+                success=True,
+                tag_spool=tag_spool,
+                message=message,
+                action_taken="COMPLETAR",
+                unions_processed=0  # v3.0 spools don't track unions
+            )
+
+        except Exception as e:
+            logger.error(f"❌ [v3.0 FINALIZAR] Failed for {tag_spool}: {e}", exc_info=True)
             raise

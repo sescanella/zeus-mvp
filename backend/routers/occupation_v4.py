@@ -15,7 +15,7 @@ Endpoints:
 
 Version Compatibility:
 - INICIAR: Works for v2.1 and v4.0 spools (v2.1 skips Uniones writes)
-- FINALIZAR: Union selection for v4.0 only (v2.1 unsupported)
+- FINALIZAR: Works for v3.0 (simplified COMPLETAR) and v4.0 (union tracking)
 
 Key Differences from v3.0:
 - ❌ NO Redis locks (infrastructure removed)
