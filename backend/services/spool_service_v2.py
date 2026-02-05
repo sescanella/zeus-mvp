@@ -194,9 +194,9 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_iniciar_arm(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR ARM (v3.0 Occupation-Based).
+        MIGRATED: Usa get_spools_disponibles("ARM", "INICIAR") internamente.
 
-        REGLA DE NEGOCIO v3.0 (Occupation-Based - 2026-01-30):
+        REGLA DE NEGOCIO v3.0 (FilterRegistry - 2026-02-05):
         - Fecha_Materiales: CON DATO (prerequisito cumplido)
         - Ocupado_Por: SIN DATO (spool no está ocupado actualmente)
 
@@ -204,35 +204,24 @@ class SpoolServiceV2:
         - PENDIENTE: nunca iniciados (Armador=None, Ocupado_Por=None)
         - PAUSADO: pausados (Armador!=None, Ocupado_Por=None)
 
-        Compatible con v4.0: En v4.0 este método será reemplazado por
-        UnionService, pero la lógica de Ocupado_Por se mantiene.
+        CAMBIOS vs v3.0:
+        - ✅ Usa FilterRegistry (lógica centralizada)
+        - ✅ Misma lógica: PrerequisiteFilter(fecha_materiales) + OcupacionFilter()
+        - ✅ Logging detallado por filtro
+
+        DEPRECATED (2026-02-05): Use get_spools_disponibles("ARM", "INICIAR") instead.
+        Will be removed in v5.0 (estimated 2026-04-01).
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V3.0] Retrieving spools available for INICIAR ARM (Occupation-Based)")
+        logger.warning(
+            "[DEPRECATED] get_spools_disponibles_para_iniciar_arm() is deprecated. "
+            "Use get_spools_disponibles('ARM', 'INICIAR') instead."
+        )
 
-        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
-        spools_disponibles = []
-
-        for row_idx, row in enumerate(all_rows[1:], start=2):
-            try:
-                spool = self.parse_spool_row(row)
-
-                # REGLA v3.0: Fecha_Materiales llena Y Ocupado_Por vacío (Occupation-Based)
-                if spool.fecha_materiales is not None and spool.ocupado_por is None:
-                    spools_disponibles.append(spool)
-                    logger.debug(
-                        f"[V3.0] Spool {spool.tag_spool} disponible INICIAR ARM: "
-                        f"fecha_materiales={spool.fecha_materiales}, ocupado_por={spool.ocupado_por}, armador={spool.armador}"
-                    )
-
-            except ValueError as e:
-                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
-                continue
-
-        logger.info(f"Found {len(spools_disponibles)} spools for INICIAR ARM")
-        return spools_disponibles
+        # Delegar al método unificado
+        return self.get_spools_disponibles("ARM", "INICIAR")
 
     def get_spools_disponibles_para_completar_arm(self) -> list[Spool]:
         """
@@ -271,9 +260,9 @@ class SpoolServiceV2:
 
     def get_spools_disponibles_para_iniciar_sold(self) -> list[Spool]:
         """
-        Obtiene spools disponibles para INICIAR SOLD (v3.0 Occupation-Based).
+        MIGRATED: Usa get_spools_disponibles("SOLD", "INICIAR") internamente.
 
-        REGLA DE NEGOCIO v3.0 (Occupation-Based - 2026-01-30):
+        REGLA DE NEGOCIO v3.0 (FilterRegistry - 2026-02-05):
         - Fecha_Armado: CON DATO (prerequisito ARM completado)
         - Ocupado_Por: SIN DATO (spool no está ocupado actualmente)
 
@@ -281,35 +270,24 @@ class SpoolServiceV2:
         - PENDIENTE: nunca iniciados (Soldador=None, Ocupado_Por=None)
         - PAUSADO: pausados (Soldador!=None, Ocupado_Por=None)
 
-        Compatible con v4.0: En v4.0 este método será reemplazado por
-        UnionService.get_disponibles(), pero la lógica de Ocupado_Por se mantiene.
+        CAMBIOS vs v3.0:
+        - ✅ Usa FilterRegistry (lógica centralizada)
+        - ✅ Misma lógica: PrerequisiteFilter(fecha_armado) + OcupacionFilter()
+        - ✅ Logging detallado por filtro
+
+        DEPRECATED (2026-02-05): Use get_spools_disponibles("SOLD", "INICIAR") instead.
+        Will be removed in v5.0 (estimated 2026-04-01).
 
         Returns:
             Lista de spools que cumplen las condiciones
         """
-        logger.info("[V3.0] Retrieving spools available for INICIAR SOLD (Occupation-Based)")
+        logger.warning(
+            "[DEPRECATED] get_spools_disponibles_para_iniciar_sold() is deprecated. "
+            "Use get_spools_disponibles('SOLD', 'INICIAR') instead."
+        )
 
-        all_rows = self.sheets_repository.read_worksheet(config.HOJA_OPERACIONES_NOMBRE)
-        spools_disponibles = []
-
-        for row_idx, row in enumerate(all_rows[1:], start=2):
-            try:
-                spool = self.parse_spool_row(row)
-
-                # REGLA v3.0: Fecha_Armado llena Y Ocupado_Por vacío (Occupation-Based)
-                if spool.fecha_armado is not None and spool.ocupado_por is None:
-                    spools_disponibles.append(spool)
-                    logger.debug(
-                        f"[V3.0] Spool {spool.tag_spool} disponible INICIAR SOLD: "
-                        f"fecha_armado={spool.fecha_armado}, ocupado_por={spool.ocupado_por}, soldador={spool.soldador}"
-                    )
-
-            except ValueError as e:
-                logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
-                continue
-
-        logger.info(f"Found {len(spools_disponibles)} spools for INICIAR SOLD")
-        return spools_disponibles
+        # Delegar al método unificado
+        return self.get_spools_disponibles("SOLD", "INICIAR")
 
     def get_spools_disponibles_para_completar_sold(self) -> list[Spool]:
         """
