@@ -112,14 +112,23 @@ class SpoolServiceV2:
         idx_soldador = self.sheets_service._get_col_idx("Soldador", fallback_idx=36)
         idx_fecha_qc_metrologia = self.sheets_service._get_col_idx("Fecha_QC_Metrología", fallback_idx=37)
         idx_total_uniones = self.sheets_service._get_col_idx("Total_Uniones", fallback_idx=67)
+        idx_uniones_arm = self.sheets_service._get_col_idx("Uniones_ARM_Completadas", fallback_idx=68)
+        idx_uniones_sold = self.sheets_service._get_col_idx("Uniones_SOLD_Completadas", fallback_idx=69)
+        idx_pulgadas_arm = self.sheets_service._get_col_idx("Pulgadas_ARM", fallback_idx=70)
+        idx_pulgadas_sold = self.sheets_service._get_col_idx("Pulgadas_SOLD", fallback_idx=71)
 
         logger.debug(
             f"Column indices: TAG_SPOOL={idx_tag_spool}, "
-            f"Fecha_Armado={idx_fecha_armado}, Armador={idx_armador}"
+            f"Fecha_Armado={idx_fecha_armado}, Armador={idx_armador}, "
+            f"Total_Uniones={idx_total_uniones}, Uniones_SOLD={idx_uniones_sold}"
         )
 
-        # Validar y rellenar fila si es corta
-        required_len = max(idx_tag_spool, idx_fecha_armado, idx_armador, idx_soldador, idx_fecha_qc_metrologia, idx_total_uniones) + 1
+        # Validar y rellenar fila si es corta (incluir todos los índices v4.0)
+        required_len = max(
+            idx_tag_spool, idx_fecha_armado, idx_armador, idx_soldador,
+            idx_fecha_qc_metrologia, idx_total_uniones, idx_uniones_arm,
+            idx_uniones_sold, idx_pulgadas_arm, idx_pulgadas_sold
+        ) + 1
         if len(row) < required_len:
             row = row + [''] * (required_len - len(row))
 
@@ -170,7 +179,59 @@ class SpoolServiceV2:
                 logger.warning(f"Invalid Total_Uniones for {tag_spool}: {total_uniones_raw}, defaulting to None")
                 total_uniones = None
 
-        # 8. v3.0: Parse Ocupado_Por (columna 64)
+        # 8. v4.0: Parse Uniones_ARM_Completadas (columna 69)
+        uniones_arm_raw = row[idx_uniones_arm] if idx_uniones_arm < len(row) and row[idx_uniones_arm] else None
+        uniones_arm_completadas = None
+        if uniones_arm_raw:
+            try:
+                uniones_arm_completadas = int(uniones_arm_raw)
+                if uniones_arm_completadas < 0:
+                    logger.warning(f"Negative Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_completadas}, defaulting to None")
+                    uniones_arm_completadas = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_raw}, defaulting to None")
+                uniones_arm_completadas = None
+
+        # 9. v4.0: Parse Uniones_SOLD_Completadas (columna 70)
+        uniones_sold_raw = row[idx_uniones_sold] if idx_uniones_sold < len(row) and row[idx_uniones_sold] else None
+        uniones_sold_completadas = None
+        if uniones_sold_raw:
+            try:
+                uniones_sold_completadas = int(uniones_sold_raw)
+                if uniones_sold_completadas < 0:
+                    logger.warning(f"Negative Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_completadas}, defaulting to None")
+                    uniones_sold_completadas = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_raw}, defaulting to None")
+                uniones_sold_completadas = None
+
+        # 10. v4.0: Parse Pulgadas_ARM (columna 71)
+        pulgadas_arm_raw = row[idx_pulgadas_arm] if idx_pulgadas_arm < len(row) and row[idx_pulgadas_arm] else None
+        pulgadas_arm = None
+        if pulgadas_arm_raw:
+            try:
+                pulgadas_arm = float(pulgadas_arm_raw)
+                if pulgadas_arm < 0:
+                    logger.warning(f"Negative Pulgadas_ARM for {tag_spool}: {pulgadas_arm}, defaulting to None")
+                    pulgadas_arm = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Pulgadas_ARM for {tag_spool}: {pulgadas_arm_raw}, defaulting to None")
+                pulgadas_arm = None
+
+        # 11. v4.0: Parse Pulgadas_SOLD (columna 72)
+        pulgadas_sold_raw = row[idx_pulgadas_sold] if idx_pulgadas_sold < len(row) and row[idx_pulgadas_sold] else None
+        pulgadas_sold = None
+        if pulgadas_sold_raw:
+            try:
+                pulgadas_sold = float(pulgadas_sold_raw)
+                if pulgadas_sold < 0:
+                    logger.warning(f"Negative Pulgadas_SOLD for {tag_spool}: {pulgadas_sold}, defaulting to None")
+                    pulgadas_sold = None
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid Pulgadas_SOLD for {tag_spool}: {pulgadas_sold_raw}, defaulting to None")
+                pulgadas_sold = None
+
+        # 12. v3.0: Parse Ocupado_Por (columna 64)
         idx_ocupado_por = self.sheets_service._get_col_idx("Ocupado_Por", fallback_idx=64)
         ocupado_por_raw = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
         ocupado_por = ocupado_por_raw if ocupado_por_raw else None
@@ -180,6 +241,10 @@ class SpoolServiceV2:
             ot=ot,  # v4.0: Orden de Trabajo (FK para Uniones)
             nv=nv,
             total_uniones=total_uniones,  # v4.0: version detection field
+            uniones_arm_completadas=uniones_arm_completadas,  # v4.0: ARM counter
+            uniones_sold_completadas=uniones_sold_completadas,  # v4.0: SOLD counter
+            pulgadas_arm=pulgadas_arm,  # v4.0: ARM pulgadas-diámetro metric
+            pulgadas_sold=pulgadas_sold,  # v4.0: SOLD pulgadas-diámetro metric
             arm=arm_status,
             sold=sold_status,
             fecha_materiales=fecha_materiales,
