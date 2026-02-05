@@ -996,9 +996,28 @@ class OccupationService:
                 raise SpoolNoEncontradoError(tag_spool)
 
             # Step 2.5: Detect v3.0 spools and use simplified COMPLETAR path
-            is_v30 = spool.total_uniones is None
+            #
+            # v3.0 detection: total_uniones = None (no column) or 0 (CONTAR.SI formula)
+            # v4.0 detection: total_uniones >= 1 (has registered unions)
+            #
+            # IMPORTANT: v3.0 spools may have total_uniones=0 due to the formula
+            # =CONTAR.SI(Uniones!$D:$D,Gx) counting 0 when no unions are registered.
+            is_v30 = spool.total_uniones is None or spool.total_uniones == 0
+
             if is_v30:
-                logger.info(f"v3.0 spool detected for {tag_spool}, using simplified COMPLETAR logic")
+                logger.info(
+                    f"v3.0 spool detected for {tag_spool} "
+                    f"(total_uniones={spool.total_uniones})"
+                )
+
+                # Warning: v3.0 should not receive selected_unions from UI
+                # (but if it does, we ignore them - not an error)
+                if len(selected_unions) > 0:
+                    logger.warning(
+                        f"v3.0 spool {tag_spool} received {len(selected_unions)} "
+                        f"selected_unions (will be ignored by simplified COMPLETAR logic)"
+                    )
+
                 return await self._finalizar_v30_spool(
                     tag_spool=tag_spool,
                     worker_id=worker_id,

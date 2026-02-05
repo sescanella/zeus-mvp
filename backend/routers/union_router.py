@@ -314,11 +314,11 @@ async def finalizar_v4(
                 detail=f"Spool {tag_spool} not found"
             )
 
-        # Version detection: v3.0 (total_uniones=None) vs v4.0 (total_uniones>0)
+        # Version detection: v3.0 (total_uniones=None or 0) vs v4.0 (total_uniones>=1)
         # Both versions now supported - v3.0 uses simplified COMPLETAR logic
-        is_v30 = spool.total_uniones is None
+        is_v30 = spool.total_uniones is None or spool.total_uniones == 0
         version_str = "v3.0" if is_v30 else "v4.0"
-        logger.info(f"Spool {tag_spool} detected as {version_str}")
+        logger.info(f"Spool {tag_spool} detected as {version_str} (total_uniones={spool.total_uniones})")
 
         # Step 2: Derive worker_nombre from worker_id
         worker = worker_service.find_worker_by_id(request.worker_id)
