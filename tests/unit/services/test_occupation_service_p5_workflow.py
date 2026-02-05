@@ -67,6 +67,10 @@ def mock_sheets_repository():
     mock_spool_v4.tag_spool = "TEST-V4"
     mock_spool_v4.ot = "123"
     mock_spool_v4.total_uniones = 10  # v4.0 indicator
+    mock_spool_v4.uniones_arm_completadas = 0  # v4.0 counter (read-only, formula in Sheets)
+    mock_spool_v4.uniones_sold_completadas = 0  # v4.0 counter (read-only, formula in Sheets)
+    mock_spool_v4.pulgadas_arm = 0.0  # v4.0 metric (read-only, formula in Sheets)
+    mock_spool_v4.pulgadas_sold = 0.0  # v4.0 metric (read-only, formula in Sheets)
     mock_spool_v4.ocupado_por = None
     mock_spool_v4.fecha_ocupacion = None
     mock_spool_v4.version = "uuid-v1"
@@ -82,6 +86,10 @@ def mock_sheets_repository():
     mock_spool_v21.tag_spool = "TEST-V21"
     mock_spool_v21.ot = "124"
     mock_spool_v21.total_uniones = None  # v2.1 indicator
+    mock_spool_v21.uniones_arm_completadas = None  # v2.1: columns don't exist yet
+    mock_spool_v21.uniones_sold_completadas = None
+    mock_spool_v21.pulgadas_arm = None
+    mock_spool_v21.pulgadas_sold = None
     mock_spool_v21.ocupado_por = None
     mock_spool_v21.fecha_ocupacion = None
     mock_spool_v21.version = "uuid-v2"
@@ -331,6 +339,10 @@ async def test_iniciar_p5_sold_hardcoded_states(
     - ARM state = "completado"
     - SOLD state = "en_progreso"
     """
+    # Mock spool with ARM completed (uniones_arm_completadas >= 1)
+    mock_spool = mock_sheets_repository.get_spool_by_tag("TEST-V4")
+    mock_spool.uniones_arm_completadas = 5  # ARM already completed on some unions
+
     request = IniciarRequest(
         tag_spool="TEST-V4",
         worker_id=93,
@@ -354,15 +366,20 @@ async def test_iniciar_p5_sold_hardcoded_states(
 @pytest.mark.asyncio
 async def test_iniciar_p5_arm_prerequisite_validation(
     occupation_service_p5,
-    mock_validation_service
+    mock_validation_service,
+    mock_sheets_repository
 ):
     """
     Test INICIAR P5 validates ARM prerequisite for SOLD.
 
     Validates:
-    - ValidationService.validate_arm_prerequisite called
-    - Raises ArmPrerequisiteError if validation fails
+    - Raises ArmPrerequisiteError if uniones_arm_completadas < 1
+    - Error message includes Spanish text
     """
+    # Mock spool with NO ARM completed (uniones_arm_completadas = 0)
+    mock_spool = mock_sheets_repository.get_spool_by_tag("TEST-V4")
+    mock_spool.uniones_arm_completadas = 0  # No ARM completed yet
+
     request = IniciarRequest(
         tag_spool="TEST-V4",
         worker_id=93,
@@ -370,17 +387,12 @@ async def test_iniciar_p5_arm_prerequisite_validation(
         operacion=ActionType.SOLD
     )
 
-    # Mock ARM prerequisite failure
-    mock_validation_service.validate_arm_prerequisite.side_effect = ArmPrerequisiteError(
-        tag_spool="TEST-V4",
-        unions_sin_armar=10
-    )
-
     with pytest.raises(ArmPrerequisiteError) as exc_info:
         await occupation_service_p5.iniciar_spool(request)
 
-    assert "Cannot start SOLD" in str(exc_info.value)
-    mock_validation_service.validate_arm_prerequisite.assert_called_once_with(tag_spool="TEST-V4", ot="123")
+    # Validate error message (Spanish)
+    assert "No se puede iniciar SOLD" in str(exc_info.value)
+    assert "0/10 uniones armadas" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -595,15 +607,16 @@ async def test_finalizar_p5_completar_updates_v4_counters(
     # Assert: COMPLETAR action
     assert response.action_taken == "COMPLETAR"
 
-    # Assert: Sheets write includes v4.0 fields
+    # Assert: Sheets write does NOT include v4.0 formula columns (managed by Google Sheets)
     call_kwargs = mock_sheets_repository.batch_update_by_column_name.call_args.kwargs
     batch_updates = call_kwargs["updates"]
     updates = {u["column_name"]: u["value"] for u in batch_updates}
 
     assert updates["Fecha_Armado"] == "04-02-2026"
     assert updates["Armador"] == "MR(93)"
-    assert updates["Uniones_ARM_Completadas"] == 10
-    assert updates["Pulgadas_ARM"] == 25.0  # 10 * 2.5
+    # v4.0 counter columns are NOT written (they are formulas in Sheets)
+    assert "Uniones_ARM_Completadas" not in updates
+    assert "Pulgadas_ARM" not in updates
 
 
 @pytest.mark.asyncio

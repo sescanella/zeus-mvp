@@ -1266,21 +1266,21 @@ class OccupationService:
                     "Fecha_Ocupacion": ""
                 }
 
-                # If COMPLETAR: add fecha_operacion + worker + contadores v4.0
+                # If COMPLETAR: add fecha_operacion + worker (NO v4.0 counters - managed by formulas)
                 if action_taken == "COMPLETAR":
                     if operacion == "ARM":
                         updates_dict.update({
                             "Fecha_Armado": format_date_for_sheets(today_chile()),
-                            "Armador": worker_nombre,
-                            "Uniones_ARM_Completadas": total_available,
-                            "Pulgadas_ARM": pulgadas
+                            "Armador": worker_nombre
+                            # NOTE: Uniones_ARM_Completadas and Pulgadas_ARM are NOT written here
+                            # These columns contain Google Sheets formulas that auto-calculate from Uniones sheet
                         })
                     elif operacion == "SOLD":
                         updates_dict.update({
                             "Fecha_Soldadura": format_date_for_sheets(today_chile()),
-                            "Soldador": worker_nombre,
-                            "Uniones_SOLD_Completadas": total_available,
-                            "Pulgadas_SOLD": pulgadas
+                            "Soldador": worker_nombre
+                            # NOTE: Uniones_SOLD_Completadas and Pulgadas_SOLD are NOT written here
+                            # These columns contain Google Sheets formulas that auto-calculate from Uniones sheet
                         })
 
                     updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
