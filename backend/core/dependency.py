@@ -88,6 +88,7 @@ def get_sheets_repository() -> SheetsRepository:
 
     if _sheets_repo_singleton is None:
         # v3.0 mode enabled to support reparacion features (estado_detalle, ocupado_por)
+        # Force v3.0 compatibility mode for REPARACION endpoint (2026-02-05)
         _sheets_repo_singleton = SheetsRepository(compatibility_mode="v3.0")
 
     return _sheets_repo_singleton
