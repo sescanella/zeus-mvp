@@ -116,7 +116,7 @@ async def completar_metrologia(
     )
 
     # Fetch worker to get nombre_completo
-    worker = worker_service.get_worker_by_id(request.worker_id)
+    worker = worker_service.find_worker_by_id(request.worker_id)
     if not worker:
         raise WorkerNoEncontradoError(str(request.worker_id))
 
