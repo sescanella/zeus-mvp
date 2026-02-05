@@ -28,6 +28,15 @@ def mock_union_repo():
 
 
 @pytest.fixture
+def timestamps():
+    """Standard timestamps for testing."""
+    return {
+        "inicio": datetime(2026, 2, 5, 10, 30, 0),
+        "fin": datetime(2026, 2, 5, 11, 43, 54)
+    }
+
+
+@pytest.fixture
 def mock_metadata_repo():
     """Mock MetadataRepository."""
     return Mock()
@@ -437,7 +446,7 @@ class TestProcessSelection:
         """Test successful ARM union processing."""
         # Setup mocks
         mock_union_repo.get_by_spool.return_value = sample_unions
-        mock_union_repo.batch_update_arm.return_value = 2
+        mock_union_repo.batch_update_arm_full.return_value = 2
         mock_metadata_repo.batch_log_events.return_value = None
 
         with patch('backend.utils.date_formatter.now_chile') as mock_now:
@@ -448,11 +457,13 @@ class TestProcessSelection:
                 union_ids=["OT-123+1", "OT-123+2"],
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion="ARM"
+                operacion="ARM",
+                timestamp_inicio=datetime(2026, 2, 5, 10, 30, 0),
+                timestamp_fin=datetime(2026, 2, 5, 11, 43, 54)
             )
 
         # Verify batch_update_arm was called
-        mock_union_repo.batch_update_arm.assert_called_once()
+        mock_union_repo.batch_update_arm_full.assert_called_once()
 
         # Verify metadata events were logged
         mock_metadata_repo.batch_log_events.assert_called_once()
@@ -493,7 +504,7 @@ class TestProcessSelection:
         ]
 
         mock_union_repo.get_by_spool.return_value = unions
-        mock_union_repo.batch_update_sold.return_value = 2
+        mock_union_repo.batch_update_sold_full.return_value = 2
         mock_metadata_repo.batch_log_events.return_value = None
 
         with patch('backend.utils.date_formatter.now_chile') as mock_now:
@@ -504,11 +515,13 @@ class TestProcessSelection:
                 union_ids=["OT-123+1", "OT-123+2"],
                 worker_id=95,
                 worker_nombre="MG(95)",
-                operacion="SOLD"
+                operacion="SOLD",
+                timestamp_inicio=datetime(2026, 2, 5, 10, 30, 0),
+                timestamp_fin=datetime(2026, 2, 5, 11, 43, 54)
             )
 
         # Verify batch_update_sold was called
-        mock_union_repo.batch_update_sold.assert_called_once()
+        mock_union_repo.batch_update_sold_full.assert_called_once()
 
         # Verify result
         assert result["action"] == "SOLD_COMPLETAR"
@@ -521,7 +534,9 @@ class TestProcessSelection:
                 union_ids=[],
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion="ARM"
+                operacion="ARM",
+                timestamp_inicio=datetime(2026, 2, 5, 10, 30, 0),
+                timestamp_fin=datetime(2026, 2, 5, 11, 43, 54)
             )
 
     def test_union_ids_not_found(
@@ -539,7 +554,9 @@ class TestProcessSelection:
                 union_ids=["OT-123+99"],  # Non-existent ID
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion="ARM"
+                operacion="ARM",
+                timestamp_inicio=datetime(2026, 2, 5, 10, 30, 0),
+                timestamp_fin=datetime(2026, 2, 5, 11, 43, 54)
             )
 
     def test_mixed_ot_ownership(
@@ -561,7 +578,9 @@ class TestProcessSelection:
                 union_ids=["OT-123+1", "OT-124+1"],
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion="ARM"
+                operacion="ARM",
+                timestamp_inicio=datetime(2026, 2, 5, 10, 30, 0),
+                timestamp_fin=datetime(2026, 2, 5, 11, 43, 54)
             )
 
     def test_filters_unavailable_unions(
@@ -589,7 +608,7 @@ class TestProcessSelection:
         ]
 
         mock_union_repo.get_by_spool.return_value = unions
-        mock_union_repo.batch_update_arm.return_value = 1
+        mock_union_repo.batch_update_arm_full.return_value = 1
         mock_metadata_repo.batch_log_events.return_value = None
 
         with patch('backend.utils.date_formatter.now_chile') as mock_now:
@@ -600,7 +619,9 @@ class TestProcessSelection:
                 union_ids=["OT-123+1", "OT-123+2"],
                 worker_id=93,
                 worker_nombre="MR(93)",
-                operacion="ARM"
+                operacion="ARM",
+                timestamp_inicio=datetime(2026, 2, 5, 10, 30, 0),
+                timestamp_fin=datetime(2026, 2, 5, 11, 43, 54)
             )
 
         # Only 1 union should be processed (the available one)

@@ -63,23 +63,27 @@ class UnionService:
         union_ids: list[str],
         worker_id: int,
         worker_nombre: str,
-        operacion: Literal["ARM", "SOLD"]
+        operacion: Literal["ARM", "SOLD"],
+        timestamp_inicio: datetime,
+        timestamp_fin: datetime
     ) -> dict:
         """
         Orchestrate batch union updates for selected unions.
 
         Workflow:
         1. Validate selected union IDs exist and are available
-        2. Call appropriate batch_update method from UnionRepository
+        2. Call appropriate batch_update_*_full() method from UnionRepository
         3. Build and log metadata events (batch + granular)
         4. Return processing summary
 
         Args:
             tag_spool: TAG_SPOOL value (e.g., "OT-123")
-            union_ids: List of union IDs to mark as complete (e.g., ["OT-123+1", "OT-123+2"])
+            union_ids: List of union IDs to mark as complete (e.g., ["001+1", "001+2"])
             worker_id: Worker ID
             worker_nombre: Worker name in format 'INICIALES(ID)'
             operacion: Operation type ("ARM" or "SOLD")
+            timestamp_inicio: Start timestamp (from Fecha_Ocupacion when spool was taken)
+            timestamp_fin: End timestamp (when FINALIZAR was confirmed, typically now())
 
         Returns:
             dict with keys:
@@ -132,22 +136,26 @@ class UnionService:
             union_ids = [u.id for u in available_unions]
 
         # Step 2: Call batch update method based on operation
-        from backend.utils.date_formatter import now_chile
-        timestamp = now_chile()
+        # Use full methods that write INICIO + FIN + WORKER (3 columns)
+        self.logger.info(
+            f"Batch update for {tag_spool}: INICIO={timestamp_inicio}, FIN={timestamp_fin}"
+        )
 
         if operacion == "ARM":
-            updated_count = self.union_repo.batch_update_arm(
+            updated_count = self.union_repo.batch_update_arm_full(
                 tag_spool=tag_spool,
                 union_ids=union_ids,
                 worker=worker_nombre,
-                timestamp=timestamp
+                timestamp_inicio=timestamp_inicio,  # From Fecha_Ocupacion (passed by caller)
+                timestamp_fin=timestamp_fin          # Current time (passed by caller)
             )
         elif operacion == "SOLD":
-            updated_count = self.union_repo.batch_update_sold(
+            updated_count = self.union_repo.batch_update_sold_full(
                 tag_spool=tag_spool,
                 union_ids=union_ids,
                 worker=worker_nombre,
-                timestamp=timestamp
+                timestamp_inicio=timestamp_inicio,  # From Fecha_Ocupacion (passed by caller)
+                timestamp_fin=timestamp_fin          # Current time (passed by caller)
             )
         else:
             raise ValueError(f"Invalid operacion: {operacion}")

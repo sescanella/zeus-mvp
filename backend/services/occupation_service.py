@@ -1147,13 +1147,31 @@ class OccupationService:
 
             try:
                 if self.union_service:
+                    # Parse Fecha_Ocupacion to get timestamp_inicio
+                    if not spool.fecha_ocupacion:
+                        logger.warning(f"Spool {tag_spool} missing Fecha_Ocupacion, using now() as fallback")
+                        timestamp_inicio = now_chile()
+                    else:
+                        # Parse formato: "DD-MM-YYYY HH:MM:SS"
+                        from datetime import datetime as dt
+                        try:
+                            timestamp_inicio = dt.strptime(spool.fecha_ocupacion, "%d-%m-%Y %H:%M:%S")
+                            logger.info(f"Parsed Fecha_Ocupacion: {spool.fecha_ocupacion} → {timestamp_inicio}")
+                        except ValueError as e:
+                            logger.warning(f"Failed to parse Fecha_Ocupacion '{spool.fecha_ocupacion}': {e}, using now()")
+                            timestamp_inicio = now_chile()
+
+                    timestamp_fin = now_chile()
+
                     # Use UnionService for batch update + metadata logging
                     result = self.union_service.process_selection(
                         tag_spool=tag_spool,
                         union_ids=selected_unions,
                         worker_id=worker_id,
                         worker_nombre=worker_nombre,
-                        operacion=operacion
+                        operacion=operacion,
+                        timestamp_inicio=timestamp_inicio,
+                        timestamp_fin=timestamp_fin
                     )
 
                     updated_count = result["union_count"]
