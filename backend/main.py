@@ -8,6 +8,7 @@ Configuración:
 - FastAPI app con OpenAPI docs automática
 - CORS para frontend (localhost + Railway)
 - Exception handlers para errores custom (ZEUSException)
+- FilterRegistry v3.0 (ARM, SOLD, METROLOGIA)
 - Logging comprehensivo
 - Middleware de rate limiting (futuro)
 
