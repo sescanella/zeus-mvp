@@ -236,6 +236,11 @@ class SpoolServiceV2:
         ocupado_por_raw = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
         ocupado_por = ocupado_por_raw if ocupado_por_raw else None
 
+        # 13. v3.0: Parse Estado_Detalle (columna 67) - CRITICAL for REPARACION filter
+        idx_estado_detalle = self.sheets_service._get_col_idx("Estado_Detalle", fallback_idx=66)
+        estado_detalle_raw = row[idx_estado_detalle].strip() if idx_estado_detalle < len(row) and row[idx_estado_detalle] else None
+        estado_detalle = estado_detalle_raw if estado_detalle_raw else None
+
         return Spool(
             tag_spool=tag_spool,
             ot=ot,  # v4.0: Orden de Trabajo (FK para Uniones)
@@ -254,7 +259,8 @@ class SpoolServiceV2:
             soldador=soldador,
             fecha_qc_metrologia=fecha_qc_metrologia,
             proyecto=None,
-            ocupado_por=ocupado_por  # v3.0: Current occupation lock
+            ocupado_por=ocupado_por,  # v3.0: Current occupation lock
+            estado_detalle=estado_detalle  # v3.0: Human-readable state - CRITICAL for REPARACION
         )
 
     def get_spools_disponibles_para_iniciar_arm(self) -> list[Spool]:
