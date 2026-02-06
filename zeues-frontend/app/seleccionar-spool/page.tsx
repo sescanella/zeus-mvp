@@ -3,11 +3,10 @@
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
 import type { Spool } from '@/lib/types';
-import { getOperationConfig } from '@/lib/operation-config';
 
 function SeleccionarSpoolContent() {
   const router = useRouter();
@@ -279,7 +278,7 @@ function SeleccionarSpoolContent() {
       return;
     }
 
-    // REPARACION: Navigate to tipo-interaccion page (user selects TOMAR/PAUSAR/COMPLETAR)
+    // REPARACION: Navigate to tipo-interaccion page (single spool only for Phase 6 simplicity)
     if (tipo === 'reparacion') {
       if (selectedCount === 1) {
         setState({
@@ -318,8 +317,9 @@ function SeleccionarSpoolContent() {
                       tipo === 'cancelar' ? 'CANCELAR' :
                       tipo === 'metrologia' ? 'INSPECCIONAR' :
                       tipo === 'reparacion' ? 'REPARAR' : 'SELECCIONAR';
-  // Use centralized operation config (eliminates duplication + ternary anti-pattern)
-  const { label: operationLabel, icon: OperationIcon } = getOperationConfig(state.selectedOperation);
+  const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
+                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
+                        state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' : 'REPARACIÓN';
 
   // v3.0/v4.0: Dynamic page title based on tipo or accion
   const getPageTitle = () => {
@@ -382,6 +382,10 @@ function SeleccionarSpoolContent() {
         return 'No hay spools disponibles';
     }
   };
+
+  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
+                        state.selectedOperation === 'SOLD' ? Flame :
+                        state.selectedOperation === 'METROLOGIA' ? SearchCheck : Wrench;
 
   const selectedCount = (state.selectedSpools || []).length;
 

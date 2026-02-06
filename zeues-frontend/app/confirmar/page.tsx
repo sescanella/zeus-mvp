@@ -3,10 +3,9 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { Modal } from '@/components/Modal';
-import { getOperationConfig } from '@/lib/operation-config';
 import {
   tomarOcupacion,
   pausarOcupacion,
@@ -509,8 +508,14 @@ function ConfirmarContent() {
     tipo === 'completar' ? 'COMPLETAR' :
     tipo === 'cancelar' ? 'CANCELAR' : 'ACCIÓN';
 
-  // Use centralized operation config (eliminates duplication + ternary anti-pattern)
-  const { label: operationLabel, icon: OperationIcon } = getOperationConfig(state.selectedOperation);
+  const operationLabel =
+    state.selectedOperation === 'ARM' ? 'ARMADO' :
+    state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
+    state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' :
+    state.selectedOperation === 'REPARACION' ? 'REPARACIÓN' : 'OPERACIÓN';
+
+  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
+                        state.selectedOperation === 'SOLD' ? Flame : SearchCheck;
 
   const spoolsList = isBatchMode ? state.selectedSpools : [state.selectedSpool];
   const spoolCount = spoolsList.length;
