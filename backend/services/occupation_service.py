@@ -1106,7 +1106,92 @@ class OccupationService:
                     unions_processed=0
                 )
 
-            # Step 4: Get fresh union totals to determine action
+            # Step 4a: Handle REPARACION workflow (spool-level only, no unions)
+            if operacion == "REPARACION":
+                logger.info(f"[REPARACION FINALIZAR] Processing {tag_spool} without union tracking")
+
+                # REPARACION always marks as completed (no PAUSAR support)
+                action_taken = "COMPLETAR"
+
+                # Clear occupation and update estado_detalle
+                updates_dict = {
+                    "Ocupado_Por": "",
+                    "Fecha_Ocupacion": "",
+                    "Estado_Detalle": "REPARACION completado - PENDIENTE_METROLOGIA"
+                }
+
+                # Use batch_update_by_column_name with automatic retry
+                from backend.core.column_map_cache import ColumnMapCache
+                from backend.config import config
+
+                column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
+
+                def normalize(name: str) -> str:
+                    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+                # Find TAG_SPOOL column
+                tag_column_index = None
+                for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+                    normalized = normalize(col_name)
+                    if normalized in column_map:
+                        tag_column_index = column_map[normalized]
+                        break
+
+                if tag_column_index is None:
+                    tag_column_index = 6  # Fallback
+
+                batch_updates = [{"column_name": k, "value": v} for k, v in updates_dict.items()]
+
+                try:
+                    self.sheets_repository.batch_update_by_column_name(
+                        tag_spool=tag_spool,
+                        tag_column_index=tag_column_index,
+                        updates=batch_updates,
+                        expected_version=None  # REPARACION doesn't use version column
+                    )
+                    logger.info(f"✅ REPARACION occupation cleared for {tag_spool}")
+                except Exception as e:
+                    logger.error(f"Failed to clear occupation for REPARACION: {e}")
+                    raise SheetsUpdateError(
+                        f"Failed to clear REPARACION occupation: {e}",
+                        updates=updates_dict
+                    )
+
+                # Log metadata event
+                try:
+                    evento_tipo = EventoTipo.FINALIZAR_SPOOL.value
+                    metadata_json = json.dumps({
+                        "pulgadas": 0.0,  # REPARACION has no pulgadas metric
+                        "action_determined": action_taken
+                    })
+
+                    self.metadata_repository.log_event(
+                        evento_tipo=evento_tipo,
+                        tag_spool=tag_spool,
+                        worker_id=worker_id,
+                        worker_nombre=worker_nombre,
+                        operacion=operacion,
+                        accion="FINALIZAR",
+                        fecha_operacion=format_date_for_sheets(today_chile()),
+                        metadata_json=metadata_json
+                    )
+
+                    logger.info(f"✅ Metadata logged: {evento_tipo} for REPARACION {tag_spool}")
+
+                except Exception as e:
+                    logger.error(f"❌ CRITICAL: Metadata logging failed for REPARACION: {e}")
+
+                # Return early for REPARACION
+                return OccupationResponse(
+                    success=True,
+                    tag_spool=tag_spool,
+                    message=f"REPARACION finalizada en {tag_spool} - PENDIENTE_METROLOGIA",
+                    action_taken=action_taken,
+                    unions_processed=0,
+                    pulgadas=0.0
+                )
+
+            # Step 4b: Standard ARM/SOLD workflow with union tracking
             if self.union_repository is None:
                 raise ValueError("UnionRepository not configured for v4.0 operations")
 
