@@ -622,24 +622,36 @@ export async function getSpoolsReparacion(): Promise<{
   filtro_aplicado: string;
 }> {
   try {
-    const url = `${API_URL}/api/spools/reparacion`;
+    // Use /api/spools/iniciar?operacion=REPARACION endpoint (uses FilterRegistry)
+    const url = `${API_URL}/api/spools/iniciar?operacion=REPARACION`;
     const res = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
 
-    return await handleResponse<{
+    const data = await handleResponse<{
       spools: Array<{
         tag_spool: string;
-        estado_detalle: string;
-        fecha_rechazo: string;
-        cycle: number;
-        bloqueado: boolean;
+        estado_detalle?: string;
+        fecha_qc_metrologia?: string;
       }>;
       total: number;
-      bloqueados: number;
       filtro_aplicado: string;
     }>(res);
+
+    // Transform response to match expected format
+    return {
+      spools: data.spools.map((spool) => ({
+        tag_spool: spool.tag_spool,
+        estado_detalle: spool.estado_detalle || '',
+        fecha_rechazo: spool.fecha_qc_metrologia || '',
+        cycle: 0, // TODO: Extract cycle from estado_detalle if needed
+        bloqueado: false // TODO: Determine from estado_detalle if needed
+      })),
+      total: data.total,
+      bloqueados: 0, // TODO: Calculate if needed
+      filtro_aplicado: data.filtro_aplicado
+    };
   } catch (error) {
     console.error('getSpoolsReparacion error:', error);
     throw new Error('No se pudieron cargar spools para reparación.');
