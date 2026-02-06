@@ -278,7 +278,7 @@ function SeleccionarSpoolContent() {
       return;
     }
 
-    // REPARACION: Navigate to tipo-interaccion page (single spool only for Phase 6 simplicity)
+    // REPARACION: Navigate to confirmar page (single spool only for Phase 6 simplicity)
     if (tipo === 'reparacion') {
       if (selectedCount === 1) {
         setState({
@@ -286,7 +286,7 @@ function SeleccionarSpoolContent() {
           selectedSpools: [],
           batchMode: false
         });
-        router.push('/tipo-interaccion');
+        router.push('/confirmar?tipo=reparacion');
       }
       return;
     }
