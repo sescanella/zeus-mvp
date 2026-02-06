@@ -1113,10 +1113,12 @@ class OccupationService:
                 # REPARACION always marks as completed (no PAUSAR support)
                 action_taken = "COMPLETAR"
 
-                # Clear occupation and update estado_detalle
+                # Clear occupation, metrología date, and update estado_detalle
+                # CRITICAL: Clear Fecha_QC_Metrología so spool returns to PENDIENTE_METROLOGIA state
                 updates_dict = {
                     "Ocupado_Por": "",
                     "Fecha_Ocupacion": "",
+                    "Fecha_QC_Metrología": "",  # Reset metrología - spool must be re-inspected after repair
                     "Estado_Detalle": "REPARACION completado - PENDIENTE_METROLOGIA"
                 }
 
