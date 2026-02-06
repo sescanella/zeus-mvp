@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, ArrowLeft, X } from 'lucide-react';
 import { ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
+import { OPERATION_WORKFLOWS, type OperationType } from '@/lib/operation-config';
 import type { Worker } from '@/lib/types';
 
 // Mapeo de operaciones a roles necesarios
@@ -67,12 +68,17 @@ export default function TrabajadorSelectionPage() {
   const handleSelectWorker = (worker: Worker) => {
     setState({ selectedWorker: worker });
 
-    // METROLOGIA and REPARACION skip tipo-interaccion and go directly to spool selection
-    if (state.selectedOperation === 'METROLOGIA') {
-      router.push('/seleccionar-spool?tipo=metrologia');
-    } else if (state.selectedOperation === 'REPARACION') {
-      router.push('/seleccionar-spool?tipo=reparacion');
+    // Data-driven navigation based on operation configuration
+    // See: lib/operation-config.ts for workflow definitions
+    const workflow = OPERATION_WORKFLOWS[state.selectedOperation as OperationType];
+
+    if (workflow.skipP3) {
+      // Direct navigation to P4 (spool selection) with first action
+      // Currently only METROLOGIA uses this path (instant inspection)
+      router.push(`/seleccionar-spool?tipo=${workflow.actions[0]}`);
     } else {
+      // Standard flow through P3 (action type selection)
+      // Used by ARM, SOLD, REPARACION for multi-step workflows
       router.push('/tipo-interaccion');
     }
   };

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Wrench, Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getUnionMetricas } from '@/lib/api';
 import { cacheSpoolVersion, getCachedVersion } from '@/lib/version';
@@ -137,10 +137,12 @@ export default function TipoInteraccionPage() {
   }
 
   const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
-                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
+                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
+                        state.selectedOperation === 'REPARACION' ? 'REPARACIÓN' : 'METROLOGÍA';
 
   const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
-                        state.selectedOperation === 'SOLD' ? Flame : SearchCheck;
+                        state.selectedOperation === 'SOLD' ? Flame :
+                        state.selectedOperation === 'REPARACION' ? Wrench : SearchCheck;
 
   // Get worker roles array (assuming roles is array, fallback to single rol)
   const workerRoles = (Array.isArray(state.selectedWorker.roles)
@@ -389,7 +391,17 @@ export default function TipoInteraccionPage() {
                 </button>
               </div>
 
-              {/* CANCELAR - full width (REPARACIÓN only) */}
+              {/* CANCELAR - full width (REPARACIÓN only)
+                  Business Rule: After 3 failed repair attempts, spool must be CANCELED.
+                  This transitions spool to BLOQUEADO state (requires engineering review).
+
+                  Use CANCELAR when:
+                  - Spool has been repaired 3 times and still fails inspection
+                  - Defect is beyond field repair capabilities
+                  - Engineering department must evaluate root cause
+
+                  Effect: Spool becomes BLOQUEADO and cannot be used until engineering clears it.
+              */}
               {state.selectedOperation === 'REPARACION' && (
                 <button
                   onClick={() => handleSelectTipo('cancelar')}
