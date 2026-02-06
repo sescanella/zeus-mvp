@@ -159,27 +159,37 @@ function ConfirmarContent() {
         // v4.0: FINALIZAR flow with union selection
         const worker_id = state.selectedWorker!.id;
         const tag_spool = state.selectedSpool!;
-        const operacion = state.selectedOperation as 'ARM' | 'SOLD';
+        const operacion = state.selectedOperation as 'ARM' | 'SOLD' | 'REPARACION';
 
-        const payload: FinalizarRequest = {
-          tag_spool,
-          worker_id,
-          operacion,
-          selected_unions: state.selectedUnions, // Already union IDs (format: "OT-123+5")
-        };
+        // REPARACION uses v3.0 endpoint (no union selection, uses state machine)
+        if (operacion === 'REPARACION') {
+          await completarReparacion({
+            tag_spool,
+            worker_id,
+          });
+          router.push('/exito');
+        } else {
+          // ARM/SOLD use v4.0 endpoint with union selection
+          const payload: FinalizarRequest = {
+            tag_spool,
+            worker_id,
+            operacion,
+            selected_unions: state.selectedUnions, // Already union IDs (format: "OT-123+5")
+          };
 
-        const response = await finalizarSpool(payload);
+          const response = await finalizarSpool(payload);
 
-        // Store pulgadas for success page (backend field name is "pulgadas", not "pulgadas_completadas")
-        setState({ pulgadasCompletadas: response.pulgadas || 0 });
+          // Store pulgadas for success page (backend field name is "pulgadas", not "pulgadas_completadas")
+          setState({ pulgadasCompletadas: response.pulgadas || 0 });
 
-        // Clear session storage on success
-        if (state.selectedSpool) {
-          sessionStorage.removeItem(`unions_selection_${state.selectedSpool}`);
+          // Clear session storage on success
+          if (state.selectedSpool) {
+            sessionStorage.removeItem(`unions_selection_${state.selectedSpool}`);
+          }
+
+          // Navigate to success
+          router.push('/exito');
         }
-
-        // Navigate to success
-        router.push('/exito');
       } else if (isBatchMode) {
         // v3.0: Batch mode - procesar múltiples spools
         const worker_nombre = state.selectedWorker!.nombre_completo; // Format: "INICIALES(ID)"
