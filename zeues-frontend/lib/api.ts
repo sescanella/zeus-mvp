@@ -144,7 +144,7 @@ export async function getSpoolsParaCompletar(
  * POST /api/iniciar-accion
  * Inicia una acción (marca V/W→0.1, guarda trabajador en BC/BE).
  *
- * @deprecated Use tomarOcupacion() instead (v3.0 endpoint with Redis locks, optimistic versioning, and Estado_Detalle tracking)
+ * @deprecated Use tomarOcupacion() instead (v3.0 endpoint with Estado_Detalle tracking)
  *
  * @param payload - Datos de la acción (worker_id, operacion, tag_spool)
  * @returns Promise<ActionResponse> - Respuesta con detalles de la operación
@@ -159,7 +159,7 @@ export async function getSpoolsParaCompletar(
  * console.log(result.message); // "Acción ARM iniciada exitosamente..."
  */
 export async function iniciarAccion(payload: ActionPayload): Promise<ActionResponse> {
-  console.warn('⚠️ iniciarAccion() is deprecated. Migrate to tomarOcupacion() for v3.0 features (Redis locks, optimistic versioning, Estado_Detalle tracking).');
+  console.warn('⚠️ iniciarAccion() is deprecated. Migrate to tomarOcupacion() for v3.0 features (Estado_Detalle tracking).');
   try {
     const res = await fetch(`${API_URL}/api/iniciar-accion`, {
       method: 'POST',
@@ -179,7 +179,7 @@ export async function iniciarAccion(payload: ActionPayload): Promise<ActionRespo
  * POST /api/completar-accion
  * Completa una acción (marca V/W→1.0, guarda fecha en BB/BD).
  *
- * @deprecated Use completarOcupacion() instead (v3.0 endpoint with Redis lock release and Estado_Detalle updates)
+ * @deprecated Use completarOcupacion() instead (v3.0 endpoint with Estado_Detalle updates)
  *
  * CRÍTICO: Solo quien inició (BC/BE) puede completar. Si otro trabajador intenta,
  * backend retorna 403 FORBIDDEN y esta función lanza error con mensaje específico.
@@ -210,7 +210,7 @@ export async function iniciarAccion(payload: ActionPayload): Promise<ActionRespo
  * }
  */
 export async function completarAccion(payload: ActionPayload): Promise<ActionResponse> {
-  console.warn('⚠️ completarAccion() is deprecated. Migrate to completarOcupacion() for v3.0 features (Redis lock release, Estado_Detalle updates).');
+  console.warn('⚠️ completarAccion() is deprecated. Migrate to completarOcupacion() for v3.0 features (Estado_Detalle updates).');
   try {
     const res = await fetch(`${API_URL}/api/completar-accion`, {
       method: 'POST',
@@ -695,7 +695,10 @@ export async function completarReparacion(payload: {
     const res = await fetch(`${API_URL}/api/completar-reparacion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        ...payload,
+        operacion: 'REPARACION'  // Required by ActionRequest model
+      })
     });
 
     if (res.status === 403) {
@@ -803,7 +806,7 @@ export async function cancelarReparacion(payload: {
  * POST /api/iniciar-accion-batch
  * Inicia múltiples acciones simultáneamente (hasta 50 spools).
  *
- * @deprecated Use tomarOcupacionBatch() instead (v3.0 endpoint with Redis locks per spool and English response field names)
+ * @deprecated Use tomarOcupacionBatch() instead (v3.0 endpoint with English response field names)
  *
  * Procesa cada spool individualmente. Si algunos spools fallan, continúa
  * procesando los restantes (manejo de errores parciales).
@@ -830,7 +833,7 @@ export async function cancelarReparacion(payload: {
 export async function iniciarAccionBatch(
   request: BatchActionRequest
 ): Promise<BatchActionResponse> {
-  console.warn('⚠️ iniciarAccionBatch() is deprecated. Migrate to tomarOcupacionBatch() for v3.0 features (Redis locks per spool, English response field names).');
+  console.warn('⚠️ iniciarAccionBatch() is deprecated. Migrate to tomarOcupacionBatch() for v3.0 features (English response field names).');
   try {
     // Validación frontend
     if (request.tag_spools.length === 0) {
@@ -964,18 +967,18 @@ export async function cancelarAccionBatch(
 }
 
 // ==========================================
-// OCCUPATION v3.0 OPERATIONS (Redis locks + State Machine)
+// OCCUPATION v3.0 OPERATIONS (State Machine)
 // ==========================================
 
 /**
  * POST /api/occupation/tomar (v3.0)
- * Toma un spool con lock Redis y actualiza columnas de ocupación.
+ * Toma un spool y actualiza columnas de ocupación.
  *
- * Atomically acquires Redis lock and updates Ocupado_Por/Fecha_Ocupacion/Version/Estado_Detalle
+ * Updates Ocupado_Por/Fecha_Ocupacion/Version/Estado_Detalle
  * in Operaciones sheet. Prevents concurrent TOMAR on same spool.
  *
  * NEW v3.0 features vs v2.1 iniciarAccion:
- * - Redis lock with ownership token (prevents race conditions)
+ * - Occupation tracking (single-user mode)
  * - Optimistic locking with Version column
  * - Estado_Detalle tracking ("ARM en progreso", etc.)
  * - Requires worker_nombre in all requests (format: "INICIALES(ID)")
@@ -1049,10 +1052,10 @@ export async function tomarOcupacion(request: TomarRequest): Promise<OccupationR
 
 /**
  * POST /api/occupation/pausar (v3.0)
- * Pausa trabajo en un spool y libera el lock Redis.
+ * Pausa trabajo en un spool y limpia ocupación.
  *
  * Verifies worker owns the lock, marks spool as "ARM parcial (pausado)"
- * or "SOLD parcial (pausado)", clears occupation, and releases Redis lock.
+ * or "SOLD parcial (pausado)", clears occupation.
  *
  * SEMANTIC DIFFERENCE vs v2.1 cancelarAccion:
  * - PAUSAR (v3.0): Marks as "parcial (pausado)" - work can be resumed
@@ -1112,10 +1115,10 @@ export async function pausarOcupacion(request: PausarRequest): Promise<Occupatio
 
 /**
  * POST /api/occupation/completar (v3.0)
- * Completa trabajo en un spool y libera el lock Redis.
+ * Completa trabajo en un spool y limpia ocupación.
  *
  * Verifies worker owns the lock, updates fecha_armado or fecha_soldadura,
- * clears occupation, and releases Redis lock.
+ * clears occupation.
  *
  * NEW v3.0 requirements vs v2.1 completarAccion:
  * - fecha_operacion is REQUIRED (DD-MM-YYYY format)
@@ -1186,7 +1189,7 @@ export async function completarOcupacion(request: CompletarRequest): Promise<Occ
  *
  * NEW v3.0 features:
  * - Response uses English field names (succeeded/failed) NOT Spanish (exitosos/fallidos)
- * - Each spool gets individual Redis lock + ownership token
+ * - Each spool processed individually
  * - Atomic operations with optimistic locking per spool
  *
  * @param request - BatchTomarRequest with tag_spools list (max 50)
@@ -1447,7 +1450,7 @@ export async function getDisponiblesUnions(
  * Inicia ocupación de spool sin selección de uniones.
  *
  * First step of v4.0 two-button workflow (INICIAR → FINALIZAR).
- * Acquires persistent Redis lock without TTL and updates Ocupado_Por/Fecha_Ocupacion.
+ * Updates Ocupado_Por/Fecha_Ocupacion (occupation).
  * No union-level work is recorded yet - that happens in FINALIZAR.
  *
  * Validations:
@@ -1543,7 +1546,7 @@ export async function iniciarSpool(payload: IniciarRequest): Promise<IniciarResp
  * Updates:
  * - Uniones sheet: arm_fecha_fin/sol_fecha_fin for selected unions
  * - Operaciones sheet: Uniones_ARM_Completadas, Pulgadas_ARM, etc.
- * - Releases Redis lock on COMPLETAR or CANCELAR (keeps on PAUSAR)
+ * - Clears occupation on COMPLETAR or CANCELAR (keeps on PAUSAR)
  * - May trigger automatic metrología transition if SOLD 100% complete
  *
  * @param payload - FinalizarRequest with tag_spool, worker_id, operacion, selected_unions[], fecha_operacion
