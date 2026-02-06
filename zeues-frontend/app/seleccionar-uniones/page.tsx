@@ -3,11 +3,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { UnionTable } from '@/components/UnionTable';
 import { getDisponiblesUnions } from '@/lib/api';
 import type { Union } from '@/lib/types';
+import { getOperationIcon } from '@/lib/operation-config';
 
 export default function SeleccionarUnionesPage() {
   const router = useRouter();
@@ -154,8 +155,8 @@ export default function SeleccionarUnionesPage() {
     return null;
   }
 
-  // Determine operation icon
-  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle : Flame;
+  // Use centralized operation icon (eliminates duplication + ternary anti-pattern)
+  const OperationIcon = getOperationIcon(state.selectedOperation);
 
   return (
     <div

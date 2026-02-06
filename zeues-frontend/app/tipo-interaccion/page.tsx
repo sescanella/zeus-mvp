@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
+import { Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getUnionMetricas } from '@/lib/api';
 import { cacheSpoolVersion, getCachedVersion } from '@/lib/version';
+import { getOperationConfig } from '@/lib/operation-config';
 
 export default function TipoInteraccionPage() {
   const router = useRouter();
@@ -136,11 +137,8 @@ export default function TipoInteraccionPage() {
     );
   }
 
-  const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
-                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' : 'METROLOGÍA';
-
-  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
-                        state.selectedOperation === 'SOLD' ? Flame : SearchCheck;
+  // v3.0: Use centralized operation config (eliminates duplication + ternary anti-pattern)
+  const { label: operationLabel, icon: OperationIcon } = getOperationConfig(state.selectedOperation);
 
   // Get worker roles array (assuming roles is array, fallback to single rol)
   const workerRoles = (Array.isArray(state.selectedWorker.roles)
