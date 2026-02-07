@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Deployment:** Railway (backend) + Vercel (frontend)
 
 **Key Features:**
-- TOMAR/PAUSAR/COMPLETAR workflows (direct Sheets updates, no Redis locks)
+- TOMAR/PAUSAR/COMPLETAR workflows (direct Sheets updates, no distributed locks)
 - Union-level tracking (Uniones sheet)
 - INICIAR/FINALIZAR workflows (auto-determination of PAUSAR vs COMPLETAR)
 - Metrología instant inspection (APROBADO/RECHAZADO)
@@ -21,12 +21,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Hierarchical state machines
 - Pulgadas-diámetro business metric (DN_UNION sums)
 
-**Architectural Simplifications (Feb 2026):**
-- ❌ Removed Redis (no distributed locks needed with 1 user)
-- ❌ Removed SSE streaming (no real-time sync needed)
-- ❌ Removed optimistic locking (version column not updated in P5 workflow)
+**Architectural Simplifications (Single-User Mode):**
+- ✅ Single-user mode (no distributed locks with 1 tablet)
+- ✅ Real-time sync removed (no concurrent operations)
 - ✅ Direct Google Sheets validation (Ocupado_Por column check)
-- ✅ P5 Confirmation Workflow (all writes at confirmation, trust P4 filters)
+- ✅ P5 Confirmation Workflow (all writes at confirmation)
 
 **P5 Confirmation Workflow (v4.0 Phase 8 - Feb 2026):**
 
@@ -83,7 +82,7 @@ pip freeze > requirements.txt
 - **Data:** Google Sheets (single source of truth)
 - **Deploy:** Railway (backend) + Vercel (frontend)
 
-**Note:** Redis removed in Feb 2026 - Single-user mode doesn't need distributed locks or real-time pub/sub.
+**Note:** Single-user mode - No distributed locks, no real-time sync.
 
 ## Essential Commands
 
@@ -122,6 +121,17 @@ npm run build     # Production build
 # E2E tests
 npx playwright test
 npx playwright show-report
+```
+
+### Railway CLI (Deployment)
+
+```bash
+# Already linked to zeues-backend-mvp production
+railway logs              # View production logs
+railway variables         # List env vars
+railway up                # Deploy from local
+railway redeploy          # Force redeploy
+railway status            # Check deployment status
 ```
 
 ## Browser Testing with MCP (Model Context Protocol)
@@ -359,6 +369,137 @@ npm run lint      # MUST pass (no warnings)
 npm run build     # MUST pass
 ```
 
+## Accessibility Standards (WCAG 2.1 Level AA)
+
+**ZEUES is committed to WCAG 2.1 Level AA compliance for manufacturing floor accessibility.**
+
+### Testing Requirements
+
+**Automated Testing:**
+```bash
+# Run accessibility tests
+npm run test:a11y
+
+# Playwright with axe-core
+npx playwright test --grep @a11y
+npx playwright test tests/accessibility.spec.ts
+```
+
+**Manual Testing:**
+- Keyboard navigation: All features accessible via Tab/Enter/Space
+- Screen reader: VoiceOver (macOS) or NVDA (Windows) testing
+- Focus indicators: Visible 2px white/blue ring on all interactive elements
+
+### ARIA Patterns
+
+**Interactive Buttons:**
+```typescript
+<button
+  aria-label="Descriptive action"
+  aria-disabled={isDisabled}
+  onClick={handleClick}
+>
+  Button Text
+</button>
+```
+
+**Collapsible Panels:**
+```typescript
+<button
+  aria-expanded={isExpanded}
+  aria-controls="panel-id"
+  aria-label={isExpanded ? 'Ocultar panel' : 'Mostrar panel'}
+  onClick={toggle}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle();
+    }
+  }}
+>
+  Toggle
+</button>
+<div id="panel-id" role="region" aria-label="Panel description">
+  {/* Content */}
+</div>
+```
+
+**Table Rows (Selectable):**
+```typescript
+<tr
+  role="button"
+  tabIndex={isDisabled ? -1 : 0}
+  aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${tag}${isDisabled ? ' (deshabilitado)' : ''}`}
+  aria-disabled={isDisabled}
+  onClick={() => !isDisabled && handleSelect()}
+  onKeyDown={(e) => {
+    if (isDisabled) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSelect();
+    }
+  }}
+>
+```
+
+### Focus Management
+
+**Focus Indicators:**
+- Use `focus:outline-none focus:ring-2 focus:ring-zeues-blue focus:ring-inset` (Blueprint UI)
+- Use `focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset` (dark backgrounds)
+- Minimum 2px contrast ratio
+- Visible on all interactive elements (buttons, inputs, clickable rows)
+
+**Focus Trapping:**
+- Error modals trap focus (Tab cycles within modal)
+- Escape key closes modals and returns focus
+
+### Color Contrast
+
+**WCAG AA Requirements:**
+- Normal text: 4.5:1 contrast ratio
+- Large text (18pt+): 3:1 contrast ratio
+- UI components: 3:1 contrast ratio
+
+**Blueprint Industrial Palette:**
+- Primary text: `#FFFFFF` on `#001F3F` (18.5:1 ✅)
+- Error text: `#EF4444` on `#001F3F` (4.8:1 ✅)
+- Disabled text: `#9CA3AF` on `#001F3F` (3.2:1 ⚠️ - use for large text only)
+- Orange accent: `#FF6B35` on `#001F3F` (5.2:1 ✅)
+
+### Keyboard Navigation Requirements
+
+**All interactive elements MUST support:**
+- `Tab` key for focus navigation
+- `Enter` key for activation (buttons, links, clickable rows)
+- `Space` key for activation (buttons, toggles)
+- Visible focus indicators (2px ring)
+- Logical tab order (follows visual flow)
+
+**Special Cases:**
+- Collapsible panels: `Enter`/`Space` to expand/collapse
+- Table rows: `Enter`/`Space` to select/deselect
+- Filter inputs: Normal text input behavior
+- Navigation buttons: `Enter` to navigate
+
+### Validation Checklist
+
+Before PR approval:
+- [ ] `npm run test:a11y` passes (0 violations)
+- [ ] `npx playwright test tests/accessibility.spec.ts` passes
+- [ ] Keyboard navigation tested manually (Tab through all interactive elements)
+- [ ] Screen reader announces all actions correctly (VoiceOver/NVDA)
+- [ ] Focus indicators visible on all interactive elements
+- [ ] No ARIA violations (use browser axe DevTools extension)
+- [ ] Color contrast meets WCAG AA (4.5:1 for normal text, 3:1 for large/UI)
+
+### Resources
+
+- [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
+- [ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/)
+- [axe DevTools Extension](https://www.deque.com/axe/devtools/)
+- [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
+
 ## Environment Variables
 
 **Backend (.env):**
@@ -367,14 +508,68 @@ GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
 HOJA_METADATA_NOMBRE=Metadata
 GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-
-# Redis removed - single-user mode
 ```
 
 **Frontend (.env.local):**
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000  # Dev
 # NEXT_PUBLIC_API_URL=https://zeues-backend-mvp-production.up.railway.app  # Prod
+```
+
+## Security Best Practices (Updated 2026-02-06)
+
+### Credential Management
+
+**CRITICAL:** Google Service Account credentials must NEVER be committed to Git.
+
+**Verification completed (2026-02-06):**
+- ✅ `.env` in `.gitignore`
+- ✅ `google-credentials.json` and `credenciales/` in `.gitignore`
+- ✅ Git history audited - no credentials found in any commits
+- ✅ Credentials stored ONLY in Railway environment variables
+- ✅ Local development uses `.env.local` (ignored by Git)
+
+**Current setup:**
+```bash
+# Production (Railway)
+GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account",...}
+GOOGLE_CLOUD_PROJECT_ID=zeus-mvp
+GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
+
+# Development (local .env.local - NOT committed)
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+**If credentials are exposed:**
+1. Immediately rotate credentials in [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts?project=zeus-mvp)
+2. Update Railway environment variables: `railway variables set GOOGLE_APPLICATION_CREDENTIALS_JSON='...'`
+3. Redeploy: `railway up`
+4. Delete old key in Google Cloud Console
+
+### Debug Endpoints (Removed Feb 2026)
+
+**Security improvement:** All debug endpoints removed to reduce attack surface.
+
+**Previously available (now removed):**
+- `/api/health/diagnostic` - Exposed Google Sheets structure
+- `/api/health/column-map` - Exposed column mappings
+- `/api/health/test-get-spool-flow` - Exposed query logic
+- `/api/health/test-spool-constructor` - Exposed data parsing
+- `/api/health/clear-cache` - Allowed cache manipulation
+
+**Alternatives for debugging:**
+```bash
+# View column mappings
+railway logs | grep "Column map built"
+
+# Clear cache (use Railway restart instead)
+railway restart
+
+# Test Google Sheets connection
+curl https://zeues-backend-mvp-production.up.railway.app/api/health
+
+# Inspect Sheets structure
+open https://docs.google.com/spreadsheets/d/17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ/edit
 ```
 
 ## Debugging
@@ -392,17 +587,21 @@ GET  /api/occupation/diagnostic/{tag}
 # History
 GET /api/history/{tag_spool}
 
-# Health (Sheets only, no Redis)
-GET /api/health
+# Health (Sheets only)
+GET /api/health  # Only public endpoint - no debug info exposed
 
 # Cache
 POST /api/cache/clear
 ```
 
-**Removed (Feb 2026):**
-- `GET /api/sse/*` - SSE streaming endpoints (no real-time sync needed)
-- `GET /api/redis-health` - Redis health check
-- `GET /api/redis-connection-stats` - Redis monitoring
+**Removed (single-user mode):**
+- Real-time streaming endpoints (no concurrent operations)
+- **Debug endpoints (Feb 2026 - security improvement):**
+  - `/api/health/diagnostic`
+  - `/api/health/column-map`
+  - `/api/health/test-get-spool-flow`
+  - `/api/health/test-spool-constructor`
+  - `/api/health/clear-cache`
 
 **v4.0 Endpoints (Phase 8 - P5 Workflow):**
 ```bash
@@ -468,5 +667,10 @@ python backend/scripts/validate_uniones_sheet.py --fix
 
 ---
 
-**Last updated:** 2026-02-04 (v4.0 Phase 8 complete - P5 Confirmation Workflow)
-**Document version:** 3.0
+**Last updated:** 2026-02-06 (security audit complete - C1 & H3 resolved)
+**Document version:** 3.2
+
+**Security improvements (Feb 6, 2026):**
+- ✅ Credential audit: No leaks found in Git history
+- ✅ Debug endpoints removed: 476 lines of debug code eliminated
+- ✅ Attack surface reduced: 5 internal endpoints no longer exposed

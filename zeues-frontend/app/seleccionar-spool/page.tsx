@@ -562,12 +562,18 @@ function SeleccionarSpoolContent() {
               <div className="border-4 border-white overflow-hidden transition-all duration-300 ease-in-out mb-4">
                 {/* COMPACT VIEW (60px height - default) */}
                 {!isFilterExpanded && (
-                  <div
+                  <button
                     onClick={() => setIsFilterExpanded(true)}
-                    className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
-                    role="button"
-                    aria-expanded="false"
-                    aria-label="Expandir filtros de búsqueda"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsFilterExpanded(true);
+                      }
+                    }}
+                    aria-expanded={false}
+                    aria-controls="filter-panel"
+                    aria-label="Mostrar filtros de búsqueda"
+                    className="w-full p-4 cursor-pointer hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                   >
                     <div className="flex items-center justify-between">
                       {/* Left: Selection counter */}
@@ -585,23 +591,29 @@ function SeleccionarSpoolContent() {
                       {/* Right: Expand icon */}
                       <ChevronDown size={24} className="text-white" strokeWidth={3} />
                     </div>
-                  </div>
+                  </button>
                 )}
 
                 {/* EXPANDED VIEW (full filters + controls) */}
                 {isFilterExpanded && (
-                  <div className="p-6 tablet:p-4 narrow:p-4">
+                  <div id="filter-panel" className="p-6 tablet:p-4 narrow:p-4" role="region" aria-label="Panel de filtros">
                     {/* Header with collapse button */}
-                    <div
+                    <button
                       onClick={() => setIsFilterExpanded(false)}
-                      className="flex items-center justify-between mb-4 cursor-pointer hover:bg-white/5 transition-colors p-2 -m-2"
-                      role="button"
-                      aria-expanded="true"
-                      aria-label="Colapsar filtros de búsqueda"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setIsFilterExpanded(false);
+                        }
+                      }}
+                      aria-expanded={true}
+                      aria-controls="filter-panel"
+                      aria-label="Ocultar filtros de búsqueda"
+                      className="w-full flex items-center justify-between mb-4 cursor-pointer hover:bg-white/5 transition-colors p-2 -m-2 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                     >
                       <span className="text-xs font-black text-white/50 font-mono">FILTROS DE BÚSQUEDA</span>
                       <ChevronUp size={24} className="text-white" strokeWidth={3} />
-                    </div>
+                    </button>
 
                     {/* Search inputs grid */}
                     <div className="grid grid-cols-2 narrow:grid-cols-1 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
@@ -700,8 +712,19 @@ function SeleccionarSpoolContent() {
                       return (
                         <tr
                           key={spool.tag_spool}
+                          role="button"
+                          tabIndex={isBloqueado ? -1 : 0}
+                          aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isBloqueado ? ' (bloqueado)' : ''}`}
+                          aria-disabled={isBloqueado}
                           onClick={() => !isBloqueado && toggleSelect(spool.tag_spool)}
-                          className={`border-t-2 border-white/30 transition-colors ${
+                          onKeyDown={(e) => {
+                            if (isBloqueado) return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggleSelect(spool.tag_spool);
+                            }
+                          }}
+                          className={`border-t-2 border-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
                             isBloqueado
                               ? 'bg-red-500/20 border-red-500 cursor-not-allowed'
                               : isSelected

@@ -84,9 +84,21 @@ export function SpoolTable({
             return (
               <tr
                 key={spool.tag_spool}
+                role="button"
+                tabIndex={isDisabled ? -1 : 0}
+                aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isDisabled ? ' (deshabilitado)' : ''}`}
+                aria-disabled={isDisabled}
                 onClick={() => !isDisabled && onToggle(spool.tag_spool)}
+                onKeyDown={(e) => {
+                  if (isDisabled) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onToggle(spool.tag_spool);
+                  }
+                }}
                 className={`
                   cursor-pointer transition-colors h-16
+                  focus:outline-none focus:ring-2 focus:ring-zeues-blue focus:ring-inset
                   ${isSelected
                     ? 'bg-zeues-blue/10 hover:bg-zeues-blue/20'
                     : isDisabled
