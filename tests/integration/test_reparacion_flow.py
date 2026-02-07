@@ -23,7 +23,6 @@ from backend.services.validation_service import ValidationService
 from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
-from backend.services.redis_event_service import RedisEventService
 from backend.services.estado_detalle_service import EstadoDetalleService
 from backend.models.spool import Spool
 from backend.exceptions import (
@@ -61,14 +60,6 @@ def mock_metadata_repo():
 
 
 @pytest.fixture
-def mock_redis_event_service():
-    """Mock RedisEventService for testing."""
-    service = AsyncMock(spec=RedisEventService)
-    service.publish_spool_update.return_value = True
-    return service
-
-
-@pytest.fixture
 def validation_service():
     """Real ValidationService for prerequisite validation."""
     return ValidationService(role_service=None)
@@ -81,14 +72,13 @@ def cycle_counter_service():
 
 
 @pytest.fixture
-def reparacion_service(validation_service, cycle_counter_service, mock_sheets_repo, mock_metadata_repo, mock_redis_event_service):
+def reparacion_service(validation_service, cycle_counter_service, mock_sheets_repo, mock_metadata_repo):
     """ReparacionService with mocked dependencies."""
     return ReparacionService(
         validation_service=validation_service,
         cycle_counter_service=cycle_counter_service,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo,
-        redis_event_service=mock_redis_event_service
+        metadata_repository=mock_metadata_repo
     )
 
 
@@ -405,47 +395,7 @@ async def test_cancelar_returns_to_rechazado(reparacion_service, mock_sheets_rep
 # SSE EVENT PUBLISHING
 # ============================================================================
 
-
-@pytest.mark.asyncio
-async def test_sse_events_published_for_all_actions(reparacion_service, mock_sheets_repo, mock_redis_event_service, rechazado_cycle1_spool, en_reparacion_spool):
-    """
-    Should publish SSE events for TOMAR, PAUSAR, COMPLETAR, CANCELAR actions.
-    """
-    tag_spool = rechazado_cycle1_spool.tag_spool
-    worker_id = 95
-    worker_nombre = "CP(95)"
-
-    # Test TOMAR event
-    mock_sheets_repo.get_spool_by_tag.return_value = rechazado_cycle1_spool
-    await reparacion_service.tomar_reparacion(tag_spool, worker_id, worker_nombre)
-
-    assert mock_redis_event_service.publish_spool_update.called
-    call_args = mock_redis_event_service.publish_spool_update.call_args
-    assert call_args[1]["event_type"] == "TOMAR_REPARACION"
-    assert call_args[1]["tag_spool"] == tag_spool
-    assert call_args[1]["worker_nombre"] == worker_nombre
-
-    # Reset mock
-    mock_redis_event_service.reset_mock()
-
-    # Test PAUSAR event
-    mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
-    await reparacion_service.pausar_reparacion(tag_spool, worker_id)
-
-    assert mock_redis_event_service.publish_spool_update.called
-    call_args = mock_redis_event_service.publish_spool_update.call_args
-    assert call_args[1]["event_type"] == "PAUSAR_REPARACION"
-
-    # Reset mock
-    mock_redis_event_service.reset_mock()
-
-    # Test COMPLETAR event
-    mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
-    await reparacion_service.completar_reparacion(tag_spool, worker_id, worker_nombre)
-
-    assert mock_redis_event_service.publish_spool_update.called
-    call_args = mock_redis_event_service.publish_spool_update.call_args
-    assert call_args[1]["event_type"] == "COMPLETAR_REPARACION"
+# SSE event tests removed - single-user mode no longer uses Redis/SSE
 
 
 # ============================================================================
