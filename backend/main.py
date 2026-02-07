@@ -38,10 +38,8 @@ from backend.core.dependency import get_sheets_repository
 
 # FASE 2: Routers READ-ONLY implementados (health, workers, spools)
 from backend.routers import health, workers, spools
-# FASE 3: Router WRITE implementado (actions)
+# FASE 3: Router WRITE implementado (actions - reparacion only, v2.1 endpoints removed)
 from backend.routers import actions
-# v3.0: Router OCCUPATION implementado (TOMAR/PAUSAR/COMPLETAR)
-from backend.routers import occupation
 # v3.0 Phase 3: Router HISTORY implementado (occupation history timeline)
 from backend.routers import history
 # v3.0 Phase 4: Router DASHBOARD implementado (occupied spools for initial load)
@@ -271,8 +269,6 @@ async def startup_event():
     logging.info(f"CORS Origins: {config.ALLOWED_ORIGINS}")
     logging.info("API versioning enabled: v3.0 endpoints at /api/v3/, v4.0 endpoints at /api/v4/ (future)")
 
-    # Single-user mode: No Redis connections needed
-
     # v2.1: Pre-warm column map cache para hoja Operaciones
     try:
         logging.info("🔄 Pre-warming ColumnMapCache for 'Operaciones'...")
@@ -316,7 +312,7 @@ async def startup_event():
         logging.info("🔄 Validating v4.0 schema (Operaciones, Uniones, Metadata)...")
         from backend.scripts.validate_schema_startup import validate_v4_schema
 
-        # Reuse singleton sheets_repo to leverage cached data from Redis reconciliation and pre-warm
+        # Reuse singleton sheets_repo to leverage cached data from pre-warm
         sheets_repo = get_sheets_repository()
         success, details = validate_v4_schema(repo=sheets_repo)
 
@@ -360,13 +356,10 @@ async def shutdown_event():
 
     Acciones:
     - Log de shutdown
-    - Disconnect Redis connection pool
     - Cerrar conexiones pendientes (futuro)
     - Flush de cache (futuro)
     """
     logging.info("🔴 ZEUES API shutting down...")
-
-    # Single-user mode: No Redis cleanup needed
 
 
 # ============================================================================
@@ -378,11 +371,8 @@ app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(workers.router, prefix="/api", tags=["Workers"])
 app.include_router(spools.router, prefix="/api", tags=["Spools"])
 
-# FASE 3: Router WRITE registrado (CRÍTICO - ownership validation)
-app.include_router(actions.router, prefix="/api", tags=["Actions"])
-
-# v3.0: Router OCCUPATION registrado (legacy path for backward compatibility)
-app.include_router(occupation.router, prefix="/api", tags=["occupation-legacy"])
+# FASE 3: Router WRITE registrado (reparacion endpoints only)
+app.include_router(actions.router, prefix="/api", tags=["Reparacion"])
 
 # v4.0: Router OCCUPATION_V4 registrado (INICIAR/FINALIZAR workflows)
 app.include_router(occupation_v4.router, prefix="/api/v4", tags=["v4-occupation"])

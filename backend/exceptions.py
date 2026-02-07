@@ -307,9 +307,10 @@ class VersionConflictError(ZEUSException):
 
 class LockExpiredError(ZEUSException):
     """
-    Lock de Redis expiró durante la operación (v3.0).
+    Occupation lock expired during operation.
 
-    Indica que la operación tardó más del TTL del lock.
+    Note: In single-user mode (v4.0), this exception is rarely triggered
+    since there are no distributed locks. Kept for backward compatibility.
     """
 
     def __init__(self, tag_spool: str):

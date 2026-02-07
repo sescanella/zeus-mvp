@@ -6,26 +6,28 @@ usando el patrón de Dependency Injection de FastAPI con Depends().
 
 Estrategia:
 - Singletons: SheetsRepository, SheetsService, ValidationService
-  - Razón: Stateless o necesitan compartir estado (cache)
+  - Razon: Stateless o necesitan compartir estado (cache)
   - Lazy initialization: Se crean solo al primer uso
-- Nuevas instancias: WorkerService, SpoolService, ActionService
-  - Razón: Pueden tener estado en el futuro
-  - Reciben dependencias inyectadas automáticamente por FastAPI
+- Nuevas instancias: WorkerService, SpoolService, OccupationService
+  - Razon: Pueden tener estado en el futuro
+  - Reciben dependencias inyectadas automaticamente por FastAPI
+
+v4.0: ActionService removed - v2.1 endpoints deprecated in favor of v4.0 INICIAR/FINALIZAR
 
 Testability:
-- Fácil mockear dependencias en tests E2E
+- Facil mockear dependencias en tests E2E
 - Sobreescribir factory functions con app.dependency_overrides
 
 Usage en routers:
-    from backend.core.dependency import get_action_service
+    from backend.core.dependency import get_occupation_service_v4
     from fastapi import Depends
 
-    @router.post("/iniciar-accion")
-    async def iniciar_accion(
-        request: ActionRequest,
-        action_service: ActionService = Depends(get_action_service)
+    @router.post("/api/v4/occupation/iniciar")
+    async def iniciar_spool(
+        request: IniciarRequest,
+        occupation_service: OccupationService = Depends(get_occupation_service_v4)
     ):
-        return action_service.iniciar_accion(...)
+        return occupation_service.iniciar_spool(...)
 """
 
 from typing import Optional
@@ -41,7 +43,7 @@ from backend.services.validation_service import ValidationService
 from backend.services.spool_service import SpoolService
 from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
-from backend.services.action_service import ActionService
+# ActionService removed - v2.1 endpoints deprecated in favor of v4.0 INICIAR/FINALIZAR
 from backend.services.occupation_service import OccupationService
 from backend.services.union_service import UnionService
 from backend.services.state_service import StateService
@@ -58,7 +60,6 @@ from backend.config import config
 
 _sheets_repo_singleton: Optional[SheetsRepository] = None
 _sheets_service_singleton: Optional[SheetsService] = None
-# Redis removed - single-user mode
 
 
 # ============================================================================
@@ -282,50 +283,7 @@ def get_spool_service_v2(
     return SpoolServiceV2(sheets_repository=sheets_repo)
 
 
-def get_action_service(
-    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    metadata_repository: MetadataRepository = Depends(get_metadata_repository),
-    validation_service: ValidationService = Depends(get_validation_service),
-    worker_service: WorkerService = Depends(get_worker_service),
-    spool_service_v2: SpoolServiceV2 = Depends(get_spool_service_v2)
-) -> ActionService:
-    """
-    Factory para ActionService (nueva instancia por request) - CRÍTICO.
-
-    v2.1 Direct Write: ActionService escribe directamente en hoja Operaciones
-    + auditoría opcional en Metadata.
-
-    ActionService coordina:
-    - Validación de trabajadores (WorkerService)
-    - Búsqueda de spools (SpoolServiceV2 - mapeo dinámico)
-    - Validación de ownership (ValidationService - Direct Read)
-    - Escritura en Operaciones (SheetsRepository - CRÍTICO)
-    - Escritura en Metadata (MetadataRepository - OPCIONAL auditoría)
-
-    Args:
-        sheets_repo: Repositorio Sheets para escribir en Operaciones (v2.1 CRÍTICO).
-        metadata_repository: Repositorio Metadata para auditoría (v2.1 OPCIONAL).
-        validation_service: Servicio de validación (inyectado automáticamente).
-        worker_service: Servicio de trabajadores (inyectado automáticamente).
-        spool_service_v2: SpoolServiceV2 con mapeo dinámico (inyectado automáticamente).
-
-    Returns:
-        Nueva instancia de ActionService con todas las dependencias configuradas.
-
-    Usage:
-        action_service: ActionService = Depends(get_action_service)
-
-    Note:
-        v2.1: Escribe directamente en Operaciones (columnas: Armador, Fecha_Armado, etc.)
-        Metadata se mantiene como auditoría paralela (best effort, no crítico).
-    """
-    return ActionService(
-        sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository,
-        validation_service=validation_service,
-        spool_service=spool_service_v2,
-        worker_service=worker_service
-    )
+# get_action_service removed - v2.1 endpoints deprecated in favor of v4.0 INICIAR/FINALIZAR
 
 
 
@@ -355,8 +313,8 @@ def get_conflict_service(
         conflict_service: ConflictService = Depends(get_conflict_service)
 
     Note:
-        v3.0: Secondary defense against race conditions. Primary defense is Redis locks.
-        Version tokens prevent data corruption from concurrent sheet updates.
+        Single-user mode: Version tokens provide data consistency for any concurrent operations.
+        No distributed locks needed with 1 tablet.
     """
     return ConflictService(sheets_repository=sheets_repo)
 

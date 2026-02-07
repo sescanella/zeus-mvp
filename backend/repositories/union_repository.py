@@ -137,7 +137,7 @@ class UnionRepository:
         Query all unions for a given spool using TAG_SPOOL as foreign key.
 
         This method maintains v3.0 compatibility by using TAG_SPOOL (not OT)
-        to avoid breaking Redis keys, Metadata references, and existing queries.
+        to avoid breaking Metadata references and existing queries.
 
         Args:
             tag_spool: TAG_SPOOL value to filter by (e.g., "OT-123")

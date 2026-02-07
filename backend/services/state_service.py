@@ -8,7 +8,7 @@ v3.0 state management:
 - Separate state machines per operation (ARM/SOLD)
 - Hydration from Sheets columns (Armador/Soldador/Fecha_*)
 - Estado_Detalle updates via EstadoDetalleBuilder
-- Integration with Phase 2 OccupationService (Redis locks)
+- Integration with OccupationService (single-user mode)
 """
 
 import logging
@@ -67,7 +67,7 @@ class StateService:
         TOMAR operation with state machine coordination.
 
         Flow:
-        1. Delegate to OccupationService (Redis lock + Ocupado_Por update)
+        1. Delegate to OccupationService (Ocupado_Por update)
         2. Fetch current spool state from Sheets
         3. Hydrate state machines from current Sheets state
         4. Trigger state transition (iniciar) based on operation
@@ -91,7 +91,7 @@ class StateService:
             f"StateService.tomar: {tag_spool} by {request.worker_nombre} for {operacion.value}"
         )
 
-        # Step 1: Delegate to OccupationService (Redis lock + Ocupado_Por)
+        # Step 1: Delegate to OccupationService (Ocupado_Por update)
         response = await self.occupation_service.tomar(request)
 
         try:
@@ -225,7 +225,7 @@ class StateService:
 
         except Exception as e:
             # CRITICAL: State machine transition failed after OccupationService wrote Ocupado_Por
-            # We must rollback: clear Ocupado_Por and release Redis lock
+            # We must rollback: clear Ocupado_Por
             logger.error(
                 f"❌ CRITICAL: State machine transition failed for {tag_spool}, rolling back occupation: {e}",
                 exc_info=True
@@ -248,13 +248,9 @@ class StateService:
                     operation="ROLLBACK_TOMAR"
                 )
 
-                # NOTE: We cannot safely release the Redis lock here because we don't have the lock_token
-                # (it's inside OccupationService.tomar which already succeeded before this rollback).
-                # The lock will auto-expire after 1 hour (TTL), which is acceptable for this edge case.
                 # The critical part is clearing Ocupado_Por so the spool appears available in Sheets.
                 logger.info(
-                    f"✅ Rollback successful: cleared Ocupado_Por for {tag_spool}. "
-                    f"Redis lock will auto-expire after TTL."
+                    f"✅ Rollback successful: cleared Ocupado_Por for {tag_spool}."
                 )
 
             except Exception as rollback_error:

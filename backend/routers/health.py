@@ -6,7 +6,8 @@ con Google Sheets está operativa. Usado por Railway y monitoreo externo.
 
 Endpoints:
 - GET /api/health - Health check con test de conexión Sheets
-- GET /api/redis-health - Health check con test de conexión Redis
+
+Note: Single-user mode - No Redis health check needed.
 """
 
 from fastapi import APIRouter, Depends, status
@@ -587,4 +588,3 @@ async def clear_cache():
         }
 
 
-# Redis endpoints removed - single-user mode doesn't need Redis

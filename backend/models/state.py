@@ -46,12 +46,12 @@ class CombinedSpoolState(BaseModel):
     Estado combinado de un spool (ocupación + operaciones).
 
     Representa el estado completo de un spool incluyendo:
-    - Estado de ocupación (Redis lock)
+    - Estado de ocupación (Ocupado_Por column)
     - Estado de operaciones ARM/SOLD (state machines)
     - Estado_Detalle display string
     """
     tag_spool: str = Field(..., description="TAG del spool")
-    ocupado: bool = Field(..., description="Si el spool está ocupado (Redis lock)")
+    ocupado: bool = Field(..., description="Si el spool está ocupado")
     ocupado_por: Optional[str] = Field(None, description="Worker que ocupa el spool")
     arm_estado: StateInfo = Field(..., description="Estado de operación ARM")
     sold_estado: StateInfo = Field(..., description="Estado de operación SOLD")

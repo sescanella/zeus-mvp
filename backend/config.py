@@ -39,8 +39,6 @@ class Config:
     # Cache configuration
     CACHE_TTL_SECONDS: int = int(os.getenv('CACHE_TTL_SECONDS', '300'))  # 5 minutos default
 
-    # Redis removed - single-user mode doesn't need distributed locks or SSE
-
     # Environment
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'development')
 

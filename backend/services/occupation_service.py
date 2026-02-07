@@ -336,15 +336,16 @@ class OccupationService:
 
     async def completar(self, request: CompletarRequest) -> OccupationResponse:
         """
-        Complete work on a spool (mark operation complete and release lock).
+        Complete work on a spool (mark operation complete and clear occupation).
+
+        Simplified for single-user mode: No distributed locks needed.
 
         Flow:
-        1. Verify worker owns the Redis lock
+        1. Validate spool exists and is occupied
         2. Update fecha_armado or fecha_soldadura based on operation
         3. Clear Ocupado_Por and Fecha_Ocupacion
-        4. Release Redis lock
-        5. Log COMPLETAR event to Metadata sheet
-        6. Return success response
+        4. Log COMPLETAR event to Metadata sheet
+        5. Return success response
 
         Args:
             request: COMPLETAR request with tag_spool, worker_id, worker_nombre, fecha_operacion
@@ -369,23 +370,8 @@ class OccupationService:
         )
 
         try:
-            # Step 1: Verify lock ownership
-            lock_owner = await self.redis_lock_service.get_lock_owner(tag_spool)
-
-            if lock_owner is None:
-                raise LockExpiredError(tag_spool)
-
-            owner_id, lock_token = lock_owner
-
-            if owner_id != worker_id:
-                raise NoAutorizadoError(
-                    tag_spool=tag_spool,
-                    trabajador_esperado=f"Worker {owner_id}",
-                    trabajador_solicitante=worker_nombre,
-                    operacion="COMPLETAR"
-                )
-
-            # Step 2: Determine operation type and update fecha column
+            # Step 1: Validate spool exists and is occupied (single-user mode)
+            # No distributed lock ownership check needed with 1 tablet
             spool = self.sheets_repository.get_spool_by_tag(tag_spool)
             if not spool:
                 raise SpoolNoEncontradoError(tag_spool)
@@ -436,20 +422,7 @@ class OccupationService:
                     updates={fecha_column: fecha_str, "ocupado_por": None}
                 )
 
-            # Step 4: Release Redis lock
-            try:
-                released = await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
-                if not released:
-                    logger.warning(
-                        f"⚠️ Lock release returned False for {tag_spool} "
-                        f"(may have already expired)"
-                    )
-            except Exception as e:
-                logger.error(f"Failed to release lock for {tag_spool}: {e}")
-                # Continue - Sheets already updated, lock will expire naturally
-
-
-            # Step 5: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
+            # Step 4: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
                 event = (
                     MetadataEventBuilder()
@@ -475,7 +448,7 @@ class OccupationService:
                 # Continue operation but log prominently - metadata writes should be investigated
                 # Note: In future, consider making this a hard failure if regulatory compliance requires it
 
-            # Step 6: Return success
+            # Step 5: Return success
             message = f"Operación completada en {tag_spool}"
             logger.info(f"✅ COMPLETAR completed successfully: {message}")
 
@@ -932,15 +905,17 @@ class OccupationService:
         Procesa las uniones seleccionadas y auto-determina si debe PAUSAR o COMPLETAR
         basado en si se procesaron todas las uniones disponibles.
 
-        selected_unions vacío = cancellation (libera lock sin tocar Uniones).
+        selected_unions vacío = cancellation (libera ocupación sin tocar Uniones).
+
+        Simplified for single-user mode: No distributed locks needed.
 
         Flow:
-        1. Verify worker owns the Redis lock
+        1. Validate spool exists
         2. Get fresh union totals from UnionRepository
         3. If selected_unions is empty → handle as cancellation
         4. Calculate if action is PAUSAR or COMPLETAR based on selected vs total
         5. Update Uniones sheet with batch operation
-        6. Release Redis lock and clear Ocupado_Por
+        6. Clear Ocupado_Por
         7. Log appropriate event to Metadata
         8. Return response with action_taken and unions_processed
 
@@ -1012,12 +987,6 @@ class OccupationService:
             # Step 3: Handle zero-union cancellation (v4.0 only)
             if len(selected_unions) == 0:
                 logger.info(f"Zero unions selected - handling as cancellation for {tag_spool}")
-
-                # Release Redis lock
-                try:
-                    await self.redis_lock_service.release_lock(tag_spool, worker_id, lock_token)
-                except Exception as e:
-                    logger.warning(f"Failed to release lock during cancellation: {e}")
 
                 # Clear occupation fields (with version retry)
                 try:

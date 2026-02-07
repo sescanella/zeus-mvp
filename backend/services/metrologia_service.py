@@ -7,7 +7,7 @@ Skips TOMAR phase entirely - inspection completes in single atomic operation.
 v3.0 Phase 5 feature:
 - Instant completion (no en_progreso state)
 - Binary resultado (APROBADO/RECHAZADO)
-- No Redis locking (no occupation)
+- No occupation tracking (skips TOMAR phase)
 - Metadata logging with resultado in metadata_json
 """
 
