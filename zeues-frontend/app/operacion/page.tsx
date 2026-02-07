@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, ArrowLeft, X } from 'lucide-react';
-import { ErrorMessage, FixedFooter } from '@/components';
+import { BlueprintPageWrapper, ErrorMessage, FixedFooter } from '@/components';
 import { useAppState } from '@/lib/context';
 import { OPERATION_WORKFLOWS, type OperationType } from '@/lib/operation-config';
 import type { Worker } from '@/lib/types';
@@ -98,16 +98,7 @@ export default function TrabajadorSelectionPage() {
   };
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -242,6 +233,6 @@ export default function TrabajadorSelectionPage() {
           </>
         )}
       </div>
-    </div>
+    </BlueprintPageWrapper>
   );
 }

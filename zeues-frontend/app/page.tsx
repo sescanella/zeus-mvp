@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Puzzle, Flame, SearchCheck, Monitor, Wrench } from 'lucide-react';
-import { Loading, ErrorMessage } from '@/components';
+import { BlueprintPageWrapper, Loading, ErrorMessage } from '@/components';
 import { useAppState } from '@/lib/context';
 import { getWorkers } from '@/lib/api';
 
@@ -52,50 +52,34 @@ export default function OperacionSelectionPage() {
   // Si está cargando o hay error, mostrar en diseño Blueprint Industrial
   if (loading || error) {
     return (
-      <div
-        className="min-h-screen bg-[#001F3F] flex flex-col items-center justify-center"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-          `,
-          backgroundSize: '50px 50px'
-        }}
-      >
-        {/* Logo */}
-        <div className="mb-12">
-          <Image
-            src="/logos/logo-grisclaro-F8F9FA.svg"
-            alt="Kronos Mining"
-            width={200}
-            height={80}
-            priority
-          />
-        </div>
-
-        {loading ? (
-          <Loading />
-        ) : (
-          <div className="max-w-2xl mx-auto px-6">
-            <ErrorMessage message={error} onRetry={fetchWorkers} />
+      <BlueprintPageWrapper>
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          {/* Logo */}
+          <div className="mb-12">
+            <Image
+              src="/logos/logo-grisclaro-F8F9FA.svg"
+              alt="Kronos Mining"
+              width={200}
+              height={80}
+              priority
+            />
           </div>
-        )}
-      </div>
+
+          {loading ? (
+            <Loading />
+          ) : (
+            <div className="max-w-2xl mx-auto px-6">
+              <ErrorMessage message={error} onRetry={fetchWorkers} />
+            </div>
+          )}
+        </div>
+      </BlueprintPageWrapper>
     );
   }
 
   // Pantalla principal Blueprint Industrial
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo 200px + Dashboard Link */}
       <div className="relative flex justify-center pt-8 pb-6 border-b-4 border-white/30">
         <Image
@@ -205,6 +189,6 @@ export default function OperacionSelectionPage() {
           </h3>
         </button>
       </div>
-    </div>
+    </BlueprintPageWrapper>
   );
 }

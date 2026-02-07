@@ -21,12 +21,12 @@ describe('getOperationLabel', () => {
     expect(getOperationLabel('SOLD')).toBe('SOLDADURA');
   });
 
-  it('returns METROLOGIA for METROLOGIA', () => {
-    expect(getOperationLabel('METROLOGIA')).toBe('METROLOGIA');
+  it('returns METROLOGÍA for METROLOGIA', () => {
+    expect(getOperationLabel('METROLOGIA')).toBe('METROLOGÍA');
   });
 
-  it('returns REPARACION for REPARACION', () => {
-    expect(getOperationLabel('REPARACION')).toBe('REPARACION');
+  it('returns REPARACIÓN for REPARACION', () => {
+    expect(getOperationLabel('REPARACION')).toBe('REPARACIÓN');
   });
 });
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { BlueprintPageWrapper } from '@/components';
 
 interface OccupiedSpool {
   tag_spool: string;
@@ -49,8 +50,6 @@ export default function DashboardPage() {
     fetchInitialState();
   }, []);
 
-  // SSE removed - single-user mode doesn't need real-time updates
-
   // Calculate time occupied
   const getTimeOccupied = (fecha: string): string => {
     try {
@@ -74,16 +73,7 @@ export default function DashboardPage() {
   const spoolsArray = Array.from(spools.values());
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Header with Back Button */}
       <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b-4 border-white/30">
         <button
@@ -164,6 +154,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-    </div>
+    </BlueprintPageWrapper>
   );
 }

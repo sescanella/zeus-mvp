@@ -3,23 +3,21 @@
  * Extracted from seleccionar-spool/page.tsx for testability and reuse.
  */
 
+import { OPERATION_WORKFLOWS, type OperationType } from './operation-config';
+
 /** Maximum spools selectable in a single batch (backend constraint) */
 export const MAX_BATCH_SELECTION = 50;
 
 type TipoParam = 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | null;
 type Accion = 'INICIAR' | 'FINALIZAR' | null;
-type Operation = 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
+type Operation = OperationType;
 
 /**
  * Maps operation code to human-readable label.
+ * Delegates to OPERATION_WORKFLOWS (single source of truth).
  */
 export function getOperationLabel(operation: Operation): string {
-  switch (operation) {
-    case 'ARM': return 'ARMADO';
-    case 'SOLD': return 'SOLDADURA';
-    case 'METROLOGIA': return 'METROLOGIA';
-    case 'REPARACION': return 'REPARACION';
-  }
+  return OPERATION_WORKFLOWS[operation].label;
 }
 
 /**

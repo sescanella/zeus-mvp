@@ -11,6 +11,7 @@ import { OPERATION_ICONS } from '@/lib/operation-config';
 import { classifyApiError } from '@/lib/error-classifier';
 import { useDebounce } from '@/hooks/useDebounce';
 import { getOperationLabel, getPageTitle, getEmptyMessage, MAX_BATCH_SELECTION } from '@/lib/spool-selection-utils';
+import { BlueprintPageWrapper } from '@/components/BlueprintPageWrapper';
 import { SpoolFilterPanel } from '@/components/SpoolFilterPanel';
 import { SpoolTable } from '@/components/SpoolTable';
 import { SpoolSelectionFooter } from '@/components/SpoolSelectionFooter';
@@ -234,7 +235,6 @@ function SeleccionarSpoolContent() {
         setState({
           selectedSpool: tag,
           selectedSpools: [],
-          batchMode: false
         });
 
         router.push('/exito');
@@ -251,12 +251,11 @@ function SeleccionarSpoolContent() {
     if (state.accion === 'FINALIZAR' && selectedCount === 1) {
       const tag = state.selectedSpools[0];
       const selectedSpool = spools.find(s => s.tag_spool === tag);
-      const isV4 = selectedSpool ? detectSpoolVersion(selectedSpool) === 'v4.0' : false;
+      const isV4 = selectedSpool?.version === 'v4.0';
 
       setState({
         selectedSpool: tag,
         selectedSpools: [],
-        batchMode: false
       });
 
       if (isV4) {
@@ -273,7 +272,6 @@ function SeleccionarSpoolContent() {
         setState({
           selectedSpool: state.selectedSpools[0],
           selectedSpools: [],
-          batchMode: false
         });
         router.push('/resultado-metrologia');
       }
@@ -286,7 +284,6 @@ function SeleccionarSpoolContent() {
         setState({
           selectedSpool: state.selectedSpools[0],
           selectedSpools: [],
-          batchMode: false
         });
         router.push('/confirmar?tipo=reparacion');
       }
@@ -298,12 +295,10 @@ function SeleccionarSpoolContent() {
       setState({
         selectedSpool: state.selectedSpools[0],
         selectedSpools: [],
-        batchMode: false
       });
     } else {
       setState({
         selectedSpool: null,
-        batchMode: true
       });
     }
 
@@ -331,16 +326,7 @@ function SeleccionarSpoolContent() {
   });
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -446,16 +432,18 @@ function SeleccionarSpoolContent() {
         maxBatch={MAX_BATCH_SELECTION}
         totalAvailable={batchLimitTotal}
       />
-    </div>
+    </BlueprintPageWrapper>
   );
 }
 
 export default function SeleccionarSpoolPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center">
-        <Loader2 size={64} className="text-zeues-orange animate-spin" strokeWidth={3} />
-      </div>
+      <BlueprintPageWrapper>
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 size={64} className="text-zeues-orange animate-spin" strokeWidth={3} />
+        </div>
+      </BlueprintPageWrapper>
     }>
       <SeleccionarSpoolContent />
     </Suspense>

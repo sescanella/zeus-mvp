@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, ArrowLeft, X } from 'lucide-react';
+import { BlueprintPageWrapper } from '@/components';
 import { useAppState } from '@/lib/context';
 import { UnionTable } from '@/components/UnionTable';
 import { getDisponiblesUnions } from '@/lib/api';
@@ -158,16 +159,7 @@ export default function SeleccionarUnionesPage() {
   const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle : Flame;
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -366,6 +358,6 @@ export default function SeleccionarUnionesPage() {
           </div>
         </div>
       )}
-    </div>
+    </BlueprintPageWrapper>
   );
 }

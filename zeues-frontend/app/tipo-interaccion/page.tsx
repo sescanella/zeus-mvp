@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Wrench, Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
-import { FixedFooter } from '@/components';
+import { Play, Pause, CheckCircle, XCircle, ArrowLeft, X } from 'lucide-react';
+import { BlueprintPageWrapper, FixedFooter } from '@/components';
 import { useAppState } from '@/lib/context';
 import { getUnionMetricas } from '@/lib/api';
-import { cacheSpoolVersion, getCachedVersion, detectSpoolVersion } from '@/lib/version';
+import { detectSpoolVersion } from '@/lib/version';
+import { OPERATION_WORKFLOWS, OPERATION_ICONS } from '@/lib/operation-config';
 
 export default function TipoInteraccionPage() {
   const router = useRouter();
@@ -38,14 +39,6 @@ export default function TipoInteraccionPage() {
         return;
       }
 
-      // Check cache first
-      const cached = getCachedVersion(state.selectedSpool);
-      if (cached) {
-        setSpoolVersion(cached);
-        setLoadingVersion(false);
-        return;
-      }
-
       try {
         setLoadingVersion(true);
 
@@ -55,7 +48,6 @@ export default function TipoInteraccionPage() {
         const version = detectSpoolVersion(metrics);
 
         setSpoolVersion(version);
-        cacheSpoolVersion(state.selectedSpool, version);
 
       } catch (error) {
         console.error('Error detecting version:', error);
@@ -97,19 +89,22 @@ export default function TipoInteraccionPage() {
   // Loading state while detecting version
   if (loadingVersion) {
     return (
-      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center">
-        <div className="text-white text-xl font-mono tracking-[0.15em]">
-          Detectando versión...
+      <BlueprintPageWrapper>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-white text-xl font-mono tracking-[0.15em]">
+            Detectando versión...
+          </div>
         </div>
-      </div>
+      </BlueprintPageWrapper>
     );
   }
 
   // Error boundary for version detection failure
   if (!loadingVersion && !spoolVersion) {
     return (
-      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center p-8">
-        <div className="max-w-md w-full">
+      <BlueprintPageWrapper>
+        <div className="flex items-center justify-center min-h-screen p-8">
+          <div className="max-w-md w-full">
           <div className="bg-red-900/30 border-4 border-red-500 rounded p-6">
             <p className="text-red-200 text-lg font-mono mb-4">
               Error detectando versión. Usando modo v3.0.
@@ -133,17 +128,13 @@ export default function TipoInteraccionPage() {
             </button>
           </div>
         </div>
-      </div>
+        </div>
+      </BlueprintPageWrapper>
     );
   }
 
-  const operationLabel = state.selectedOperation === 'ARM' ? 'ARMADO' :
-                        state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
-                        state.selectedOperation === 'REPARACION' ? 'REPARACIÓN' : 'METROLOGÍA';
-
-  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
-                        state.selectedOperation === 'SOLD' ? Flame :
-                        state.selectedOperation === 'REPARACION' ? Wrench : SearchCheck;
+  const operationLabel = OPERATION_WORKFLOWS[state.selectedOperation].label;
+  const OperationIcon = OPERATION_ICONS[state.selectedOperation];
 
   // Get worker roles array (assuming roles is array, fallback to single rol)
   const workerRoles = (Array.isArray(state.selectedWorker.roles)
@@ -163,16 +154,7 @@ export default function TipoInteraccionPage() {
   );
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -453,6 +435,6 @@ export default function TipoInteraccionPage() {
           }}
         />
       </div>
-    </div>
+    </BlueprintPageWrapper>
   );
 }

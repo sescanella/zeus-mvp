@@ -29,11 +29,6 @@ export interface Spool {
 }
 
 // ==========================================
-// BATCH OPERATIONS (v2.0 Multiselect) - DEPRECATED
-// Legacy types removed in v3.0 refactor (Feb 2026)
-// ==========================================
-
-// ==========================================
 // REPARACION OPERATIONS (Phase 6)
 // ==========================================
 
@@ -47,33 +42,6 @@ export interface ReparacionResponse {
   message: string;
   tag_spool: string;
   estado_detalle?: string;
-}
-
-// ==========================================
-// REAL-TIME SSE (v3.0) - REMOVED
-// Single-user mode doesn't need real-time updates
-// ==========================================
-// VERSION DETECTION (v4.0 Phase 9)
-// ==========================================
-
-/**
- * Version information for a spool (v3.0 vs v4.0)
- *
- * Detection logic: count > 0 = v4.0, count = 0 = v3.0
- */
-export interface VersionInfo {
-  version: 'v3.0' | 'v4.0';
-  union_count: number;
-  detection_logic: string;
-  tag_spool: string;
-}
-
-/**
- * API response for version detection endpoint
- */
-export interface VersionResponse {
-  success: boolean;
-  data: VersionInfo;
 }
 
 // ==========================================

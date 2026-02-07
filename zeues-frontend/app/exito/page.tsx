@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { CheckCircle, AlertCircle } from 'lucide-react';
+import { BlueprintPageWrapper } from '@/components';
 import { useAppState } from '@/lib/context';
 
 export default function ExitoPage() {
@@ -113,17 +114,9 @@ export default function ExitoPage() {
   const isSuccess = !isCancelAction;
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F] flex flex-col"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
-      {/* Logo */}
+    <BlueprintPageWrapper>
+      <div className="flex flex-col min-h-screen">
+        {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
@@ -261,6 +254,7 @@ export default function ExitoPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </BlueprintPageWrapper>
   );
 }

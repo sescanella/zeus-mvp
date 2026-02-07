@@ -6,8 +6,8 @@ import Image from 'next/image';
 import { ArrowLeft, X, CheckCircle, Package, Loader2 } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { Modal } from '@/components/Modal';
-import { FixedFooter } from '@/components';
-import { OPERATION_ICONS } from '@/lib/operation-config';
+import { BlueprintPageWrapper, FixedFooter } from '@/components';
+import { OPERATION_WORKFLOWS, OPERATION_ICONS } from '@/lib/operation-config';
 import { classifyApiError } from '@/lib/error-classifier';
 import {
   // REPARACION operations (Phase 6)
@@ -52,7 +52,7 @@ function ConfirmarContent() {
   const [errorModal, setErrorModal] = useState<ErrorModalState | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const isBatchMode = state.batchMode && state.selectedSpools.length > 0;
+  const isBatchMode = state.selectedSpools.length > 1;
 
   useEffect(() => {
     // Validar flujo: debe tener worker, operación, y al menos un spool (single o batch)
@@ -294,11 +294,7 @@ function ConfirmarContent() {
     tipo === 'completar' ? 'COMPLETAR' :
     tipo === 'cancelar' ? 'CANCELAR' : 'ACCIÓN';
 
-  const operationLabel =
-    state.selectedOperation === 'ARM' ? 'ARMADO' :
-    state.selectedOperation === 'SOLD' ? 'SOLDADURA' :
-    state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' :
-    state.selectedOperation === 'REPARACION' ? 'REPARACIÓN' : 'OPERACIÓN';
+  const operationLabel = OPERATION_WORKFLOWS[state.selectedOperation].label;
 
   const OperationIcon = OPERATION_ICONS[state.selectedOperation];
 
@@ -306,16 +302,7 @@ function ConfirmarContent() {
   const spoolCount = spoolsList.length;
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -473,16 +460,18 @@ function ConfirmarContent() {
           </div>
         </Modal>
       )}
-    </div>
+    </BlueprintPageWrapper>
   );
 }
 
 export default function ConfirmarPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center">
-        <Loader2 size={64} className="text-zeues-orange animate-spin" strokeWidth={3} />
-      </div>
+      <BlueprintPageWrapper>
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 size={64} className="text-zeues-orange animate-spin" strokeWidth={3} />
+        </div>
+      </BlueprintPageWrapper>
     }>
       <ConfirmarContent />
     </Suspense>

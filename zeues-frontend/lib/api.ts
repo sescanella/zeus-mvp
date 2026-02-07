@@ -1,13 +1,10 @@
 // /Users/sescanella/Proyectos/ZEUES-by-KM/zeues-frontend/lib/api.ts
 
 // ============= IMPORTS =============
-import { detectSpoolVersion } from './version';
 import {
   Worker,
   Spool,
   ReparacionResponse,
-  VersionInfo,
-  VersionResponse,
   DisponiblesResponse,
   MetricasResponse,
   IniciarRequest,
@@ -548,101 +545,6 @@ export async function cancelarReparacion(payload: {
     console.error('cancelarReparacion error:', error);
     throw error;
   }
-}
-
-// ==========================================
-// VERSION DETECTION (v4.0 Phase 9)
-// ==========================================
-
-/**
- * GET /api/diagnostic/{tag}/version (v4.0)
- * Detects spool version (v3.0 vs v4.0) based on union count.
- *
- * Queries Total_Uniones column (68) and determines version:
- * - v4.0: union_count > 0 (Engineering populated unions)
- * - v3.0: union_count = 0 or None (legacy workflow)
- *
- * Includes retry logic with exponential backoff (3 attempts).
- * Defaults to v3.0 on failure (safer legacy workflow).
- *
- * @param tag - TAG_SPOOL identifier
- * @returns Promise<VersionInfo> with version detection result
- * @throws Error if network error or backend unavailable
- *
- * @example
- * const versionInfo = await getSpoolVersion('TEST-02');
- * console.log(versionInfo);
- * // {
- * //   version: "v4.0",
- * //   union_count: 8,
- * //   detection_logic: "Total_Uniones=8 -> v4.0",
- * //   tag_spool: "TEST-02"
- * // }
- *
- * @example
- * // Detection failure defaults to v3.0
- * const versionInfo = await getSpoolVersion('UNKNOWN');
- * // {
- * //   version: "v3.0",
- * //   union_count: 0,
- * //   detection_logic: "Error fetching version, defaulting to v3.0",
- * //   tag_spool: "UNKNOWN"
- * // }
- */
-export async function getSpoolVersion(tag: string): Promise<VersionInfo> {
-  try {
-    const response = await fetch(
-      `${API_URL}/api/diagnostic/${tag}/version`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (!response.ok) {
-      // Default to v3.0 on error (safer legacy workflow)
-      return {
-        version: 'v3.0',
-        union_count: 0,
-        detection_logic: 'Error fetching version, defaulting to v3.0',
-        tag_spool: tag,
-      };
-    }
-
-    const data: VersionResponse = await response.json();
-    return data.data;
-  } catch (error) {
-    console.error('Version detection failed:', error);
-    // Default to v3.0 on network error
-    return {
-      version: 'v3.0',
-      union_count: 0,
-      detection_logic: 'Network error, defaulting to v3.0',
-      tag_spool: tag,
-    };
-  }
-}
-
-/**
- * Detect version from spool data locally (alternative to API call).
- *
- * Re-exports centralized version detection logic from lib/version.ts
- * to maintain backward compatibility with existing imports.
- *
- * @deprecated Import from '@/lib/version' instead
- * @param spool - Spool object with total_uniones field
- * @returns 'v3.0' or 'v4.0'
- *
- * @example
- * import { detectSpoolVersion } from '@/lib/version';
- * const version = detectSpoolVersion(spool);
- * console.log(version); // "v4.0"
- */
-export function detectVersionFromSpool(spool: Spool): 'v3.0' | 'v4.0' {
-  // Delegate to centralized version detection (lib/version.ts)
-  return detectSpoolVersion(spool);
 }
 
 // ==========================================

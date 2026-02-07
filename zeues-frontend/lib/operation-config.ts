@@ -77,44 +77,6 @@ export const OPERATION_WORKFLOWS: Record<OperationType, OperationWorkflow> = {
 } as const;
 
 /**
- * Check if an operation has a specific action available.
- */
-export function operationHasAction(
-  operation: OperationType,
-  action: ActionType
-): boolean {
-  return OPERATION_WORKFLOWS[operation].actions.includes(action);
-}
-
-/**
- * Get the workflow configuration for an operation.
- * Throws if operation is invalid.
- */
-export function getOperationWorkflow(operation: OperationType): OperationWorkflow {
-  const workflow = OPERATION_WORKFLOWS[operation];
-  if (!workflow) {
-    throw new Error(`Invalid operation: ${operation}`);
-  }
-  return workflow;
-}
-
-/**
- * Validate if a tipo parameter is valid for the current operation.
- * Used for URL query parameter validation.
- */
-export function isValidTipoForOperation(
-  tipo: string | null,
-  operation: OperationType | null
-): boolean {
-  if (!tipo || !operation) return false;
-
-  const workflow = OPERATION_WORKFLOWS[operation];
-  if (!workflow) return false;
-
-  return workflow.actions.includes(tipo as ActionType);
-}
-
-/**
  * Operation icon mapping for consistent UI representation.
  * Used across P1-P6 flow for visual operation identification.
  *

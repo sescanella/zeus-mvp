@@ -10,7 +10,6 @@ interface AppState {
   selectedTipo: 'tomar' | 'pausar' | 'completar' | 'cancelar' | null;  // v3.0: TOMAR/PAUSAR/COMPLETAR workflow
   selectedSpool: string | null;  // Single-select (backward compat)
   selectedSpools: string[];  // v2.0: Multiselect batch (array de TAGs)
-  batchMode: boolean;  // v2.0: Flag si operación es batch
   batchResults: { total: number; succeeded: number; failed: number; details: Array<{ success: boolean; tag_spool: string; message: string }> } | null;  // v2.0: Resultados de batch operation (inline type after BatchActionResponse removal)
   // v4.0: Union-level workflow fields
   accion: 'INICIAR' | 'FINALIZAR' | null;  // v4.0: Workflow action (replaces selectedTipo for v4.0 spools)
@@ -38,7 +37,6 @@ const initialState: AppState = {
   selectedTipo: null,
   selectedSpool: null,
   selectedSpools: [],  // v2.0: Array vacío por defecto
-  batchMode: false,  // v2.0: No batch por defecto
   batchResults: null,  // v2.0: Sin resultados por defecto
   // v4.0: Initialize union-level workflow state
   accion: null,

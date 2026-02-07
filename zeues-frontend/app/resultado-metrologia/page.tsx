@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { CheckCircle, XCircle, ArrowLeft, X, Loader2, AlertCircle } from 'lucide-react';
+import { BlueprintPageWrapper } from '@/components';
 import { useAppState } from '@/lib/context';
 import { completarMetrologia } from '@/lib/api';
 
@@ -60,8 +61,9 @@ export default function ResultadoMetrologiaPage() {
 
   if (!state.selectedSpool || !state.selectedWorker) {
     return (
-      <div className="min-h-screen bg-[#001F3F] flex items-center justify-center">
-        <div className="text-center">
+      <BlueprintPageWrapper>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
           <p className="text-xl text-white font-mono mb-6">
             Datos incompletos. Volviendo al inicio...
           </p>
@@ -72,21 +74,13 @@ export default function ResultadoMetrologiaPage() {
             IR AL INICIO
           </button>
         </div>
-      </div>
+        </div>
+      </BlueprintPageWrapper>
     );
   }
 
   return (
-    <div
-      className="min-h-screen bg-[#001F3F]"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px'
-      }}
-    >
+    <BlueprintPageWrapper>
       {/* Logo */}
       <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
         <Image
@@ -234,6 +228,6 @@ export default function ResultadoMetrologiaPage() {
           </div>
         </div>
       )}
-    </div>
+    </BlueprintPageWrapper>
   );
 }
