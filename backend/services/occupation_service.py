@@ -1040,23 +1040,16 @@ class OccupationService:
 
                 # Log cancellation event to Metadata
                 try:
-                    evento_tipo = EventoTipo.SPOOL_CANCELADO.value
-                    metadata_json = json.dumps({
-                        "reason": "zero_unions_selected"
-                    })
-
-                    self.metadata_repository.log_event(
-                        evento_tipo=evento_tipo,
-                        tag_spool=tag_spool,
-                        worker_id=worker_id,
-                        worker_nombre=worker_nombre,
-                        operacion=operacion,
-                        accion="CANCELAR",
-                        fecha_operacion=format_date_for_sheets(today_chile()),
-                        metadata_json=metadata_json
+                    event = (
+                        MetadataEventBuilder()
+                        .for_cancelar(tag_spool, worker_id, worker_nombre)
+                        .with_operacion(operacion)
+                        .with_metadata({"reason": "zero_unions_selected"})
+                        .build()
                     )
+                    self.metadata_repository.log_event(**event)
 
-                    logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+                    logger.info(f"✅ Metadata logged: CANCELAR_SPOOL for {tag_spool}")
 
                 except Exception as e:
                     logger.error(f"❌ CRITICAL: Metadata logging failed for cancellation: {e}")
