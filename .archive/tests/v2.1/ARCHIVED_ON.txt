@@ -1,8 +1,0 @@
-v2.1 Tests Archived On: 2026-01-26 17:29:44
-
-Archived by: backend/scripts/archive_v2_tests.py
-Phase: 01-migration-foundation
-Plan: 01-03
-
-These tests are preserved for historical reference.
-v3.0 smoke tests are located in tests/v3.0/
