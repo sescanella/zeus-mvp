@@ -10,8 +10,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // WCAG 2.1 AA Compliance: Allow zoom for visually impaired users
+  // maximumScale: 1,  // REMOVED: Do not restrict zoom
+  // userScalable: false,  // REMOVED: Allow pinch-to-zoom on mobile
 };
 
 export default function RootLayout({
