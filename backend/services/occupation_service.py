@@ -1422,23 +1422,21 @@ class OccupationService:
 
                         # Log METROLOGIA_AUTO_TRIGGERED event
                         try:
-                            metrologia_metadata = json.dumps({
-                                "trigger_reason": "all_work_complete",
-                                "operacion_completed": operacion,
-                                "unions_processed": updated_count,
-                                "new_state": metrologia_new_state
-                            })
-
-                            self.metadata_repository.log_event(
+                            metrologia_event = build_metadata_event(
                                 evento_tipo=EventoTipo.METROLOGIA_AUTO_TRIGGERED.value,
                                 tag_spool=tag_spool,
                                 worker_id=worker_id,
                                 worker_nombre=worker_nombre,
                                 operacion=operacion,
                                 accion="AUTO_TRIGGER",
-                                fecha_operacion=format_date_for_sheets(today_chile()),
-                                metadata_json=metrologia_metadata
+                                metadata={
+                                    "trigger_reason": "all_work_complete",
+                                    "operacion_completed": operacion,
+                                    "unions_processed": updated_count,
+                                    "new_state": metrologia_new_state
+                                }
                             )
+                            self.metadata_repository.log_event(**metrologia_event)
 
                             logger.info(
                                 f"✅ Metadata logged: METROLOGIA_AUTO_TRIGGERED for {tag_spool}"
