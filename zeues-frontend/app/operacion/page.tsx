@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Puzzle, Flame, SearchCheck, Wrench, ArrowLeft, X } from 'lucide-react';
-import { ErrorMessage } from '@/components';
+import { ErrorMessage, FixedFooter } from '@/components';
 import { useAppState } from '@/lib/context';
 import { OPERATION_WORKFLOWS, type OperationType } from '@/lib/operation-config';
 import type { Worker } from '@/lib/types';
@@ -226,45 +226,19 @@ export default function TrabajadorSelectionPage() {
             </div>
 
             {/* Fixed Navigation Footer */}
-            <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
-              <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
-                <button
-                  onClick={() => router.back()}
-                  className="
-                    flex-1 narrow:w-full h-16
-                    bg-transparent
-                    border-4 border-white
-                    flex items-center justify-center gap-3
-                    active:bg-white active:text-[#001F3F]
-                    transition-all duration-200
-                    group
-                  "
-                >
-                  <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-                  <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
-                    VOLVER
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => router.push('/')}
-                  className="
-                    flex-1 narrow:w-full h-16
-                    bg-transparent
-                    border-4 border-red-500
-                    flex items-center justify-center gap-3
-                    active:bg-red-500 active:border-red-500
-                    transition-all duration-200
-                    group
-                  "
-                >
-                  <X size={24} strokeWidth={3} className="text-red-500 group-active:text-white" />
-                  <span className="text-xl narrow:text-lg font-black text-red-500 font-mono tracking-[0.15em] group-active:text-white">
-                    CANCELAR
-                  </span>
-                </button>
-              </div>
-            </div>
+            <FixedFooter
+              backButton={{
+                text: "VOLVER",
+                onClick: () => router.back(),
+                icon: <ArrowLeft size={24} strokeWidth={3} />
+              }}
+              primaryButton={{
+                text: "CANCELAR",
+                onClick: () => router.push('/'),
+                variant: "danger",
+                icon: <X size={24} strokeWidth={3} />
+              }}
+            />
           </>
         )}
       </div>
