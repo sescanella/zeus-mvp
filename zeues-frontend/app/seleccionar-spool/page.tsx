@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
-import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, iniciarSpool } from '@/lib/api';
+import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsReparacion, iniciarSpool } from '@/lib/api';
 import { detectSpoolVersion } from '@/lib/version';
 import { OPERATION_ICONS } from '@/lib/operation-config';
 import { classifyApiError } from '@/lib/error-classifier';
@@ -96,11 +96,7 @@ function SeleccionarSpoolContent() {
           setLoading(false);
           return;
         }
-        if (selectedOperation === 'REPARACION') {
-          fetchedSpools = await getSpoolsOcupados(selectedWorker.id, 'REPARACION');
-        } else {
-          fetchedSpools = await getSpoolsParaCancelar(selectedOperation as 'ARM' | 'SOLD', selectedWorker.id);
-        }
+        fetchedSpools = await getSpoolsOcupados(selectedWorker.id, selectedOperation as 'ARM' | 'SOLD' | 'REPARACION');
       } else {
         setError('Tipo de accion no valido');
         setLoading(false);

@@ -88,41 +88,6 @@ export async function getSpoolsParaIniciar(operacion: 'ARM' | 'SOLD'): Promise<S
 }
 
 /**
- * GET /api/spools/completar?operacion={ARM|SOLD}&worker_nombre={nombre}
- * Obtiene spools del trabajador para COMPLETAR (V/W=0.1, filtro ownership).
- *
- * @param operacion - Tipo de operación ("ARM" o "SOLD")
- * @param workerNombre - Nombre completo del trabajador (será URL encoded)
- * @returns Promise<Spool[]> - Array de spools propios del trabajador
- * @throws Error si operación inválida o falla request
- *
- * @example
- * const spools = await getSpoolsParaCompletar('ARM', 'JP(93)');
- * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "JP(93)", ...}]
- */
-export async function getSpoolsParaCompletar(
-  operacion: 'ARM' | 'SOLD',
-  workerNombre: string
-): Promise<Spool[]> {
-  try {
-    // URL encode del nombre para manejar espacios y tildes
-    const encodedWorker = encodeURIComponent(workerNombre);
-    const url = `${API_URL}/api/spools/completar?operacion=${operacion}&worker_nombre=${encodedWorker}`;
-
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const data = await handleResponse<{ spools: Spool[], total: number, filtro_aplicado: string }>(res);
-    return data.spools;
-  } catch (error) {
-    console.error('getSpoolsParaCompletar error:', error);
-    throw new Error(`No se pudieron cargar tus spools de ${operacion}.`);
-  }
-}
-
-/**
  * GET /api/spools/disponible?operacion={ARM|SOLD|REPARACION} (v3.0)
  * Obtiene spools DISPONIBLES para TOMAR (no ocupados, prerequisitos cumplidos).
  *
@@ -193,43 +158,6 @@ export async function getSpoolsOcupados(
   } catch (error) {
     console.error('getSpoolsOcupados error:', error);
     throw new Error(`No se pudieron cargar tus spools de ${operacion}.`);
-  }
-}
-
-/**
- * GET /api/spools/cancelar?operacion={ARM|SOLD}&worker_id={id}
- * Obtiene spools EN_PROGRESO (estado=0.1) del trabajador para CANCELAR.
- *
- * Similar a getSpoolsParaCompletar pero semánticamente diferente:
- * - COMPLETAR: Finalizar acción (0.1 → 1.0)
- * - CANCELAR: Revertir acción (0.1 → 0)
- *
- * @param operacion - Tipo de operación ("ARM" o "SOLD")
- * @param workerId - ID numérico del trabajador
- * @returns Promise<Spool[]> - Array de spools propios EN_PROGRESO
- * @throws Error si operación inválida, worker no encontrado, o falla request
- *
- * @example
- * const spools = await getSpoolsParaCancelar('ARM', 93);
- * console.log(spools); // [{tag_spool: "MK-123", arm: 0.1, armador: "JP(93)", ...}]
- */
-export async function getSpoolsParaCancelar(
-  operacion: 'ARM' | 'SOLD',
-  workerId: number
-): Promise<Spool[]> {
-  try {
-    const url = `${API_URL}/api/spools/cancelar?operacion=${operacion}&worker_id=${workerId}`;
-
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const data = await handleResponse<{ spools: Spool[], total: number, filtro_aplicado: string }>(res);
-    return data.spools;
-  } catch (error) {
-    console.error('getSpoolsParaCancelar error:', error);
-    throw new Error(`No se pudieron cargar spools cancelables de ${operacion}.`);
   }
 }
 
