@@ -13,8 +13,6 @@ v3.0 Phase 6 feature:
 """
 
 import logging
-import uuid
-import json
 from datetime import date, datetime
 
 from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile, today_chile
@@ -24,7 +22,6 @@ from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.exceptions import SpoolNoEncontradoError
-from backend.models.enums import EventoTipo
 from backend.services.metadata_event_builder import MetadataEventBuilder
 # RedisEventService removed - single-user mode doesn't need real-time events
 
