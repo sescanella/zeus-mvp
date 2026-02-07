@@ -1,6 +1,7 @@
 // /Users/sescanella/Proyectos/ZEUES-by-KM/zeues-frontend/lib/api.ts
 
 // ============= IMPORTS =============
+import { detectSpoolVersion } from './version';
 import {
   Worker,
   Spool,
@@ -964,20 +965,21 @@ export async function getSpoolVersion(tag: string): Promise<VersionInfo> {
 /**
  * Detect version from spool data locally (alternative to API call).
  *
- * Uses Total_Uniones field from Spool object to determine version.
- * Frontend detection logic: count > 0 = v4.0, count = 0 = v3.0
+ * Re-exports centralized version detection logic from lib/version.ts
+ * to maintain backward compatibility with existing imports.
  *
+ * @deprecated Import from '@/lib/version' instead
  * @param spool - Spool object with total_uniones field
  * @returns 'v3.0' or 'v4.0'
  *
  * @example
- * const spool = { tag_spool: "TEST-02", total_uniones: 8, ... };
- * const version = detectVersionFromSpool(spool);
+ * import { detectSpoolVersion } from '@/lib/version';
+ * const version = detectSpoolVersion(spool);
  * console.log(version); // "v4.0"
  */
 export function detectVersionFromSpool(spool: Spool): 'v3.0' | 'v4.0' {
-  // Frontend detection logic: count > 0 = v4.0, count = 0 = v3.0
-  return (spool.total_uniones && spool.total_uniones > 0) ? 'v4.0' : 'v3.0';
+  // Delegate to centralized version detection (lib/version.ts)
+  return detectSpoolVersion(spool);
 }
 
 // ==========================================

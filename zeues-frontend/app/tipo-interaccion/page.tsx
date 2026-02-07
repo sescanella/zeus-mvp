@@ -7,7 +7,7 @@ import { Puzzle, Flame, SearchCheck, Wrench, Play, Pause, CheckCircle, XCircle, 
 import { FixedFooter } from '@/components';
 import { useAppState } from '@/lib/context';
 import { getUnionMetricas } from '@/lib/api';
-import { cacheSpoolVersion, getCachedVersion } from '@/lib/version';
+import { cacheSpoolVersion, getCachedVersion, detectSpoolVersion } from '@/lib/version';
 
 export default function TipoInteraccionPage() {
   const router = useRouter();
@@ -51,8 +51,8 @@ export default function TipoInteraccionPage() {
 
         // Call metricas endpoint
         const metrics = await getUnionMetricas(state.selectedSpool);
-        // Detect version based on total_uniones field
-        const version = metrics.total_uniones > 0 ? 'v4.0' : 'v3.0';
+        // Detect version based on total_uniones field using centralized utility
+        const version = detectSpoolVersion(metrics);
 
         setSpoolVersion(version);
         cacheSpoolVersion(state.selectedSpool, version);

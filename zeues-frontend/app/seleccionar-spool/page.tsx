@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
+import { detectSpoolVersion } from '@/lib/version';
 import { OPERATION_ICONS } from '@/lib/operation-config';
 import { classifyApiError } from '@/lib/error-classifier';
 import type { Spool } from '@/lib/types';
@@ -116,7 +117,7 @@ function SeleccionarSpoolContent() {
       // Optimized: O(1) instead of O(N) API calls
       const spoolsWithVersion = fetchedSpools.map(spool => ({
         ...spool,
-        version: (spool.total_uniones && spool.total_uniones > 0) ? 'v4.0' as const : 'v3.0' as const
+        version: detectSpoolVersion(spool)
       }));
 
       // v4.0: Apply filtering based on action type (INICIAR vs FINALIZAR)
@@ -297,7 +298,7 @@ function SeleccionarSpoolContent() {
 
       // Detect spool version from total_uniones (already in spools list)
       const selectedSpool = spools.find(s => s.tag_spool === tag);
-      const isV4 = selectedSpool?.total_uniones && selectedSpool.total_uniones > 0;
+      const isV4 = selectedSpool ? detectSpoolVersion(selectedSpool) === 'v4.0' : false;
 
       setState({
         selectedSpool: tag,
