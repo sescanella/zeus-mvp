@@ -1375,35 +1375,20 @@ class OccupationService:
             # Step 8: Log appropriate event to Metadata (only if not handled by UnionService)
             if not skip_metadata_logging:
                 try:
-                    if action_taken == "PAUSAR":
-                        evento_tipo = EventoTipo.PAUSAR_SPOOL.value
-                    elif action_taken == "COMPLETAR":
-                        # Use operation-specific event type
-                        evento_tipo_str = f"COMPLETAR_{operacion}"
-                        try:
-                            evento_tipo_enum = EventoTipo(evento_tipo_str)
-                            evento_tipo = evento_tipo_enum.value
-                        except ValueError:
-                            evento_tipo = evento_tipo_str
-
-                    metadata_json = json.dumps({
-                        "unions_processed": updated_count,
-                        "selected_unions": selected_unions,
-                        "pulgadas": pulgadas  # ALWAYS include (both PAUSAR and COMPLETAR)
-                    })
-
-                    self.metadata_repository.log_event(
-                        evento_tipo=evento_tipo,
-                        tag_spool=tag_spool,
-                        worker_id=worker_id,
-                        worker_nombre=worker_nombre,
-                        operacion=operacion,
-                        accion=action_taken,
-                        fecha_operacion=format_date_for_sheets(today_chile()),
-                        metadata_json=metadata_json
+                    event = (
+                        MetadataEventBuilder()
+                        .for_finalizar(tag_spool, worker_id, worker_nombre, action_taken)
+                        .with_operacion(operacion)
+                        .with_metadata({
+                            "unions_processed": updated_count,
+                            "selected_unions": selected_unions,
+                            "pulgadas": pulgadas  # ALWAYS include (both PAUSAR and COMPLETAR)
+                        })
+                        .build()
                     )
+                    self.metadata_repository.log_event(**event)
 
-                    logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+                    logger.info(f"✅ Metadata logged: {action_taken}_SPOOL for {tag_spool}")
 
                 except Exception as e:
                     logger.error(f"❌ CRITICAL: Metadata logging failed: {e}", exc_info=True)
