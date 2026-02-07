@@ -226,28 +226,19 @@ class ReparacionService:
         current_cycle = self.cycle_counter.extract_cycle_count(spool.estado_detalle or "")
 
         # Step 4: Log metadata event
-        evento_tipo = EventoTipo.PAUSAR_REPARACION
-
-        metadata_event = {
-            "id": str(uuid.uuid4()),
-            "timestamp": format_datetime_for_sheets(now_chile()),
-            "evento_tipo": evento_tipo,
-            "tag_spool": tag_spool,
-            "worker_id": worker_id,
-            "worker_nombre": spool.ocupado_por,  # Current worker name
-            "operacion": "REPARACION",
-            "accion": "PAUSAR",
-            "fecha_operacion": format_date_for_sheets(today_chile()),
-            "metadata_json": json.dumps({
-                "cycle": current_cycle,
-                "max_cycles": self.cycle_counter.MAX_CYCLES,
-                "state": reparacion_machine.get_state_id()
-            })
-        }
-
-        # Log to Metadata sheet (best-effort)
         try:
-            self.metadata_repo.append_event(metadata_event)
+            event = (
+                MetadataEventBuilder()
+                .for_pausar(tag_spool, worker_id, spool.ocupado_por)  # Use current worker name
+                .with_operacion("REPARACION")
+                .with_metadata({
+                    "cycle": current_cycle,
+                    "max_cycles": self.cycle_counter.MAX_CYCLES,
+                    "state": reparacion_machine.get_state_id()
+                })
+                .build()
+            )
+            self.metadata_repo.append_event(event)
         except Exception as e:
             logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
 
