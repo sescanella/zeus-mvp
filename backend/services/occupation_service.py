@@ -301,23 +301,16 @@ class OccupationService:
 
             # Step 3: Log to Metadata (audit trail - MANDATORY)
             try:
-                evento_tipo = EventoTipo.PAUSAR_SPOOL.value
-                metadata_json = json.dumps({
-                    "estado": estado_pausado
-                })
-
-                self.metadata_repository.log_event(
-                    evento_tipo=evento_tipo,
-                    tag_spool=tag_spool,
-                    worker_id=worker_id,
-                    worker_nombre=worker_nombre,
-                    operacion=operacion,
-                    accion="PAUSAR",
-                    fecha_operacion=format_date_for_sheets(today_chile()),
-                    metadata_json=metadata_json
+                event = (
+                    MetadataEventBuilder()
+                    .for_pausar(tag_spool, worker_id, worker_nombre)
+                    .with_operacion(operacion)
+                    .with_metadata({"estado": estado_pausado})
+                    .build()
                 )
+                self.metadata_repository.log_event(**event)
 
-                logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+                logger.info(f"✅ Metadata logged: PAUSAR_SPOOL for {tag_spool}")
 
             except Exception as e:
                 logger.error(
