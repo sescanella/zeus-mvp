@@ -133,28 +133,19 @@ class ReparacionService:
         logger.info(f"REPARACION TOMAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
         # Step 5: Log metadata event (Ocupado_Por/Fecha_Ocupacion/Estado_Detalle already updated by state machine)
-        evento_tipo = EventoTipo.TOMAR_REPARACION
-
-        metadata_event = {
-            "id": str(uuid.uuid4()),
-            "timestamp": format_datetime_for_sheets(now_chile()),
-            "evento_tipo": evento_tipo,
-            "tag_spool": tag_spool,
-            "worker_id": worker_id,
-            "worker_nombre": worker_nombre,
-            "operacion": "REPARACION",
-            "accion": "TOMAR",
-            "fecha_operacion": format_date_for_sheets(today_chile()),
-            "metadata_json": json.dumps({
-                "cycle": current_cycle,
-                "max_cycles": self.cycle_counter.MAX_CYCLES,
-                "state": reparacion_machine.get_state_id()
-            })
-        }
-
-        # Log to Metadata sheet (best-effort)
         try:
-            self.metadata_repo.append_event(metadata_event)
+            event = (
+                MetadataEventBuilder()
+                .for_tomar(tag_spool, worker_id, worker_nombre)
+                .with_operacion("REPARACION")
+                .with_metadata({
+                    "cycle": current_cycle,
+                    "max_cycles": self.cycle_counter.MAX_CYCLES,
+                    "state": reparacion_machine.get_state_id()
+                })
+                .build()
+            )
+            self.metadata_repo.append_event(event)
         except Exception as e:
             logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
 
