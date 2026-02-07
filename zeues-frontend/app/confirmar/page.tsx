@@ -24,7 +24,6 @@ import type {
   CompletarRequest,
   BatchTomarRequest,
   BatchOccupationResponse,
-  BatchActionResponse,
   IniciarRequest,
   FinalizarRequest
 } from '@/lib/types';
@@ -347,21 +346,12 @@ function ConfirmarContent() {
           throw new Error('Tipo de acción no soportado');
         }
 
-        // Convert v3.0 BatchOccupationResponse to v2.1 BatchActionResponse format for context
-        // (Context expects Spanish field names: exitosos/fallidos, not English: succeeded/failed)
-        const convertedResponse: BatchActionResponse = {
-          success: batchResponse.succeeded > 0, // success if at least 1 succeeded
-          message: `${batchResponse.succeeded} de ${batchResponse.total} spools procesados exitosamente`,
+        // Store batch response in context (inline type after BatchActionResponse removal)
+        const convertedResponse = {
           total: batchResponse.total,
-          exitosos: batchResponse.succeeded, // v3.0 'succeeded' → v2.1 'exitosos'
-          fallidos: batchResponse.failed,     // v3.0 'failed' → v2.1 'fallidos'
-          resultados: batchResponse.details.map(detail => ({
-            tag_spool: detail.tag_spool,
-            success: detail.success,
-            message: detail.message,
-            evento_id: null, // v3.0 doesn't return evento_id
-            error_type: detail.success ? null : 'unknown',
-          })),
+          succeeded: batchResponse.succeeded,
+          failed: batchResponse.failed,
+          details: batchResponse.details,
         };
 
         // Guardar resultados en contexto para P6

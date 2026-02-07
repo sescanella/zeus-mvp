@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Worker, BatchActionResponse, Union } from './types';
+import { Worker, Union } from './types';
 
 interface AppState {
   allWorkers: Worker[];  // v2.0: Cache de todos los trabajadores (fetch en P1, filtrar en P2)
@@ -11,7 +11,7 @@ interface AppState {
   selectedSpool: string | null;  // Single-select (backward compat)
   selectedSpools: string[];  // v2.0: Multiselect batch (array de TAGs)
   batchMode: boolean;  // v2.0: Flag si operación es batch
-  batchResults: BatchActionResponse | null;  // v2.0: Resultados de batch operation
+  batchResults: { total: number; succeeded: number; failed: number; details: Array<{ success: boolean; tag_spool: string; message: string }> } | null;  // v2.0: Resultados de batch operation (inline type after BatchActionResponse removal)
   // v4.0: Union-level workflow fields
   accion: 'INICIAR' | 'FINALIZAR' | null;  // v4.0: Workflow action (replaces selectedTipo for v4.0 spools)
   selectedUnions: string[];  // v4.0: Selected union IDs (format: "OT-123+5")

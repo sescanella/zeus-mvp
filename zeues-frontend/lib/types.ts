@@ -28,79 +28,36 @@ export interface Spool {
   version?: 'v3.0' | 'v4.0';  // v4.0: Derived from total_uniones (>0 = v4.0, 0 = v3.0)
 }
 
-export interface ActionPayload {
-  worker_id: number;  // v2.0: Breaking change from worker_nombre (string) to worker_id (number)
-  operacion: 'ARM' | 'SOLD' | 'METROLOGIA';  // v2.0: +METROLOGIA
-  tag_spool: string;
-  timestamp?: string;
-}
-
-// Response de API para iniciar/completar acción
-export interface ActionResponse {
-  success: boolean;
-  message: string;
-  data: {
-    tag_spool: string;
-    operacion: string;
-    trabajador: string;  // v2.1: Formato "INICIALES(ID)" ej: "MR(93)"
-    fila_actualizada: number;
-    columna_actualizada: string;
-    valor_nuevo: number;
-    metadata_actualizada: Record<string, unknown>;
-  };
-}
+// ==========================================
+// BATCH OPERATIONS (v2.0 Multiselect) - DEPRECATED
+// Legacy types removed in v3.0 refactor (Feb 2026)
+// ==========================================
 
 // ==========================================
-// BATCH OPERATIONS (v2.0 Multiselect)
+// REPARACION OPERATIONS (Phase 6)
 // ==========================================
 
 /**
- * Request para operaciones batch (múltiples spools)
+ * Response for reparación operations
  *
- * Soporta hasta 50 spools simultáneos
+ * Used by completarReparacion, tomarReparacion, pausarReparacion, cancelarReparacion
  */
-export interface BatchActionRequest {
-  worker_id: number;
-  operacion: 'ARM' | 'SOLD' | 'METROLOGIA';
-  tag_spools: string[];  // Array de TAGs (máx 50)
-  timestamp?: string;    // Solo para completar
-}
-
-/**
- * Resultado individual de un spool en batch operation
- */
-export interface SpoolActionResult {
+export interface ReparacionResponse {
+  success: boolean;
+  message: string;
   tag_spool: string;
-  success: boolean;
-  message: string;
-  evento_id: string | null;
-  error_type: string | null;
-}
-
-/**
- * Response de batch operation (iniciar/completar/cancelar)
- *
- * Retorna stats agregadas + resultados individuales
- * success=true si AL MENOS 1 spool fue procesado exitosamente
- */
-export interface BatchActionResponse {
-  success: boolean;
-  message: string;
-  total: number;
-  exitosos: number;
-  fallidos: number;
-  resultados: SpoolActionResult[];
+  estado_detalle?: string;
 }
 
 // ==========================================
-// OCCUPATION v3.0 TYPES (Redis locks + State Machine)
+// OCCUPATION v3.0 TYPES (State Machine)
 // ==========================================
 
 /**
  * Request para TOMAR un spool (iniciar ocupación v3.0)
  *
  * Utilizado por endpoint POST /api/occupation/tomar
- * Adquiere lock Redis y actualiza Ocupado_Por/Fecha_Ocupacion
+ * Actualiza Ocupado_Por/Fecha_Ocupacion (occupation)
  */
 export interface TomarRequest {
   tag_spool: string;
