@@ -12,8 +12,6 @@ v3.0 Phase 5 feature:
 """
 
 import logging
-import uuid
-import json
 from datetime import date, datetime
 from typing import Literal
 
@@ -23,7 +21,6 @@ from backend.services.validation_service import ValidationService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.exceptions import SpoolNoEncontradoError
-from backend.models.enums import EventoTipo
 from backend.services.metadata_event_builder import MetadataEventBuilder
 
 logger = logging.getLogger(__name__)
@@ -123,31 +120,18 @@ class MetrologiaService:
             logger.info(f"METROLOGIA RECHAZADO: {tag_spool}")
 
         # Step 4: Log metadata event (Fecha_QC_Metrologia already updated by state machine)
-        evento_tipo = (
-            EventoTipo.COMPLETAR_METROLOGIA
-            if hasattr(EventoTipo, 'COMPLETAR_METROLOGIA')
-            else "COMPLETAR_METROLOGIA"
-        )
-
-        metadata_event = {
-            "id": str(uuid.uuid4()),
-            "timestamp": format_datetime_for_sheets(now_chile()),
-            "evento_tipo": evento_tipo,
-            "tag_spool": tag_spool,
-            "worker_id": worker_id,
-            "worker_nombre": worker_nombre,
-            "operacion": "METROLOGIA",
-            "accion": "COMPLETAR",
-            "fecha_operacion": format_date_for_sheets(fecha_operacion),
-            "metadata_json": json.dumps({
-                "resultado": resultado,
-                "state": metrologia_machine.get_state_id()
-            })
-        }
-
-        # Log to Metadata sheet (best-effort)
         try:
-            self.metadata_repo.append_event(metadata_event)
+            event = (
+                MetadataEventBuilder()
+                .for_metrologia(tag_spool, worker_id, worker_nombre, resultado)
+                .with_operacion("METROLOGIA")
+                .with_metadata({
+                    "resultado": resultado,
+                    "state": metrologia_machine.get_state_id()
+                })
+                .build()
+            )
+            self.metadata_repo.append_event(event)
         except Exception as e:
             logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
 
