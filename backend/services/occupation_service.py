@@ -451,36 +451,19 @@ class OccupationService:
 
             # Step 5: Log to Metadata (audit trail - MANDATORY for regulatory compliance)
             try:
-                # v3.0: COMPLETAR uses operation-specific event types (COMPLETAR_ARM, COMPLETAR_SOLD)
-                # Build evento_tipo string and validate against enum
-                evento_tipo_str = f"COMPLETAR_{operacion}"
-
-                # Validate that enum value exists
-                try:
-                    evento_tipo_enum = EventoTipo(evento_tipo_str)
-                    evento_tipo = evento_tipo_enum.value
-                except ValueError:
-                    # Fallback: Use legacy enum values if new format not available
-                    logger.warning(f"EventoTipo '{evento_tipo_str}' not found in enum, using string directly")
-                    evento_tipo = evento_tipo_str
-
-                metadata_json = json.dumps({
-                    "fecha_operacion": fecha_str,
-                    "completed": True
-                })
-
-                self.metadata_repository.log_event(
-                    evento_tipo=evento_tipo,
-                    tag_spool=tag_spool,
-                    worker_id=worker_id,
-                    worker_nombre=worker_nombre,
-                    operacion=operacion,
-                    accion="COMPLETAR",
-                    fecha_operacion=fecha_operacion,
-                    metadata_json=metadata_json
+                event = (
+                    MetadataEventBuilder()
+                    .for_completar(tag_spool, worker_id, worker_nombre, fecha_operacion)
+                    .with_operacion(operacion)
+                    .with_metadata({
+                        "fecha_operacion": fecha_str,
+                        "completed": True
+                    })
+                    .build()
                 )
+                self.metadata_repository.log_event(**event)
 
-                logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+                logger.info(f"✅ Metadata logged: COMPLETAR_SPOOL for {tag_spool}")
 
             except Exception as e:
                 # CRITICAL: Metadata logging is mandatory for audit compliance
