@@ -109,8 +109,8 @@ backend/
 ```
 zeues-frontend/
   app/                        # 7+ page flow
-    page.tsx                  # P1: Worker identification
-    operacion/                # P2: Operation selection (ARM/SOLD/MET/REP)
+    page.tsx                  # P1: Operation selection (ARM/SOLD/MET/REP)
+    operacion/                # P2: Worker identification (filtered by role)
     tipo-interaccion/         # P3: Action type (INICIAR/FINALIZAR)
     seleccionar-spool/        # P4: Spool selection (multi-select)
     seleccionar-uniones/      # P4b: Union selection

@@ -283,9 +283,9 @@ main.py
 
 ```
 app/                   # 7-page linear flow
-├── page.tsx          # P1: Worker identification
-├── operacion/        # P2: Operation selection
-├── tipo-interaccion/ # P3: Action type (TOMAR/PAUSAR/COMPLETAR)
+├── page.tsx          # P1: Operation selection (ARM/SOLD/MET/REP)
+├── operacion/        # P2: Worker identification (filtered by role)
+├── tipo-interaccion/ # P3: Action type (INICIAR/FINALIZAR)
 ├── seleccionar-spool/# P4: Spool selection
 ├── confirmar/        # P5: Confirmation
 └── exito/            # P6: Success

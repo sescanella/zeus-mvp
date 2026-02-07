@@ -172,8 +172,8 @@
 **Frontend App:**
 - Location: `zeues-frontend/app/layout.tsx` (root) + pages
 - Pages (7-page linear flow):
-  * `app/page.tsx` → P1: Worker identification (fetch all workers)
-  * `app/operacion/page.tsx` → P2: Operation selection (ARM/SOLD/METROLOGIA)
+  * `app/page.tsx` → P1: Operation selection (ARM/SOLD/MET/REP)
+  * `app/operacion/page.tsx` → P2: Worker identification (filtered by role)
   * `app/tipo-interaccion/page.tsx` → P3: Action type (INICIAR/COMPLETAR/CANCELAR)
   * `app/seleccionar-spool/page.tsx` → P4: Spool selection (filtered by API)
   * `app/confirmar/page.tsx` → P5: Confirmation summary
