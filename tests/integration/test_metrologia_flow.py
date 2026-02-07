@@ -20,7 +20,6 @@ from backend.services.metrologia_service import MetrologiaService
 from backend.services.validation_service import ValidationService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
-from backend.services.redis_event_service import RedisEventService
 from backend.models.spool import Spool
 from backend.exceptions import (
     SpoolNoEncontradoError,
@@ -55,27 +54,18 @@ def mock_metadata_repo():
 
 
 @pytest.fixture
-def mock_redis_event_service():
-    """Mock RedisEventService for testing."""
-    service = AsyncMock(spec=RedisEventService)
-    service.publish_spool_update.return_value = True
-    return service
-
-
-@pytest.fixture
 def validation_service():
     """Real ValidationService for prerequisite validation."""
     return ValidationService(role_service=None)
 
 
 @pytest.fixture
-def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo, mock_redis_event_service):
+def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo):
     """MetrologiaService with mocked dependencies."""
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo,
-        redis_event_service=mock_redis_event_service
+        metadata_repository=mock_metadata_repo
     )
 
 
@@ -229,27 +219,7 @@ async def test_completar_logs_metadata_event(metrologia_service, mock_sheets_rep
     assert "APROBADO" in event["metadata_json"]
 
 
-@pytest.mark.asyncio
-async def test_completar_publishes_sse_event(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
-    """Test that SSE event is published for dashboard updates."""
-    # Arrange
-    mock_sheets_repo.get_spool_by_tag.return_value = ready_spool
-
-    # Act
-    await metrologia_service.completar(
-        tag_spool="INTEGRATION-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="RECHAZADO"
-    )
-
-    # Assert SSE event was published
-    mock_redis_event_service.publish_spool_update.assert_called_once()
-    call_args = mock_redis_event_service.publish_spool_update.call_args
-    assert call_args[1]["event_type"] == "COMPLETAR_METROLOGIA"
-    assert call_args[1]["tag_spool"] == "INTEGRATION-001"
-    assert call_args[1]["worker_nombre"] == "CP(95)"
-    assert call_args[1]["additional_data"]["resultado"] == "RECHAZADO"
+# SSE event test removed - single-user mode no longer uses Redis/SSE
 
 
 # ============================================================================
@@ -382,24 +352,7 @@ async def test_completar_continues_on_metadata_failure(metrologia_service, mock_
     assert result["resultado"] == "APROBADO"
 
 
-@pytest.mark.asyncio
-async def test_completar_continues_on_sse_failure(metrologia_service, mock_sheets_repo, mock_redis_event_service, ready_spool):
-    """Test that operation continues even if SSE publishing fails (best-effort)."""
-    # Arrange
-    mock_sheets_repo.get_spool_by_tag.return_value = ready_spool
-    mock_redis_event_service.publish_spool_update.side_effect = Exception("Redis connection error")
-
-    # Act
-    result = await metrologia_service.completar(
-        tag_spool="INTEGRATION-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="APROBADO"
-    )
-
-    # Assert - should still succeed
-    assert result["success"] is True
-    assert result["resultado"] == "APROBADO"
+# SSE failure test removed - single-user mode no longer uses Redis/SSE
 
 
 # ============================================================================

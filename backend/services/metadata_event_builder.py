@@ -277,9 +277,10 @@ class MetadataEventBuilder:
         Configure for METROLOGIA event.
 
         Sets:
-        - evento_tipo = "METROLOGIA_APROBADO" or "METROLOGIA_RECHAZADO"
-        - accion = resultado
+        - evento_tipo = "COMPLETAR_METROLOGIA"
+        - accion = "COMPLETAR"
         - tag_spool, worker_id, worker_nombre
+        - resultado stored in metadata (not in accion)
 
         Args:
             tag_spool: Spool identifier
@@ -300,8 +301,8 @@ class MetadataEventBuilder:
                 f"Must be one of: {valid_resultados}"
             )
 
-        self._evento_tipo = f"METROLOGIA_{resultado}"
-        self._accion = resultado
+        self._evento_tipo = "COMPLETAR_METROLOGIA"
+        self._accion = "COMPLETAR"
         self._tag_spool = tag_spool
         self._worker_id = worker_id
         self._worker_nombre = worker_nombre
