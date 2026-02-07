@@ -771,25 +771,19 @@ class OccupationService:
 
             # Step 6: Log to Metadata (minimal fields only)
             try:
-                evento_tipo = EventoTipo.INICIAR_SPOOL.value  # NEW event type
-                metadata_json = json.dumps({
-                    "ocupado_por": worker_nombre,
-                    "fecha_ocupacion": fecha_ocupacion_str
-                    # NO include: lock_token, v4_operation, spool_version (minimalismo)
-                })
-
-                self.metadata_repository.log_event(
-                    evento_tipo=evento_tipo,
-                    tag_spool=tag_spool,
-                    worker_id=worker_id,
-                    worker_nombre=worker_nombre,
-                    operacion=operacion,
-                    accion="INICIAR",
-                    fecha_operacion=format_date_for_sheets(today_chile()),
-                    metadata_json=metadata_json
+                event = (
+                    MetadataEventBuilder()
+                    .for_iniciar(tag_spool, worker_id, worker_nombre)
+                    .with_operacion(operacion)
+                    .with_metadata({
+                        "ocupado_por": worker_nombre,
+                        "fecha_ocupacion": fecha_ocupacion_str
+                    })
+                    .build()
                 )
+                self.metadata_repository.log_event(**event)
 
-                logger.info(f"✅ Metadata logged: {evento_tipo} for {tag_spool}")
+                logger.info(f"✅ Metadata logged: INICIAR_SPOOL for {tag_spool}")
 
             except Exception as e:
                 # CRITICAL: Metadata logging is mandatory for audit compliance
