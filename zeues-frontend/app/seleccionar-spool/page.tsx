@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock } from 'lucide-react';
+import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
 import type { Spool } from '@/lib/types';
@@ -22,6 +22,23 @@ function SeleccionarSpoolContent() {
   // Local filter states
   const [searchNV, setSearchNV] = useState('');
   const [searchTag, setSearchTag] = useState('');
+
+  // Filter expansion state (sessionStorage - persists during session only)
+  const [isFilterExpanded, setIsFilterExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('spool-filter-expanded');
+      return stored === 'true';
+    }
+    return false; // Default: collapsed (60px compact view)
+  });
+
+  // Persist expansion state to sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('spool-filter-expanded', String(isFilterExpanded));
+    }
+  }, [isFilterExpanded]);
+
   // const [shouldRefresh, setShouldRefresh] = useState(0); // Unused - SSE removed
 
   // SSE removed - single-user mode doesn't need real-time updates
@@ -166,11 +183,35 @@ function SeleccionarSpoolContent() {
   //   }
   // }, [shouldRefresh, fetchSpools]);
 
-  // Filter spools locally (v2.1.2 - renamed variable to force rebuild)
-  const spoolsFiltrados = spools.filter(s =>
-    (s.nv ?? '').toLowerCase().includes(searchNV.toLowerCase()) &&
-    s.tag_spool.toLowerCase().includes(searchTag.toLowerCase())
-  );
+  // Custom debounce hook (500ms - conservative for tablets)
+  function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+
+    useEffect(() => {
+      const handler = setTimeout(() => setDebouncedValue(value), delay);
+      return () => clearTimeout(handler);
+    }, [value, delay]);
+
+    return debouncedValue;
+  }
+
+  // Debounced search values (500ms delay)
+  const debouncedSearchNV = useDebounce(searchNV, 500);
+  const debouncedSearchTag = useDebounce(searchTag, 500);
+
+  // Filter spools with useMemo (optimized - only recalculates when debounced values change)
+  const spoolsFiltrados = useMemo(() => {
+    return spools.filter(s =>
+      (s.nv ?? '').toLowerCase().includes(debouncedSearchNV.toLowerCase()) &&
+      s.tag_spool.toLowerCase().includes(debouncedSearchTag.toLowerCase())
+    );
+  }, [spools, debouncedSearchNV, debouncedSearchTag]);
+
+  // Derived state: active filters count
+  const activeFiltersCount = [
+    debouncedSearchNV.trim() !== '',
+    debouncedSearchTag.trim() !== ''
+  ].filter(Boolean).length;
 
   // Toggle selection
   const toggleSelect = (tag: string) => {
@@ -184,13 +225,32 @@ function SeleccionarSpoolContent() {
     }
   };
 
-  // Select/Deselect all
+  // Select/Deselect all (with 50 spool limit - backend batch constraint)
+  const MAX_BATCH_SELECTION = 50;
+
   const handleSelectAll = () => {
-    setState({ selectedSpools: spoolsFiltrados.map(s => s.tag_spool) });
+    const availableTags = spoolsFiltrados.map(s => s.tag_spool);
+    const toSelect = availableTags.slice(0, MAX_BATCH_SELECTION);
+
+    if (availableTags.length > MAX_BATCH_SELECTION) {
+      alert(
+        `⚠️ LÍMITE DE SELECCIÓN\n\n` +
+        `Solo se pueden seleccionar ${MAX_BATCH_SELECTION} spools a la vez.\n` +
+        `Se seleccionaron los primeros ${MAX_BATCH_SELECTION} de ${availableTags.length} disponibles.\n\n` +
+        `💡 Usa los filtros de búsqueda para reducir la lista.`
+      );
+    }
+
+    setState({ selectedSpools: toSelect });
   };
 
   const handleDeselectAll = () => {
     setState({ selectedSpools: [] });
+  };
+
+  const handleClearFilters = () => {
+    setSearchNV('');
+    setSearchTag('');
   };
 
   // v2.0/v4.0: Navigate with selections (auto-detect single vs batch)
@@ -214,7 +274,7 @@ function SeleccionarSpoolContent() {
         const tag = state.selectedSpools[0];
         const workerNombre = `${state.selectedWorker.nombre.charAt(0)}${(state.selectedWorker.apellido || '').charAt(0)}(${state.selectedWorker.id})`;
 
-        // Call INICIAR API to occupy spool (sets Ocupado_Por, creates Redis lock)
+        // Call INICIAR API to occupy spool (sets Ocupado_Por)
         await iniciarSpool({
           tag_spool: tag,
           worker_id: state.selectedWorker.id,
@@ -508,59 +568,128 @@ function SeleccionarSpoolContent() {
             })()}
 
             <div className="mb-6 tablet:mb-4">
-              <div className="border-4 border-white p-6 tablet:p-4 narrow:p-4 mb-4">
-                <div className="grid grid-cols-2 narrow:grid-cols-1 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
-                  <div>
-                    <label className="block text-xs font-black text-white/50 font-mono mb-2">BUSCAR NV</label>
-                    <div className="relative">
-                      <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
-                      <input
-                        type="text"
-                        value={searchNV}
-                        onChange={(e) => setSearchNV(e.target.value)}
-                        placeholder="NV-2024-..."
-                        className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
-                      />
+              {/* Collapsible Filter Panel (v3.0 - compact by default) */}
+              <div className="border-4 border-white overflow-hidden transition-all duration-300 ease-in-out mb-4">
+                {/* COMPACT VIEW (60px height - default) */}
+                {!isFilterExpanded && (
+                  <div
+                    onClick={() => setIsFilterExpanded(true)}
+                    className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                    role="button"
+                    aria-expanded="false"
+                    aria-label="Expandir filtros de búsqueda"
+                  >
+                    <div className="flex items-center justify-between">
+                      {/* Left: Selection counter */}
+                      <span className="text-sm font-black text-white/70 font-mono">
+                        SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length}
+                      </span>
+
+                      {/* Center: Active filters indicator */}
+                      {activeFiltersCount > 0 && (
+                        <span className="text-xs font-black text-zeues-orange font-mono px-3 py-1 border border-zeues-orange">
+                          {activeFiltersCount} FILTRO{activeFiltersCount !== 1 ? 'S' : ''}
+                        </span>
+                      )}
+
+                      {/* Right: Expand icon */}
+                      <ChevronDown size={24} className="text-white" strokeWidth={3} />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black text-white/50 font-mono mb-2">BUSCAR TAG</label>
-                    <div className="relative">
-                      <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
-                      <input
-                        type="text"
-                        value={searchTag}
-                        onChange={(e) => setSearchTag(e.target.value)}
-                        placeholder="Buscar TAG..."
-                        className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
-                      />
+                )}
+
+                {/* EXPANDED VIEW (full filters + controls) */}
+                {isFilterExpanded && (
+                  <div className="p-6 tablet:p-4 narrow:p-4">
+                    {/* Header with collapse button */}
+                    <div
+                      onClick={() => setIsFilterExpanded(false)}
+                      className="flex items-center justify-between mb-4 cursor-pointer hover:bg-white/5 transition-colors p-2 -m-2"
+                      role="button"
+                      aria-expanded="true"
+                      aria-label="Colapsar filtros de búsqueda"
+                    >
+                      <span className="text-xs font-black text-white/50 font-mono">FILTROS DE BÚSQUEDA</span>
+                      <ChevronUp size={24} className="text-white" strokeWidth={3} />
+                    </div>
+
+                    {/* Search inputs grid */}
+                    <div className="grid grid-cols-2 narrow:grid-cols-1 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
+                      <div>
+                        <label htmlFor="filter-nv" className="block text-xs font-black text-white/50 font-mono mb-2">
+                          BUSCAR NV
+                        </label>
+                        <div className="relative">
+                          <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" aria-hidden="true" />
+                          <input
+                            id="filter-nv"
+                            type="text"
+                            value={searchNV}
+                            onChange={(e) => setSearchNV(e.target.value)}
+                            placeholder="NV-2024-..."
+                            aria-label="Buscar por número de nota de venta"
+                            className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="filter-tag" className="block text-xs font-black text-white/50 font-mono mb-2">
+                          BUSCAR TAG
+                        </label>
+                        <div className="relative">
+                          <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" aria-hidden="true" />
+                          <input
+                            id="filter-tag"
+                            type="text"
+                            value={searchTag}
+                            onChange={(e) => setSearchTag(e.target.value)}
+                            placeholder="Buscar TAG..."
+                            aria-label="Buscar por TAG de spool"
+                            className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Controls row */}
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <span className="text-sm font-black text-white/70 font-mono">
+                        SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS
+                      </span>
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={handleSelectAll}
+                          className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-[#001F3F] transition-colors"
+                          aria-label="Seleccionar todos los spools filtrados"
+                        >
+                          TODOS
+                        </button>
+                        <button
+                          onClick={handleDeselectAll}
+                          disabled={selectedCount === 0}
+                          className="px-4 py-2 border-2 border-red-500 text-red-500 font-mono text-xs font-black active:bg-red-500 active:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          aria-label="Deseleccionar todos los spools"
+                        >
+                          NINGUNO
+                        </button>
+                        {activeFiltersCount > 0 && (
+                          <button
+                            onClick={handleClearFilters}
+                            className="px-4 py-2 border-2 border-yellow-500 text-yellow-500 font-mono text-xs font-black active:bg-yellow-500 active:text-white transition-colors"
+                            aria-label="Limpiar todos los filtros de búsqueda"
+                          >
+                            LIMPIAR FILTROS
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-white/70 font-mono">
-                    SELECCIONADOS: {selectedCount} / {spoolsFiltrados.length} FILTRADOS (v2.1.4)
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSelectAll}
-                      className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-[#001F3F]"
-                    >
-                      TODOS
-                    </button>
-                    <button
-                      onClick={handleDeselectAll}
-                      className="px-4 py-2 border-2 border-red-500 text-red-500 font-mono text-xs font-black active:bg-red-500 active:text-white"
-                    >
-                      NINGUNO
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Tabla */}
               <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto custom-scrollbar">
-                <table className="w-full" key={`table-${spoolsFiltrados.length}-${searchTag}-${searchNV}`}>
+                <table className="w-full">
                   <thead className="sticky top-0 bg-[#001F3F] border-b-4 border-white">
                     <tr>
                       <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">SEL</th>
