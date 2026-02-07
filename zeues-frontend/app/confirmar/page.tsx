@@ -3,10 +3,12 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, X, CheckCircle, Package, Loader2, AlertCircle } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { Modal } from '@/components/Modal';
 import { FixedFooter } from '@/components';
+import { OPERATION_ICONS } from '@/lib/operation-config';
+import { classifyApiError } from '@/lib/error-classifier';
 import {
   tomarOcupacion,
   pausarOcupacion,
@@ -63,7 +65,7 @@ function ConfirmarContent() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [errorType, setErrorType] = useState<'network' | 'not-found' | 'validation' | 'forbidden' | 'server' | 'generic'>('generic');
+  const [errorType, setErrorType] = useState<'network' | 'validation' | 'forbidden' | 'server' | 'conflict' | 'generic'>('generic');
   const [errorModal, setErrorModal] = useState<ErrorModalState | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
@@ -101,11 +103,13 @@ function ConfirmarContent() {
   }, []);
 
   const handleApiError = (error: unknown) => {
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    const classified = classifyApiError(error);
 
-    if (errorMessage.includes('409') || errorMessage.includes('Conflicto')) {
+    if (classified.type === 'conflict') {
       // Race condition - unions changed, need to reload
-      setCountdown(2);
+      if (classified.retryDelay) {
+        setCountdown(Math.floor(classified.retryDelay / 1000));
+      }
       setErrorModal({
         title: 'Datos desactualizados',
         message: `Las uniones disponibles han cambiado. Recargando${countdown !== null ? ` en ${countdown}s` : ''}...`,
@@ -113,18 +117,18 @@ function ConfirmarContent() {
           router.push('/seleccionar-uniones');
         }
       });
-    } else if (errorMessage.includes('403') || errorMessage.includes('autorizado') || errorMessage.includes('permisos')) {
+    } else if (classified.type === 'forbidden') {
       // Ownership validation failed
       setErrorModal({
         title: 'Error de permisos',
-        message: 'No eres el dueño de este spool. Este spool está ocupado por otro trabajador.',
+        message: classified.userMessage,
         action: () => router.push('/seleccionar-spool')
       });
     } else {
       // Generic error
       setErrorModal({
         title: 'Error',
-        message: errorMessage || 'Ocurrió un error. Por favor intenta nuevamente.',
+        message: classified.userMessage,
         action: () => setErrorModal(null)
       });
     }
@@ -441,39 +445,20 @@ function ConfirmarContent() {
         router.push('/exito');
       }
     } catch (err) {
+      console.error('Error al confirmar acción:', err);
+
       // v4.0: Use new error handler for INICIAR/FINALIZAR, fallback to v3.0 for other actions
       if (state.accion === 'INICIAR' || state.accion === 'FINALIZAR') {
         handleApiError(err);
       } else {
-        // v3.0: Manejar errores específicos según código HTTP (incluye nuevos códigos)
-        const errorMessage = err instanceof Error ? err.message : 'Error al procesar acción';
+        // v3.0: Use error classifier for consistent messaging
+        const classified = classifyApiError(err);
+        setError(classified.userMessage);
+        setErrorType(classified.type);
 
-        if (errorMessage.includes('red') || errorMessage.includes('conexión') || errorMessage.includes('Failed to fetch')) {
-          setErrorType('network');
-          setError('Error de conexión con el servidor. Verifica que el backend esté disponible.');
-        } else if (errorMessage.includes('ocupado') || errorMessage.includes('409')) {
-          // v3.0: 409 CONFLICT - Spool occupied by another worker (LOC-04 requirement)
-          setErrorType('forbidden');
-          setError('Este spool está siendo usado por otro trabajador. Intenta más tarde.');
-        } else if (errorMessage.includes('expiró') || errorMessage.includes('410')) {
-          // v3.0: 410 GONE - Lock expired (worker took too long)
-          setErrorType('validation');
-          setError('La operación tardó demasiado tiempo. Por favor vuelve a intentar.');
-        } else if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
-          setErrorType('not-found');
-          setError(errorMessage);
-        } else if (errorMessage.includes('400') || errorMessage.includes('ya iniciada') || errorMessage.includes('ya completada') || errorMessage.includes('dependencias') || errorMessage.includes('Requisitos')) {
-          setErrorType('validation');
-          setError(errorMessage);
-        } else if (errorMessage.includes('403') || errorMessage.includes('autorizado') || errorMessage.includes('completar')) {
-          setErrorType('forbidden');
-          setError(errorMessage);
-        } else if (errorMessage.includes('503') || errorMessage.includes('Sheets') || errorMessage.includes('servidor')) {
-          setErrorType('server');
-          setError('Error del servidor de Google Sheets. Intenta más tarde.');
-        } else {
-          setErrorType('generic');
-          setError(errorMessage);
+        // Keep countdown timer for 409 conflicts (v3.0 compatibility)
+        if (classified.type === 'conflict' && classified.retryDelay) {
+          setCountdown(Math.floor(classified.retryDelay / 1000));
         }
       }
     } finally {
@@ -515,8 +500,7 @@ function ConfirmarContent() {
     state.selectedOperation === 'METROLOGIA' ? 'METROLOGÍA' :
     state.selectedOperation === 'REPARACION' ? 'REPARACIÓN' : 'OPERACIÓN';
 
-  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
-                        state.selectedOperation === 'SOLD' ? Flame : SearchCheck;
+  const OperationIcon = OPERATION_ICONS[state.selectedOperation];
 
   const spoolsList = isBatchMode ? state.selectedSpools : [state.selectedSpool];
   const spoolCount = spoolsList.length;

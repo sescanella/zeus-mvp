@@ -3,9 +3,11 @@
 import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Wrench, Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, CheckSquare, Square, ArrowLeft, X, Loader2, AlertCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppState } from '@/lib/context';
 import { getSpoolsDisponible, getSpoolsOcupados, getSpoolsParaIniciar, getSpoolsParaCancelar, getSpoolsReparacion, detectVersionFromSpool, iniciarSpool } from '@/lib/api';
+import { OPERATION_ICONS } from '@/lib/operation-config';
+import { classifyApiError } from '@/lib/error-classifier';
 import type { Spool } from '@/lib/types';
 
 function SeleccionarSpoolContent() {
@@ -147,20 +149,9 @@ function SeleccionarSpoolContent() {
       setSpools(filtered);
       setLoading(false);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-
-      if (errorMessage.includes('red') || errorMessage.includes('conexión')) {
-        setError('Error de conexión. Verifica que el servidor esté disponible.');
-      } else if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
-        setError(errorMessage);
-      } else if (errorMessage.includes('400') || errorMessage.includes('validación')) {
-        setError(errorMessage);
-      } else if (errorMessage.includes('503') || errorMessage.includes('servidor')) {
-        setError('El servidor no está disponible. Intenta más tarde.');
-      } else {
-        setError(errorMessage || 'Error al cargar spools. Intenta nuevamente.');
-      }
-
+      console.error('Error fetching spools:', err);
+      const classified = classifyApiError(err);
+      setError(classified.userMessage);
       setLoading(false);
     }
   }, [state, tipo]);
@@ -443,9 +434,7 @@ function SeleccionarSpoolContent() {
     }
   };
 
-  const OperationIcon = state.selectedOperation === 'ARM' ? Puzzle :
-                        state.selectedOperation === 'SOLD' ? Flame :
-                        state.selectedOperation === 'METROLOGIA' ? SearchCheck : Wrench;
+  const OperationIcon = OPERATION_ICONS[state.selectedOperation];
 
   const selectedCount = (state.selectedSpools || []).length;
 
