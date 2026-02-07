@@ -5,6 +5,8 @@
  * Adding a new operation only requires updating this configuration file.
  */
 
+import { Puzzle, Flame, SearchCheck, Wrench, type LucideIcon } from 'lucide-react';
+
 export type OperationType = 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
 
 export type ActionType =
@@ -111,3 +113,16 @@ export function isValidTipoForOperation(
 
   return workflow.actions.includes(tipo as ActionType);
 }
+
+/**
+ * Operation icon mapping for consistent UI representation.
+ * Used across P1-P6 flow for visual operation identification.
+ *
+ * Centralized to avoid duplication across multiple pages.
+ */
+export const OPERATION_ICONS: Record<OperationType, LucideIcon> = {
+  ARM: Puzzle,
+  SOLD: Flame,
+  METROLOGIA: SearchCheck,
+  REPARACION: Wrench,
+} as const;
