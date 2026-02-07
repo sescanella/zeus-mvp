@@ -114,26 +114,3 @@ export function classifyApiError(error: unknown): ClassifiedError {
   };
 }
 
-/**
- * Format error for display in Blueprint Industrial UI.
- *
- * @param classified - ClassifiedError from classifyApiError()
- * @returns Object with title, message, and retry button label
- */
-export function formatErrorForUI(classified: ClassifiedError) {
-  const titles: Record<ErrorType, string> = {
-    network: 'SIN CONEXIÓN',
-    validation: 'DATOS INVÁLIDOS',
-    forbidden: 'ACCIÓN NO PERMITIDA',
-    server: 'ERROR DEL SERVIDOR',
-    conflict: 'DATOS DESACTUALIZADOS',
-    generic: 'ERROR',
-  };
-
-  return {
-    title: titles[classified.type],
-    message: classified.userMessage,
-    retryLabel: classified.shouldRetry ? 'REINTENTAR' : null,
-    retryDelay: classified.retryDelay,
-  };
-}

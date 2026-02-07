@@ -68,25 +68,3 @@ export function getCachedVersion(tagSpool: string): 'v3.0' | 'v4.0' | null {
   return null;
 }
 
-/**
- * Clear cached version (useful when spool data changes)
- */
-export function clearCachedVersion(tagSpool: string): void {
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    window.sessionStorage.removeItem(getVersionCacheKey(tagSpool));
-  }
-}
-
-/**
- * Clear all cached versions
- */
-export function clearAllCachedVersions(): void {
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    const keys = Object.keys(window.sessionStorage);
-    keys.forEach(key => {
-      if (key.startsWith('spool_version_')) {
-        window.sessionStorage.removeItem(key);
-      }
-    });
-  }
-}

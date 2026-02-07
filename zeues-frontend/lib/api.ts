@@ -139,58 +139,6 @@ export async function getSpoolsParaCompletar(
 }
 
 /**
- * GET /api/health
- * Health check del backend y conectividad Google Sheets.
- *
- * @returns Promise<{status: string, sheets_connection: string}> - Estado del sistema
- * @throws Error si backend no disponible
- *
- * @example
- * const health = await checkHealth();
- * console.log(health); // {status: "healthy", sheets_connection: "ok", ...}
- */
-export async function checkHealth(): Promise<{ status: string, sheets_connection: string }> {
-  try {
-    const res = await fetch(`${API_URL}/api/health`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    return await handleResponse<{ status: string, sheets_connection: string }>(res);
-  } catch (error) {
-    console.error('checkHealth error:', error);
-    throw new Error('No se pudo verificar el estado del sistema.');
-  }
-}
-
-/**
- * GET /api/workers/{workerId}/roles
- * Obtiene los roles operativos asignados a un trabajador.
- *
- * @param workerId - ID numérico del trabajador
- * @returns Promise<string[]> - Array de roles ("Armador", "Soldador", "Metrologia", etc.)
- * @throws Error si trabajador no encontrado o falla request
- *
- * @example
- * const roles = await getWorkerRoles(93);
- * console.log(roles); // ["Armador", "Soldador"]
- */
-export async function getWorkerRoles(workerId: number): Promise<string[]> {
-  try {
-    const res = await fetch(`${API_URL}/api/workers/${workerId}/roles`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const data = await handleResponse<{ roles: string[] }>(res);
-    return data.roles;
-  } catch (error) {
-    console.error('getWorkerRoles error:', error);
-    throw new Error('No se pudieron cargar los roles del trabajador.');
-  }
-}
-
-/**
  * GET /api/spools/disponible?operacion={ARM|SOLD|REPARACION} (v3.0)
  * Obtiene spools DISPONIBLES para TOMAR (no ocupados, prerequisitos cumplidos).
  *
