@@ -25,6 +25,7 @@ from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.exceptions import SpoolNoEncontradoError
 from backend.models.enums import EventoTipo
+from backend.services.metadata_event_builder import MetadataEventBuilder
 # RedisEventService removed - single-user mode doesn't need real-time events
 
 logger = logging.getLogger(__name__)
