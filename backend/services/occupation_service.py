@@ -41,6 +41,7 @@ from backend.models.occupation import (
     FinalizarRequest
 )
 from backend.models.enums import ActionType, EventoTipo
+from backend.services.metadata_event_builder import MetadataEventBuilder, build_metadata_event
 
 # SOLD_REQUIRED_TYPES: Union types that require SOLD operation (imported from union_service)
 # FW unions are ARM-only (no SOLD needed)
