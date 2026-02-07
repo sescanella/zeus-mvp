@@ -532,31 +532,6 @@ function SeleccionarSpoolContent() {
         {/* Main Content - VAR-1 Table */}
         {!loading && !error && spools.length > 0 && (
           <>
-            {/* Version Info Message */}
-            {(() => {
-              const allSameVersion = spools.every(s => s.version === spools[0]?.version);
-              const v4Count = spools.filter(s => s.version === 'v4.0').length;
-
-              if (allSameVersion && spools.length > 0) {
-                return (
-                  <div className="mb-4 border-2 border-white/30 p-3 bg-white/5">
-                    <span className="text-sm font-black text-white/70 font-mono">
-                      Todos los spools son versión {spools[0].version}
-                    </span>
-                  </div>
-                );
-              } else if (v4Count > 0) {
-                return (
-                  <div className="mb-4 border-2 border-green-500/50 p-3 bg-green-500/10">
-                    <span className="text-sm font-black text-green-400 font-mono">
-                      {v4Count} spool{v4Count !== 1 ? 's' : ''} v4.0 (con uniones), {spools.length - v4Count} v3.0
-                    </span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
             <div className="mb-6 tablet:mb-4">
               {/* Collapsible Filter Panel (v3.0 - compact by default) */}
               <div className="border-4 border-white overflow-hidden transition-all duration-300 ease-in-out mb-4">
