@@ -1118,24 +1118,19 @@ class OccupationService:
 
                 # Log metadata event
                 try:
-                    evento_tipo = EventoTipo.FINALIZAR_SPOOL.value
-                    metadata_json = json.dumps({
-                        "pulgadas": 0.0,  # REPARACION has no pulgadas metric
-                        "action_determined": action_taken
-                    })
-
-                    self.metadata_repository.log_event(
-                        evento_tipo=evento_tipo,
-                        tag_spool=tag_spool,
-                        worker_id=worker_id,
-                        worker_nombre=worker_nombre,
-                        operacion=operacion,
-                        accion="FINALIZAR",
-                        fecha_operacion=format_date_for_sheets(today_chile()),
-                        metadata_json=metadata_json
+                    event = (
+                        MetadataEventBuilder()
+                        .for_finalizar(tag_spool, worker_id, worker_nombre, action_taken)
+                        .with_operacion(operacion)
+                        .with_metadata({
+                            "pulgadas": 0.0,  # REPARACION has no pulgadas metric
+                            "action_determined": action_taken
+                        })
+                        .build()
                     )
+                    self.metadata_repository.log_event(**event)
 
-                    logger.info(f"✅ Metadata logged: {evento_tipo} for REPARACION {tag_spool}")
+                    logger.info(f"✅ Metadata logged: COMPLETAR_SPOOL for REPARACION {tag_spool}")
 
                 except Exception as e:
                     logger.error(f"❌ CRITICAL: Metadata logging failed for REPARACION: {e}")
