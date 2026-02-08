@@ -111,16 +111,7 @@ export default function TipoInteraccionPage() {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="
-                w-full h-12
-                bg-transparent
-                border-4 border-white
-                flex items-center justify-center
-                cursor-pointer
-                active:bg-white active:text-[#001F3F]
-                transition-all duration-200
-                group
-              "
+              className="w-full h-12 bg-transparent border-4 border-white flex items-center justify-center cursor-pointer active:bg-white active:text-[#001F3F] transition-all duration-200 group"
             >
               <span className="text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
                 REINTENTAR
@@ -141,300 +132,129 @@ export default function TipoInteraccionPage() {
     ? state.selectedWorker.roles
     : [state.selectedWorker.rol]).filter((r): r is string => r !== undefined);
 
-  // Version badge component
-  const VersionBadge = ({ version }: { version: 'v3.0' | 'v4.0' }) => (
-    <span className={`
-      inline-flex items-center px-3 py-1 text-xs font-black tracking-[0.15em] rounded font-mono
-      ${version === 'v4.0'
-        ? 'text-green-700 bg-green-100 border-2 border-green-700'
-        : 'text-gray-700 bg-gray-100 border-2 border-gray-700'}
-    `}>
-      {version}
-    </span>
-  );
-
   return (
     <BlueprintPageWrapper>
       {/* Logo */}
-      <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
+      <div className="flex justify-center pt-4 pb-3 tablet:header-compact narrow:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
-          width={200}
-          height={80}
+          width={140}
+          height={56}
           priority
         />
       </div>
 
       {/* Header */}
       <div className="px-10 tablet:px-6 narrow:px-5 py-6 tablet:py-4 border-b-4 border-white/30">
-        <div className="flex items-center justify-center gap-4 mb-4">
+        <div className="flex items-center justify-center gap-4">
           <OperationIcon size={48} strokeWidth={3} className="text-zeues-orange" />
-          <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
+          <h1 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
             {operationLabel}
-          </h2>
+          </h1>
         </div>
-        <p className="text-xl narrow:text-lg text-center text-white/70 font-mono tracking-[0.15em]">
-          ¿QUÉ ACCIÓN REALIZARÁS?
-        </p>
       </div>
 
       {/* Content */}
-      <div className="p-8 tablet:p-5 tablet:pb-footer">
-        {/* Worker Info Bar - expandido con double-row + left accent */}
-        <div className="border-4 border-white mb-6 relative overflow-hidden">
-          {/* Left accent bar */}
-          <div className="absolute inset-y-0 left-0 w-2 bg-zeues-orange"></div>
-
-          <div className="pl-8 pr-6 py-4 narrow:pl-4 narrow:pr-4 narrow:py-3">
-            {/* Top row */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-black text-white/50 font-mono tracking-[0.2em]">
-                TRABAJADOR ASIGNADO
-              </span>
-              <div className="flex items-center gap-2">
-                {workerRoles.map((rol, index) => (
-                  <div key={index} className="px-3 py-1 border-2 border-white/40">
-                    <span className="text-xs font-black text-white/70 font-mono tracking-[0.15em]">
-                      {rol.toUpperCase()}
-                    </span>
-                  </div>
-                ))}
-              </div>
+      <div className="p-8 tablet:p-5 pb-footer tablet:pb-footer narrow:pb-footer">
+        {/* Worker Info Bar - compact inline with orange accent */}
+        <div className="border-4 border-white/30 mb-6 relative overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-2 bg-zeues-orange" />
+          <div className="flex items-center h-[60px] narrow:h-[52px] pl-6 pr-4 narrow:pl-4 gap-4 narrow:gap-3">
+            <div className="flex-shrink-0 bg-zeues-orange px-3 py-1">
+              <span className="text-xl narrow:text-lg font-black text-white font-mono">#{state.selectedWorker.id}</span>
             </div>
-
-            {/* Bottom row */}
-            <div className="flex items-center gap-6">
-              <div className="px-4 py-2 bg-zeues-orange border-2 border-zeues-orange">
-                <span className="text-3xl narrow:text-2xl font-black text-white font-mono">
-                  #{state.selectedWorker.id}
-                </span>
-              </div>
-
-              <div className="h-12 w-1 bg-white/30"></div>
-
-              <div className="flex-1">
-                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.15em] font-mono leading-tight">
-                  {state.selectedWorker.nombre}
-                </h3>
-                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.15em] font-mono leading-tight">
-                  {state.selectedWorker.apellido}
-                </h3>
-              </div>
+            <div className="h-8 w-px bg-white/30" />
+            <span className="text-lg narrow:text-base font-black text-white tracking-[0.1em] font-mono truncate">
+              {state.selectedWorker.nombre} {state.selectedWorker.apellido}
+            </span>
+            <div className="flex items-center gap-2">
+              {workerRoles.map((rol, index) => (
+                <div key={index} className="flex-shrink-0 px-2 py-1 border-2 border-white/40">
+                  <span className="text-xs font-black text-white/70 font-mono tracking-[0.15em]">{rol.toUpperCase()}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Spool Info with Version Badge */}
-        {state.selectedSpool && spoolVersion && (
-          <div className="border-4 border-white/30 mb-6 p-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-xs font-black text-white/50 font-mono tracking-[0.2em] mb-2">
-                  SPOOL SELECCIONADO
-                </p>
-                <p className="text-2xl narrow:text-xl font-black text-white font-mono tracking-[0.15em]">
-                  {state.selectedSpool}
-                </p>
-              </div>
-              <VersionBadge version={spoolVersion} />
-            </div>
+        {/* v4.0 buttons - INICIAR/FINALIZAR (A1 massive colored style) */}
+        {!loadingVersion && spoolVersion === 'v4.0' && (
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={handleIniciar}
+              aria-label="Iniciar trabajo en spool"
+              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-green-600 border-4 border-green-700 flex items-center justify-center gap-6 active:bg-green-700 active:border-green-800 transition-all duration-200"
+            >
+              <Play size={64} strokeWidth={3} className="text-white" />
+              <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">INICIAR</span>
+            </button>
+            <button
+              onClick={handleFinalizar}
+              aria-label="Finalizar trabajo en spool"
+              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-[#E55D26] flex items-center justify-center gap-6 active:bg-[#E55D26] active:border-[#CC5322] transition-all duration-200"
+            >
+              <CheckCircle size={64} strokeWidth={3} className="text-white" />
+              <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">FINALIZAR</span>
+            </button>
           </div>
         )}
 
-        <div className="mb-6 tablet:mb-4">
-          {/* v4.0 buttons - INICIAR/FINALIZAR */}
-          {!loadingVersion && spoolVersion === 'v4.0' && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-black text-white tracking-[0.15em] font-mono mb-6">
-                ¿QUÉ DESEAS HACER?
-              </h2>
-
+        {/* v3.0 buttons - REPARACION (A1 massive colored style) */}
+        {!loadingVersion && spoolVersion === 'v3.0' && (
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={() => handleSelectTipo('tomar')}
+              aria-label="Tomar spool"
+              className="w-full h-[100px] tablet:h-[90px] narrow:h-[80px] bg-green-600 border-4 border-green-700 flex items-center justify-center gap-6 active:bg-green-700 active:border-green-800 transition-all duration-200"
+            >
+              <Play size={56} strokeWidth={3} className="text-white" />
+              <span className="text-4xl tablet:text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">TOMAR</span>
+            </button>
+            <button
+              onClick={() => handleSelectTipo('pausar')}
+              aria-label="Pausar trabajo"
+              className="w-full h-[100px] tablet:h-[90px] narrow:h-[80px] bg-yellow-500 border-4 border-yellow-600 flex items-center justify-center gap-6 active:bg-yellow-600 active:border-yellow-700 transition-all duration-200"
+            >
+              <Pause size={56} strokeWidth={3} className="text-white" />
+              <span className="text-4xl tablet:text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">PAUSAR</span>
+            </button>
+            <button
+              onClick={() => handleSelectTipo('completar')}
+              aria-label="Completar trabajo"
+              className="w-full h-[100px] tablet:h-[90px] narrow:h-[80px] bg-blue-600 border-4 border-blue-700 flex items-center justify-center gap-6 active:bg-blue-700 active:border-blue-800 transition-all duration-200"
+            >
+              <CheckCircle size={56} strokeWidth={3} className="text-white" />
+              <span className="text-4xl tablet:text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">COMPLETAR</span>
+            </button>
+            {state.selectedOperation === 'REPARACION' && (
               <button
-                onClick={handleIniciar}
-                className="
-                  w-full h-20
-                  bg-transparent
-                  border-4 border-white
-                  flex items-center justify-center gap-4
-                  cursor-pointer
-                  active:bg-zeues-orange active:border-zeues-orange
-                  transition-all duration-200
-                  group
-                "
+                onClick={() => handleSelectTipo('cancelar')}
+                aria-label="Cancelar reparación"
+                className="w-full h-[80px] narrow:h-[70px] bg-transparent border-4 border-red-500 flex items-center justify-center gap-4 active:bg-red-500 active:border-red-500 transition-all duration-200 group"
               >
-                <Play size={48} strokeWidth={3} className="text-white group-active:text-white" />
-                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                  INICIAR
-                </h3>
+                <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
+                <span className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">CANCELAR REPARACIÓN</span>
               </button>
-
-              <button
-                onClick={handleFinalizar}
-                className="
-                  w-full h-20
-                  bg-transparent
-                  border-4 border-white
-                  flex items-center justify-center gap-4
-                  cursor-pointer
-                  active:bg-green-500 active:border-green-500
-                  transition-all duration-200
-                  group
-                "
-              >
-                <CheckCircle size={48} strokeWidth={3} className="text-white group-active:text-white" />
-                <h3 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                  FINALIZAR
-                </h3>
-              </button>
-
-              <p className="text-sm text-white/60 mt-4 font-mono tracking-[0.1em] text-center">
-                Versión 4.0 - Trabajo por uniones
-              </p>
-
-              {/* Help text for v4.0 */}
-              <div className="mt-6 p-4 bg-blue-900/30 border-2 border-blue-500/50 rounded">
-                <p className="text-sm text-blue-200 font-mono">
-                  <strong className="text-blue-100">INICIAR:</strong> Ocupar spool para comenzar trabajo
-                </p>
-                <p className="text-sm text-blue-200 mt-2 font-mono">
-                  <strong className="text-blue-100">FINALIZAR:</strong> Registrar uniones completadas y liberar spool
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* v3.0 buttons - TOMAR/PAUSAR/COMPLETAR */}
-          {!loadingVersion && spoolVersion === 'v3.0' && (
-            <>
-              <h2 className="text-2xl font-black text-white tracking-[0.15em] font-mono mb-6">
-                SELECCIONA LA ACCIÓN
-              </h2>
-
-              {/* Grid 3 columnas - TOMAR/PAUSAR/COMPLETAR */}
-              <div className="grid grid-cols-3 gap-4 tablet:gap-3 mb-4">
-                {/* TOMAR */}
-                <button
-                  onClick={() => handleSelectTipo('tomar')}
-                  className="
-                    h-40 narrow:h-32
-                    bg-transparent
-                    border-4 border-white
-                    flex flex-col items-center justify-center gap-4
-                    cursor-pointer
-                    active:bg-zeues-orange active:border-zeues-orange
-                    transition-all duration-200
-                    group
-                  "
-                >
-                  <Play size={56} strokeWidth={3} className="text-white group-active:text-white" />
-                  <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                    TOMAR
-                  </h3>
-                </button>
-
-                {/* PAUSAR */}
-                <button
-                  onClick={() => handleSelectTipo('pausar')}
-                  className="
-                    h-40 narrow:h-32
-                    bg-transparent
-                    border-4 border-white
-                    flex flex-col items-center justify-center gap-4
-                    cursor-pointer
-                    active:bg-yellow-500 active:border-yellow-500
-                    transition-all duration-200
-                    group
-                  "
-                >
-                  <Pause size={56} strokeWidth={3} className="text-white group-active:text-white" />
-                  <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                    PAUSAR
-                  </h3>
-                </button>
-
-                {/* COMPLETAR */}
-                <button
-                  onClick={() => handleSelectTipo('completar')}
-                  className="
-                    h-40 narrow:h-32
-                    bg-transparent
-                    border-4 border-white
-                    flex flex-col items-center justify-center gap-4
-                    cursor-pointer
-                    active:bg-green-500 active:border-green-500
-                    transition-all duration-200
-                    group
-                  "
-                >
-                  <CheckCircle size={56} strokeWidth={3} className="text-white group-active:text-white" />
-                  <h3 className="text-2xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-                    COMPLETAR
-                  </h3>
-                </button>
-              </div>
-
-              {/* CANCELAR - full width (REPARACIÓN only)
-                  Business Rule: After 3 failed repair attempts, spool must be CANCELED.
-                  This transitions spool to BLOQUEADO state (requires engineering review).
-
-                  Use CANCELAR when:
-                  - Spool has been repaired 3 times and still fails inspection
-                  - Defect is beyond field repair capabilities
-                  - Engineering department must evaluate root cause
-
-                  Effect: Spool becomes BLOQUEADO and cannot be used until engineering clears it.
-              */}
-              {state.selectedOperation === 'REPARACION' && (
-                <button
-                  onClick={() => handleSelectTipo('cancelar')}
-                  className="
-                    w-full h-24 narrow:h-20
-                    bg-transparent
-                    border-4 border-red-500
-                    flex items-center justify-center gap-4
-                    cursor-pointer
-                    active:bg-red-500 active:border-red-500
-                    transition-all duration-200
-                    group
-                  "
-                >
-                  <XCircle size={40} strokeWidth={3} className="text-red-500 group-active:text-white" />
-                  <h3 className="text-3xl narrow:text-2xl font-black text-red-500 tracking-[0.2em] font-mono group-active:text-white">
-                    CANCELAR REPARACIÓN
-                  </h3>
-                </button>
-              )}
-
-              <p className="text-sm text-white/60 mt-4 font-mono tracking-[0.1em] text-center">
-                Versión 3.0 - Trabajo por spool completo
-              </p>
-
-              {/* Help text for v3.0 */}
-              <div className="mt-6 p-4 bg-gray-800/50 border-2 border-gray-500/50 rounded">
-                <p className="text-sm text-gray-300 font-mono text-center">
-                  Flujo tradicional: trabajo a nivel de spool completo
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Fixed Navigation Footer */}
-        <FixedFooter
-          backButton={{
-            text: "VOLVER",
-            onClick: handleBack,
-            icon: <ArrowLeft size={24} strokeWidth={3} />
-          }}
-          primaryButton={{
-            text: "INICIO",
-            onClick: () => router.push('/'),
-            variant: "danger",
-            icon: <X size={24} strokeWidth={3} />
-          }}
-        />
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Fixed Navigation Footer */}
+      <FixedFooter
+        backButton={{
+          text: "VOLVER",
+          onClick: handleBack,
+          icon: <ArrowLeft size={24} strokeWidth={3} />
+        }}
+        primaryButton={{
+          text: "INICIO",
+          onClick: () => router.push('/'),
+          variant: "danger",
+          icon: <X size={24} strokeWidth={3} />
+        }}
+      />
     </BlueprintPageWrapper>
   );
 }
