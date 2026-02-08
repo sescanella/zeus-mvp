@@ -161,12 +161,12 @@ export default function SeleccionarUnionesPage() {
   return (
     <BlueprintPageWrapper>
       {/* Logo */}
-      <div className="flex justify-center pt-8 pb-6 tablet:header-compact border-b-4 border-white/30">
+      <div className="flex justify-center pt-4 pb-3 tablet:header-compact narrow:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
-          width={200}
-          height={80}
+          width={140}
+          height={56}
           priority
         />
       </div>
@@ -192,7 +192,7 @@ export default function SeleccionarUnionesPage() {
       </div>
 
       {/* Content */}
-      <div className="p-8 tablet:p-5 tablet:pb-footer">
+      <div className="p-8 tablet:p-5 pb-footer tablet:pb-footer narrow:pb-footer">
         {/* Loading State */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-20">

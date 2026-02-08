@@ -25,6 +25,11 @@ button {
   touch-action: manipulation;
 }
 
+/* Base footer offset - applies on ALL screen sizes */
+.pb-footer {
+  padding-bottom: 11rem !important; /* 176px - matches two-row footer */
+}
+
 /* ========================================
    TABLET VIEWPORT OPTIMIZATIONS
    Target: Android Tablets 10" (800x1280, 1024x600)
@@ -198,6 +203,12 @@ button {
 
   .narrow\:tracking-tight {
     letter-spacing: -0.01em !important;
+  }
+
+  /* Header compact for narrow screens */
+  .narrow\:header-compact {
+    padding-top: 0.75rem !important;   /* 12px */
+    padding-bottom: 0.75rem !important; /* 12px */
   }
 
   /* Content with fixed footer - vertical button layout needs more space */

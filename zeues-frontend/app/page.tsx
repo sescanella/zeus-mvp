@@ -59,8 +59,8 @@ export default function OperacionSelectionPage() {
             <Image
               src="/logos/logo-grisclaro-F8F9FA.svg"
               alt="Kronos Mining"
-              width={200}
-              height={80}
+              width={140}
+              height={56}
               priority
             />
           </div>
@@ -80,20 +80,20 @@ export default function OperacionSelectionPage() {
   // Pantalla principal Blueprint Industrial
   return (
     <BlueprintPageWrapper>
-      {/* Logo 200px + Dashboard Link */}
-      <div className="relative flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+      {/* Logo + Dashboard Link */}
+      <div className="relative flex justify-center pt-4 pb-3 narrow:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
-          width={200}
-          height={80}
+          width={140}
+          height={56}
           priority
         />
 
         {/* Dashboard Link - Top Right */}
         <Link
           href="/dashboard"
-          className="absolute right-8 top-8 flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group"
+          className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group"
         >
           <Monitor size={24} strokeWidth={3} className="text-white group-active:text-white" />
           <span className="text-sm font-black font-mono text-white tracking-wider group-active:text-white">

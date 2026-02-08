@@ -117,12 +117,12 @@ export default function ExitoPage() {
     <BlueprintPageWrapper>
       <div className="flex flex-col min-h-screen">
         {/* Logo */}
-      <div className="flex justify-center pt-8 pb-6 border-b-4 border-white/30">
+      <div className="flex justify-center pt-4 pb-3 narrow:header-compact border-b-4 border-white/30">
         <Image
           src="/logos/logo-grisclaro-F8F9FA.svg"
           alt="Kronos Mining"
-          width={200}
-          height={80}
+          width={140}
+          height={56}
           priority
         />
       </div>
