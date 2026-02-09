@@ -18,6 +18,7 @@ from .common_filters import (
     StatusNVFilter,
     StatusSpoolFilter,
     SOLDCompletionFilter,
+    ARMCompletionFilter,
     EstadoDetalleContainsFilter
 )
 
@@ -88,22 +89,27 @@ class FilterRegistry:
     ]
 
     # ============================================================================
-    # SOLD - INICIAR (v3.0 Occupation-Based)
+    # SOLD - INICIAR (v3.0 + v4.0 Hybrid Logic)
     # ============================================================================
-    # LÓGICA ACTUAL EN PRODUCCIÓN:
-    # if spool.fecha_armado is not None and spool.ocupado_por is None:
-    #     spools_disponibles.append(spool)
+    # NUEVA LÓGICA (2026-02-09):
+    # CONDICIÓN 1: ARM completado (v3.0 O v4.0):
+    #   - v3.0 (Total_Uniones = 0): Fecha_Armado CON dato
+    #   - v4.0 (Total_Uniones >= 1): Uniones_ARM_Completadas >= 1
+    # CONDICIÓN 2: No ocupado por otro trabajador
+    #
+    # MOTIVO DEL CAMBIO:
+    # PrerequisiteFilter("fecha_armado") exigía Fecha_Armado con dato, pero ese
+    # campo solo se escribe al COMPLETAR todas las uniones ARM. Spools v4.0 con
+    # ARM parcial (ej: 6/12 uniones) nunca aparecían en SOLD INICIAR.
+    # ARMCompletionFilter acepta v4.0 con >= 1 unión ARM (alineado con P5).
     #
     # Incluye:
     # - Spools PENDIENTE: nunca iniciados (Soldador=None, Ocupado_Por=None)
     # - Spools PAUSADO: pausados (Soldador!=None, Ocupado_Por=None)
     # ============================================================================
     _SOLD_INICIAR_FILTERS: List[SpoolFilter] = [
-        # 1. Prerequisito: Armado completado (fecha_armado con dato)
-        PrerequisiteFilter(
-            field_name="fecha_armado",
-            display_name="Armado"
-        ),
+        # 1. Armado completado (v3.0 + v4.0 hybrid logic)
+        ARMCompletionFilter(),
         # 2. No ocupado por otro trabajador (ocupado_por vacío/null)
         OcupacionFilter(),
     ]

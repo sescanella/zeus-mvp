@@ -242,6 +242,61 @@ class SOLDCompletionFilter(SpoolFilter):
         )
 
 
+class ARMCompletionFilter(SpoolFilter):
+    """
+    Filtra spools con ARMADO completado (v3.0 + v4.0 hybrid).
+
+    REGLA DE NEGOCIO:
+    - v3.0 (Total_Uniones == 0 o None): Verifica Fecha_Armado con dato
+    - v4.0 (Total_Uniones >= 1): Verifica Uniones_ARM_Completadas >= 1
+
+    Este filtro es específico para SOLD INICIAR, que necesita validar que
+    al menos una unión ARM esté completada antes de permitir soldadura.
+    Alineado con la validación P5 en occupation_service.py.
+    """
+
+    def apply(self, spool: Spool) -> FilterResult:
+        # Detectar versión del spool
+        total_uniones = spool.total_uniones or 0
+
+        if total_uniones == 0:
+            # Spool v3.0 (legacy) - Usar Fecha_Armado
+            if spool.fecha_armado is not None:
+                return FilterResult(
+                    passed=True,
+                    reason=f"v3.0: Armado completado (Fecha_Armado={spool.fecha_armado})"
+                )
+            return FilterResult(
+                passed=False,
+                reason="v3.0: Armado no completado (Fecha_Armado vacía)"
+            )
+        else:
+            # Spool v4.0 (con uniones) - Usar contadores
+            uniones_arm = spool.uniones_arm_completadas or 0
+
+            if uniones_arm >= 1:
+                return FilterResult(
+                    passed=True,
+                    reason=f"v4.0: ARM parcial o completo ({uniones_arm}/{total_uniones} uniones)"
+                )
+            return FilterResult(
+                passed=False,
+                reason=f"v4.0: Sin uniones ARM completadas ({uniones_arm}/{total_uniones} uniones)"
+            )
+
+    @property
+    def name(self) -> str:
+        return "ARMCompletion_v3_v4_Hybrid"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Verifica que ARMADO esté completado (al menos parcial). "
+            "v3.0 (Total_Uniones=0): Fecha_Armado con dato. "
+            "v4.0 (Total_Uniones>=1): Uniones_ARM_Completadas >= 1"
+        )
+
+
 class EstadoDetalleContainsFilter(SpoolFilter):
     """
     Filtra spools basándose en si Estado_Detalle contiene una palabra específica.
