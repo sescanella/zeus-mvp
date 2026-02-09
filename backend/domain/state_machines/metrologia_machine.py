@@ -97,13 +97,10 @@ class MetrologiaStateMachine(BaseOperationStateMachine):
         """
         Callback when inspection fails.
 
-        Updates Fecha_QC_Metrologia column with completion date.
+        Updates Estado_Detalle only (NOT Fecha_QC_Metrología).
+        Fecha_QC_Metrología represents approval date, not inspection date.
         Phase 6: Increments cycle counter and checks if should block after 3 rejections.
-
-        Args:
-            fecha_operacion: Date of inspection completion (defaults to today)
         """
-        fecha = fecha_operacion if fecha_operacion else date.today()
         if self.sheets_repo:
             # Find row for this spool
             row_num = self.sheets_repo.find_row_by_column_value(
@@ -113,9 +110,6 @@ class MetrologiaStateMachine(BaseOperationStateMachine):
             )
 
             if row_num:
-                # Format date as DD-MM-YYYY for consistency with existing data
-                fecha_str = fecha.strftime("%d-%m-%Y") if hasattr(fecha, 'strftime') else str(fecha)
-
                 # Phase 6: Increment cycle counter on rejection
                 estado_detalle = "METROLOGIA RECHAZADO - Pendiente reparación"
                 if self.cycle_counter:
@@ -133,11 +127,10 @@ class MetrologiaStateMachine(BaseOperationStateMachine):
                     # Build new estado (BLOQUEADO if at limit, else RECHAZADO with cycle)
                     estado_detalle = self.cycle_counter.build_rechazado_estado(new_cycle)
 
-                # Update Fecha_QC_Metrologia + Estado_Detalle columns
+                # Update Estado_Detalle only (no Fecha_QC_Metrología for RECHAZADO)
                 self.sheets_repo.batch_update_by_column_name(
                     sheet_name=config.HOJA_OPERACIONES_NOMBRE,
                     updates=[
-                        {"row": row_num, "column_name": "Fecha_QC_Metrología", "value": fecha_str},
                         {"row": row_num, "column_name": "Estado_Detalle", "value": estado_detalle}
                     ]
                 )

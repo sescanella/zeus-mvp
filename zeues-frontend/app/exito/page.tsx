@@ -31,12 +31,6 @@ export default function ExitoPage() {
     router.push('/');
   }, [resetState, router]);
 
-  const handleContinueSameSpool = useCallback(() => {
-    // Keep worker, operation, and spool - reset only union selection
-    resetV4State();
-    router.push('/tipo-interaccion');
-  }, [resetV4State, router]);
-
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
@@ -221,18 +215,6 @@ export default function ExitoPage() {
 
         {/* Navigation Buttons */}
         <div className="w-full max-w-2xl space-y-4">
-          {/* v4.0: Continue with same spool (only for FINALIZAR) */}
-          {accion === 'FINALIZAR' && selectedUnions.length > 0 && (
-            <button
-              onClick={handleContinueSameSpool}
-              className="w-full h-16 border-4 border-white/50 flex items-center justify-center active:bg-white/20 group"
-            >
-              <span className="text-xl font-black text-white font-mono">
-                CONTINUAR CON MISMO SPOOL
-              </span>
-            </button>
-          )}
-
           {/* Nuevo Trabajo (all workflows) */}
           <button
             onClick={handleNewWork}

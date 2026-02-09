@@ -119,6 +119,46 @@ def test_validar_puede_completar_metrologia_already_completed(validation_service
     assert "METROLOGIA" in str(exc.value)
 
 
+def test_validar_puede_completar_metrologia_rechazado(validation_service):
+    """Test validation fails if spool was RECHAZADO (needs reparación, not re-inspection)."""
+    spool = Spool(
+        tag_spool="UNIT-012",
+        fecha_materiales=date(2026, 1, 20),
+        fecha_armado=date(2026, 1, 22),
+        fecha_soldadura=date(2026, 1, 25),
+        fecha_qc_metrologia=None,  # No fecha (RECHAZADO no longer writes it)
+        armador="MR(93)",
+        soldador="JP(94)",
+        ocupado_por=None,
+        estado_detalle="METROLOGIA RECHAZADO - Pendiente reparación"
+    )
+
+    with pytest.raises(OperacionYaCompletadaError) as exc:
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=95)
+
+    assert "METROLOGIA" in str(exc.value)
+
+
+def test_validar_puede_completar_metrologia_bloqueado(validation_service):
+    """Test validation fails if spool is BLOQUEADO (needs supervisor intervention)."""
+    spool = Spool(
+        tag_spool="UNIT-013",
+        fecha_materiales=date(2026, 1, 20),
+        fecha_armado=date(2026, 1, 22),
+        fecha_soldadura=date(2026, 1, 25),
+        fecha_qc_metrologia=None,
+        armador="MR(93)",
+        soldador="JP(94)",
+        ocupado_por=None,
+        estado_detalle="BLOQUEADO (3/3 rechazos)"
+    )
+
+    with pytest.raises(OperacionYaCompletadaError) as exc:
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=95)
+
+    assert "METROLOGIA" in str(exc.value)
+
+
 def test_validar_puede_completar_metrologia_spool_occupied(validation_service):
     """Test validation fails if spool is occupied (prerequisite 4)."""
     spool = Spool(

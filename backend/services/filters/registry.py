@@ -19,6 +19,7 @@ from .common_filters import (
     StatusSpoolFilter,
     SOLDCompletionFilter,
     ARMCompletionFilter,
+    MetrologiaNotCompletedFilter,
     EstadoDetalleContainsFilter
 )
 
@@ -136,28 +137,26 @@ class FilterRegistry:
     # ============================================================================
     # METROLOGIA - INICIAR (v3.0 + v4.0 Hybrid Logic)
     # ============================================================================
-    # NUEVA LÓGICA (2026-02-05):
-    # CONDICIÓN 1: Fecha_QC_Metrología debe estar vacía (metrología no completada)
+    # LÓGICA (2026-02-09):
+    # CONDICIÓN 1: Metrología no completada ni rechazada:
+    #   - fecha_qc_metrologia vacía (no APROBADO)
+    #   - Estado_Detalle NO contiene "RECHAZADO" ni "BLOQUEADO"
     # CONDICIÓN 2: SOLD completada (v3.0 O v4.0):
     #   - v3.0 (Total_Uniones = 0): Fecha_Soldadura CON dato
     #   - v4.0 (Total_Uniones >= 1): Uniones_SOLD_Completadas = Total_Uniones
     #
+    # CAMBIO (2026-02-09):
+    # Reemplazado CompletionFilter("fecha_qc_metrologia") por MetrologiaNotCompletedFilter.
+    # Motivo: RECHAZADO ya no escribe Fecha_QC_Metrología (esa fecha = fecha de aprobación).
+    # El nuevo filtro excluye por Estado_Detalle (RECHAZADO/BLOQUEADO) además de fecha.
+    #
     # DECISIÓN DEL USUARIO (2026-02-05):
     # ✅ NO filtrar por Ocupado_Por (permite ver spools ocupados por ARM/SOLD)
     # ✅ Usar lógica híbrida v3.0/v4.0 basada en Total_Uniones
-    #
-    # CASOS DE EJEMPLO:
-    # - v3.0: TAG-001, Total_Uniones=0, Fecha_Soldadura=01-01-2026, Fecha_QC=None → ELEGIBLE
-    # - v4.0 completo: TAG-002, Total_Uniones=5, Uniones_SOLD=5, Fecha_QC=None → ELEGIBLE
-    # - v4.0 incompleto: TAG-003, Total_Uniones=5, Uniones_SOLD=2, Fecha_QC=None → NO ELEGIBLE
-    # - v4.0 sin v3.0: TAG-004, Total_Uniones=5, Uniones_SOLD=5, Fecha_Soldadura=None → ELEGIBLE
     # ============================================================================
     _METROLOGIA_INICIAR_FILTERS: List[SpoolFilter] = [
-        # 1. Metrología no completada (fecha_qc_metrologia vacía)
-        CompletionFilter(
-            field_name="fecha_qc_metrologia",
-            display_name="Metrología"
-        ),
+        # 1. Metrología no completada ni rechazada (fecha + Estado_Detalle)
+        MetrologiaNotCompletedFilter(),
         # 2. Soldadura completada (v3.0 + v4.0 hybrid logic)
         SOLDCompletionFilter(),
         # NOTA: NO se filtra por Ocupado_Por (decisión del usuario 2026-02-05)

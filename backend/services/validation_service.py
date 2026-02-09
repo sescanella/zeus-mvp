@@ -229,8 +229,16 @@ class ValidationService:
                 detalle="Soldadura debe finalizar antes de metrología"
             )
 
-        # 3. Check NOT already completed
+        # 3. Check NOT already completed (APROBADO)
         if spool.fecha_qc_metrologia is not None:
+            raise OperacionYaCompletadaError(
+                tag_spool=spool.tag_spool,
+                operacion="METROLOGIA"
+            )
+
+        # 3b. Check NOT RECHAZADO or BLOQUEADO (needs reparación, not re-inspection)
+        estado = spool.estado_detalle or ""
+        if "RECHAZADO" in estado or "BLOQUEADO" in estado:
             raise OperacionYaCompletadaError(
                 tag_spool=spool.tag_spool,
                 operacion="METROLOGIA"
