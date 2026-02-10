@@ -254,7 +254,10 @@ function SeleccionarSpoolContent() {
         selectedSpools: [],
       });
 
-      if (isV4) {
+      // REPARACION: skip union selection (operates at spool level)
+      if (state.selectedOperation === 'REPARACION') {
+        router.push('/confirmar');
+      } else if (isV4) {
         router.push('/seleccionar-uniones');
       } else {
         router.push('/confirmar');

@@ -21,7 +21,7 @@ export default function SeleccionarUnionesPage() {
 
   // Redirect if missing required context
   useEffect(() => {
-    if (!state.selectedSpool || !state.selectedOperation || state.selectedOperation === 'METROLOGIA') {
+    if (!state.selectedSpool || !state.selectedOperation || state.selectedOperation === 'METROLOGIA' || state.selectedOperation === 'REPARACION') {
       router.push('/');
     }
   }, [state.selectedSpool, state.selectedOperation, router]);
