@@ -80,7 +80,7 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
         aria-modal="true"
         aria-label={ariaLabel}
         className={`
-          relative bg-white rounded-lg shadow-xl
+          relative rounded-lg shadow-xl
           max-w-md w-full p-6
           transition-all duration-200
           ${className}
