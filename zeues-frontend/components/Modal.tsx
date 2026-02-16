@@ -9,9 +9,10 @@ interface ModalProps {
   onBackdropClick?: (() => void) | null;
   children: React.ReactNode;
   className?: string;
+  ariaLabel?: string;
 }
 
-export function Modal({ isOpen, onClose, onBackdropClick, children, className = '' }: ModalProps) {
+export function Modal({ isOpen, onClose, onBackdropClick, children, className = '', ariaLabel }: ModalProps) {
   const [mounted, setMounted] = React.useState(false);
 
   // Handle SSR - only render portal after mount
@@ -75,6 +76,9 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
 
       {/* Modal content */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel}
         className={`
           relative bg-white rounded-lg shadow-xl
           max-w-md w-full p-6

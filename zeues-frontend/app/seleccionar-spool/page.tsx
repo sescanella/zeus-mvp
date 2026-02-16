@@ -34,21 +34,8 @@ function SeleccionarSpoolContent() {
   const [searchNV, setSearchNV] = useState('');
   const [searchTag, setSearchTag] = useState('');
 
-  // Filter expansion state (sessionStorage - persists during session only)
-  const [isFilterExpanded, setIsFilterExpanded] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('spool-filter-expanded');
-      return stored === 'true';
-    }
-    return false;
-  });
-
-  // Persist expansion state to sessionStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('spool-filter-expanded', String(isFilterExpanded));
-    }
-  }, [isFilterExpanded]);
+  // Filter modal state
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const fetchSpools = useCallback(async () => {
     try {
@@ -128,7 +115,15 @@ function SeleccionarSpoolContent() {
         }
       }
 
-      setSpools(filtered);
+      // Deduplicate by tag_spool (Google Sheets may contain duplicate rows)
+      const seen = new Set<string>();
+      const deduplicated = filtered.filter(spool => {
+        if (seen.has(spool.tag_spool)) return false;
+        seen.add(spool.tag_spool);
+        return true;
+      });
+
+      setSpools(deduplicated);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching spools:', err);
@@ -389,8 +384,9 @@ function SeleccionarSpoolContent() {
         {!loading && !error && spools.length > 0 && (
           <div className="mb-6 tablet:mb-4">
             <SpoolFilterPanel
-              isExpanded={isFilterExpanded}
-              onToggleExpand={() => setIsFilterExpanded(prev => !prev)}
+              isOpen={isFilterOpen}
+              onOpen={() => setIsFilterOpen(true)}
+              onClose={() => setIsFilterOpen(false)}
               searchNV={searchNV}
               onSearchNVChange={setSearchNV}
               searchTag={searchTag}

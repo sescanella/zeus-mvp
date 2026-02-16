@@ -4,8 +4,9 @@ import { axe } from 'jest-axe';
 import { SpoolFilterPanel } from '@/components/SpoolFilterPanel';
 
 const defaultProps = {
-  isExpanded: false,
-  onToggleExpand: jest.fn(),
+  isOpen: false,
+  onOpen: jest.fn(),
+  onClose: jest.fn(),
   searchNV: '',
   onSearchNVChange: jest.fn(),
   searchTag: '',
@@ -22,7 +23,7 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('SpoolFilterPanel — collapsed state', () => {
+describe('SpoolFilterPanel — closed state (trigger bar)', () => {
   it('shows selection counter', () => {
     render(<SpoolFilterPanel {...defaultProps} />);
     expect(screen.getByText('SELECCIONADOS: 3 / 10')).toBeInTheDocument();
@@ -49,116 +50,110 @@ describe('SpoolFilterPanel — collapsed state', () => {
     expect(screen.getByText('1 FILTRO')).toBeInTheDocument();
   });
 
-  it('calls onToggleExpand on click', () => {
+  it('calls onOpen on click', () => {
     render(<SpoolFilterPanel {...defaultProps} />);
-    fireEvent.click(screen.getByRole('button', { name: /Mostrar filtros/i }));
-    expect(defaultProps.onToggleExpand).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Abrir filtros/i }));
+    expect(defaultProps.onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onToggleExpand on Enter key', () => {
+  it('has aria-haspopup="dialog"', () => {
     render(<SpoolFilterPanel {...defaultProps} />);
-    fireEvent.keyDown(screen.getByRole('button', { name: /Mostrar filtros/i }), { key: 'Enter' });
-    expect(defaultProps.onToggleExpand).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onToggleExpand on Space key', () => {
-    render(<SpoolFilterPanel {...defaultProps} />);
-    fireEvent.keyDown(screen.getByRole('button', { name: /Mostrar filtros/i }), { key: ' ' });
-    expect(defaultProps.onToggleExpand).toHaveBeenCalledTimes(1);
-  });
-
-  it('has aria-expanded=false', () => {
-    render(<SpoolFilterPanel {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /Mostrar filtros/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /Abrir filtros/i })).toHaveAttribute('aria-haspopup', 'dialog');
   });
 });
 
-describe('SpoolFilterPanel — expanded state', () => {
-  const expandedProps = { ...defaultProps, isExpanded: true };
+describe('SpoolFilterPanel — open state (modal)', () => {
+  const openProps = { ...defaultProps, isOpen: true };
 
   it('shows search inputs', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+    render(<SpoolFilterPanel {...openProps} />);
     expect(screen.getByLabelText('Buscar por numero de nota de venta')).toBeInTheDocument();
     expect(screen.getByLabelText('Buscar por TAG de spool')).toBeInTheDocument();
   });
 
+  it('renders a dialog', () => {
+    render(<SpoolFilterPanel {...openProps} />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('shows TODOS and NINGUNO buttons', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+    render(<SpoolFilterPanel {...openProps} />);
     expect(screen.getByText('TODOS')).toBeInTheDocument();
     expect(screen.getByText('NINGUNO')).toBeInTheDocument();
   });
 
   it('shows LIMPIAR FILTROS when filters are active', () => {
-    render(<SpoolFilterPanel {...expandedProps} activeFiltersCount={1} />);
+    render(<SpoolFilterPanel {...openProps} activeFiltersCount={1} />);
     expect(screen.getByRole('button', { name: /Limpiar todos los filtros/i })).toBeInTheDocument();
   });
 
   it('does not show LIMPIAR FILTROS when no filters active', () => {
-    render(<SpoolFilterPanel {...expandedProps} activeFiltersCount={0} />);
+    render(<SpoolFilterPanel {...openProps} activeFiltersCount={0} />);
     expect(screen.queryByRole('button', { name: /Limpiar todos los filtros/i })).not.toBeInTheDocument();
   });
 
   it('calls onSelectAll when TODOS clicked', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+    render(<SpoolFilterPanel {...openProps} />);
     fireEvent.click(screen.getByText('TODOS'));
-    expect(expandedProps.onSelectAll).toHaveBeenCalledTimes(1);
+    expect(openProps.onSelectAll).toHaveBeenCalledTimes(1);
   });
 
   it('calls onDeselectAll when NINGUNO clicked', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+    render(<SpoolFilterPanel {...openProps} />);
     fireEvent.click(screen.getByText('NINGUNO'));
-    expect(expandedProps.onDeselectAll).toHaveBeenCalledTimes(1);
+    expect(openProps.onDeselectAll).toHaveBeenCalledTimes(1);
   });
 
   it('calls onClearFilters when LIMPIAR FILTROS clicked', () => {
-    render(<SpoolFilterPanel {...expandedProps} activeFiltersCount={1} />);
+    render(<SpoolFilterPanel {...openProps} activeFiltersCount={1} />);
     fireEvent.click(screen.getByRole('button', { name: /Limpiar todos los filtros/i }));
-    expect(expandedProps.onClearFilters).toHaveBeenCalledTimes(1);
+    expect(openProps.onClearFilters).toHaveBeenCalledTimes(1);
   });
 
   it('calls onSearchNVChange when NV input changes', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+    render(<SpoolFilterPanel {...openProps} />);
     fireEvent.change(screen.getByLabelText('Buscar por numero de nota de venta'), { target: { value: 'NV-2024' } });
-    expect(expandedProps.onSearchNVChange).toHaveBeenCalledWith('NV-2024');
+    expect(openProps.onSearchNVChange).toHaveBeenCalledWith('NV-2024');
   });
 
   it('calls onSearchTagChange when TAG input changes', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+    render(<SpoolFilterPanel {...openProps} />);
     fireEvent.change(screen.getByLabelText('Buscar por TAG de spool'), { target: { value: 'MK-123' } });
-    expect(expandedProps.onSearchTagChange).toHaveBeenCalledWith('MK-123');
+    expect(openProps.onSearchTagChange).toHaveBeenCalledWith('MK-123');
   });
 
   it('disables NINGUNO button when selectedCount is 0', () => {
-    render(<SpoolFilterPanel {...expandedProps} selectedCount={0} />);
+    render(<SpoolFilterPanel {...openProps} selectedCount={0} />);
     expect(screen.getByRole('button', { name: /Deseleccionar todos/i })).toBeDisabled();
   });
 
-  it('has aria-expanded=true on collapse button', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
-    expect(screen.getByRole('button', { name: /Ocultar filtros/i })).toHaveAttribute('aria-expanded', 'true');
+  it('shows close button inside modal', () => {
+    render(<SpoolFilterPanel {...openProps} />);
+    expect(screen.getByRole('button', { name: /Cerrar filtros/i })).toBeInTheDocument();
   });
 
-  it('has filter-panel region with aria-label', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
-    expect(screen.getByRole('region', { name: 'Panel de filtros' })).toBeInTheDocument();
+  it('calls onClose when close button clicked', () => {
+    render(<SpoolFilterPanel {...openProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /Cerrar filtros/i }));
+    expect(openProps.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('shows expanded counter with FILTRADOS suffix', () => {
-    render(<SpoolFilterPanel {...expandedProps} />);
+  it('shows counter with FILTRADOS suffix', () => {
+    render(<SpoolFilterPanel {...openProps} />);
     expect(screen.getByText('SELECCIONADOS: 3 / 10 FILTRADOS')).toBeInTheDocument();
   });
 });
 
 describe('SpoolFilterPanel — accessibility', () => {
-  it('passes axe audit in collapsed state', async () => {
-    const { container } = render(<SpoolFilterPanel {...defaultProps} />);
-    const results = await axe(container);
+  it('passes axe audit in closed state', async () => {
+    render(<SpoolFilterPanel {...defaultProps} />);
+    const results = await axe(document.body);
     expect(results).toHaveNoViolations();
   });
 
-  it('passes axe audit in expanded state', async () => {
-    const { container } = render(<SpoolFilterPanel {...defaultProps} isExpanded={true} />);
-    const results = await axe(container);
+  it('passes axe audit in open state', async () => {
+    render(<SpoolFilterPanel {...defaultProps} isOpen={true} />);
+    const results = await axe(document.body);
     expect(results).toHaveNoViolations();
   });
 });
