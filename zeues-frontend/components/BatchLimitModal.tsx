@@ -27,7 +27,7 @@ export function BatchLimitModal({ isOpen, onClose, maxBatch, totalAvailable }: B
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      className="bg-[#001F3F] border-4 border-zeues-orange rounded-none max-w-lg"
+      className="bg-zeues-navy border-4 border-zeues-orange rounded-none max-w-lg"
     >
       <div className="flex items-center gap-4 mb-4">
         <AlertCircle size={40} className="text-zeues-orange flex-shrink-0" strokeWidth={3} />
@@ -49,7 +49,7 @@ export function BatchLimitModal({ isOpen, onClose, maxBatch, totalAvailable }: B
       <button
         ref={dismissRef}
         onClick={onClose}
-        className="w-full h-14 border-4 border-white text-white font-mono font-black text-lg tracking-[0.15em] active:bg-white active:text-[#001F3F] transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+        className="w-full h-14 border-4 border-white text-white font-mono font-black text-lg tracking-[0.15em] active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
       >
         ENTENDIDO
       </button>

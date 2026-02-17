@@ -93,7 +93,7 @@ export function SpoolFilterPanel({
         isOpen={isOpen}
         onClose={handleClose}
         ariaLabel="Filtros de busqueda"
-        className="bg-[#001F3F] border-4 border-white rounded-none max-w-lg"
+        className="bg-zeues-navy border-4 border-white rounded-none max-w-lg"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -154,7 +154,7 @@ export function SpoolFilterPanel({
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={onSelectAll}
-              className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-[#001F3F] transition-colors"
+              className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-zeues-navy transition-colors"
               aria-label="Seleccionar todos los spools filtrados"
             >
               TODOS

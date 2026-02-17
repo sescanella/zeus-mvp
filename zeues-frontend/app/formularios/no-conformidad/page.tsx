@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ArrowLeft, X, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
@@ -36,6 +36,12 @@ export default function NoConformidadFormPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedSection, setExpandedSection] = useState<'origen' | 'tipo' | null>(null);
+
+  useEffect(() => {
+    if (!state.selectedSpool || !state.selectedWorker) {
+      router.push('/');
+    }
+  }, [state.selectedSpool, state.selectedWorker, router]);
 
   const isOrigenCollapsed = origen !== null && expandedSection !== 'origen';
   const isTipoCollapsed = tipoNC !== null && expandedSection !== 'tipo';
@@ -88,11 +94,11 @@ export default function NoConformidadFormPage() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <p className="text-xl text-white font-mono mb-6">
-              Datos incompletos. Volviendo al inicio...
+              Redirigiendo al inicio...
             </p>
             <button
               onClick={() => router.push('/')}
-              className="px-8 py-4 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+              className="px-8 py-4 border-4 border-white text-white font-mono font-black active:bg-white active:text-zeues-navy"
             >
               IR AL INICIO
             </button>
@@ -143,8 +149,8 @@ export default function NoConformidadFormPage() {
             </div>
             <p className="text-lg text-white font-mono mb-6">{error}</p>
             <button
-              onClick={() => setError('')}
-              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+              onClick={() => { setError(''); handleSubmit(); }}
+              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-zeues-navy"
             >
               REINTENTAR
             </button>
@@ -213,7 +219,7 @@ export default function NoConformidadFormPage() {
                           text-base narrow:text-sm
                           focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
                           ${origen === opt.value
-                            ? 'bg-zeues-orange border-[#E55D26] text-white'
+                            ? 'bg-zeues-orange border-zeues-orange-border text-white'
                             : 'bg-transparent border-white/40 text-white/70 active:bg-white/10'
                           }
                         `}
@@ -277,7 +283,7 @@ export default function NoConformidadFormPage() {
                           text-base narrow:text-sm
                           focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
                           ${tipoNC === opt.value
-                            ? 'bg-zeues-orange border-[#E55D26] text-white'
+                            ? 'bg-zeues-orange border-zeues-orange-border text-white'
                             : 'bg-transparent border-white/40 text-white/70 active:bg-white/10'
                           }
                         `}
@@ -292,10 +298,12 @@ export default function NoConformidadFormPage() {
 
             {/* DESCRIPCIÓN */}
             <div>
-              <p className="text-lg font-black text-white/70 font-mono tracking-[0.15em] mb-4">
+              <label htmlFor="descripcion-input" className="text-lg font-black text-white/70 font-mono tracking-[0.15em] mb-4 block">
                 DESCRIPCIÓN
-              </p>
+              </label>
               <textarea
+                id="descripcion-input"
+                aria-describedby="descripcion-counter"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 placeholder="Describe la no conformidad..."
@@ -311,7 +319,7 @@ export default function NoConformidadFormPage() {
                   resize-none
                 "
               />
-              <p className="text-sm text-white/40 font-mono mt-2 text-right">
+              <p id="descripcion-counter" className="text-sm text-white/40 font-mono mt-2 text-right">
                 {descripcion.length}/2000
               </p>
             </div>

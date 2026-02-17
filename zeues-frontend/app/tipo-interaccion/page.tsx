@@ -114,9 +114,9 @@ export default function TipoInteraccionPage() {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full h-12 bg-transparent border-4 border-white flex items-center justify-center cursor-pointer active:bg-white active:text-[#001F3F] transition-all duration-200 group"
+              className="w-full h-12 bg-transparent border-4 border-white flex items-center justify-center cursor-pointer active:bg-white active:text-zeues-navy transition-all duration-200 group"
             >
-              <span className="text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+              <span className="text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-zeues-navy">
                 REINTENTAR
               </span>
             </button>
@@ -195,7 +195,7 @@ export default function TipoInteraccionPage() {
             <button
               onClick={handleFinalizar}
               aria-label="Finalizar trabajo en spool"
-              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-[#E55D26] flex items-center justify-center gap-6 active:bg-[#E55D26] active:border-[#CC5322] transition-all duration-200"
+              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-zeues-orange-border flex items-center justify-center gap-6 active:bg-zeues-orange-border active:border-zeues-orange-pressed transition-all duration-200"
             >
               <CheckCircle size={64} strokeWidth={3} className="text-white" />
               <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">FINALIZAR</span>
@@ -209,7 +209,7 @@ export default function TipoInteraccionPage() {
             <button
               onClick={handleInspeccion}
               aria-label="Iniciar inspección de metrología"
-              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-[#E55D26] flex items-center justify-center active:bg-[#E55D26] active:border-[#CC5322] transition-all duration-200"
+              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-zeues-orange-border flex items-center justify-center active:bg-zeues-orange-border active:border-zeues-orange-pressed transition-all duration-200"
             >
               <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">INSPECCIÓN</span>
             </button>

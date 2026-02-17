@@ -30,6 +30,11 @@ const config: Config = {
           // States
           red: '#DC2626',           // Danger/Cancel
           warning: '#EA580C',       // Warning
+
+          // Blueprint base
+          navy: '#001F3F',             // Dark background
+          'orange-border': '#E55D26',  // Selected state border
+          'orange-pressed': '#CC5322', // Active/pressed state border
         },
         // Alias para compatibilidad con código existente
         'km-orange': '#FF5B00',

@@ -376,7 +376,7 @@ function SeleccionarSpoolContent() {
             <p className="text-lg text-white font-mono mb-6">{error}</p>
             <button
               onClick={fetchSpools}
-              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-zeues-navy"
             >
               REINTENTAR
             </button>

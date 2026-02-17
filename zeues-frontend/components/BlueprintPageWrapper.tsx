@@ -9,7 +9,7 @@ interface BlueprintPageWrapperProps {
 export function BlueprintPageWrapper({ children }: BlueprintPageWrapperProps) {
   return (
     <div
-      className="min-h-screen bg-[#001F3F]"
+      className="min-h-screen bg-zeues-navy"
       style={{
         backgroundImage: `
           linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),

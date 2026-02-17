@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { CheckCircle, XCircle, ArrowLeft, X, Loader2, AlertCircle } from 'lucide-react';
@@ -13,6 +13,13 @@ export default function ResultadoMetrologiaPage() {
   const { state } = useAppState();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [lastResultado, setLastResultado] = useState<'APROBADO' | 'RECHAZADO' | null>(null);
+
+  useEffect(() => {
+    if (!state.selectedSpool || !state.selectedWorker) {
+      router.push('/');
+    }
+  }, [state.selectedSpool, state.selectedWorker, router]);
 
   const handleSubmit = async (resultado: 'APROBADO' | 'RECHAZADO') => {
     try {
@@ -65,11 +72,11 @@ export default function ResultadoMetrologiaPage() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
           <p className="text-xl text-white font-mono mb-6">
-            Datos incompletos. Volviendo al inicio...
+            Redirigiendo al inicio...
           </p>
           <button
             onClick={() => router.push('/')}
-            className="px-8 py-4 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+            className="px-8 py-4 border-4 border-white text-white font-mono font-black active:bg-white active:text-zeues-navy"
           >
             IR AL INICIO
           </button>
@@ -120,8 +127,8 @@ export default function ResultadoMetrologiaPage() {
             </div>
             <p className="text-lg text-white font-mono mb-6">{error}</p>
             <button
-              onClick={() => setError('')}
-              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F]"
+              onClick={() => { if (lastResultado) { setError(''); handleSubmit(lastResultado); } }}
+              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-zeues-navy"
             >
               REINTENTAR
             </button>
@@ -133,7 +140,7 @@ export default function ResultadoMetrologiaPage() {
           <div className="flex flex-col gap-6 mb-8">
             {/* APROBADO Button */}
             <button
-              onClick={() => handleSubmit('APROBADO')}
+              onClick={() => { setLastResultado('APROBADO'); handleSubmit('APROBADO'); }}
               disabled={loading}
               className="
                 h-32 narrow:h-28 w-full
@@ -155,7 +162,7 @@ export default function ResultadoMetrologiaPage() {
 
             {/* RECHAZADO Button */}
             <button
-              onClick={() => handleSubmit('RECHAZADO')}
+              onClick={() => { setLastResultado('RECHAZADO'); handleSubmit('RECHAZADO'); }}
               disabled={loading}
               className="
                 h-32 narrow:h-28 w-full
@@ -188,7 +195,7 @@ export default function ResultadoMetrologiaPage() {
 
       {/* Fixed Navigation Footer */}
       {!loading && (
-        <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+        <div className="fixed bottom-0 left-0 right-0 bg-zeues-navy z-50 border-t-4 border-white/30 p-6 tablet:p-5">
           <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
             <button
               onClick={() => router.back()}
@@ -197,13 +204,13 @@ export default function ResultadoMetrologiaPage() {
                 bg-transparent
                 border-4 border-white
                 flex items-center justify-center gap-3
-                active:bg-white active:text-[#001F3F]
+                active:bg-white active:text-zeues-navy
                 transition-all duration-200
                 group
               "
             >
-              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-              <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-zeues-navy" />
+              <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-zeues-navy">
                 VOLVER
               </span>
             </button>

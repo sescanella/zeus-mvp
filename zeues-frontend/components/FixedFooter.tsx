@@ -26,7 +26,7 @@ interface FixedFooterProps {
  * - Primary button (right): Orange border for confirm actions
  *
  * Features:
- * - Dark theme (bg-[#001F3F]) with white/red/orange borders
+ * - Dark theme (bg-zeues-navy) with white/red/orange borders
  * - Mobile-first design (800x1280px tablets)
  * - Large touch targets (h-16)
  * - Mono font with tracking for industrial aesthetic
@@ -66,7 +66,7 @@ export function FixedFooter({ backButton, primaryButton, middleButton }: FixedFo
         return `${baseStyles}
           bg-transparent
           border-4 border-white
-          ${!disabled && 'active:bg-white active:text-[#001F3F]'}
+          ${!disabled && 'active:bg-white active:text-zeues-navy'}
         `;
       case 'danger':
         return `${baseStyles}
@@ -91,7 +91,7 @@ export function FixedFooter({ backButton, primaryButton, middleButton }: FixedFo
 
     switch (variant) {
       case 'back':
-        return `${baseStyles} text-white group-active:text-[#001F3F]`;
+        return `${baseStyles} text-white group-active:text-zeues-navy`;
       case 'danger':
         return `${baseStyles} text-red-500 group-active:text-white`;
       case 'primary':
@@ -105,7 +105,7 @@ export function FixedFooter({ backButton, primaryButton, middleButton }: FixedFo
 
     switch (variant) {
       case 'back':
-        return 'text-white group-active:text-[#001F3F]';
+        return 'text-white group-active:text-zeues-navy';
       case 'danger':
         return 'text-red-500 group-active:text-white';
       case 'primary':
@@ -115,7 +115,7 @@ export function FixedFooter({ backButton, primaryButton, middleButton }: FixedFo
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+    <div className="fixed bottom-0 left-0 right-0 bg-zeues-navy z-50 border-t-4 border-white/30 p-6 tablet:p-5">
       <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
         {/* Back button (left) */}
         {backButton && (

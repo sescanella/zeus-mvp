@@ -218,9 +218,9 @@ export default function ExitoPage() {
           {/* Nuevo Trabajo (all workflows) */}
           <button
             onClick={handleNewWork}
-            className="w-full h-20 border-4 border-white flex items-center justify-center active:bg-white active:text-[#001F3F] group"
+            className="w-full h-20 border-4 border-white flex items-center justify-center active:bg-white active:text-zeues-navy group"
           >
-            <span className="text-2xl font-black text-white font-mono group-active:text-[#001F3F]">
+            <span className="text-2xl font-black text-white font-mono group-active:text-zeues-navy">
               NUEVO TRABAJO
             </span>
           </button>

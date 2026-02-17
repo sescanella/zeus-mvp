@@ -185,7 +185,7 @@ export default function SeleccionarUnionesPage() {
       </div>
 
       {/* Sticky Counter */}
-      <div className="sticky top-0 z-10 bg-[#001F3F] border-b-4 border-zeues-orange p-4 shadow-md">
+      <div className="sticky top-0 z-10 bg-zeues-navy border-b-4 border-zeues-orange p-4 shadow-md">
         <div className="text-xl narrow:text-lg font-black text-center text-white font-mono tracking-[0.15em]">
           SELECCIONADAS: {state.selectedUnions.length}/{availableUnions.length} | PULGADAS: {selectedPulgadas.toFixed(1)}&quot;
         </div>
@@ -207,7 +207,7 @@ export default function SeleccionarUnionesPage() {
             <p className="text-lg text-white font-mono mb-6">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-[#001F3F] transition-all"
+              className="px-6 py-3 border-4 border-white text-white font-mono font-black active:bg-white active:text-zeues-navy transition-all"
             >
               REINTENTAR
             </button>
@@ -253,7 +253,7 @@ export default function SeleccionarUnionesPage() {
 
       {/* Fixed Navigation Footer */}
       {!loading && !error && (
-        <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+        <div className="fixed bottom-0 left-0 right-0 bg-zeues-navy z-50 border-t-4 border-white/30 p-6 tablet:p-5">
           <div className="flex flex-col gap-4 tablet:gap-3">
             {/* Botón Continuar */}
             <button
@@ -282,13 +282,13 @@ export default function SeleccionarUnionesPage() {
                   bg-transparent
                   border-4 border-white
                   flex items-center justify-center gap-3
-                  active:bg-white active:text-[#001F3F]
+                  active:bg-white active:text-zeues-navy
                   transition-all duration-200
                   group
                 "
               >
-                <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-                <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+                <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-zeues-navy" />
+                <span className="text-xl narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-zeues-navy">
                   VOLVER
                 </span>
               </button>
@@ -318,7 +318,7 @@ export default function SeleccionarUnionesPage() {
       {/* Zero-Selection Modal */}
       {showZeroModal && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
-          <div className="bg-[#001F3F] border-4 border-white p-8 max-w-lg w-full">
+          <div className="bg-zeues-navy border-4 border-white p-8 max-w-lg w-full">
             <h3 className="text-2xl font-black text-white font-mono tracking-[0.15em] mb-4 text-center">
               ¿LIBERAR SIN REGISTRAR?
             </h3>
@@ -332,7 +332,7 @@ export default function SeleccionarUnionesPage() {
                   flex-1 h-14
                   bg-transparent
                   border-4 border-white
-                  active:bg-white active:text-[#001F3F]
+                  active:bg-white active:text-zeues-navy
                   transition-all duration-200
                 "
               >

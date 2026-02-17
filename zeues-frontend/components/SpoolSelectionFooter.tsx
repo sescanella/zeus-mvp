@@ -18,7 +18,7 @@ export function SpoolSelectionFooter({
   onHome,
 }: SpoolSelectionFooterProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#001F3F] z-50 border-t-4 border-white/30 p-6 tablet:p-5">
+    <div className="fixed bottom-0 left-0 right-0 bg-zeues-navy z-50 border-t-4 border-white/30 p-6 tablet:p-5">
       <div className="flex flex-col gap-4 tablet:gap-3">
         {/* Continue button - first row (only show if spools available) */}
         {hasSpools && (
@@ -37,10 +37,10 @@ export function SpoolSelectionFooter({
         <div className="flex gap-4 tablet:gap-3 narrow:flex-col narrow:gap-3">
           <button
             onClick={onBack}
-            className="flex-1 narrow:w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-[#001F3F] transition-all group"
+            className="flex-1 narrow:w-full h-16 tablet:h-14 bg-transparent border-4 border-white flex items-center justify-center gap-3 active:bg-white active:text-zeues-navy transition-all group"
           >
-            <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-            <span className="text-xl tablet:text-lg narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+            <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-zeues-navy" />
+            <span className="text-xl tablet:text-lg narrow:text-lg font-black text-white font-mono tracking-[0.15em] group-active:text-zeues-navy">
               VOLVER
             </span>
           </button>

@@ -61,7 +61,7 @@ export function UnionTable({
   return (
     <div className="border-4 border-white overflow-hidden max-h-[calc(100dvh-26rem)] overflow-y-auto">
       <table className="w-full border-collapse">
-        <thead className="sticky top-0 bg-[#001F3F] border-b-4 border-white z-10">
+        <thead className="sticky top-0 bg-zeues-navy border-b-4 border-white z-10">
           <tr>
             <th scope="col" className="p-3 text-center text-xs font-black text-white/70 font-mono border-r-2 border-white/30">
               SEL

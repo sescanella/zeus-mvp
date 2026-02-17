@@ -139,13 +139,13 @@ export default function TrabajadorSelectionPage() {
                 bg-transparent
                 border-4 border-white
                 flex items-center justify-center gap-3
-                active:bg-white active:text-[#001F3F]
+                active:bg-white active:text-zeues-navy
                 transition-all duration-200
                 group
               "
             >
-              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-[#001F3F]" />
-              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-[#001F3F]">
+              <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-zeues-navy" />
+              <span className="text-xl font-black text-white font-mono tracking-[0.15em] group-active:text-zeues-navy">
                 VOLVER A SELECCIONAR OPERACIÓN
               </span>
             </button>

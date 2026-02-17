@@ -16,7 +16,7 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo }: Spo
   return (
     <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto custom-scrollbar">
       <table className="w-full">
-        <thead className="sticky top-0 bg-[#001F3F] border-b-4 border-white">
+        <thead className="sticky top-0 bg-zeues-navy border-b-4 border-white">
           <tr>
             <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">SEL</th>
             <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">{tipo === 'reparacion' ? 'CICLO/ESTADO' : 'NV'}</th>
