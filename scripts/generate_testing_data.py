@@ -19,7 +19,8 @@ Uso:
 """
 
 import sys
-sys.path.insert(0, '/Users/sescanella/Proyectos/ZEUES-by-KM')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.config import config

@@ -226,7 +226,7 @@ uvicorn main:app --reload --port 8000
 # Docs: http://localhost:8000/api/docs
 
 # Run tests
-PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest tests/unit/ -v --tb=short
+PYTHONPATH="$(pwd)" pytest tests/unit/ -v --tb=short
 ```
 
 ### Frontend

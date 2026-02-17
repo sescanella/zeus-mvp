@@ -237,10 +237,11 @@ pip install -r requirements.txt
 ### Error: Tests failing
 ```bash
 # Verificar que estás en el directorio raíz
-cd /Users/sescanella/Proyectos/ZEUES-by-KM
+# Navigate to project root
+cd "$(git rev-parse --show-toplevel)"
 
 # Ejecutar con PYTHONPATH
-PYTHONPATH=/Users/sescanella/Proyectos/ZEUES-by-KM pytest tests/ -v
+PYTHONPATH="$(pwd)" pytest tests/ -v
 ```
 
 ## Documentación Adicional

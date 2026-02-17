@@ -370,7 +370,7 @@ Before marking Uniones sheet as complete, verify:
 
 **Development Team:**
 - Primary: [Your dev team contact]
-- Repository: `/Users/sescanella/Proyectos/KM/ZEUES-by-KM`
+- Repository: `/Users/sescanella/Documents/Obsidian Vault/Proyectos/KM/ZEUES-by-KM`
 
 **Documentation:**
 - v4.0 Requirements: `.planning/PROJECT.md`

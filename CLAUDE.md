@@ -96,7 +96,7 @@ uvicorn main:app --reload --port 8000
 # Docs: http://localhost:8000/api/docs
 
 # Testing
-PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest
+PYTHONPATH="$(pwd)" pytest
 pytest tests/unit/ -v --tb=short
 pytest tests/integration/ -v
 
@@ -617,7 +617,7 @@ GET  /api/v4/metricas/{tag}        # Pulgadas-diámetro metrics
 **ImportError:**
 ```bash
 source venv/bin/activate
-PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest
+PYTHONPATH="$(pwd)" pytest
 ```
 
 **Google Sheets connection:**

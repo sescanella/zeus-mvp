@@ -628,7 +628,7 @@ Después de 3er rechazo:
 **Pasos:**
 
 ```bash
-cd /Users/sescanella/Proyectos/KM/ZEUES-by-KM
+cd "/Users/sescanella/Documents/Obsidian Vault/Proyectos/KM/ZEUES-by-KM"
 
 # Verificar archivo
 ls tests/v2.1-archive/

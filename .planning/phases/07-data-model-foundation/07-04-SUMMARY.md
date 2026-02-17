@@ -192,7 +192,7 @@ Comprehensive test coverage for validation logic:
 
 **Test execution:**
 ```bash
-PYTHONPATH=/Users/sescanella/Proyectos/KM/ZEUES-by-KM pytest tests/integration/test_schema_validation.py -v
+PYTHONPATH="$(pwd)" pytest tests/integration/test_schema_validation.py -v
 # Result: 8 passed in 0.25s
 ```
 
