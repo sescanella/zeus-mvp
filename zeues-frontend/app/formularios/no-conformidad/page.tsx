@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, X, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, X, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 import { BlueprintPageWrapper, FixedFooter } from '@/components';
 import { useAppState } from '@/lib/context';
 import { submitNoConformidad } from '@/lib/api';
@@ -35,6 +35,27 @@ export default function NoConformidadFormPage() {
   const [descripcion, setDescripcion] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [expandedSection, setExpandedSection] = useState<'origen' | 'tipo' | null>(null);
+
+  const isOrigenCollapsed = origen !== null && expandedSection !== 'origen';
+  const isTipoCollapsed = tipoNC !== null && expandedSection !== 'tipo';
+
+  const handleOrigenSelect = (value: OrigenType) => {
+    setOrigen(value);
+    setExpandedSection(null);
+  };
+
+  const handleTipoSelect = (value: TipoNCType) => {
+    setTipoNC(value);
+    setExpandedSection(null);
+  };
+
+  const handleSectionToggle = (section: 'origen' | 'tipo') => {
+    setExpandedSection(prev => prev === section ? null : section);
+  };
+
+  const getOrigenLabel = () => ORIGEN_OPTIONS.find(o => o.value === origen)?.label ?? '';
+  const getTipoLabel = () => TIPO_OPTIONS.find(o => o.value === tipoNC)?.label ?? '';
 
   const isFormValid = origen !== null && tipoNC !== null && descripcion.trim().length > 0;
 
@@ -143,60 +164,130 @@ export default function NoConformidadFormPage() {
           <div className="flex flex-col gap-8">
             {/* ORIGEN */}
             <div>
-              <p className="text-lg font-black text-white/70 font-mono tracking-[0.15em] mb-4">
-                ORIGEN
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                {ORIGEN_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setOrigen(opt.value)}
-                    aria-pressed={origen === opt.value}
-                    className={`
-                      h-16 narrow:h-14
-                      border-4 flex items-center justify-center
-                      font-black font-mono tracking-[0.1em]
-                      transition-all duration-200
-                      text-base narrow:text-sm
-                      ${origen === opt.value
-                        ? 'bg-zeues-orange border-[#E55D26] text-white'
-                        : 'bg-transparent border-white/40 text-white/70 active:bg-white/10'
-                      }
-                    `}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              {isOrigenCollapsed ? (
+                <button
+                  onClick={() => handleSectionToggle('origen')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSectionToggle('origen');
+                    }
+                  }}
+                  aria-expanded={false}
+                  aria-controls="origen-panel"
+                  aria-label={`Origen seleccionado: ${getOrigenLabel()}. Pulsar para cambiar`}
+                  className="
+                    w-full h-16 narrow:h-14
+                    border-4 border-white/20
+                    flex items-center justify-between
+                    px-5 font-mono
+                    active:bg-white/10
+                    transition-all duration-200
+                    focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
+                  "
+                >
+                  <span className="text-sm font-black text-white/50 tracking-[0.15em]">ORIGEN</span>
+                  <div className="flex items-center gap-3">
+                    <span className="px-4 py-1.5 bg-zeues-orange/20 border-2 border-zeues-orange text-zeues-orange font-black text-sm tracking-[0.1em]">
+                      {getOrigenLabel()}
+                    </span>
+                    <ChevronDown size={20} className="text-white/40" strokeWidth={3} />
+                  </div>
+                </button>
+              ) : (
+                <>
+                  <p className="text-lg font-black text-white/70 font-mono tracking-[0.15em] mb-4">
+                    ORIGEN
+                  </p>
+                  <div id="origen-panel" role="region" aria-label="Opciones de origen" className="grid grid-cols-3 gap-3">
+                    {ORIGEN_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleOrigenSelect(opt.value)}
+                        aria-pressed={origen === opt.value}
+                        className={`
+                          h-16 narrow:h-14
+                          border-4 flex items-center justify-center
+                          font-black font-mono tracking-[0.1em]
+                          transition-all duration-200
+                          text-base narrow:text-sm
+                          focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
+                          ${origen === opt.value
+                            ? 'bg-zeues-orange border-[#E55D26] text-white'
+                            : 'bg-transparent border-white/40 text-white/70 active:bg-white/10'
+                          }
+                        `}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* TIPO NC */}
             <div>
-              <p className="text-lg font-black text-white/70 font-mono tracking-[0.15em] mb-4">
-                TIPO
-              </p>
-              <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-                {TIPO_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setTipoNC(opt.value)}
-                    aria-pressed={tipoNC === opt.value}
-                    className={`
-                      h-16 narrow:h-14 px-4
-                      border-4 flex items-center justify-center
-                      font-black font-mono tracking-[0.1em]
-                      transition-all duration-200
-                      text-base narrow:text-sm
-                      ${tipoNC === opt.value
-                        ? 'bg-zeues-orange border-[#E55D26] text-white'
-                        : 'bg-transparent border-white/40 text-white/70 active:bg-white/10'
-                      }
-                    `}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              {isTipoCollapsed ? (
+                <button
+                  onClick={() => handleSectionToggle('tipo')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSectionToggle('tipo');
+                    }
+                  }}
+                  aria-expanded={false}
+                  aria-controls="tipo-panel"
+                  aria-label={`Tipo seleccionado: ${getTipoLabel()}. Pulsar para cambiar`}
+                  className="
+                    w-full h-16 narrow:h-14
+                    border-4 border-white/20
+                    flex items-center justify-between
+                    px-5 font-mono
+                    active:bg-white/10
+                    transition-all duration-200
+                    focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
+                  "
+                >
+                  <span className="text-sm font-black text-white/50 tracking-[0.15em]">TIPO</span>
+                  <div className="flex items-center gap-3">
+                    <span className="px-4 py-1.5 bg-zeues-orange/20 border-2 border-zeues-orange text-zeues-orange font-black text-sm tracking-[0.1em]">
+                      {getTipoLabel()}
+                    </span>
+                    <ChevronDown size={20} className="text-white/40" strokeWidth={3} />
+                  </div>
+                </button>
+              ) : (
+                <>
+                  <p className="text-lg font-black text-white/70 font-mono tracking-[0.15em] mb-4">
+                    TIPO
+                  </p>
+                  <div id="tipo-panel" role="region" aria-label="Opciones de tipo" className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
+                    {TIPO_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleTipoSelect(opt.value)}
+                        aria-pressed={tipoNC === opt.value}
+                        className={`
+                          h-16 narrow:h-14 px-4
+                          border-4 flex items-center justify-center
+                          font-black font-mono tracking-[0.1em]
+                          transition-all duration-200
+                          text-base narrow:text-sm
+                          focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
+                          ${tipoNC === opt.value
+                            ? 'bg-zeues-orange border-[#E55D26] text-white'
+                            : 'bg-transparent border-white/40 text-white/70 active:bg-white/10'
+                          }
+                        `}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* DESCRIPCIÓN */}
