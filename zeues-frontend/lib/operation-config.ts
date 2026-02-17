@@ -10,11 +10,12 @@ import { Puzzle, Flame, SearchCheck, Wrench, type LucideIcon } from 'lucide-reac
 export type OperationType = 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION';
 
 export type ActionType =
-  | 'tomar'       // v3.0: Take ownership of spool
-  | 'pausar'      // v3.0: Pause work (release ownership temporarily)
-  | 'completar'   // v3.0: Complete work (mark as finished)
-  | 'cancelar'    // v3.0: Cancel repair (transition to BLOQUEADO state)
-  | 'metrologia'; // Special: Instant metrología inspection
+  | 'tomar'            // v3.0: Take ownership of spool
+  | 'pausar'           // v3.0: Pause work (release ownership temporarily)
+  | 'completar'        // v3.0: Complete work (mark as finished)
+  | 'cancelar'         // v3.0: Cancel repair (transition to BLOQUEADO state)
+  | 'metrologia'       // Special: Instant metrología inspection
+  | 'no-conformidad';  // Forms: No Conformidad (REG-QAC-002)
 
 export interface OperationWorkflow {
   /**
@@ -64,9 +65,9 @@ export const OPERATION_WORKFLOWS: Record<OperationType, OperationWorkflow> = {
   },
   'METROLOGIA': {
     skipP3: false,
-    actions: ['metrologia'],
+    actions: ['metrologia', 'no-conformidad'],
     label: 'METROLOGÍA',
-    description: 'Quality inspection (APROBADO/RECHAZADO)',
+    description: 'Quality inspection (APROBADO/RECHAZADO) and non-conformity forms',
   },
   'REPARACION': {
     skipP3: false,

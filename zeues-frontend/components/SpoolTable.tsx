@@ -3,7 +3,7 @@
 import { CheckSquare, Square, Lock } from 'lucide-react';
 import type { Spool } from '@/lib/types';
 
-type TipoParam = 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | null;
+type TipoParam = 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | 'no-conformidad' | null;
 
 interface SpoolTableProps {
   spools: Spool[];

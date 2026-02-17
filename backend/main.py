@@ -52,6 +52,8 @@ from backend.routers import diagnostic
 from backend.routers import occupation_v4
 # v4.0 Phase 11: Router UNION implementado (union query endpoints)
 from backend.routers import union_router
+# Forms: No Conformidad (REG-QAC-002)
+from backend.routers.forms import no_conformidad as forms_no_conformidad
 
 
 # ============================================================================
@@ -391,6 +393,9 @@ app.include_router(diagnostic.router, prefix="/api", tags=["Diagnostic"])
 
 # v4.0 Phase 11: Router UNION registrado (union query endpoints)
 app.include_router(union_router.router, prefix="/api/v4", tags=["v4-unions"])
+
+# Forms: No Conformidad (REG-QAC-002)
+app.include_router(forms_no_conformidad.router, prefix="/api/forms", tags=["Forms"])
 
 
 # ============================================================================

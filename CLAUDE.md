@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Reparación bounded cycles (max 3 before BLOQUEADO)
 - Hierarchical state machines
 - Pulgadas-diámetro business metric (DN_UNION sums)
+- Forms module: No Conformidad (REG-QAC-002) - modular monolith pattern
 
 **Architectural Simplifications (Single-User Mode):**
 - ✅ Single-user mode (no distributed locks with 1 tablet)
@@ -265,10 +266,16 @@ mcp__MCP_DOCKER__browser_console_messages --level error
 ```
 main.py
 ├── routers/           # API endpoints (occupation, history, metrologia)
+│   └── forms/         # Forms module (modular monolith, isolated)
+│       └── no_conformidad.py  # POST /api/forms/no-conformidad
 ├── services/          # Business logic (state, occupation, validation)
+│   └── forms/         # Forms business logic (isolated)
+│       └── no_conformidad_service.py
 ├── repositories/      # Data access (sheets, metadata)
+│   └── forms_repository.py  # Forms sheet access (NoConformidad, etc.)
 ├── state_machines/    # ARM, SOLD, Metrologia, Reparacion
 ├── models/            # Pydantic schemas
+│   └── no_conformidad.py  # Forms request/response models
 └── exceptions.py      # Custom exceptions
 ```
 
@@ -278,17 +285,20 @@ main.py
 - Version-aware updates (ConflictService with retry)
 - Direct Sheets validation (Ocupado_Por column check)
 - Event Sourcing (Metadata sheet)
+- Modular Monolith for forms (`/api/forms/*` isolated modules, $0 infra cost)
 
 ### Frontend (Next.js App Router)
 
 ```
-app/                   # 7-page linear flow
+app/                   # Page flow
 ├── page.tsx          # P1: Operation selection (ARM/SOLD/MET/REP)
 ├── operacion/        # P2: Worker identification (filtered by role)
-├── tipo-interaccion/ # P3: Action type (INICIAR/FINALIZAR)
+├── tipo-interaccion/ # P3: Action type (INICIAR/FINALIZAR/INSPECCIÓN/NO CONFORMIDAD)
 ├── seleccionar-spool/# P4: Spool selection
 ├── confirmar/        # P5: Confirmation
-└── exito/            # P6: Success
+├── exito/            # P6: Success
+└── formularios/      # Forms (branched from P3 via spool selection)
+    └── no-conformidad/  # No Conformidad form (Origen + Tipo + Descripción)
 
 components/            # Button, Card, etc.
 lib/
@@ -325,6 +335,7 @@ lib/
 - Trabajadores (4 cols): Id, Nombre, Apellido, Activo
 - Roles (3 cols): Id, Rol, Activo (multi-role support)
 - Metadata (11 cols - v4.0): Event Sourcing audit trail + N_UNION column
+- NoConformidad (8 cols): ID, Fecha, TAG_SPOOL, Worker_ID, Worker_Nombre, Origen, Tipo_NC, Descripcion
 
 **CRITICAL:** Use dynamic header mapping - NEVER hardcode column indices
 ```python
@@ -612,6 +623,12 @@ GET  /api/v4/unions/{tag}          # List available unions for spool
 GET  /api/v4/metricas/{tag}        # Pulgadas-diámetro metrics
 ```
 
+**Forms Endpoints (Modular Monolith):**
+```bash
+# No Conformidad (REG-QAC-002)
+POST /api/forms/no-conformidad     # Register NC → writes to "NoConformidad" sheet
+```
+
 ### Common Issues
 
 **ImportError:**
@@ -667,8 +684,13 @@ python backend/scripts/validate_uniones_sheet.py --fix
 
 ---
 
-**Last updated:** 2026-02-06 (security audit complete - C1 & H3 resolved)
-**Document version:** 3.2
+**Last updated:** 2026-02-17 (Forms module added - No Conformidad)
+**Document version:** 3.3
+
+**Recent changes:**
+- ✅ Forms modular monolith: `POST /api/forms/no-conformidad` (Feb 17, 2026)
+- ✅ Frontend: `/formularios/no-conformidad` form page
+- ✅ P3 METROLOGÍA: Added NO CONFORMIDAD button alongside INSPECCIÓN
 
 **Security improvements (Feb 6, 2026):**
 - ✅ Credential audit: No leaks found in Git history

@@ -10,7 +10,9 @@ import {
   IniciarRequest,
   IniciarResponse,
   FinalizarRequest,
-  FinalizarResponse
+  FinalizarResponse,
+  NoConformidadRequest,
+  NoConformidadResponse,
 } from './types';
 
 // ============= CONSTANTS =============
@@ -788,6 +790,48 @@ export async function finalizarSpool(payload: FinalizarRequest): Promise<Finaliz
     return await handleResponse<FinalizarResponse>(res);
   } catch (error) {
     console.error('finalizarSpool error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// FORMS API FUNCTIONS (No Conformidad)
+// ==========================================
+
+/**
+ * POST /api/forms/no-conformidad
+ * Registra una No Conformidad (REG-QAC-002) para un spool.
+ *
+ * @param payload - NoConformidadRequest with form fields
+ * @returns Promise<NoConformidadResponse> with registro_id
+ * @throws Error if:
+ *   - 404: Worker not found
+ *   - 422: Validation error (missing/invalid fields)
+ *   - 503: Google Sheets unavailable
+ */
+export async function submitNoConformidad(
+  payload: NoConformidadRequest
+): Promise<NoConformidadResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/forms/no-conformidad`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Trabajador no encontrado.');
+    }
+
+    if (res.status === 422) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail?.[0]?.msg || 'Error de validación. Verifica los datos.');
+    }
+
+    return await handleResponse<NoConformidadResponse>(res);
+  } catch (error) {
+    console.error('submitNoConformidad error:', error);
     throw error;
   }
 }

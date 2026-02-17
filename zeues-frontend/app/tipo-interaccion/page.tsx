@@ -77,6 +77,10 @@ export default function TipoInteraccionPage() {
     router.push('/seleccionar-spool?tipo=metrologia');
   };
 
+  const handleNoConformidad = () => {
+    router.push('/seleccionar-spool?tipo=no-conformidad');
+  };
+
   // Back button with v4.0 cleanup
   const handleBack = () => {
     resetV4State();  // Clear v4.0 state
@@ -199,7 +203,7 @@ export default function TipoInteraccionPage() {
           </div>
         )}
 
-        {/* METROLOGÍA - single INSPECCIÓN button */}
+        {/* METROLOGÍA - INSPECCIÓN + NO CONFORMIDAD buttons */}
         {state.selectedOperation === 'METROLOGIA' && (
           <div className="flex flex-col gap-4">
             <button
@@ -208,6 +212,13 @@ export default function TipoInteraccionPage() {
               className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-[#E55D26] flex items-center justify-center active:bg-[#E55D26] active:border-[#CC5322] transition-all duration-200"
             >
               <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">INSPECCIÓN</span>
+            </button>
+            <button
+              onClick={handleNoConformidad}
+              aria-label="Registrar no conformidad"
+              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-red-600 border-4 border-red-700 flex items-center justify-center active:bg-red-700 active:border-red-800 transition-all duration-200"
+            >
+              <span className="text-4xl tablet:text-3xl narrow:text-2xl font-black text-white tracking-[0.2em] font-mono">NO CONFORMIDAD</span>
             </button>
           </div>
         )}

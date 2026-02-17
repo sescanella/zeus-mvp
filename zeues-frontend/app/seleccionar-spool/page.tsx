@@ -21,7 +21,7 @@ import type { Spool } from '@/lib/types';
 function SeleccionarSpoolContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tipo = searchParams.get('tipo') as 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion';
+  const tipo = searchParams.get('tipo') as 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | 'no-conformidad';
   const { state, setState } = useAppState();
 
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,8 @@ function SeleccionarSpoolContent() {
         }
         fetchedSpools = await getSpoolsOcupados(selectedWorker.id, selectedOperation as 'ARM' | 'SOLD' | 'REPARACION');
       } else if (tipo === 'metrologia') {
+        fetchedSpools = await getSpoolsParaIniciar('METROLOGIA' as 'ARM' | 'SOLD');
+      } else if (tipo === 'no-conformidad') {
         fetchedSpools = await getSpoolsParaIniciar('METROLOGIA' as 'ARM' | 'SOLD');
       } else if (tipo === 'reparacion') {
         const reparacionResponse = await getSpoolsReparacion();
@@ -268,6 +270,18 @@ function SeleccionarSpoolContent() {
           selectedSpools: [],
         });
         router.push('/resultado-metrologia');
+      }
+      return;
+    }
+
+    // NO CONFORMIDAD: Navigate to form page (single spool only)
+    if (tipo === 'no-conformidad') {
+      if (selectedCount === 1) {
+        setState({
+          selectedSpool: state.selectedSpools[0],
+          selectedSpools: [],
+        });
+        router.push('/formularios/no-conformidad');
       }
       return;
     }

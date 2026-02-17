@@ -51,6 +51,8 @@ from backend.services.history_service import HistoryService
 from backend.services.metrologia_service import MetrologiaService
 from backend.services.reparacion_service import ReparacionService
 from backend.services.cycle_counter_service import CycleCounterService
+from backend.repositories.forms_repository import FormsRepository
+from backend.services.forms.no_conformidad_service import NoConformidadService
 from backend.config import config
 
 
@@ -531,6 +533,29 @@ def get_reparacion_service(
         cycle_counter_service=cycle_counter,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository
+    )
+
+
+# ============================================================================
+# FACTORY FUNCTIONS - Forms (Modular Monolith)
+# ============================================================================
+
+
+def get_forms_repository(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository)
+) -> FormsRepository:
+    """Factory for FormsRepository (new instance per request)."""
+    return FormsRepository(sheets_repo=sheets_repo)
+
+
+def get_no_conformidad_service(
+    forms_repo: FormsRepository = Depends(get_forms_repository),
+    worker_service: WorkerService = Depends(get_worker_service),
+) -> NoConformidadService:
+    """Factory for NoConformidadService (new instance per request)."""
+    return NoConformidadService(
+        forms_repo=forms_repo,
+        worker_service=worker_service,
     )
 
 
