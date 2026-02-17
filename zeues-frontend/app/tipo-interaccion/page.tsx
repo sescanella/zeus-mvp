@@ -23,12 +23,6 @@ export default function TipoInteraccionPage() {
       return;
     }
 
-    // METROLOGÍA bypass - skip P3, go directly to resultado
-    if (state.selectedOperation === 'METROLOGIA') {
-      router.push('/resultado-metrologia');
-      return;
-    }
-
     // Version detection for v4.0 workflow (only if spool already selected)
     // This page can be reached BEFORE spool selection (P2→P3 flow) or AFTER (v4.0 flow)
     const detectVersion = async () => {
@@ -76,6 +70,11 @@ export default function TipoInteraccionPage() {
     setState({ accion: 'FINALIZAR' });
     // Navigate to spool selection to show occupied spools by this worker
     router.push('/seleccionar-spool');
+  };
+
+  const handleInspeccion = () => {
+    setState({ selectedTipo: 'metrologia' as unknown as typeof state.selectedTipo });
+    router.push('/seleccionar-spool?tipo=metrologia');
   };
 
   // Back button with v4.0 cleanup
@@ -179,7 +178,7 @@ export default function TipoInteraccionPage() {
         </div>
 
         {/* v4.0 buttons - INICIAR/FINALIZAR (A1 massive colored style) */}
-        {!loadingVersion && spoolVersion === 'v4.0' && (
+        {!loadingVersion && spoolVersion === 'v4.0' && state.selectedOperation !== 'METROLOGIA' && (
           <div className="flex flex-col gap-4">
             <button
               onClick={handleIniciar}
@@ -196,6 +195,19 @@ export default function TipoInteraccionPage() {
             >
               <CheckCircle size={64} strokeWidth={3} className="text-white" />
               <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">FINALIZAR</span>
+            </button>
+          </div>
+        )}
+
+        {/* METROLOGÍA - single INSPECCIÓN button */}
+        {state.selectedOperation === 'METROLOGIA' && (
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={handleInspeccion}
+              aria-label="Iniciar inspección de metrología"
+              className="w-full h-[120px] tablet:h-[100px] narrow:h-[90px] bg-zeues-orange border-4 border-[#E55D26] flex items-center justify-center active:bg-[#E55D26] active:border-[#CC5322] transition-all duration-200"
+            >
+              <span className="text-5xl tablet:text-4xl narrow:text-3xl font-black text-white tracking-[0.25em] font-mono">INSPECCIÓN</span>
             </button>
           </div>
         )}

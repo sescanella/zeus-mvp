@@ -63,10 +63,10 @@ export const OPERATION_WORKFLOWS: Record<OperationType, OperationWorkflow> = {
     description: 'Welding workflow with multi-step actions',
   },
   'METROLOGIA': {
-    skipP3: true,
+    skipP3: false,
     actions: ['metrologia'],
     label: 'METROLOGÍA',
-    description: 'Instant inspection (APROBADO/RECHAZADO) - skips action selection',
+    description: 'Quality inspection (APROBADO/RECHAZADO)',
   },
   'REPARACION': {
     skipP3: false,
