@@ -14,8 +14,7 @@ export type ActionType =
   | 'pausar'           // v3.0: Pause work (release ownership temporarily)
   | 'completar'        // v3.0: Complete work (mark as finished)
   | 'cancelar'         // v3.0: Cancel repair (transition to BLOQUEADO state)
-  | 'metrologia'       // Special: Instant metrología inspection
-  | 'no-conformidad';  // Forms: No Conformidad (REG-QAC-002)
+  | 'metrologia';      // Special: Instant metrología inspection
 
 export interface OperationWorkflow {
   /**
@@ -65,9 +64,9 @@ export const OPERATION_WORKFLOWS: Record<OperationType, OperationWorkflow> = {
   },
   'METROLOGIA': {
     skipP3: false,
-    actions: ['metrologia', 'no-conformidad'],
+    actions: ['metrologia'],
     label: 'METROLOGÍA',
-    description: 'Quality inspection (APROBADO/RECHAZADO) and non-conformity forms',
+    description: 'Quality inspection (APROBADO/RECHAZADO)',
   },
   'REPARACION': {
     skipP3: false,

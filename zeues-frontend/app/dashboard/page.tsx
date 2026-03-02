@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, User } from 'lucide-react';
 import { BlueprintPageWrapper } from '@/components';
+import { getWorkers } from '@/lib/api';
+import type { Worker } from '@/lib/types';
 
 interface OccupiedSpool {
   tag_spool: string;
@@ -12,33 +14,65 @@ interface OccupiedSpool {
   fecha_ocupacion: string;
 }
 
+interface WorkerGroup {
+  worker_key: string;
+  worker_display: string;
+  spools: OccupiedSpool[];
+}
+
+function groupSpoolsByWorker(
+  spools: OccupiedSpool[],
+  nameMap: Map<string, string>
+): WorkerGroup[] {
+  const groupMap = new Map<string, OccupiedSpool[]>();
+  for (const spool of spools) {
+    const existing = groupMap.get(spool.worker_nombre);
+    if (existing) existing.push(spool);
+    else groupMap.set(spool.worker_nombre, [spool]);
+  }
+  return Array.from(groupMap.entries())
+    .map(([key, groupSpools]) => ({
+      worker_key: key,
+      worker_display: nameMap.get(key) || key,
+      spools: groupSpools,
+    }))
+    .sort((a, b) =>
+      b.spools.length - a.spools.length ||
+      a.worker_display.localeCompare(b.worker_display)
+    );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [spools, setSpools] = useState<Map<string, OccupiedSpool>>(new Map());
+  const [spools, setSpools] = useState<OccupiedSpool[]>([]);
+  const [workerNameMap, setWorkerNameMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Fetch initial dashboard state
   useEffect(() => {
-    const fetchInitialState = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError('');
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/occupied`);
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
-        }
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-        const data: OccupiedSpool[] = await response.json();
-
-        // Convert array to Map for O(1) updates
-        const spoolMap = new Map<string, OccupiedSpool>();
-        data.forEach(spool => {
-          spoolMap.set(spool.tag_spool, spool);
+        const spoolsPromise = fetch(`${API_URL}/api/dashboard/occupied`).then(r => {
+          if (!r.ok) throw new Error(`Error ${r.status}: ${r.statusText}`);
+          return r.json() as Promise<OccupiedSpool[]>;
         });
 
-        setSpools(spoolMap);
+        const workersPromise = getWorkers().catch((): Worker[] => []);
+
+        const [spoolsData, workers] = await Promise.all([spoolsPromise, workersPromise]);
+
+        const nameMap = new Map<string, string>();
+        for (const w of workers) {
+          nameMap.set(w.nombre_completo, `${w.nombre} ${w.apellido || ''}`.trim());
+        }
+
+        setSpools(spoolsData);
+        setWorkerNameMap(nameMap);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Error al cargar dashboard';
         setError(message);
@@ -47,10 +81,9 @@ export default function DashboardPage() {
       }
     };
 
-    fetchInitialState();
+    fetchData();
   }, []);
 
-  // Calculate time occupied
   const getTimeOccupied = (fecha: string): string => {
     try {
       const ocupado = new Date(fecha);
@@ -70,7 +103,10 @@ export default function DashboardPage() {
     }
   };
 
-  const spoolsArray = Array.from(spools.values());
+  const workerGroups = useMemo(
+    () => groupSpoolsByWorker(spools, workerNameMap),
+    [spools, workerNameMap]
+  );
 
   return (
     <BlueprintPageWrapper>
@@ -107,51 +143,73 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!loading && !error && spoolsArray.length === 0 && (
+        {!loading && !error && spools.length === 0 && (
           <div className="text-center text-white/70 font-mono text-xl mt-12">
             No hay carretes ocupados actualmente
           </div>
         )}
 
-        {!loading && !error && spoolsArray.length > 0 && (
-          <div className="grid gap-4">
-            {spoolsArray.map(spool => (
-              <div
-                key={spool.tag_spool}
-                className="bg-transparent border-4 border-white p-6"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <h2 className="text-3xl narrow:text-2xl font-black text-white font-mono tracking-wider">
-                    {spool.tag_spool}
-                  </h2>
-                  <span className="text-lg font-mono text-white/70">
-                    {getTimeOccupied(spool.fecha_ocupacion)}
-                  </span>
-                </div>
+        {!loading && !error && spools.length > 0 && (
+          <>
+            {/* Summary Bar */}
+            <div className="flex justify-center gap-12 mb-8 py-4 border-2 border-white/30 bg-white/5">
+              <p className="text-lg font-mono text-white/70 tracking-wider">
+                TRABAJADORES ACTIVOS:{' '}
+                <span className="font-black text-white">{workerGroups.length}</span>
+              </p>
+              <p className="text-lg font-mono text-white/70 tracking-wider">
+                TOTAL OCUPADOS:{' '}
+                <span className="font-black text-white">{spools.length}</span>
+              </p>
+            </div>
 
-                <div className="space-y-2">
-                  <p className="text-xl font-mono text-white">
-                    <span className="text-white/70">Trabajador:</span>{' '}
-                    <span className="font-black">{spool.worker_nombre}</span>
-                  </p>
+            {/* Worker Groups */}
+            <div className="grid gap-8">
+              {workerGroups.map(group => (
+                <section
+                  key={group.worker_key}
+                  aria-label={`Carretes de ${group.worker_display}`}
+                  className="border-4 border-white"
+                >
+                  {/* Worker Header */}
+                  <div className="flex items-center justify-between px-6 py-4 bg-white/10 border-b-4 border-white">
+                    <div className="flex items-center gap-3">
+                      <User size={28} strokeWidth={3} className="text-zeues-orange" />
+                      <h2 className="text-2xl font-black text-white font-mono tracking-wider">
+                        {group.worker_display}
+                      </h2>
+                    </div>
+                    <span className="px-4 py-1 bg-zeues-orange text-white font-black font-mono text-lg tracking-wider">
+                      {group.spools.length} {group.spools.length === 1 ? 'CARRETE' : 'CARRETES'}
+                    </span>
+                  </div>
 
-                  <p className="text-lg font-mono text-white/90">
-                    {spool.estado_detalle}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  {/* Spool Cards */}
+                  <div className="grid gap-3 p-4">
+                    {group.spools.map(spool => (
+                      <div
+                        key={spool.tag_spool}
+                        className="bg-transparent border-2 border-white/50 p-5"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-2xl narrow:text-xl font-black text-white font-mono tracking-wider">
+                            {spool.tag_spool}
+                          </h3>
+                          <span className="text-lg font-mono text-white/70">
+                            {getTimeOccupied(spool.fecha_ocupacion)}
+                          </span>
+                        </div>
 
-        {/* Stats Footer */}
-        {!loading && !error && (
-          <div className="mt-8 pt-6 border-t-4 border-white/30 text-center">
-            <p className="text-xl font-mono text-white/70">
-              Total Ocupados:{' '}
-              <span className="font-black text-white">{spoolsArray.length}</span>
-            </p>
-          </div>
+                        <p className="text-lg font-mono text-white/90">
+                          {spool.estado_detalle}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </BlueprintPageWrapper>

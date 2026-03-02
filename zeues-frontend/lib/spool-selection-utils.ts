@@ -8,7 +8,7 @@ import { OPERATION_WORKFLOWS, type OperationType } from './operation-config';
 /** Maximum spools selectable in a single batch (backend constraint) */
 export const MAX_BATCH_SELECTION = 50;
 
-type TipoParam = 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | 'no-conformidad' | null;
+type TipoParam = 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | null;
 type Accion = 'INICIAR' | 'FINALIZAR' | null;
 type Operation = OperationType;
 
@@ -31,7 +31,6 @@ export function getActionLabel(tipo: TipoParam): string {
     case 'cancelar': return 'CANCELAR';
     case 'metrologia': return 'INSPECCIONAR';
     case 'reparacion': return 'REPARAR';
-    case 'no-conformidad': return 'NO CONFORMIDAD';
     default: return 'SELECCIONAR';
   }
 }
@@ -70,8 +69,6 @@ export function getPageTitle({ accion, tipo, operationLabel, selectedOperation }
         : `SELECCIONAR SPOOL PARA CANCELAR - ${operationLabel}`;
     case 'metrologia':
       return 'SELECCIONAR SPOOL PARA INSPECCION';
-    case 'no-conformidad':
-      return 'SELECCIONAR SPOOL - NO CONFORMIDAD';
     case 'reparacion':
       return 'SELECCIONAR SPOOL PARA REPARAR';
     default:
@@ -113,8 +110,6 @@ export function getEmptyMessage({ accion, tipo, operationLabel, selectedOperatio
         : 'No tienes spools en progreso para cancelar';
     case 'metrologia':
       return 'No hay spools disponibles para inspeccion de metrologia';
-    case 'no-conformidad':
-      return 'No hay spools disponibles para registrar no conformidad';
     case 'reparacion':
       return 'No hay spools rechazados disponibles para reparacion';
     default:

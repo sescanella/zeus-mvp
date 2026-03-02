@@ -149,27 +149,3 @@ export interface FinalizarResponse {
   new_state: string | null;  // Backend field name (nullable)
 }
 
-// ==========================================
-// NO CONFORMIDAD (Forms)
-// ==========================================
-
-/**
- * Request for POST /api/forms/no-conformidad endpoint
- */
-export interface NoConformidadRequest {
-  tag_spool: string;
-  worker_id: number;
-  origen: 'Interna' | 'Cliente/ITO' | 'Otro';
-  tipo: 'Proceso' | 'Procedimiento/Protocolo' | 'Producto' | 'Post-Venta' | 'Condición Insegura';
-  descripcion: string;
-}
-
-/**
- * Response for POST /api/forms/no-conformidad endpoint
- */
-export interface NoConformidadResponse {
-  success: boolean;
-  message: string;
-  registro_id: string;
-  tag_spool: string;
-}
