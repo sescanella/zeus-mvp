@@ -127,7 +127,7 @@ async def test_tomar_extracts_cycle_count(reparacion_service, mock_sheets_repo, 
 
     # Mock state machine behavior
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
+        mock_machine = AsyncMock()
         mock_machine.current_state.id = "en_reparacion"
         mock_machine.get_state_id.return_value = "en_reparacion"
         MockStateMachine.return_value = mock_machine
@@ -174,7 +174,7 @@ async def test_pausar_clears_occupation(
     mock_cycle_counter.build_reparacion_estado.return_value = "REPARACION_PAUSADA (Ciclo 1/3)"
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
+        mock_machine = AsyncMock()
         mock_machine.current_state.id = "reparacion_pausada"
         mock_machine.get_state_id.return_value = "reparacion_pausada"
         MockStateMachine.return_value = mock_machine
@@ -200,7 +200,7 @@ async def test_completar_sets_pendiente_metrologia(reparacion_service, mock_shee
     mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
+        mock_machine = AsyncMock()
         mock_machine.current_state.id = "pendiente_metrologia"
         mock_machine.get_state_id.return_value = "pendiente_metrologia"
         MockStateMachine.return_value = mock_machine
@@ -225,7 +225,7 @@ async def test_cancelar_returns_to_rechazado(reparacion_service, mock_sheets_rep
     mock_sheets_repo.get_spool_by_tag.return_value = en_reparacion_spool
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
+        mock_machine = AsyncMock()
         mock_machine.current_state.id = "rechazado"
         mock_machine.get_state_id.return_value = "rechazado"
         MockStateMachine.return_value = mock_machine
@@ -252,9 +252,9 @@ async def test_metadata_includes_cycle_info(reparacion_service, mock_sheets_repo
     mock_sheets_repo.get_spool_by_tag.return_value = rechazado_spool
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
+        mock_machine = AsyncMock()
         mock_machine.current_state.id = "en_reparacion"
-        mock_machine.get_state_id.return_value = "en_reparacion"
+        mock_machine.get_state_id = Mock(return_value="en_reparacion")
         MockStateMachine.return_value = mock_machine
 
         result = await reparacion_service.tomar_reparacion(tag_spool, worker_id, worker_nome)
@@ -279,7 +279,7 @@ async def test_metadata_logging_failure_does_not_block(reparacion_service, mock_
     mock_metadata_repo.append_event.side_effect = Exception("Sheets API error")
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
-        mock_machine = Mock()
+        mock_machine = AsyncMock()
         mock_machine.current_state.id = "en_reparacion"
         mock_machine.get_state_id.return_value = "en_reparacion"
         MockStateMachine.return_value = mock_machine

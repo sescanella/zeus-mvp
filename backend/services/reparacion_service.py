@@ -125,7 +125,7 @@ class ReparacionService:
             reparacion_machine.current_state = reparacion_machine.rechazado
 
         # Trigger TOMAR transition
-        reparacion_machine.tomar(worker_id=worker_id, worker_nombre=worker_nombre)
+        await reparacion_machine.tomar(worker_id=worker_id, worker_nombre=worker_nombre)
         logger.info(f"REPARACION TOMAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
         # Step 5: Log metadata event (Ocupado_Por/Fecha_Ocupacion/Estado_Detalle already updated by state machine)
@@ -215,7 +215,7 @@ class ReparacionService:
         reparacion_machine.current_state = reparacion_machine.en_reparacion
 
         # Trigger PAUSAR transition
-        reparacion_machine.pausar()
+        await reparacion_machine.pausar()
         logger.info(f"REPARACION PAUSAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
         # Step 3: Extract cycle count for metadata
@@ -311,7 +311,7 @@ class ReparacionService:
         reparacion_machine.current_state = reparacion_machine.en_reparacion
 
         # Trigger COMPLETAR transition
-        reparacion_machine.completar()
+        await reparacion_machine.completar()
         logger.info(f"REPARACION COMPLETAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
         # Step 3: Extract cycle count for metadata
@@ -398,7 +398,7 @@ class ReparacionService:
             reparacion_machine.current_state = reparacion_machine.en_reparacion
 
         # Trigger CANCELAR transition
-        reparacion_machine.cancelar()
+        await reparacion_machine.cancelar()
         logger.info(f"REPARACION CANCELAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
         # Step 3: Extract cycle count for metadata
