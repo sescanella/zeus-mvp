@@ -210,27 +210,13 @@ function ConfirmarContent() {
           let results: PromiseSettledResult<unknown>[];
           let successMessage: string;
 
-          if (tipo === 'tomar') {
-            results = await Promise.allSettled(
-              state.selectedSpools.map(tag_spool =>
-                tomarReparacion({ tag_spool, worker_id })
-              )
-            );
-            successMessage = 'Reparación tomada exitosamente';
-          } else if (tipo === 'pausar') {
+          if (tipo === 'pausar') {
             results = await Promise.allSettled(
               state.selectedSpools.map(tag_spool =>
                 pausarReparacion({ tag_spool, worker_id })
               )
             );
             successMessage = 'Reparación pausada exitosamente';
-          } else if (tipo === 'completar') {
-            results = await Promise.allSettled(
-              state.selectedSpools.map(tag_spool =>
-                completarReparacion({ tag_spool, worker_id })
-              )
-            );
-            successMessage = 'Reparación completada exitosamente';
           } else if (tipo === 'cancelar') {
             results = await Promise.allSettled(
               state.selectedSpools.map(tag_spool =>
@@ -258,12 +244,8 @@ function ConfirmarContent() {
         } else {
           const tag_spool = state.selectedSpool!;
 
-          if (tipo === 'tomar') {
-            await tomarReparacion({ tag_spool, worker_id });
-          } else if (tipo === 'pausar') {
+          if (tipo === 'pausar') {
             await pausarReparacion({ tag_spool, worker_id });
-          } else if (tipo === 'completar') {
-            await completarReparacion({ tag_spool, worker_id });
           } else if (tipo === 'cancelar') {
             await cancelarReparacion({ tag_spool, worker_id });
           } else {
