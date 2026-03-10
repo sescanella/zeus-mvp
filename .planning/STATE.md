@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
-status: Starting Phase 0 — backend prerequisites
-stopped_at: Completed 00-02-PLAN.md
-last_updated: "2026-03-10T21:31:41.563Z"
-last_activity: 2026-03-10 - Created v5.0 milestone with REQUIREMENTS.md + ROADMAP.md
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-03-10T22:37:00Z"
+last_activity: "2026-03-10 - Completed 01-03: useModalStack and useNotificationToast hooks"
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 32
-  completed_plans: 30
-  percent: 96
+  total_plans: 25
+  completed_plans: 23
+  percent: 94
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/v5.0-single-page/ROADMAP.md
 
 ## Current Position
 
-Phase: 0 (Backend — Nuevos Endpoints)
-Plan: Pending
-Status: Starting Phase 0 — backend prerequisites
-Last activity: 2026-03-10 - Created v5.0 milestone with REQUIREMENTS.md + ROADMAP.md
+Phase: 1 (Frontend — Fundaciones)
+Plan: 03 COMPLETE
+Status: Phase 1 in progress — plans 01, 02, 03 done
+Last activity: 2026-03-10 - Completed 01-03: useModalStack and useNotificationToast hooks
 
-Progress: [██████████] 96%
+Progress: [█████████░] 94%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -64,6 +64,16 @@ Progress: [██████████] 96%
 - WorkerService injected into OccupationService as Optional dependency via get_occupation_service_v4()
 - Zero-union cancellation guard updated: `if len(selected_unions) == 0 and not action_override` to prevent COMPLETAR override from being treated as CANCELADO
 
+### Plan 01-01 Decisions (2026-03-10)
+- snake_case field names in SpoolCardData match backend JSON directly — no camelCase transform needed
+- getSpoolStatus and batchGetStatus use handleResponse without extra try/catch (simpler pattern)
+- STORAGE_KEY exported as named const so tests can assert exact key value
+
+### Plan 01-03 Decisions (2026-03-10)
+- ModalId union literal: 'add-spool' | 'operation' | 'action' | 'worker' | 'metrologia' — matches v5.0 flow
+- AUTO_DISMISS_MS=4000ms satisfies UX-02 (3-5s); useRef(0) counter prevents toast ID collisions on rapid enqueue
+- isOpen wrapped in useCallback([stack]) so consumers get stable reference that still reflects current stack
+
 ## Previous Milestones
 
 - v4.0: Shipped 2026-02-02 (7 phases, 42 plans)
@@ -71,6 +81,6 @@ Progress: [██████████] 96%
 
 ## Session Continuity
 
-Last session: 2026-03-10T21:28:05.523Z
-Stopped at: Completed 00-02-PLAN.md
+Last session: 2026-03-10T22:37:00Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
