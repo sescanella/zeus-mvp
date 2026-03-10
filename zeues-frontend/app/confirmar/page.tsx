@@ -51,6 +51,7 @@ function ConfirmarContent() {
   const [loading, setLoading] = useState(false);
   const [errorModal, setErrorModal] = useState<ErrorModalState | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   const isBatchMode = state.selectedSpools.length > 1;
 
@@ -90,12 +91,11 @@ function ConfirmarContent() {
 
     if (classified.type === 'conflict') {
       // Race condition - unions changed, need to reload
-      if (classified.retryDelay) {
-        setCountdown(Math.floor(classified.retryDelay / 1000));
-      }
+      const retrySeconds = classified.retryDelay ? Math.floor(classified.retryDelay / 1000) : null;
+      setCountdown(retrySeconds);
       setErrorModal({
         title: 'Datos desactualizados',
-        message: `Las uniones disponibles han cambiado. Recargando${countdown !== null ? ` en ${countdown}s` : ''}...`,
+        message: `Las uniones disponibles han cambiado. Recargando${retrySeconds !== null ? ` en ${retrySeconds}s` : ''}...`,
         action: () => {
           router.push('/seleccionar-uniones');
         }
@@ -267,10 +267,13 @@ function ConfirmarContent() {
   };
 
   const handleCancel = () => {
-    if (confirm('¿Seguro que quieres cancelar? Se perderá toda la información.')) {
-      resetState();
-      router.push('/');
-    }
+    setCancelModalOpen(true);
+  };
+
+  const handleCancelConfirm = () => {
+    setCancelModalOpen(false);
+    resetState();
+    router.push('/');
   };
 
   // Guard: must have worker, operation, and at least one spool
@@ -410,6 +413,7 @@ function ConfirmarContent() {
               <button
                 onClick={handleConfirm}
                 disabled={loading}
+                aria-label={`Confirmar acción para ${spoolCount} spool${spoolCount !== 1 ? 's' : ''}`}
                 className="w-full h-24 mb-6 tablet:mb-4 bg-zeues-orange border-4 border-zeues-orange flex items-center justify-center gap-4 cursor-pointer active:bg-zeues-orange/80 transition-all disabled:opacity-50 group"
               >
                 <CheckCircle size={48} strokeWidth={3} className="text-white" />
@@ -437,12 +441,43 @@ function ConfirmarContent() {
         </div>
       </div>
 
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        isOpen={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        ariaLabel="Confirmar cancelación"
+      >
+        <div className="text-center">
+          <h3 className="text-lg font-black text-white font-mono tracking-[0.15em] mb-4">
+            ¿CANCELAR OPERACIÓN?
+          </h3>
+          <p className="text-base font-mono text-white/70 mb-6">
+            Se perderá toda la información.
+          </p>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setCancelModalOpen(false)}
+              className="flex-1 h-14 border-4 border-white text-white font-mono font-black tracking-[0.15em] active:bg-white/10 transition-all"
+            >
+              CANCELAR
+            </button>
+            <button
+              onClick={handleCancelConfirm}
+              className="flex-1 h-14 bg-red-600 border-4 border-red-600 text-white font-mono font-black tracking-[0.15em] active:bg-red-700 transition-all"
+            >
+              CONFIRMAR
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Error Modal (v4.0) */}
       {errorModal && (
         <Modal
           isOpen={true}
           onClose={() => setErrorModal(null)}
           onBackdropClick={null}
+          ariaLabel="Error en la operación"
         >
           <div className="text-center">
             <h3 className="text-lg font-semibold mb-4 text-red-600">

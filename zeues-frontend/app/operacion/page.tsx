@@ -3,35 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Puzzle, Flame, SearchCheck, Wrench, ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { BlueprintPageWrapper, ErrorMessage, FixedFooter } from '@/components';
 import { useAppState } from '@/lib/context';
-import { OPERATION_WORKFLOWS, type OperationType } from '@/lib/operation-config';
+import { OPERATION_WORKFLOWS, OPERATION_ICONS, OPERATION_TO_ROLES, OPERATION_TITLES, type OperationType } from '@/lib/operation-config';
 import type { Worker } from '@/lib/types';
-
-// Mapeo de operaciones a roles necesarios
-const OPERATION_TO_ROLES: Record<string, string[]> = {
-  'ARM': ['Armador', 'Ayudante'],
-  'SOLD': ['Soldador', 'Ayudante'],
-  'METROLOGIA': ['Metrologia'],
-  'REPARACION': ['Armador', 'Soldador'],  // Union of Armador + Soldador roles for repairs
-};
-
-// Iconos por operación (Lucide)
-const OPERATION_ICONS = {
-  'ARM': Puzzle,
-  'SOLD': Flame,
-  'METROLOGIA': SearchCheck,
-  'REPARACION': Wrench,
-};
-
-// Títulos dinámicos por operación
-const OPERATION_TITLES: Record<string, string> = {
-  'ARM': '¿Quién va a armar?',
-  'SOLD': '¿Quién va a soldar?',
-  'METROLOGIA': '¿Quién va a medir?',
-  'REPARACION': '¿Quién va a reparar?',
-};
 
 export default function TrabajadorSelectionPage() {
   const router = useRouter();
@@ -86,16 +62,10 @@ export default function TrabajadorSelectionPage() {
   if (!state.selectedOperation) return null;
 
   // Obtener icono y título dinámicos
-  const IconComponent = OPERATION_ICONS[state.selectedOperation];
-  const pageTitle = OPERATION_TITLES[state.selectedOperation];
-
-  // Mapeo de operaciones a nombres para display
-  const operationNames: Record<string, string> = {
-    'ARM': 'ARMADO',
-    'SOLD': 'SOLDADURA',
-    'METROLOGIA': 'METROLOGÍA',
-    'REPARACION': 'REPARACIÓN'
-  };
+  const op = state.selectedOperation as OperationType;
+  const IconComponent = OPERATION_ICONS[op];
+  const pageTitle = OPERATION_TITLES[op];
+  const operationLabel = OPERATION_WORKFLOWS[op].label;
 
   return (
     <BlueprintPageWrapper>
@@ -115,7 +85,7 @@ export default function TrabajadorSelectionPage() {
         <div className="flex items-center justify-center gap-4 mb-4">
           <IconComponent size={48} strokeWidth={3} className="text-zeues-orange" />
           <h2 className="text-3xl narrow:text-2xl font-black text-white tracking-[0.25em] font-mono">
-            {operationNames[state.selectedOperation]}
+            {operationLabel}
           </h2>
         </div>
         <p className="text-xl narrow:text-lg text-center text-white/70 font-mono tracking-[0.15em]">
@@ -174,6 +144,7 @@ export default function TrabajadorSelectionPage() {
                       group
                       relative
                       overflow-hidden
+                      focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
                     "
                   >
                     {/* Highlight effect on active */}

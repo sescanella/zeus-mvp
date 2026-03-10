@@ -1,16 +1,26 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { BlueprintPageWrapper } from '@/components';
 import { useAppState } from '@/lib/context';
 
+const COUNTDOWN_SECONDS = 5;
+
 export default function ExitoPage() {
   const router = useRouter();
   const { state, resetState, resetV4State } = useAppState();
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
+  const timestampRef = useRef(new Date().toLocaleString('es-CL', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }));
 
   const tipo = state.selectedTipo;
   const accion = state.accion;
@@ -21,12 +31,6 @@ export default function ExitoPage() {
   const selectedOperation = state.selectedOperation;
 
   const handleFinish = useCallback(() => {
-    resetState();
-    router.push('/');
-  }, [resetState, router]);
-
-  const handleNewWork = useCallback(() => {
-    // Clear all state
     resetState();
     router.push('/');
   }, [resetState, router]);
@@ -188,14 +192,7 @@ export default function ExitoPage() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-white/60 font-mono">FECHA/HORA:</span>
               <span className="font-bold text-white font-mono">
-                {new Date().toLocaleString('es-CL', {
-                  timeZone: 'America/Santiago',
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                {timestampRef.current}
               </span>
             </div>
             {selectedSpool && (
@@ -217,7 +214,7 @@ export default function ExitoPage() {
         <div className="w-full max-w-2xl space-y-4">
           {/* Nuevo Trabajo (all workflows) */}
           <button
-            onClick={handleNewWork}
+            onClick={handleFinish}
             className="w-full h-20 border-4 border-white flex items-center justify-center active:bg-white active:text-zeues-navy group"
           >
             <span className="text-2xl font-black text-white font-mono group-active:text-zeues-navy">

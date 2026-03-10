@@ -9,16 +9,6 @@ export interface SpoolMetrics {
 }
 
 /**
- * Detects if a spool is v4.0 based on union count
- * v4.0 spools have total_uniones > 0
- * v3.0 spools have total_uniones = 0 or undefined
- */
-function isV4Spool(metrics: SpoolMetrics | null | undefined): boolean {
-  if (!metrics) return false;
-  return (metrics.total_uniones ?? 0) > 0;
-}
-
-/**
  * Returns version string for display
  *
  * v4.0 spools have union-level tracking (total_uniones > 0)
@@ -34,6 +24,7 @@ function isV4Spool(metrics: SpoolMetrics | null | undefined): boolean {
  * }
  */
 export function detectSpoolVersion(metrics: SpoolMetrics | null | undefined): 'v3.0' | 'v4.0' {
-  return isV4Spool(metrics) ? 'v4.0' : 'v3.0';
+  if (!metrics) return 'v3.0';
+  return (metrics.total_uniones ?? 0) > 0 ? 'v4.0' : 'v3.0';
 }
 

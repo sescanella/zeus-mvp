@@ -40,13 +40,7 @@ export default function OperacionSelectionPage() {
 
   const handleSelectOperation = (operacion: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION') => {
     setState({ selectedOperation: operacion });
-
-    // METROLOGIA and REPARACION skip tipo-interaccion and go directly to worker selection
-    if (operacion === 'METROLOGIA' || operacion === 'REPARACION') {
-      router.push('/operacion');
-    } else {
-      router.push('/operacion');
-    }
+    router.push('/operacion');
   };
 
   // Si está cargando o hay error, mostrar en diseño Blueprint Industrial
@@ -93,7 +87,8 @@ export default function OperacionSelectionPage() {
         {/* Dashboard Link - Top Right */}
         <Link
           href="/dashboard"
-          className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group"
+          aria-label="Ver panel de control de spools ocupados"
+          className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
         >
           <Monitor size={24} strokeWidth={3} className="text-white group-active:text-white" />
           <span className="text-sm font-black font-mono text-white tracking-wider group-active:text-white">
@@ -112,6 +107,7 @@ export default function OperacionSelectionPage() {
         {/* Card Armado */}
         <button
           onClick={() => handleSelectOperation('ARM')}
+          aria-label="Seleccionar operación Armado"
           className="
             h-[20vh] narrow:h-32 w-full
             bg-transparent
@@ -121,6 +117,7 @@ export default function OperacionSelectionPage() {
             transition-all duration-200
             relative
             group
+            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
           "
         >
           <Puzzle size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
@@ -132,6 +129,7 @@ export default function OperacionSelectionPage() {
         {/* Card Soldadura */}
         <button
           onClick={() => handleSelectOperation('SOLD')}
+          aria-label="Seleccionar operación Soldadura"
           className="
             h-[20vh] narrow:h-32 w-full
             bg-transparent
@@ -141,6 +139,7 @@ export default function OperacionSelectionPage() {
             transition-all duration-200
             relative
             group
+            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
           "
         >
           <Flame size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
@@ -152,6 +151,7 @@ export default function OperacionSelectionPage() {
         {/* Card Metrología */}
         <button
           onClick={() => handleSelectOperation('METROLOGIA')}
+          aria-label="Seleccionar operación Metrología"
           className="
             h-[20vh] narrow:h-32 w-full
             bg-transparent
@@ -161,6 +161,7 @@ export default function OperacionSelectionPage() {
             transition-all duration-200
             relative
             group
+            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
           "
         >
           <SearchCheck size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
@@ -172,6 +173,7 @@ export default function OperacionSelectionPage() {
         {/* Card Reparación */}
         <button
           onClick={() => handleSelectOperation('REPARACION')}
+          aria-label="Seleccionar operación Reparación"
           className="
             h-[20vh] narrow:h-32 w-full
             bg-transparent
@@ -181,6 +183,7 @@ export default function OperacionSelectionPage() {
             transition-all duration-200
             relative
             group
+            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
           "
         >
           <Wrench size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />

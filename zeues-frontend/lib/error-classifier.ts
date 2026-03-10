@@ -5,6 +5,8 @@
  * Used by P4 (seleccionar-spool) and P5 (confirmar) to classify API errors.
  */
 
+import { ApiError } from './api';
+
 export type ErrorType = 'network' | 'validation' | 'forbidden' | 'server' | 'conflict' | 'generic';
 
 export interface ClassifiedError {
@@ -41,9 +43,9 @@ export function classifyApiError(error: unknown): ClassifiedError {
     };
   }
 
-  // API response errors (structured error objects)
-  if (typeof error === 'object' && error !== null && 'status' in error) {
-    const apiError = error as { status: number; message?: string; detail?: string };
+  // API response errors (ApiError from api.ts)
+  if (error instanceof ApiError) {
+    const apiError = error;
 
     switch (apiError.status) {
       case 400:

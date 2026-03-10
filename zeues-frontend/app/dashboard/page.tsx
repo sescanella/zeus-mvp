@@ -4,27 +4,21 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, User } from 'lucide-react';
 import { BlueprintPageWrapper } from '@/components';
-import { getWorkers } from '@/lib/api';
+import { getWorkers, getDashboardOccupied } from '@/lib/api';
+import type { DashboardOccupiedSpool } from '@/lib/api';
 import type { Worker } from '@/lib/types';
-
-interface OccupiedSpool {
-  tag_spool: string;
-  worker_nombre: string;
-  estado_detalle: string;
-  fecha_ocupacion: string;
-}
 
 interface WorkerGroup {
   worker_key: string;
   worker_display: string;
-  spools: OccupiedSpool[];
+  spools: DashboardOccupiedSpool[];
 }
 
 function groupSpoolsByWorker(
-  spools: OccupiedSpool[],
+  spools: DashboardOccupiedSpool[],
   nameMap: Map<string, string>
 ): WorkerGroup[] {
-  const groupMap = new Map<string, OccupiedSpool[]>();
+  const groupMap = new Map<string, DashboardOccupiedSpool[]>();
   for (const spool of spools) {
     const existing = groupMap.get(spool.worker_nombre);
     if (existing) existing.push(spool);
@@ -44,7 +38,7 @@ function groupSpoolsByWorker(
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [spools, setSpools] = useState<OccupiedSpool[]>([]);
+  const [spools, setSpools] = useState<DashboardOccupiedSpool[]>([]);
   const [workerNameMap, setWorkerNameMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,12 +49,7 @@ export default function DashboardPage() {
         setLoading(true);
         setError('');
 
-        const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-        const spoolsPromise = fetch(`${API_URL}/api/dashboard/occupied`).then(r => {
-          if (!r.ok) throw new Error(`Error ${r.status}: ${r.statusText}`);
-          return r.json() as Promise<OccupiedSpool[]>;
-        });
+        const spoolsPromise = getDashboardOccupied();
 
         const workersPromise = getWorkers().catch((): Worker[] => []);
 
@@ -114,6 +103,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b-4 border-white/30">
         <button
           onClick={() => router.push('/')}
+          aria-label="Volver a la página principal"
           className="flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group"
         >
           <ArrowLeft size={24} strokeWidth={3} className="text-white group-active:text-white" />
@@ -145,7 +135,7 @@ export default function DashboardPage() {
 
         {!loading && !error && spools.length === 0 && (
           <div className="text-center text-white/70 font-mono text-xl mt-12">
-            No hay carretes ocupados actualmente
+            No hay spools ocupados actualmente
           </div>
         )}
 
@@ -168,7 +158,7 @@ export default function DashboardPage() {
               {workerGroups.map(group => (
                 <section
                   key={group.worker_key}
-                  aria-label={`Carretes de ${group.worker_display}`}
+                  aria-label={`Spools de ${group.worker_display}`}
                   className="border-4 border-white"
                 >
                   {/* Worker Header */}
@@ -180,7 +170,7 @@ export default function DashboardPage() {
                       </h2>
                     </div>
                     <span className="px-4 py-1 bg-zeues-orange text-white font-black font-mono text-lg tracking-wider">
-                      {group.spools.length} {group.spools.length === 1 ? 'CARRETE' : 'CARRETES'}
+                      {group.spools.length} {group.spools.length === 1 ? 'SPOOL' : 'SPOOLS'}
                     </span>
                   </div>
 

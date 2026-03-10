@@ -16,17 +16,32 @@ import {
 // ============= CONSTANTS =============
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// ============= ERROR CLASS =============
+
+export class ApiError extends Error {
+  status: number;
+  detail?: string;
+
+  constructor(status: number, message: string, detail?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 // ============= HELPER FUNCTIONS =============
 
 /**
  * Helper para manejar respuestas HTTP de forma consistente.
- * Lanza error si response.ok === false.
+ * Lanza ApiError con status code si response.ok === false.
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const message = errorData.message || `Error ${response.status}: ${response.statusText}`;
-    throw new Error(message);
+    const message = errorData.message || errorData.detail || `Error ${response.status}: ${response.statusText}`;
+    const detail = typeof errorData.detail === 'string' ? errorData.detail : errorData.detail?.message;
+    throw new ApiError(response.status, message, detail);
   }
   return response.json();
 }
@@ -219,32 +234,6 @@ export async function completarMetrologia(
       })
     });
 
-    // Handle specific error codes
-    if (res.status === 409) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool ocupado por otro trabajador. Intenta más tarde.');
-    }
-
-    if (res.status === 404) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool o trabajador no encontrado.');
-    }
-
-    if (res.status === 403) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'No tienes autorización para realizar metrología.');
-    }
-
-    if (res.status === 400) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
-    }
-
-    if (res.status === 422) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Resultado inválido. Debe ser APROBADO o RECHAZADO.');
-    }
-
     return await handleResponse<{ message: string; tag_spool: string; resultado: string }>(res);
   } catch (error) {
     console.error('completarMetrologia error:', error);
@@ -322,11 +311,11 @@ export async function getSpoolsReparacion(): Promise<{
         tag_spool: spool.tag_spool,
         estado_detalle: spool.estado_detalle || '',
         fecha_rechazo: spool.fecha_qc_metrologia || '',
-        cycle: 0, // TODO: Extract cycle from estado_detalle if needed
-        bloqueado: false // TODO: Determine from estado_detalle if needed
+        cycle: 0, // TODO: Extract cycle/bloqueado from backend response when available
+        bloqueado: false
       })),
       total: data.total,
-      bloqueados: 0, // TODO: Calculate if needed
+      bloqueados: 0,
       filtro_aplicado: data.filtro_aplicado
     };
   } catch (error) {
@@ -419,9 +408,24 @@ export async function tomarReparacion(payload: {
       body: JSON.stringify(payload)
     });
 
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool no encontrado.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
+    }
+
     if (res.status === 403) {
       const errorData = await res.json();
       throw new Error(errorData.message || 'Spool bloqueado - contactar supervisor');
+    }
+
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool ocupado por otro trabajador. Intenta más tarde.');
     }
 
     return await handleResponse<ReparacionResponse>(res);
@@ -446,6 +450,21 @@ export async function pausarReparacion(payload: {
       body: JSON.stringify(payload)
     });
 
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool no encontrado.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
+    }
+
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Conflicto. Intenta de nuevo.');
+    }
+
     return await handleResponse<ReparacionResponse>(res);
   } catch (error) {
     console.error('pausarReparacion error:', error);
@@ -468,10 +487,57 @@ export async function cancelarReparacion(payload: {
       body: JSON.stringify(payload)
     });
 
+    if (res.status === 404) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Spool no encontrado.');
+    }
+
+    if (res.status === 400) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
+    }
+
+    if (res.status === 409) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Conflicto. Intenta de nuevo.');
+    }
+
     return await handleResponse<ReparacionResponse>(res);
   } catch (error) {
     console.error('cancelarReparacion error:', error);
     throw error;
+  }
+}
+
+// ==========================================
+// DASHBOARD API FUNCTIONS
+// ==========================================
+
+export interface DashboardOccupiedSpool {
+  tag_spool: string;
+  worker_nombre: string;
+  estado_detalle: string;
+  fecha_ocupacion: string;
+}
+
+/**
+ * GET /api/dashboard/occupied
+ * Obtiene spools actualmente ocupados para el dashboard.
+ *
+ * @returns Promise<DashboardOccupiedSpool[]> - Array de spools ocupados
+ * @throws Error si falla la request o backend no disponible
+ */
+export async function getDashboardOccupied(): Promise<DashboardOccupiedSpool[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/dashboard/occupied`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    return await handleResponse<DashboardOccupiedSpool[]>(res);
+  } catch (error) {
+    console.error('getDashboardOccupied error:', error);
+    throw new Error('No se pudieron cargar los spools ocupados del dashboard.');
   }
 }
 

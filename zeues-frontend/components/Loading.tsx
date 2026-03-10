@@ -27,7 +27,7 @@ export function Loading({ message = 'CARGANDO' }: LoadingProps) {
 
       {/* Texto con puntos animados */}
       <div className="flex items-center gap-1">
-        <h2 className="text-2xl font-black text-slate-700 tracking-[0.25em] font-mono">
+        <h2 className="text-2xl font-black text-white/70 tracking-[0.25em] font-mono">
           {message}
         </h2>
         <div className="flex gap-0 items-end h-8">
@@ -97,7 +97,7 @@ export function Loading({ message = 'CARGANDO' }: LoadingProps) {
           font-size: 1.5rem;
           line-height: 2rem;
           font-weight: 900;
-          color: #334155;
+          color: rgba(255, 255, 255, 0.7);
           font-family: ui-monospace, monospace;
           animation: dotPulse 1.5s ease-in-out infinite;
         }

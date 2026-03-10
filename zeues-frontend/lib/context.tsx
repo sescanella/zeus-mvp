@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Worker, Union } from './types';
+import { Worker } from './types';
 
 interface AppState {
   allWorkers: Worker[];  // v2.0: Cache de todos los trabajadores (fetch en P1, filtrar en P2)
@@ -23,9 +23,6 @@ interface AppContextType {
   resetState: () => void;
   // v4.0: Helper functions for union-level workflow
   resetV4State: () => void;
-  calculatePulgadas: (unions: Union[], selectedUnionIds: string[]) => number;
-  toggleUnionSelection: (unionId: string, isSelected: boolean) => void;
-  selectAllAvailableUnions: (availableUnionIds: string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -67,48 +64,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  // v4.0: Calculate total pulgadas-diámetro for selected unions
-  const calculatePulgadas = useCallback((unions: Union[], selectedUnionIds: string[]): number => {
-    if (selectedUnionIds.length === 0) return 0;
-
-    const total = unions
-      .filter(u => selectedUnionIds.includes(u.id))
-      .reduce((sum, u) => sum + u.dn_union, 0);
-
-    return Math.round(total * 10) / 10; // 1 decimal precision (service layer presentation)
-  }, []);
-
-  // v4.0: Toggle single union selection
-  const toggleUnionSelection = useCallback((unionId: string, isSelected: boolean) => {
-    setStateInternal(prev => {
-      const newSelected = isSelected
-        ? [...prev.selectedUnions, unionId]
-        : prev.selectedUnions.filter(id => id !== unionId);
-
-      return {
-        ...prev,
-        selectedUnions: newSelected,
-      };
-    });
-  }, []);
-
-  // v4.0: Select all available unions at once
-  const selectAllAvailableUnions = useCallback((availableUnionIds: string[]) => {
-    setStateInternal(prev => ({
-      ...prev,
-      selectedUnions: [...availableUnionIds],
-    }));
-  }, []);
-
   return (
     <AppContext.Provider value={{
       state,
       setState,
       resetState,
       resetV4State,
-      calculatePulgadas,
-      toggleUnionSelection,
-      selectAllAvailableUnions,
     }}>
       {children}
     </AppContext.Provider>

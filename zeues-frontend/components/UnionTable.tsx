@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CheckSquare, Square, Lock } from 'lucide-react';
 
 interface Union {
@@ -28,8 +28,8 @@ export function UnionTable({
   onSelectionChange,
   disabled = false,
 }: UnionTableProps) {
-  // Sort unions by n_union ascending
-  const sortedUnions = [...unions].sort((a, b) => a.n_union - b.n_union);
+  // Sort unions by n_union ascending (memoized to avoid re-sorting on every render)
+  const sortedUnions = useMemo(() => [...unions].sort((a, b) => a.n_union - b.n_union), [unions]);
 
   // Handle checkbox selection change
   const handleCheckboxChange = (unionId: string, isChecked: boolean) => {
@@ -86,9 +86,20 @@ export function UnionTable({
             return (
               <tr
                 key={union.id}
+                role="button"
+                tabIndex={isRowDisabled ? -1 : 0}
+                aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} unión ${union.n_union}${isCompleted ? ' (completada)' : ''}${disabled ? ' (deshabilitado)' : ''}`}
+                aria-disabled={isRowDisabled ? true : undefined}
                 onClick={() => !isRowDisabled && handleCheckboxChange(union.id, !isSelected)}
+                onKeyDown={(e) => {
+                  if (isRowDisabled) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleCheckboxChange(union.id, !isSelected);
+                  }
+                }}
                 className={`
-                  border-t-2 border-white/30 transition-colors cursor-pointer
+                  border-t-2 border-white/30 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset
                   ${isCompleted ? 'opacity-30 cursor-not-allowed' : ''}
                   ${isSelected && !isCompleted ? 'bg-zeues-orange/20' : 'hover:bg-white/5'}
                 `}

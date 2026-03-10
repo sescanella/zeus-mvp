@@ -88,3 +88,17 @@ export const OPERATION_ICONS: Record<OperationType, LucideIcon> = {
   METROLOGIA: SearchCheck,
   REPARACION: Wrench,
 } as const;
+
+export const OPERATION_TO_ROLES: Record<OperationType, string[]> = {
+  ARM: ['Armador', 'Ayudante'],
+  SOLD: ['Soldador', 'Ayudante'],
+  METROLOGIA: ['Metrologia'],
+  REPARACION: ['Armador', 'Soldador'],
+} as const;
+
+export const OPERATION_TITLES: Record<OperationType, string> = {
+  ARM: '¿Quién va a armar?',
+  SOLD: '¿Quién va a soldar?',
+  METROLOGIA: '¿Quién va a medir?',
+  REPARACION: '¿Quién va a reparar?',
+} as const;
