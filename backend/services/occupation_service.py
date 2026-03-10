@@ -30,6 +30,7 @@ from backend.services.conflict_service import ConflictService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.services.union_service import UnionService
+from backend.services.worker_service import WorkerService
 from backend.models.occupation import (
     TomarRequest,
     PausarRequest,
@@ -75,7 +76,8 @@ class OccupationService:
         conflict_service: ConflictService,
         union_repository=None,  # Optional dependency for v4.0 operations
         validation_service=None,  # Optional dependency for v4.0 validations
-        union_service: Optional[UnionService] = None  # Optional dependency for v4.0 batch + granular logging
+        union_service: Optional[UnionService] = None,  # Optional dependency for v4.0 batch + granular logging
+        worker_service: Optional[WorkerService] = None  # Optional: for worker_nombre derivation from worker_id
     ):
         """
         Initialize occupation service with injected dependencies.
@@ -87,6 +89,7 @@ class OccupationService:
             union_repository: Repository for union-level operations (v4.0)
             validation_service: Service for business rule validation (v4.0)
             union_service: Service for batch union updates with metadata logging (v4.0)
+            worker_service: Service for worker lookup — used to derive worker_nombre from worker_id (v5.0)
         """
         self.sheets_repository = sheets_repository
         self.metadata_repository = metadata_repository
@@ -94,6 +97,7 @@ class OccupationService:
         self.union_repository = union_repository
         self.validation_service = validation_service
         self.union_service = union_service
+        self.worker_service = worker_service
         logger.info("OccupationService initialized (single-user mode)")
 
     async def tomar(self, request: TomarRequest) -> OccupationResponse:
@@ -588,6 +592,18 @@ class OccupationService:
         worker_nombre = request.worker_nombre
         operacion = request.operacion.value
 
+        # Derive worker_nombre from worker_id if not provided (v5.0 optional field)
+        if not worker_nombre:
+            if not self.worker_service:
+                raise SpoolNoEncontradoError(
+                    f"WorkerService not available for worker derivation (worker_id={worker_id})"
+                )
+            worker = self.worker_service.find_worker_by_id(worker_id)
+            if not worker:
+                raise SpoolNoEncontradoError(f"Worker {worker_id} not found")
+            worker_nombre = worker.nombre_completo
+            logger.info(f"Derived worker_nombre='{worker_nombre}' from worker_id={worker_id}")
+
         logger.info(
             f"[P5 INICIAR] Started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
             f"for {operacion}"
@@ -938,6 +954,18 @@ class OccupationService:
         operacion = request.operacion.value
         selected_unions = list(request.selected_unions)  # mutable copy
         action_override = getattr(request, 'action_override', None)
+
+        # Derive worker_nombre from worker_id if not provided (v5.0 optional field)
+        if not worker_nombre:
+            if not self.worker_service:
+                raise SpoolNoEncontradoError(
+                    f"WorkerService not available for worker derivation (worker_id={worker_id})"
+                )
+            worker = self.worker_service.find_worker_by_id(worker_id)
+            if not worker:
+                raise SpoolNoEncontradoError(f"Worker {worker_id} not found")
+            worker_nombre = worker.nombre_completo
+            logger.info(f"Derived worker_nombre='{worker_nombre}' from worker_id={worker_id}")
 
         logger.info(
             f"[P5 FINALIZAR] Started: {tag_spool} by worker {worker_id} ({worker_nombre}) "

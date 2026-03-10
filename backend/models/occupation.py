@@ -377,10 +377,12 @@ class IniciarRequest(BaseModel):
         gt=0,
         examples=[93, 94, 95]
     )
-    worker_nombre: str = Field(
-        ...,
-        description="Nombre completo del trabajador (formato: INICIALES(ID))",
-        min_length=1,
+    worker_nombre: Optional[str] = Field(
+        None,
+        description=(
+            "Nombre completo del trabajador (formato: INICIALES(ID)). "
+            "Deprecated: backend derives from worker_id if not provided."
+        ),
         examples=["MR(93)", "JP(94)"]
     )
     operacion: ActionType = Field(
@@ -391,6 +393,11 @@ class IniciarRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "worker_id": 93,
+                    "operacion": "ARM"
+                },
                 {
                     "tag_spool": "MK-1335-CW-25238-011",
                     "worker_id": 93,
@@ -425,10 +432,12 @@ class FinalizarRequest(BaseModel):
         gt=0,
         examples=[93, 94, 95]
     )
-    worker_nombre: str = Field(
-        ...,
-        description="Nombre completo del trabajador",
-        min_length=1,
+    worker_nombre: Optional[str] = Field(
+        None,
+        description=(
+            "Nombre completo del trabajador. "
+            "Deprecated: backend derives from worker_id if not provided."
+        ),
         examples=["MR(93)", "JP(94)"]
     )
     operacion: ActionType = Field(

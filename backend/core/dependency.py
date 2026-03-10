@@ -364,14 +364,15 @@ def get_occupation_service_v4(
     metadata_repository: MetadataRepository = Depends(get_metadata_repository),
     conflict_service: ConflictService = Depends(get_conflict_service),
     union_repo: UnionRepository = Depends(get_union_repository),
-    validation_service: ValidationService = Depends(get_validation_service)
+    validation_service: ValidationService = Depends(get_validation_service),
+    worker_service: WorkerService = Depends(get_worker_service)
 ) -> OccupationService:
     """
     Factory for OccupationService with v4.0 union support (INICIAR/FINALIZAR workflows).
 
     Used by POST /api/v4/occupation/iniciar and POST /api/v4/occupation/finalizar.
     Builds UnionService and OccupationService with union_repository, validation_service,
-    and union_service for v4.0 operations.
+    union_service for v4.0 operations, and worker_service for worker_nombre derivation.
 
     Single-user mode: No distributed locks or SSE event publishing.
     """
@@ -387,6 +388,7 @@ def get_occupation_service_v4(
         union_repository=union_repo,
         validation_service=validation_service,
         union_service=union_service,
+        worker_service=worker_service,
     )
 
 
