@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-03-10T22:41:21.425Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-10T23:16:59.058Z"
 last_activity: "2026-03-10 - Completed 01-03: useModalStack and useNotificationToast hooks"
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 25
-  completed_plans: 24
+  total_plans: 20
+  completed_plans: 19
   percent: 94
 ---
 
@@ -27,12 +27,12 @@ See: .planning/v5.0-single-page/ROADMAP.md
 
 ## Current Position
 
-Phase: 1 (Frontend — Fundaciones)
-Plan: 03 COMPLETE
-Status: Phase 1 in progress — plans 01, 02, 03 done
-Last activity: 2026-03-10 - Completed 01-03: useModalStack and useNotificationToast hooks
+Phase: 2 (Frontend — Componentes Core)
+Plan: 02 COMPLETE
+Status: Phase 2 in progress — plans 01, 02 done
+Last activity: 2026-03-10 - Completed 02-02: disabledSpools, showSelectionControls, Modal isTopOfStack
 
-Progress: [█████████░] 94%
+Progress: [██████████] 97%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -79,6 +79,11 @@ Progress: [█████████░] 94%
 - AUTO_DISMISS_MS=4000ms satisfies UX-02 (3-5s); useRef(0) counter prevents toast ID collisions on rapid enqueue
 - isOpen wrapped in useCallback([stack]) so consumers get stable reference that still reflects current stack
 
+### Plan 02-02 Decisions (2026-03-10)
+- isInert = isBloqueado || isDisabled (OR-logic); both independently block row interaction in SpoolTable
+- isTopOfStack uses strict false check (=== false) so omitted/undefined prop defaults to top-of-stack ESC behavior
+- Grey Lock icon (text-white/30) used for disabled-from-stack rows; red Lock reserved for bloqueado (reparacion)
+
 ## Previous Milestones
 
 - v4.0: Shipped 2026-02-02 (7 phases, 42 plans)
@@ -86,6 +91,6 @@ Progress: [█████████░] 94%
 
 ## Session Continuity
 
-Last session: 2026-03-10T22:37:24.589Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-03-10T23:16:59.056Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
