@@ -10,9 +10,10 @@ interface ModalProps {
   children: React.ReactNode;
   className?: string;
   ariaLabel?: string;
+  isTopOfStack?: boolean;
 }
 
-export function Modal({ isOpen, onClose, onBackdropClick, children, className = '', ariaLabel }: ModalProps) {
+export function Modal({ isOpen, onClose, onBackdropClick, children, className = '', ariaLabel, isTopOfStack = true }: ModalProps) {
   const [mounted, setMounted] = React.useState(false);
 
   // Handle SSR - only render portal after mount
@@ -37,6 +38,7 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
   // ESC key handler
   useEffect(() => {
     if (!isOpen || !onClose) return;
+    if (isTopOfStack === false) return; // not top of stack — ignore ESC
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -46,7 +48,7 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isTopOfStack]);
 
   // Don't render anything if not open or not mounted (SSR)
   if (!isOpen || !mounted) return null;
