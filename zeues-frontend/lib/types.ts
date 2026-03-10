@@ -1,5 +1,48 @@
 // TypeScript Types - Completar en DÍA 4
 
+// ==========================================
+// v5.0 SPOOL CARD TYPES
+// ==========================================
+
+/**
+ * Union type of all possible spool work states.
+ * Mirrors backend EstadoTrabajo enum exactly.
+ */
+export type EstadoTrabajo =
+  | 'LIBRE'
+  | 'EN_PROGRESO'
+  | 'PAUSADO'
+  | 'COMPLETADO'
+  | 'RECHAZADO'
+  | 'BLOQUEADO'
+  | 'PENDIENTE_METROLOGIA';
+
+/**
+ * Union type of all possible active operations.
+ * Mirrors backend OperacionActual field exactly.
+ */
+export type OperacionActual = 'ARM' | 'SOLD' | 'REPARACION' | null;
+
+/**
+ * Spool status data for v5.0 single-page card view.
+ * Mirrors backend SpoolStatus Pydantic model exactly (snake_case field names).
+ * Used by SpoolCard component and batch polling refresh.
+ */
+export interface SpoolCardData {
+  tag_spool: string;
+  ocupado_por: string | null;
+  fecha_ocupacion: string | null;
+  estado_detalle: string | null;
+  total_uniones: number | null;
+  uniones_arm_completadas: number | null;
+  uniones_sold_completadas: number | null;
+  pulgadas_arm: number | null;
+  pulgadas_sold: number | null;
+  operacion_actual: OperacionActual;
+  estado_trabajo: EstadoTrabajo | null;
+  ciclo_rep: number | null;
+}
+
 export interface Worker {
   id: number;
   nombre: string;
@@ -104,7 +147,7 @@ export interface MetricasResponse {
 export interface IniciarRequest {
   tag_spool: string;
   worker_id: number;
-  worker_nombre: string;
+  worker_nombre?: string;  // Optional — backend derives via WorkerService when not provided (Plan 00-03)
   operacion: 'ARM' | 'SOLD';
 }
 
@@ -127,7 +170,8 @@ export interface FinalizarRequest {
   tag_spool: string;
   worker_id: number;
   operacion: 'ARM' | 'SOLD';
-  selected_unions: string[]; // Union IDs (format: "OT-123+5")
+  selected_unions?: string[];  // Optional — not needed when action_override is set (Plan 00-03)
+  action_override?: 'PAUSAR' | 'COMPLETAR';  // Bypass union selection (Plan 00-03)
 }
 
 /**
