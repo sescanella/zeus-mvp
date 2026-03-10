@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: Starting Phase 0 — backend prerequisites
-stopped_at: Completed 00-03-PLAN.md
-last_updated: "2026-03-10T21:22:52.554Z"
+stopped_at: Completed 00-02-PLAN.md
+last_updated: "2026-03-10T21:28:05.527Z"
 last_activity: 2026-03-10 - Created v5.0 milestone with REQUIREMENTS.md + ROADMAP.md
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 32
-  completed_plans: 29
+  completed_plans: 30
   percent: 94
 ---
 
@@ -32,13 +32,13 @@ Plan: Pending
 Status: Starting Phase 0 — backend prerequisites
 Last activity: 2026-03-10 - Created v5.0 milestone with REQUIREMENTS.md + ROADMAP.md
 
-Progress: [█████████░] 94%
+Progress: [██████████] 96%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
 **Phases:**
-- Phase 0: Backend — Nuevos Endpoints (prerequisito) ← CURRENT
-- Phase 1: Frontend — Fundaciones
+- Phase 0: Backend — Nuevos Endpoints (prerequisito) ← COMPLETE
+- Phase 1: Frontend — Fundaciones ← CURRENT
 - Phase 2: Frontend — Componentes Core
 - Phase 3: Frontend — Modales
 - Phase 4: Frontend — Integración
@@ -54,6 +54,10 @@ Progress: [█████████░] 94%
 - CANCELAR dual: frontend-only vs backend según ocupado_por
 - No optimistic updates — esperar respuesta API
 
+### Plan 00-02 Decisions (2026-03-10)
+- Batch endpoint was fully scaffolded by Plan 01 — Plan 02 delivered 16 unit tests verifying all specified behaviors (GREEN directly, TDD adapted)
+- _make_repo_for_spools(*spools) helper pattern established for multi-tag mock repos in TestClient overrides
+
 ### Plan 00-03 Decisions (2026-03-10)
 - action_override=PAUSAR takes early return path in finalizar_spool(), bypassing union writes and metrologia check
 - worker_nombre Optional in IniciarRequest/FinalizarRequest — derived via WorkerService.find_worker_by_id() when None
@@ -67,6 +71,6 @@ Progress: [█████████░] 94%
 
 ## Session Continuity
 
-Last session: 2026-03-10T21:22:52.551Z
-Stopped at: Completed 00-03-PLAN.md
+Last session: 2026-03-10T21:28:05.523Z
+Stopped at: Completed 00-02-PLAN.md
 Resume file: None
