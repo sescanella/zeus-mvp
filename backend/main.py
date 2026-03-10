@@ -52,6 +52,8 @@ from backend.routers import diagnostic
 from backend.routers import occupation_v4
 # v4.0 Phase 11: Router UNION implementado (union query endpoints)
 from backend.routers import union_router
+# v5.0 Phase 0: Router SPOOL_STATUS implementado (GET status + batch-status)
+from backend.routers import spool_status_router
 
 # ============================================================================
 # INICIALIZACIÓN FASTAPI
@@ -390,6 +392,9 @@ app.include_router(diagnostic.router, prefix="/api", tags=["Diagnostic"])
 
 # v4.0 Phase 11: Router UNION registrado (union query endpoints)
 app.include_router(union_router.router, prefix="/api/v4", tags=["v4-unions"])
+
+# v5.0 Phase 0: Router SPOOL_STATUS registrado (individual + batch status)
+app.include_router(spool_status_router.router, prefix="/api", tags=["spool-status"])
 
 
 # ============================================================================
