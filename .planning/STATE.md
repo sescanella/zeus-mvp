@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: Starting Phase 0 — backend prerequisites
-stopped_at: Created milestone, about to start Phase 0
-last_updated: "2026-03-10T21:21:04.037Z"
+stopped_at: Completed 00-03-PLAN.md
+last_updated: "2026-03-10T21:22:52.554Z"
 last_activity: 2026-03-10 - Created v5.0 milestone with REQUIREMENTS.md + ROADMAP.md
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 32
-  completed_plans: 28
+  completed_plans: 29
   percent: 94
 ---
 
@@ -54,6 +54,12 @@ Progress: [█████████░] 94%
 - CANCELAR dual: frontend-only vs backend según ocupado_por
 - No optimistic updates — esperar respuesta API
 
+### Plan 00-03 Decisions (2026-03-10)
+- action_override=PAUSAR takes early return path in finalizar_spool(), bypassing union writes and metrologia check
+- worker_nombre Optional in IniciarRequest/FinalizarRequest — derived via WorkerService.find_worker_by_id() when None
+- WorkerService injected into OccupationService as Optional dependency via get_occupation_service_v4()
+- Zero-union cancellation guard updated: `if len(selected_unions) == 0 and not action_override` to prevent COMPLETAR override from being treated as CANCELADO
+
 ## Previous Milestones
 
 - v4.0: Shipped 2026-02-02 (7 phases, 42 plans)
@@ -61,6 +67,6 @@ Progress: [█████████░] 94%
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Created milestone, about to start Phase 0
+Last session: 2026-03-10T21:22:52.551Z
+Stopped at: Completed 00-03-PLAN.md
 Resume file: None
