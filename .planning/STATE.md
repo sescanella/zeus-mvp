@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-10T23:16:59.058Z"
-last_activity: "2026-03-10 - Completed 01-03: useModalStack and useNotificationToast hooks"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-10T23:21:19.947Z"
+last_activity: "2026-03-10 - Completed 02-02: disabledSpools, showSelectionControls, Modal isTopOfStack"
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 20
-  completed_plans: 19
-  percent: 94
+  completed_plans: 20
+  percent: 97
 ---
 
 # Project State
@@ -79,6 +79,12 @@ Progress: [██████████] 97%
 - AUTO_DISMISS_MS=4000ms satisfies UX-02 (3-5s); useRef(0) counter prevents toast ID collisions on rapid enqueue
 - isOpen wrapped in useCallback([stack]) so consumers get stable reference that still reflects current stack
 
+### Plan 02-01 Decisions (2026-03-10)
+- WCAG nested-interactive: SpoolCard uses outer plain div + inner role=button; remove button at outer level (absolute positioned) to avoid axe nested-interactive violation
+- parseFechaOcupacion uses Date.UTC treating DD-MM-YYYY HH:MM:SS fields as UTC epoch values — makes timer tests deterministic with jest.setSystemTime
+- Axe tests use jest.useRealTimers() locally — jest-axe async internals conflict with fake timers; 10s timeout for axe tests
+- PAUSADO guard: isPausado computed from estado_trabajo in SpoolCard blocks timer render and interval regardless of ocupado_por
+
 ### Plan 02-02 Decisions (2026-03-10)
 - isInert = isBloqueado || isDisabled (OR-logic); both independently block row interaction in SpoolTable
 - isTopOfStack uses strict false check (=== false) so omitted/undefined prop defaults to top-of-stack ESC behavior
@@ -91,6 +97,6 @@ Progress: [██████████] 97%
 
 ## Session Continuity
 
-Last session: 2026-03-10T23:16:59.056Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-03-10T23:21:19.944Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
