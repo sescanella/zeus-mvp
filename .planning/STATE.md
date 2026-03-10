@@ -69,6 +69,11 @@ Progress: [█████████░] 94%
 - getSpoolStatus and batchGetStatus use handleResponse without extra try/catch (simpler pattern)
 - STORAGE_KEY exported as named const so tests can assert exact key value
 
+### Plan 01-02 Decisions (2026-03-10)
+- Local type aliases for EstadoTrabajo/OperacionActual/SpoolCardData used — Wave 1 parallelism; TODO to import from types.ts after Plan 01-01 consolidates types
+- isArmFullyCompleted() returns false (ARM partial) when total_uniones is 0 or null — fail-safe prevents premature SOLD unlock
+- getValidActions keyed only on ocupado_por, not estado_trabajo — occupation state is single source of truth for action availability
+
 ### Plan 01-03 Decisions (2026-03-10)
 - ModalId union literal: 'add-spool' | 'operation' | 'action' | 'worker' | 'metrologia' — matches v5.0 flow
 - AUTO_DISMISS_MS=4000ms satisfies UX-02 (3-5s); useRef(0) counter prevents toast ID collisions on rapid enqueue
