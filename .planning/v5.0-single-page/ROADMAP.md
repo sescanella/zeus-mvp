@@ -36,18 +36,18 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 01-01-PLAN.md — SpoolCardData types + API functions + localStorage persistence
-- [ ] 01-02-PLAN.md — parseEstadoDetalle (TS) + spool-state-machine (TDD)
-- [ ] 01-03-PLAN.md — useModalStack + useNotificationToast hooks (TDD)
+- [x] 01-01-PLAN.md — SpoolCardData types + API functions + localStorage persistence
+- [x] 01-02-PLAN.md — parseEstadoDetalle (TS) + spool-state-machine (TDD)
+- [x] 01-03-PLAN.md — useModalStack + useNotificationToast hooks (TDD)
 
 ### Tasks
-- [ ] 1.1 — Crear SpoolCardData interface en lib/types.ts
-- [ ] 1.2 — Crear lib/local-storage.ts (persistencia localStorage)
-- [ ] 1.3 — Crear lib/spool-state-machine.ts (getValidOperations, getValidActions)
-- [ ] 1.4 — Crear lib/parse-estado-detalle.ts (parseEstadoDetalle → objeto estructurado)
-- [ ] 1.5 — Crear hooks/useModalStack.ts (pila de modales)
-- [ ] 1.6 — Crear hooks/useNotificationToast.ts (cola de notificaciones)
-- [ ] 1.7 — Agregar funciones API nuevas a lib/api.ts (getSpoolStatus, batchGetStatus)
+- [x] 1.1 — Crear SpoolCardData interface en lib/types.ts
+- [x] 1.2 — Crear lib/local-storage.ts (persistencia localStorage)
+- [x] 1.3 — Crear lib/spool-state-machine.ts (getValidOperations, getValidActions)
+- [x] 1.4 — Crear lib/parse-estado-detalle.ts (parseEstadoDetalle → objeto estructurado)
+- [x] 1.5 — Crear hooks/useModalStack.ts (pila de modales)
+- [x] 1.6 — Crear hooks/useNotificationToast.ts (cola de notificaciones)
+- [x] 1.7 — Agregar funciones API nuevas a lib/api.ts (getSpoolStatus, batchGetStatus)
 
 ### Success Criteria
 - localStorage persiste y recupera tags correctamente
@@ -60,7 +60,13 @@ Plans:
 
 ## Phase 2: Frontend — Componentes Core
 
-**Goal:** Crear los componentes visuales reutilizables.
+**Goal:** Crear los componentes visuales reutilizables (3 nuevos + 3 modificados).
+**Requirements:** [CARD-02, CARD-06, STATE-05, STATE-06, MODAL-07, UX-01, UX-02, UX-04]
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — NotificationToast + SpoolCard + SpoolCardList (new components)
+- [ ] 02-02-PLAN.md — SpoolTable + SpoolFilterPanel + Modal modifications (backward-compatible props)
 
 ### Tasks
 - [ ] 2.1 — Crear NotificationToast.tsx (toast con auto-dismiss, role="alert")
