@@ -1,888 +1,712 @@
-# Phase 1 Research: Migration Foundation
+# Phase 1: Frontend — Fundaciones - Research
 
-**Phase:** 01-migration-foundation
-**Research Date:** 2026-01-26
-**Researcher:** Claude (Sonnet 4.5)
-
----
-
-## Executive Summary
-
-Phase 1 migrates ZEUES from v2.1's progress tracking model to v3.0's occupation tracking model using a **branch-based migration strategy**. Instead of dual-write complexity, v3.0 will be built in a separate Git branch while v2.1 remains untouched in production. When v3.0 is ready, a one-time cutover with data migration script will transition production. This approach avoids synchronization complexity while maintaining full rollback capability.
-
-**Key Finding:** Current v2.1 architecture (244 passing tests, Clean Architecture with Google Sheets as source of truth) provides a solid foundation for schema expansion. The direct-read pattern and append-only Metadata sheet align perfectly with v3.0's occupation tracking needs.
+**Researched:** 2026-03-10
+**Domain:** TypeScript utility libraries, React hooks, localStorage, state machine patterns, API client integration (Next.js 14 + React 18)
+**Confidence:** HIGH
 
 ---
 
-## 1. Current v2.1 Architecture Analysis
+<phase_requirements>
+## Phase Requirements
 
-### 1.1 Data Model (Google Sheets)
-
-**Production Sheet:** `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ`
-
-**Current Sheets:**
-
-| Sheet | Mode | Columns | Purpose | v2.1 Usage |
-|-------|------|---------|---------|------------|
-| **Operaciones** | READ-ONLY | 65+ | Spool base data, progress tracking | Direct read for state (armador, soldador, fecha_armado, fecha_soldadura) |
-| **Trabajadores** | READ-ONLY | 4 (A-D) | Worker master data | Id, Nombre, Apellido, Activo |
-| **Roles** | READ-ONLY | 3 (A-C) | Multi-role assignments | Id, Rol, Activo (one worker = multiple rows) |
-| **Metadata** | APPEND-ONLY | 10 (A-J) | Event sourcing audit trail | UUID, timestamp, evento_tipo, tag_spool, worker_id, worker_nombre, operacion, accion, fecha_operacion, metadata_json |
-
-**Critical Operaciones Columns (v2.1):**
-- `TAG_SPOOL` (col G, idx 6): Unique identifier
-- `Fecha_Materiales` (col AG, idx 32): ARM prerequisite
-- `Fecha_Armado` (col AH, idx 33): ARM completion date
-- `Armador` (col AI, idx 34): Worker who started ARM (format: "INICIALES(ID)")
-- `Fecha_Soldadura` (col AJ, idx 35): SOLD completion date
-- `Soldador` (col AK, idx 36): Worker who started SOLD (format: "INICIALES(ID)")
-- `Fecha_QC_Metrologia` (col 38): Metrología completion date
-
-**v2.1 State Determination (Direct Read):**
-```python
-# ARM PENDIENTE: armador = None AND fecha_armado = None
-# ARM EN_PROGRESO: armador != None AND fecha_armado = None
-# ARM COMPLETADO: fecha_armado != None
-
-# Same pattern for SOLD (soldador, fecha_soldadura)
-```
-
-**Column Mapping Pattern (CRITICAL for v3.0):**
-- NEVER hardcode column indices (columns shift frequently in production)
-- ALWAYS use `ColumnMapCache` for dynamic mapping by header name
-- Pre-warmed on application startup via `backend/core/column_map_cache.py`
-
-### 1.2 Backend Architecture
-
-**Stack:**
-- Python 3.11+ FastAPI
-- gspread 5.10+ (Google Sheets API)
-- Pydantic 2.0+ models
-- pytest (233 collected tests)
-
-**Layered Architecture (Clean Architecture):**
-```
-Routers (thin HTTP layer)
-    ↓
-Services (business logic orchestration)
-    ├── ActionService: INICIAR/COMPLETAR/CANCELAR workflows
-    ├── ValidationService: Business rule validation (state checks, ownership)
-    ├── SpoolService: Spool queries
-    ├── WorkerService: Worker queries
-    └── RoleService: Role-based access control
-    ↓
-Repositories (data access)
-    ├── SheetsRepository: READ/WRITE Operaciones sheet
-    ├── MetadataRepository: APPEND-ONLY Metadata events
-    └── RoleRepository: READ Roles sheet
-    ↓
-Google Sheets API (gspread client)
-```
-
-**Key Abstractions:**
-
-1. **SheetsRepository** (`backend/repositories/sheets_repository.py`, 584 lines)
-   - Methods: `read_worksheet()`, `batch_update_by_column_name()`, `update_cell_by_column_name()`
-   - Uses `ColumnMapCache` for dynamic column mapping
-   - Retry decorator with exponential backoff (3 attempts, 1s → 2s → 4s)
-   - Cache integration (TTL: 300s for Trabajadores, 60s for Operaciones)
-
-2. **MetadataRepository** (`backend/repositories/metadata_repository.py`, 328 lines)
-   - Methods: `append_event()`, `get_events_by_spool()`, `get_all_events()`, `get_worker_in_progress()`
-   - Event Sourcing pattern: Immutable events, append-only writes
-   - Ownership validation: Reads Metadata to determine who initiated operation
-
-3. **ValidationService** (`backend/services/validation_service.py`)
-   - Pure business rule validation (stateless)
-   - Methods: `validar_puede_iniciar_arm()`, `validar_puede_completar_arm()`, `validar_puede_cancelar()`
-   - **CRITICAL:** Ownership check - only initiator can complete/cancel
-   - Raises custom exceptions: `OperacionYaIniciadaError`, `NoAutorizadoError`, `DependenciasNoSatisfechasError`
-
-4. **ActionService** (`backend/services/action_service.py`)
-   - Orchestrates workflows: Fetch worker → Fetch spool → Validate → Update Sheets → Log event
-   - Batch operations: Up to 50 spools with partial success handling
-   - Methods: `iniciar_accion()`, `completar_accion()`, `cancelar_accion()` + batch variants
-
-**Exception Hierarchy:**
-- Base: `ZEUSException` (`backend/exceptions.py`)
-- 10+ subclasses mapped to HTTP status codes:
-  - `SpoolNoEncontradoError` → 404
-  - `NoAutorizadoError` → 403 (ownership violation)
-  - `RolNoAutorizadoError` → 403 (missing role)
-  - `OperacionYaIniciadaError` → 400
-  - `SheetsConnectionError` → 503
-
-### 1.3 Test Suite
-
-**Current Coverage:** 233 tests collected (pytest)
-
-**Test Structure:**
-```
-tests/
-├── conftest.py              # Shared fixtures (mock_column_map, clear cache)
-├── unit/                    # 19 test files
-│   ├── test_validation_service.py
-│   ├── test_action_service.py
-│   ├── test_action_service_batch.py
-│   ├── test_role_service.py
-│   ├── test_worker_nombre_formato.py
-│   └── ...
-├── e2e/
-│   └── test_api_flows.py    # Integration tests (HTTP → Sheets)
-└── integration/
-```
-
-**Fixture Pattern (conftest.py):**
-```python
-@pytest.fixture
-def mock_column_map_operaciones():
-    """Normalized column names to indices."""
-    return {
-        "tagspool": 6,
-        "fechamateriales": 32,
-        "fechaarmado": 33,
-        "armador": 34,
-        "fechasoldadura": 35,
-        "soldador": 36,
-        "fechaqcmetrologia": 37,
-    }
-
-@pytest.fixture(autouse=True)
-def clear_column_map_cache():
-    """Clear ColumnMapCache before each test (isolation)."""
-    ColumnMapCache.clear()
-    yield
-```
-
-**Test Categories:**
-- **Unit Tests:** Isolated service logic with mocked dependencies
-- **Integration Tests:** Full HTTP request → Services → Sheets flow
-- **E2E Tests (Frontend):** Playwright browser automation (zeues-frontend/e2e/)
-
-**Critical Test Files for Migration:**
-- `tests/unit/test_validation_service.py` - State validation rules
-- `tests/unit/test_action_service_v2.py` - Worker ID migration validation
-- `tests/unit/test_worker_nombre_formato.py` - Name format "INICIALES(ID)"
+| ID | Description | Research Support |
+|----|-------------|-----------------|
+| CARD-01 | Botón "Añadir Spool" abre modal con SpoolTable + filtros | SpoolCardData interface feeds modal display; localStorage tags enable "already added" filtering |
+| CARD-02 | Cards muestran: TAG, operación actual, acción, worker, tiempo en estado | SpoolCardData must include operacion_actual, estado_trabajo, ocupado_por, fecha_ocupacion |
+| CARD-03 | Spools persisten en localStorage (solo tag_spool), estado se refresca 30s | local-storage.ts handles tags array; batchGetStatus API call drives refresh |
+| CARD-04 | MET APROBADA remueve spool del listado | estado_trabajo = "COMPLETADO" after APROBADO → remove from localStorage list |
+| CARD-05 | MET RECHAZADA mantiene spool para ir a Reparación | estado_trabajo = "RECHAZADO" → keep in list |
+| CARD-06 | Múltiples spools, operar individualmente | useModalStack provides per-spool modal context |
+| MODAL-01 | Click en card → OperationModal filtrado por estado | getValidOperations(spoolStatus) determines options |
+| MODAL-02 | ARM/SOLD/REP → ActionModal filtrado por estado | getValidActions(spoolStatus) determines options |
+| MODAL-03 | INICIAR/FINALIZAR/PAUSAR → WorkerModal filtrado por rol | API getWorkers + client-side role filter |
+| MODAL-04 | CANCELAR no requiere worker — vuelve directo | getValidActions distinguishes CANCELAR as no-worker path |
+| MODAL-05 | MET → MetrologiaModal (APROBADA/RECHAZADA) | Separate modal path for MET |
+| MODAL-06 | Al seleccionar worker → API call → vuelve a pantalla | useModalStack.clear() after API success |
+| MODAL-07 | NotificationToast feedback éxito/error | useNotificationToast enqueues messages |
+| MODAL-08 | Eliminamos selección de uniones — PAUSAR reemplaza | PAUSAR uses action_override, no union selection needed |
+| STATE-01 | Operaciones válidas dependen del estado del spool | getValidOperations() maps estado_trabajo → operation list |
+| STATE-02 | Acciones válidas dependen del estado de ocupación | getValidActions() maps ocupado_por → action list |
+| STATE-03 | CANCELAR en spool libre = quitar del listado (frontend-only) | Detected via ocupado_por == null |
+| STATE-04 | CANCELAR en spool activo = reset operación backend + quitar | API call to cancel endpoint, then remove from localStorage |
+| STATE-05 | Timer solo cuando spool está ocupado (Fecha_Ocupacion) | SpoolCardData.fecha_ocupacion non-null = timer active |
+| STATE-06 | Spools PAUSADOS muestran badge estático sin timer | estado_trabajo = "PAUSADO" + ocupado_por null = no timer |
+| UX-01 | Modal "Añadir Spool" muestra ya-añadidos como deshabilitados | localStorage tags set passed to SpoolTable as disabledSpools |
+| UX-02 | Notificaciones toast auto-dismiss (3-5 segundos) | useNotificationToast implements auto-dismiss timer |
+| UX-03 | No optimistic updates — loading spinner, esperar API | API functions return promises; no state pre-update |
+| UX-04 | Mantener paleta Blueprint Industrial + mobile-first | Existing Tailwind config/classes unchanged |
+</phase_requirements>
 
 ---
 
-## 2. v3.0 Schema Design
+## Summary
 
-### 2.1 New Columns for Operaciones Sheet
+Phase 1 creates the pure utility layer for ZEUES v5.0: TypeScript interfaces, localStorage persistence, a frontend state machine, the `parseEstadoDetalle` parser, two React hooks, and new API client functions. None of these artifacts render UI — they are the data and logic foundation that Phases 2, 3, and 4 build on top of.
 
-**Position:** End of sheet (after existing 65 columns) - safest, no disruption to existing column indices
+The backend already provides the computed fields (`operacion_actual`, `estado_trabajo`, `ciclo_rep`) through `GET /api/spool/{tag}/status` and `POST /api/spools/batch-status` (both completed in Phase 0). The frontend parser (`lib/parse-estado-detalle.ts`) must mirror the backend `parse_estado_detalle()` logic in TypeScript, so both layers agree on how to interpret Estado_Detalle strings. The authoritative list of Estado_Detalle formats lives in `backend/services/estado_detalle_parser.py`.
 
-**New Columns:**
+The two hooks (`useModalStack`, `useNotificationToast`) are pure React hooks with no external library dependencies — the project uses only React 18 + Next.js 14 + Tailwind, with no state management library. All hooks must follow the existing pattern established in `hooks/useDebounce.ts` (simple `useState`/`useCallback`/`useEffect` composition, no third-party hooks).
 
-| Column Name | Type | Purpose | Initial Value | Example |
-|-------------|------|---------|---------------|---------|
-| **Ocupado_Por** | str | Worker currently occupying spool (format: "INICIALES(ID)") | NULL/empty | "MR(93)" |
-| **Fecha_Ocupacion** | date | When spool was taken (TOMAR timestamp) | NULL/empty | "26-01-2026" |
-| **version** | int | Optimistic locking token (increments on TOMAR/PAUSAR/COMPLETAR) | 0 | 0, 1, 2, ... |
-
-**Behavior:**
-- **TOMAR:** Write worker to Ocupado_Por, write current date to Fecha_Ocupacion, increment version
-- **PAUSAR:** Clear Ocupado_Por and Fecha_Ocupacion, increment version
-- **COMPLETAR:** Clear Ocupado_Por and Fecha_Ocupacion (same as PAUSAR), write to Fecha_Armado/Soldadura, increment version
-- **PAUSAR vs COMPLETAR difference:**
-  - PAUSAR: Clears occupation but does NOT update v2.1 progress columns (Armador/Soldador remain frozen)
-  - COMPLETAR: Clears occupation AND writes completion date (Fecha_Armado/Soldadura)
-
-**Dual Schema Strategy (NEW DECISION - Branch-Based):**
-- v2.1 columns (Armador, Soldador, Fecha_Armado, Fecha_Soldadura) remain in sheet
-- v3.0 writes to BOTH old and new columns:
-  - TOMAR ARM → write to both Armador AND Ocupado_Por
-  - COMPLETAR ARM → write to both Fecha_Armado AND Fecha_Ocupacion (then clear Ocupado_Por)
-  - PAUSAR ARM → clear Ocupado_Por only (Armador keeps last person who started - frozen as historical record)
-- v2.1 columns become "last person who worked" (historical), v3.0 columns track "current occupation"
-
-### 2.2 New Event Types for Metadata
-
-**Existing EventoTipo Enum:**
-```python
-class EventoTipo(str, Enum):
-    INICIAR_ARM = "INICIAR_ARM"          # v2.1
-    COMPLETAR_ARM = "COMPLETAR_ARM"      # v2.1
-    CANCELAR_ARM = "CANCELAR_ARM"        # v2.1
-    INICIAR_SOLD = "INICIAR_SOLD"        # v2.1
-    COMPLETAR_SOLD = "COMPLETAR_SOLD"    # v2.1
-    CANCELAR_SOLD = "CANCELAR_SOLD"      # v2.1
-    # ... METROLOGIA variants ...
-```
-
-**New v3.0 Event Types:**
-```python
-    TOMAR_SPOOL = "TOMAR_SPOOL"          # NEW: Worker takes spool (occupation start)
-    PAUSAR_SPOOL = "PAUSAR_SPOOL"        # NEW: Worker releases spool (occupation end, no completion)
-```
-
-**Event Schema Remains Unchanged:**
-- Metadata sheet structure (10 columns A-J) stays the same
-- New event types use existing columns (evento_tipo, operacion, worker_id, etc.)
-- No schema migration needed for Metadata sheet
-
-### 2.3 State Machine Model (Hierarchical)
-
-**v2.1 State (Current):**
-```
-ARM: PENDIENTE (armador=NULL, fecha=NULL)
-     → EN_PROGRESO (armador!=NULL, fecha=NULL)
-     → COMPLETADO (fecha!=NULL)
-
-SOLD: Same pattern with soldador/fecha_soldadura
-```
-
-**v3.0 State (Occupation-Centric):**
-```
-Primary State (Occupation):
-- DISPONIBLE: Ocupado_Por = NULL (available to take)
-- OCUPADO: Ocupado_Por != NULL (someone working on it)
-
-Sub-State (Progress per Operation):
-- ARM: PENDIENTE → PARCIAL → COMPLETO
-- SOLD: PENDIENTE → PARCIAL → COMPLETO
-- METROLOGIA: PENDIENTE → COMPLETO (no PARCIAL - instant)
-
-Context (Worker):
-- worker_id (who has it now)
-- worker_nombre (for display)
-```
-
-**Hierarchical Approach (9 states, not 27):**
-- NOT: 3 operations × 3 occupation states × 3 progress states = 27 states (explosion)
-- YES: Primary state (4 states) + Sub-state per operation (3 states) + Context (worker_id)
-  - Primary: DISPONIBLE, OCUPADO, PAUSADO (same as DISPONIBLE but with partial work), COMPLETADO
-  - Sub-state: ARM_PENDIENTE, ARM_PARCIAL, ARM_COMPLETO (3 states)
-  - Sub-state: SOLD_PENDIENTE, SOLD_PARCIAL, SOLD_COMPLETO (3 states)
-  - Total manageable states: ~9 (4 primary + 6 sub-states shared across all spools)
-
-**State Transitions (v3.0):**
-```
-DISPONIBLE + ARM_PENDIENTE
-  → TOMAR → OCUPADO + ARM_PARCIAL (Ocupado_Por set, Armador set)
-  → PAUSAR → DISPONIBLE + ARM_PARCIAL (Ocupado_Por cleared, Armador frozen)
-  → TOMAR (by different worker) → OCUPADO + ARM_PARCIAL (Ocupado_Por updated, Armador frozen)
-  → COMPLETAR → DISPONIBLE + ARM_COMPLETO (Ocupado_Por cleared, Fecha_Armado set)
-```
+**Primary recommendation:** Mirror the backend parser exactly, keep hooks dependency-free, use `unknown` instead of `any` in all TypeScript, and scope localStorage under a single versioned key to avoid stale data from previous app versions.
 
 ---
 
-## 3. Migration Strategy (Branch-Based)
+## Standard Stack
 
-### 3.1 Strategy Overview
+### Core (already installed — no new packages needed)
 
-**Decision:** Branch-based migration over dual-write
+| Library | Version | Purpose | Why Standard |
+|---------|---------|---------|--------------|
+| React | ^18.3.0 | Hooks (`useState`, `useEffect`, `useCallback`, `useRef`) | Already in project |
+| TypeScript | ^5.4.0 | Type safety, `strict: true` enforced in tsconfig | Already in project |
+| Next.js | ^14.2.0 | App Router environment; `'use client'` required for hooks | Already in project |
 
-**Rationale:**
-- v2.1 production remains untouched during v3.0 development (zero risk)
-- No synchronization complexity (no dual-write logic needed)
-- Clean separation of concerns (v3.0 in separate branch)
-- One-time cutover with data migration script (predictable)
-- Full rollback capability (keep v2.1 branch for 1 week)
+### No New Dependencies
 
-**Phases:**
+Phase 1 adds zero npm packages. All required primitives are:
+- `localStorage` (browser API)
+- React hooks (`useState`, `useEffect`, `useCallback`, `useRef`)
+- `fetch` (already used in `lib/api.ts`)
+- Standard TypeScript
 
-1. **Development (Weeks 1-4):** Build v3.0 in `v3.0-dev` branch
-   - Add new columns to test Sheet copy
-   - Implement OccupationService, StateService
-   - Write new tests (target: 250+ total tests)
-   - v2.1 production continues running unaffected
-
-2. **Cutover (Day 1):**
-   - Automatic backup of production Sheet (copy with timestamp)
-   - Add 3 new columns to production Sheet (Ocupado_Por, Fecha_Ocupacion, version)
-   - Run migration script: Initialize all spools with version=0
-   - Deploy v3.0 backend to Railway
-   - Deploy v3.0 frontend to Vercel
-   - Smoke tests (15-30 minutes)
-
-3. **Rollback Window (Week 1):**
-   - Monitor for critical issues
-   - If critical failure: Revert to v2.1 deployment, restore Sheet backup
-   - After 1 week validation: Archive v2.1 branch, delete backup
-
-### 3.2 Automatic Backup Process
-
-**Implementation:** Phase 1 Plan 01-01
-
-**Backup Strategy:**
-```python
-# backend/scripts/backup_sheet.py
-def create_sheet_backup(spreadsheet_id: str) -> str:
-    """
-    Creates a copy of current production sheet before migration.
-
-    Returns:
-        str: New backup spreadsheet ID
-    """
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    backup_name = f"ZEUES_v2.1_backup_{timestamp}"
-
-    # Use gspread to copy entire spreadsheet
-    backup = sheets_client.copy(
-        file_id=spreadsheet_id,
-        title=backup_name,
-        folder_id=config.BACKUP_FOLDER_ID  # Google Drive folder
-    )
-
-    logger.info(f"✅ Backup created: {backup_name} (ID: {backup.id})")
-    return backup.id
-```
-
-**Naming Convention:** `ZEUES_v2.1_backup_YYYYMMDD_HHMMSS`
-
-**Storage:** Google Drive folder (separate from production)
-
-**Retention Policy:** 1 week after successful cutover (Claude's discretion for longer retention)
-
-### 3.3 Schema Expansion Script
-
-**Implementation:** Phase 1 Plan 01-01
-
-**Script:** `backend/scripts/add_v3_columns.py`
-
-```python
-def add_v3_columns_to_production():
-    """
-    Adds 3 new columns to Operaciones sheet for v3.0.
-
-    Columns added at end (after col 65):
-    - Ocupado_Por (str, NULL)
-    - Fecha_Ocupacion (date, NULL)
-    - version (int, 0)
-    """
-    worksheet = sheets_repo.get_worksheet("Operaciones")
-
-    # Get current column count
-    current_cols = len(worksheet.row_values(1))  # Header row
-
-    # Add headers to row 1
-    new_headers = ["Ocupado_Por", "Fecha_Ocupacion", "version"]
-    worksheet.update(
-        f"{index_to_letter(current_cols)}{1}:{index_to_letter(current_cols + 2)}{1}",
-        [new_headers]
-    )
-
-    # Initialize all rows with NULL/0
-    total_rows = len(worksheet.get_all_values())
-    updates = []
-    for row_num in range(2, total_rows + 1):  # Skip header
-        updates.append({
-            "row": row_num,
-            "column_name": "Ocupado_Por",
-            "value": ""  # NULL
-        })
-        updates.append({
-            "row": row_num,
-            "column_name": "Fecha_Ocupacion",
-            "value": ""  # NULL
-        })
-        updates.append({
-            "row": row_num,
-            "column_name": "version",
-            "value": 0
-        })
-
-    # Batch update (efficient - one API call)
-    worksheet.batch_update(updates)
-
-    logger.info(f"✅ Added 3 v3.0 columns to {total_rows} rows")
-```
-
-**Safety Checks:**
-- Verify backup exists before proceeding
-- Validate sheet structure (column count, header names)
-- Dry-run mode for testing (log changes without writing)
-
-### 3.4 Test Strategy
-
-**v2.1 Tests (233 tests):**
-- **Archive location:** `tests/v2.1-archive/` (move all 233 tests)
-- **Rationale:** No need to run v2.1 tests against v3.0 - architectural change too large
-- **Trust assumption:** Adding 3 columns at end of sheet won't break v2.1 behavior (column mapping is dynamic)
-
-**v3.0 Smoke Tests (Phase 1):**
-- **Purpose:** Validate schema expansion worked correctly
-- **Count:** 5 foundational tests (minimal for Phase 1)
-
-Test coverage:
-```python
-# tests/unit/test_v3_schema.py
-def test_read_new_columns():
-    """Verify Ocupado_Por, Fecha_Ocupacion, version can be read."""
-
-def test_write_new_columns():
-    """Verify values can be written to new columns."""
-
-def test_version_increments():
-    """Verify version column increments correctly."""
-
-def test_v2_columns_readable():
-    """Verify v2.1 columns (Armador, Soldador) still readable."""
-
-def test_backup_creation():
-    """Verify backup script creates valid Sheet copy."""
-```
-
-**Full Test Suite (Phase 2+):**
-- Target: 250+ tests (233 v2.1 archived + 20+ new v3.0 tests)
-- Categories: OccupationService, StateService, ConflictService, race conditions
+**Installation:** None required.
 
 ---
 
-## 4. Technical Considerations
+## Architecture Patterns
 
-### 4.1 Column Mapping (CRITICAL)
+### Recommended File Structure for Phase 1
 
-**Current System (v2.1):**
-- `ColumnMapCache` (`backend/core/column_map_cache.py`) maps header names to indices
-- Pre-warmed on application startup
-- Normalized names (lowercase, no spaces/underscores): "Fecha_Materiales" → "fechamateriales"
-
-**v3.0 Impact:**
-```python
-# ColumnMapCache will automatically include new columns
-# No code changes needed IF we add columns at end
-
-# Example usage (existing pattern):
-from backend.core.column_map_cache import ColumnMapCache
-
-column_map = ColumnMapCache.get_or_build("Operaciones", sheets_repo)
-ocupado_por_idx = column_map["ocupadopor"]  # Auto-mapped
-fecha_ocupacion_idx = column_map["fechaocupacion"]
-version_idx = column_map["version"]
+```
+zeues-frontend/
+├── lib/
+│   ├── types.ts               # EXTEND: add SpoolCardData interface
+│   ├── api.ts                 # EXTEND: add getSpoolStatus, batchGetStatus
+│   ├── local-storage.ts       # NEW: saveTags, loadTags, removeTag
+│   ├── spool-state-machine.ts # NEW: getValidOperations, getValidActions
+│   ├── parse-estado-detalle.ts # NEW: parseEstadoDetalle (TS mirror of backend)
+│   └── (existing files unchanged)
+└── hooks/
+    ├── useDebounce.ts         # EXISTING (reference pattern)
+    ├── useModalStack.ts       # NEW: push/pop/clear stack management
+    └── useNotificationToast.ts # NEW: enqueue/dismiss notification queue
 ```
 
-**Migration Requirement:**
-- After adding columns, clear ColumnMapCache and rebuild
-- OR: Restart backend application (cache rebuilds on startup)
+### Pattern 1: SpoolCardData Interface (Task 1.1)
 
-### 4.2 SheetsRepository Enhancements
+**What:** Extend `lib/types.ts` with a new interface that represents the data shape needed to render a spool card. This is the contract between the API response and UI components.
 
-**Current Methods (Relevant):**
-```python
-class SheetsRepository:
-    def batch_update_by_column_name(
-        self,
-        sheet_name: str,
-        updates: list[dict]
-    ) -> None:
-        """
-        Updates multiple cells using column names.
+**When to use:** Used by every component that displays a spool card (Phase 2+).
 
-        Updates: [{"row": 10, "column_name": "Armador", "value": "MR(93)"}, ...]
-        """
+**Key insight:** `SpoolCardData` maps 1:1 to `SpoolStatus` from the backend — it IS the API response type for the batch-status endpoint. Do not duplicate fields; re-use or alias.
+
+```typescript
+// Source: backend/models/spool_status.py (SpoolStatus model)
+// SpoolCardData is the frontend representation of SpoolStatus
+
+export type EstadoTrabajo =
+  | 'LIBRE'
+  | 'EN_PROGRESO'
+  | 'PAUSADO'
+  | 'COMPLETADO'
+  | 'RECHAZADO'
+  | 'BLOQUEADO'
+  | 'PENDIENTE_METROLOGIA';
+
+export type OperacionActual = 'ARM' | 'SOLD' | 'REPARACION' | null;
+
+export interface SpoolCardData {
+  tag_spool: string;
+  ocupado_por: string | null;
+  fecha_ocupacion: string | null;   // "DD-MM-YYYY HH:MM:SS" format
+  estado_detalle: string | null;    // raw string, kept for debugging
+  total_uniones: number | null;
+  uniones_arm_completadas: number | null;
+  uniones_sold_completadas: number | null;
+  pulgadas_arm: number | null;
+  pulgadas_sold: number | null;
+  // Computed by backend (from parse_estado_detalle)
+  operacion_actual: OperacionActual;
+  estado_trabajo: EstadoTrabajo | null;
+  ciclo_rep: number | null;         // 1-3 for RECHAZADO/REPARACION, null otherwise
+}
 ```
 
-**No Changes Needed:**
-- Existing methods already support dynamic column mapping
-- New columns work automatically once added to Sheet
+### Pattern 2: localStorage Persistence (Task 1.2)
 
-**Performance Consideration:**
-- Batch updates use single `worksheet.batch_update()` call (efficient)
-- Current performance: ~200ms for 10 spools (v2.1)
-- v3.0 writes to 2 columns instead of 1 (Ocupado_Por + version) → still <500ms
+**What:** Thin wrapper over `localStorage` that stores the ordered list of spool tags. Only tags are persisted — state is always fetched from backend.
 
-### 4.3 Optimistic Locking (version column)
+**When to use:** Called from Phase 4's `SpoolListContext` to persist/restore the user's spool list.
 
-**Purpose:** Prevent race conditions when 2 workers TOMAR same spool simultaneously
+**Critical:** localStorage is only available client-side. All access must be wrapped in `typeof window !== 'undefined'` guards (Next.js SSR compatibility).
 
-**Pattern (to be implemented in Phase 2):**
-```python
-# ConflictService.validate_and_increment_version()
-def tomar_with_lock(tag_spool: str, worker_id: int) -> bool:
-    """
-    Atomically TOMAR spool with version check.
+```typescript
+// lib/local-storage.ts
 
-    Returns:
-        bool: True if successful, False if conflict (retry)
-    """
-    # Read current version
-    current_version = spool.version
+const STORAGE_KEY = 'zeues_v5_spool_tags';  // versioned key
 
-    # Write with version check (conditional update)
-    success = sheets_repo.update_if_version_matches(
-        tag_spool=tag_spool,
-        expected_version=current_version,
-        updates={
-            "Ocupado_Por": worker_nombre,
-            "Fecha_Ocupacion": today(),
-            "version": current_version + 1
-        }
-    )
+export function loadTags(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((t): t is string => typeof t === 'string');
+  } catch {
+    return [];
+  }
+}
 
-    if not success:
-        # Conflict - another worker took it
-        raise OptimisticLockError(
-            f"Spool {tag_spool} was modified (version mismatch)"
-        )
+export function saveTags(tags: string[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
+}
 
-    return True
+export function addTag(tag: string): string[] {
+  const current = loadTags();
+  if (current.includes(tag)) return current;
+  const updated = [...current, tag];
+  saveTags(updated);
+  return updated;
+}
+
+export function removeTag(tag: string): string[] {
+  const updated = loadTags().filter(t => t !== tag);
+  saveTags(updated);
+  return updated;
+}
+
+export function clearTags(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_KEY);
+}
 ```
 
-**Google Sheets Limitation:**
-- No native row-level locking
-- Implement via read-compare-write pattern
-- Low contention (30-50 workers on 2,000 spools = 0.5% collision rate)
-- Retry logic: 3 attempts with 100ms delay
+### Pattern 3: Spool State Machine (Task 1.3)
 
-### 4.4 Data Migration Script
+**What:** Pure functions that map spool state → valid operations/actions. No class, no framework — just data transformation.
 
-**NOT NEEDED for Phase 1:**
-- New columns initialized with NULL/0 (fresh start)
-- No inferred occupation from v2.1 data (clean slate)
+**State logic (from REQUIREMENTS.md STATE-01, STATE-02):**
 
-**Rationale:**
-- v3.0 occupation tracking is NEW functionality
-- v2.1 doesn't track occupation (only progress completion)
-- Safer to start with all spools DISPONIBLE than infer state
+```typescript
+// lib/spool-state-machine.ts
 
-**Future Consideration (Phase 3+):**
-- Could infer ARM_PARCIAL from (armador != NULL AND fecha_armado = NULL)
-- Could infer ARM_COMPLETO from (fecha_armado != NULL)
-- Decision deferred - not needed for Phase 1 success criteria
+import { SpoolCardData, EstadoTrabajo, OperacionActual } from './types';
 
----
+export type Operation = 'ARM' | 'SOLD' | 'MET' | 'REP';
+export type Action = 'INICIAR' | 'FINALIZAR' | 'PAUSAR' | 'CANCELAR';
 
-## 5. Risks and Mitigation
+// STATE-01: Valid operations by estado_trabajo
+export function getValidOperations(spool: SpoolCardData): Operation[] {
+  const estado = spool.estado_trabajo;
+  const operacion = spool.operacion_actual;
 
-### 5.1 Schema Change Risks
+  switch (estado) {
+    case 'LIBRE':
+      return ['ARM'];
+    case 'PAUSADO':
+      // ARM pausado → can continue ARM or start SOLD if ARM done
+      if (operacion === 'ARM') return ['ARM'];
+      if (operacion === null) return ['SOLD']; // ARM completado, SOLD pausado
+      return [];
+    case 'EN_PROGRESO':
+      // Occupied — same operation continues
+      if (operacion === 'ARM') return ['ARM'];
+      if (operacion === 'SOLD') return ['SOLD'];
+      if (operacion === 'REPARACION') return ['REP'];
+      return [];
+    case 'COMPLETADO':
+      // Both ARM+SOLD done → MET
+      return ['MET'];
+    case 'PENDIENTE_METROLOGIA':
+      return ['MET'];
+    case 'RECHAZADO':
+      return ['REP'];
+    case 'BLOQUEADO':
+      return [];
+    default:
+      return [];
+  }
+}
 
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| **Adding columns breaks v2.1 queries** | HIGH | LOW | Dynamic column mapping via ColumnMapCache prevents hardcoded indices |
-| **Column indices shift breaks legacy code** | HIGH | MEDIUM | Full test suite run before cutover; v2.1 tests archived not run |
-| **Backup restore fails** | HIGH | LOW | Test backup/restore process in staging before production |
-| **Version column not initialized** | MEDIUM | LOW | Migration script validates all rows have version=0 |
+// STATE-02: Valid actions by occupation state
+export function getValidActions(spool: SpoolCardData): Action[] {
+  const isOccupied = spool.ocupado_por !== null && spool.ocupado_por !== '';
 
-**Mitigation Strategy:**
-- **Pre-cutover:** Test schema expansion on Sheet copy (non-production)
-- **Cutover:** Automatic backup BEFORE any changes
-- **Post-cutover:** Smoke tests validate new columns readable/writable
-- **Rollback:** Keep v2.1 branch + backup Sheet for 1 week
-
-### 5.2 Test Coverage Gaps
-
-| Gap | Risk | Mitigation |
-|-----|------|------------|
-| **v2.1 tests not run against v3.0** | v2.1 functionality regression | Trust dynamic column mapping + manual smoke tests |
-| **Only 5 v3.0 smoke tests in Phase 1** | v3.0 schema issues not caught | Full test suite in Phase 2 (OccupationService, race conditions) |
-| **No integration tests for cutover script** | Migration script fails in production | Dry-run mode + staging environment testing |
-
-**Mitigation:**
-- Phase 1 scope: Schema expansion only (minimal risk)
-- Phase 2: Full test coverage before enabling TOMAR/PAUSAR
-- Phase 3: Load testing with 30 concurrent workers
-
-### 5.3 Performance Risks
-
-| Risk | Impact | Mitigation |
-|------|--------|-------------|
-| **Additional columns slow down reads** | API response time +50-100ms | Acceptable (current: ~200ms for 10 spools) |
-| **Version column adds write overhead** | Batch update time +10-20% | Still <500ms for 10 spools (meets <3s requirement) |
-| **Google Sheets API quota exceeded** | 429 errors, failed operations | Current quota usage: ~60% (room for 2-3 more columns) |
-
-**Current Performance Baseline (v2.1):**
-- Batch 10 spools INICIAR: ~2 seconds
-- Single spool INICIAR: ~500ms
-- Full workflow (P1-P6): <30 seconds
-
-**v3.0 Expected Performance:**
-- Batch 10 spools TOMAR: ~2.5 seconds (acceptable)
-- Single spool TOMAR: ~600ms (acceptable)
-
----
-
-## 6. Dependencies and Prerequisites
-
-### 6.1 Technical Prerequisites
-
-**Current Environment:**
-- ✅ Python 3.11+ (venv activated)
-- ✅ FastAPI backend running
-- ✅ gspread 5.10+ installed
-- ✅ pytest test framework
-- ✅ Railway deployment working
-- ✅ Vercel frontend deployment working
-
-**New Requirements (Phase 1):**
-- Google Drive API access for backup creation (may require additional scope)
-- Staging/test environment for dry-run testing
-
-**Python Packages (New):**
-- None required for Phase 1
-- Phase 2 will add: `python-statemachine==2.5.0`, `redis==5.0+`
-
-### 6.2 Google Sheets API Considerations
-
-**Current Quotas:**
-- 60 writes/min/user (Service Account)
-- 200-500ms latency per request
-- No WebSocket support (eventual consistency)
-
-**v3.0 Impact:**
-- TOMAR writes 3 cells (Ocupado_Por + Fecha_Ocupacion + version) vs v2.1's 1 cell
-- Batch 10 spools = 30 cell writes (still within quota)
-- Metadata events remain same (1 append per action)
-
-**Rate Limiting:**
-- Existing retry decorator handles 429 errors
-- Exponential backoff: 1s → 2s → 4s
-- Max 3 retries before SheetsRateLimitError
-
-### 6.3 Frontend Impact (Minimal in Phase 1)
-
-**Phase 1 Scope:** Backend schema only
-
-**Frontend Changes (Phase 2):**
-- New API endpoints: `/api/tomar-spool`, `/api/pausar-spool`
-- New UI pages: "Available Spools" dashboard, "Who Has What" view
-- SSE integration for real-time updates
-
-**Phase 1 Frontend Work:** None required (v2.1 frontend continues working)
-
----
-
-## 7. Success Criteria Validation
-
-### 7.1 Phase 1 Success Criteria
-
-From ROADMAP.md:
-
-1. ✅ **All 244 v2.1 tests continue passing with new schema columns added**
-   - **Validation:** Run `pytest` after schema expansion on test Sheet copy
-   - **Expectation:** 233 collected tests pass (assuming dynamic column mapping works)
-   - **Fallback:** If tests fail, means column mapping broke - fix before production
-
-2. ✅ **Dual-write mechanism logs actions to both v2.1 and v3.0 schema simultaneously**
-   - **UPDATED DECISION:** Branch-based migration, NOT dual-write
-   - **Validation:** v3.0 writes to BOTH old columns (Armador) and new columns (Ocupado_Por)
-   - **Example:** TOMAR ARM writes to both Armador and Ocupado_Por in single batch update
-
-3. ✅ **Production rollback to v2.1-only mode works without data loss**
-   - **Validation:** Backup restoration script tested in staging
-   - **Process:** Restore backup Sheet copy → redeploy v2.1 backend/frontend
-   - **Window:** 1 week rollback capability
-
-4. ✅ **New Operaciones columns (Ocupado_Por, Fecha_Ocupacion, version) visible in Google Sheet**
-   - **Validation:** Manual inspection of production Sheet after migration
-   - **Smoke test:** Read values from new columns via SheetsRepository
-
-5. ✅ **Metadata sheet accepts new event types (TOMAR_SPOOL, PAUSAR_SPOOL) without schema errors**
-   - **Validation:** Append test event with evento_tipo=TOMAR_SPOOL
-   - **No schema change needed:** Metadata structure (10 columns) unchanged
-
-### 7.2 Validation Tests
-
-**Pre-Cutover (Staging):**
-```bash
-# 1. Create test Sheet copy
-python backend/scripts/backup_sheet.py --dry-run
-
-# 2. Add v3.0 columns to test copy
-python backend/scripts/add_v3_columns.py --sheet-id=<test-copy-id>
-
-# 3. Run smoke tests
-pytest tests/unit/test_v3_schema.py -v
-
-# 4. Run v2.1 test subset (optional)
-pytest tests/unit/test_validation_service.py -v
+  if (isOccupied) {
+    // En progreso → FINALIZAR / PAUSAR / CANCELAR
+    return ['FINALIZAR', 'PAUSAR', 'CANCELAR'];
+  } else {
+    // Libre → INICIAR / CANCELAR
+    return ['INICIAR', 'CANCELAR'];
+  }
+}
 ```
 
-**Post-Cutover (Production):**
-```bash
-# 1. Smoke test new columns readable
-pytest tests/unit/test_v3_schema.py::test_read_new_columns -v
+**Note on ARM-COMPLETADO / SOLD state:** The mapping `ARM-COMPLETADO → SOLD` and `ARM-PAUSADO → SOLD` requires checking both `estado_trabajo` and `operacion_actual`. The state machine above covers these transitions.
 
-# 2. Smoke test new columns writable
-pytest tests/unit/test_v3_schema.py::test_write_new_columns -v
+### Pattern 4: parseEstadoDetalle (Task 1.4)
 
-# 3. Smoke test version increments
-pytest tests/unit/test_v3_schema.py::test_version_increments -v
+**What:** TypeScript port of `backend/services/estado_detalle_parser.py`. Must produce identical output for identical input.
+
+**All known Estado_Detalle formats (source: `backend/services/estado_detalle_parser.py`):**
+
+| Input pattern | operacion_actual | estado_trabajo | ciclo_rep |
+|---------------|-----------------|----------------|-----------|
+| `null` or `""` | null | "LIBRE" | null |
+| `"MR(93) trabajando ARM (...)"` | "ARM" | "EN_PROGRESO" | null |
+| `"MR(93) trabajando SOLD (...)"` | "SOLD" | "EN_PROGRESO" | null |
+| `"EN_REPARACION (Ciclo N/3) - Ocupado: MR(93)"` | "REPARACION" | "EN_PROGRESO" | N |
+| `"BLOQUEADO - Contactar supervisor"` | null | "BLOQUEADO" | null |
+| `"RECHAZADO (Ciclo N/3) - ..."` | null | "RECHAZADO" | N |
+| `"RECHAZADO"` (bare) | null | "RECHAZADO" | null |
+| `"REPARACION completado - PENDIENTE_METROLOGIA"` | null | "PENDIENTE_METROLOGIA" | null |
+| `"... METROLOGIA APROBADO ✓"` | null | "COMPLETADO" | null |
+| `"... ARM completado, SOLD completado"` | null | "COMPLETADO" | null |
+| `"ARM completado, SOLD pendiente"` | "ARM" | "PAUSADO" | null |
+| `"ARM completado, SOLD pausado"` | "ARM" | "PAUSADO" | null |
+| `"ARM pausado"` | "ARM" | "PAUSADO" | null |
+
+**CRITICAL pattern match order** (must match backend exactly — order matters):
+1. Occupied ARM/SOLD (`trabajando ARM/SOLD`)
+2. REPARACION in progress (`EN_REPARACION.*Ciclo`)
+3. BLOQUEADO (keyword)
+4. RECHAZADO with cycle (`RECHAZADO.*Ciclo`)
+5. RECHAZADO bare (keyword)
+6. PENDIENTE_METROLOGIA (keyword)
+7. METROLOGIA APROBADO (keyword + ✓)
+8. Both ARM + SOLD completado
+9. ARM completado + SOLD pendiente/pausado
+10. ARM pausado
+11. Default → LIBRE
+
+```typescript
+// lib/parse-estado-detalle.ts
+
+import { EstadoTrabajo, OperacionActual } from './types';
+
+export interface ParsedEstadoDetalle {
+  operacion_actual: OperacionActual;
+  estado_trabajo: EstadoTrabajo;
+  ciclo_rep: number | null;
+  worker: string | null;
+}
+
+export function parseEstadoDetalle(estado: string | null | undefined): ParsedEstadoDetalle {
+  const defaultResult: ParsedEstadoDetalle = {
+    operacion_actual: null,
+    estado_trabajo: 'LIBRE',
+    ciclo_rep: null,
+    worker: null,
+  };
+
+  if (!estado || !estado.trim()) return defaultResult;
+  const s = estado.trim();
+
+  // 1. Occupied ARM/SOLD
+  const ocupadoMatch = s.match(/^(\S+)\s+trabajando\s+(ARM|SOLD)\s+/);
+  if (ocupadoMatch) {
+    return { ...defaultResult, worker: ocupadoMatch[1], operacion_actual: ocupadoMatch[2] as 'ARM' | 'SOLD', estado_trabajo: 'EN_PROGRESO' };
+  }
+
+  // 2. REPARACION en progreso
+  const repMatch = s.match(/EN_REPARACION.*?Ciclo\s+(\d+)\/3/);
+  if (repMatch) {
+    return { ...defaultResult, operacion_actual: 'REPARACION', estado_trabajo: 'EN_PROGRESO', ciclo_rep: parseInt(repMatch[1], 10) };
+  }
+
+  // 3. BLOQUEADO
+  if (s.includes('BLOQUEADO')) {
+    return { ...defaultResult, estado_trabajo: 'BLOQUEADO' };
+  }
+
+  // 4. RECHAZADO con ciclo
+  const rechazadoCicloMatch = s.match(/RECHAZADO.*?Ciclo\s+(\d+)\/3/);
+  if (rechazadoCicloMatch) {
+    return { ...defaultResult, estado_trabajo: 'RECHAZADO', ciclo_rep: parseInt(rechazadoCicloMatch[1], 10) };
+  }
+
+  // 5. RECHAZADO bare
+  if (s.includes('RECHAZADO')) {
+    return { ...defaultResult, estado_trabajo: 'RECHAZADO' };
+  }
+
+  // 6. PENDIENTE_METROLOGIA
+  if (s.includes('PENDIENTE_METROLOGIA') || s.includes('REPARACION completado')) {
+    return { ...defaultResult, estado_trabajo: 'PENDIENTE_METROLOGIA' };
+  }
+
+  // 7. METROLOGIA APROBADO
+  if (s.includes('METROLOGIA APROBADO') || s.includes('APROBADO \u2713')) {
+    return { ...defaultResult, estado_trabajo: 'COMPLETADO' };
+  }
+
+  // 8. ARM + SOLD completado
+  if (s.includes('ARM completado') && s.includes('SOLD completado')) {
+    return { ...defaultResult, estado_trabajo: 'COMPLETADO' };
+  }
+
+  // 9. ARM completado, SOLD pendiente/pausado
+  if (s.includes('ARM completado') && (s.includes('SOLD pendiente') || s.includes('SOLD pausado'))) {
+    return { ...defaultResult, estado_trabajo: 'PAUSADO', operacion_actual: 'ARM' };
+  }
+
+  // 10. ARM pausado
+  if (s.includes('ARM pausado')) {
+    return { ...defaultResult, estado_trabajo: 'PAUSADO', operacion_actual: 'ARM' };
+  }
+
+  // Default
+  return defaultResult;
+}
 ```
 
----
+### Pattern 5: useModalStack (Task 1.5)
 
-## 8. Implementation Recommendations
+**What:** A React hook that manages an ordered stack of modal identifiers. Used to implement the multi-step modal flow (Card → Operation → Action → Worker).
 
-### 8.1 Phase 1 Plan Breakdown
+**Design:** Stack entries are typed strings identifying which modal to show. The hook returns the current top-of-stack and push/pop/clear operations.
 
-**Plan 01-01: Design schema expansion**
-- Output: Schema design document (column specs, state machine diagram)
-- Duration: 2-4 hours
-- Artifacts:
-  - `docs/v3-schema-design.md` with column definitions
-  - State machine diagram (ASCII or Mermaid)
-  - Migration script pseudocode
+```typescript
+// hooks/useModalStack.ts
+'use client';
 
-**Plan 01-02: Implement schema expansion scripts**
-- Output: Working migration scripts with dry-run mode
-- Duration: 4-6 hours
-- Artifacts:
-  - `backend/scripts/backup_sheet.py` (automatic backup)
-  - `backend/scripts/add_v3_columns.py` (schema expansion)
-  - `backend/scripts/restore_backup.py` (rollback)
+import { useState, useCallback } from 'react';
 
-**Plan 01-03: Create v3.0 smoke test suite**
-- Output: 5 passing tests validating new columns
-- Duration: 2-3 hours
-- Artifacts:
-  - `tests/unit/test_v3_schema.py` (5 tests)
-  - Updated `conftest.py` with v3.0 column map fixture
+export type ModalId =
+  | 'add-spool'
+  | 'operation'
+  | 'action'
+  | 'worker'
+  | 'metrologia';
 
-### 8.2 Testing Strategy
+export interface UseModalStackReturn {
+  stack: ModalId[];
+  current: ModalId | null;     // top of stack (last element)
+  push: (modal: ModalId) => void;
+  pop: () => void;
+  clear: () => void;
+  isOpen: (modal: ModalId) => boolean;
+}
 
-**Branch Strategy:**
-- Create `v3.0-dev` branch from `main` (v2.1)
-- All Phase 1 work in `v3.0-dev`
-- DO NOT merge to `main` until cutover day
-- Keep `main` (v2.1) deployable for rollback
+export function useModalStack(): UseModalStackReturn {
+  const [stack, setStack] = useState<ModalId[]>([]);
 
-**Test Environment:**
-- Use test Sheet copy (NOT production) for development
-- Test Sheet ID: TBD (create copy via backup script)
-- Environment variable: `GOOGLE_SHEET_ID_TEST`
+  const push = useCallback((modal: ModalId) => {
+    setStack(prev => [...prev, modal]);
+  }, []);
 
-**Smoke Test Coverage (Minimal for Phase 1):**
-```python
-# tests/unit/test_v3_schema.py
-class TestV3SchemaExpansion:
-    """Smoke tests for v3.0 schema expansion."""
+  const pop = useCallback(() => {
+    setStack(prev => prev.slice(0, -1));
+  }, []);
 
-    def test_read_new_columns(self):
-        """Verify new columns readable via SheetsRepository."""
-        # Read row with Ocupado_Por, Fecha_Ocupacion, version
-        # Assert values are NULL/0 (initial state)
+  const clear = useCallback(() => {
+    setStack([]);
+  }, []);
 
-    def test_write_new_columns(self):
-        """Verify new columns writable."""
-        # Write test values to new columns
-        # Read back and assert match
+  const current = stack.length > 0 ? stack[stack.length - 1] : null;
 
-    def test_version_increments(self):
-        """Verify version column increments correctly."""
-        # Write version=0 → read → assert 0
-        # Write version=1 → read → assert 1
+  const isOpen = useCallback((modal: ModalId) => {
+    return stack[stack.length - 1] === modal;
+  }, [stack]);
 
-    def test_v2_columns_readable(self):
-        """Verify v2.1 columns still work after schema expansion."""
-        # Read Armador, Soldador columns
-        # Assert ColumnMapCache still resolves them
-
-    def test_backup_creation(self):
-        """Verify backup script creates valid Sheet copy."""
-        # Run backup script
-        # Open backup Sheet
-        # Assert row count matches production
+  return { stack, current, push, pop, clear, isOpen };
+}
 ```
 
-### 8.3 Claude's Discretion Areas
+**Key behaviors:**
+- `push` adds to top (never duplicates protection is Phase 3's responsibility)
+- `pop` removes top only — ESC key behavior in Phase 2's Modal.tsx modification
+- `clear` collapses entire stack on success or explicit close
+- `isOpen(modal)` returns true only for the TOP modal (prevents rendering buried modals as "open")
 
-**Decisions left to implementation:**
+### Pattern 6: useNotificationToast (Task 1.6)
 
-1. **Testing Environment Choice:**
-   - Option A: Use production Sheet with dry-run mode (log changes, don't write)
-   - Option B: Create test Sheet copy for all development work
-   - Recommendation: Option B (safer)
+**What:** A hook that manages a queue of toast notifications with auto-dismiss. No third-party library.
 
-2. **Backup Retention Policy:**
-   - Minimum: 1 week after cutover (for rollback window)
-   - Claude's choice: Keep indefinitely vs delete after validation
-   - Recommendation: Keep 1 month for auditing
+```typescript
+// hooks/useNotificationToast.ts
+'use client';
 
-3. **Migration Script Error Handling:**
-   - Stop on first error vs continue with warnings
-   - Recommendation: Stop on critical errors (schema validation), warn on non-critical
+import { useState, useCallback, useRef } from 'react';
 
-4. **Column Header Validation:**
-   - Verify exact header names vs normalize
-   - Recommendation: Exact match for critical columns (Armador, TAG_SPOOL)
+export type ToastType = 'success' | 'error';
 
----
+export interface Toast {
+  id: string;
+  message: string;
+  type: ToastType;
+}
 
-## 9. Open Questions
+export interface UseNotificationToastReturn {
+  toasts: Toast[];
+  enqueue: (message: string, type: ToastType) => void;
+  dismiss: (id: string) => void;
+}
 
-### 9.1 For Planning Phase
+const AUTO_DISMISS_MS = 4000;  // 4s — within UX-02 spec (3-5s)
 
-1. **State Inference from v2.1 Data:**
-   - Q: Should we infer ARM_PARCIAL from existing (armador != NULL, fecha_armado = NULL)?
-   - A: Deferred to Phase 3 - start with clean slate (all DISPONIBLE)
+export function useNotificationToast(): UseNotificationToastReturn {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const counterRef = useRef(0);
 
-2. **Version Column Type:**
-   - Q: Int vs string for optimistic locking?
-   - A: Int (simpler arithmetic, standard pattern)
+  const dismiss = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
-3. **Dual-Write Duration:**
-   - Q: How long to maintain v2.1 column writes?
-   - A: UPDATED - NO dual-write period. Branch-based migration with one-time cutover.
+  const enqueue = useCallback((message: string, type: ToastType) => {
+    const id = `toast-${Date.now()}-${counterRef.current++}`;
+    const toast: Toast = { id, message, type };
+    setToasts(prev => [...prev, toast]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, AUTO_DISMISS_MS);
+  }, []);
 
-### 9.2 For Implementation Phase
+  return { toasts, enqueue, dismiss };
+}
+```
 
-1. **Google Drive Folder for Backups:**
-   - Q: Create new folder or use existing?
-   - A: Create `ZEUES_Backups` folder (Claude's discretion)
+**Note:** `dismiss` is also exported for Phase 2's NotificationToast.tsx to allow manual early dismiss.
 
-2. **Dry-Run Mode for Scripts:**
-   - Q: Add `--dry-run` flag to all scripts?
-   - A: Yes, mandatory for safety
+### Pattern 7: New API Functions (Task 1.7)
 
-3. **Staging Environment:**
-   - Q: Need separate Railway/Vercel deployment for testing?
-   - A: Recommended but not required (can test locally with test Sheet)
+**What:** Add `getSpoolStatus` and `batchGetStatus` to `lib/api.ts`. These wrap the backend endpoints built in Phase 0.
 
----
+**Import addition required:** `SpoolCardData` from `./types`.
 
-## 10. References
+```typescript
+// Additions to lib/api.ts — import SpoolCardData from './types'
 
-### 10.1 Codebase Files
+// GET /api/spool/{tag}/status (API-01)
+export async function getSpoolStatus(tag: string): Promise<SpoolCardData> {
+  const res = await fetch(`${API_URL}/api/spool/${tag}/status`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<SpoolCardData>(res);
+}
 
-**Critical Files for Phase 1:**
-- `backend/repositories/sheets_repository.py` - Column mapping, batch updates
-- `backend/core/column_map_cache.py` - Dynamic header resolution
-- `backend/models/spool.py` - Spool data model (needs v3.0 fields)
-- `backend/models/metadata.py` - Event types (needs TOMAR_SPOOL, PAUSAR_SPOOL)
-- `tests/conftest.py` - Shared fixtures (needs v3.0 column map)
+// POST /api/spools/batch-status (API-02)
+export async function batchGetStatus(tags: string[]): Promise<SpoolCardData[]> {
+  const res = await fetch(`${API_URL}/api/spools/batch-status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags }),
+  });
+  const data = await handleResponse<{ spools: SpoolCardData[]; total: number }>(res);
+  return data.spools;
+}
+```
 
-**Reference Documentation:**
-- `proyecto-v2-backend.md` - v2.1 architecture (lines 1-1002)
-- `CLAUDE.md` - Project instructions (v2.1 constraints)
-- `.planning/PROJECT.md` - v3.0 requirements
-- `.planning/ROADMAP.md` - Phase 1 success criteria
-- `.planning/codebase/ARCHITECTURE.md` - v2.1 architecture analysis
+**Note:** These functions do NOT wrap errors in a user-friendly string — they let `ApiError` propagate. The modal layer (Phase 3) handles display.
 
-### 10.2 External Resources
+### Anti-Patterns to Avoid
 
-**Google Sheets API:**
-- [gspread documentation](https://docs.gspread.org/) - v5.10+
-- [Google Sheets API quotas](https://developers.google.com/sheets/api/limits)
-
-**State Machine Libraries:**
-- [python-statemachine 2.5.0](https://python-statemachine.readthedocs.io/) - Phase 2+
-
-**Pattern References:**
-- Martin Fowler: "Expand-Migrate-Contract" database refactoring pattern
-- Microsoft: "Optimistic Concurrency Control" (version tokens)
-
----
-
-## Appendix A: v2.1 → v3.0 Comparison
-
-| Aspect | v2.1 (Current) | v3.0 (Target) |
-|--------|----------------|---------------|
-| **Primary Question** | "How complete is this work?" | "WHO has WHICH spool right now?" |
-| **State Model** | Progress tracking (PENDIENTE → EN_PROGRESO → COMPLETADO) | Occupation tracking (DISPONIBLE → OCUPADO → PAUSADO/COMPLETADO) |
-| **Ownership** | Strict (only initiator can complete) | Flexible (any qualified worker can continue) |
-| **Work Continuity** | Worker must complete what they started | Worker can pause, another can continue |
-| **Columns (Operaciones)** | Armador, Soldador, Fecha_Armado, Fecha_Soldadura (4 columns) | + Ocupado_Por, Fecha_Ocupacion, version (7 columns total) |
-| **Metadata Events** | INICIAR_*, COMPLETAR_*, CANCELAR_* (9 types) | + TOMAR_SPOOL, PAUSAR_SPOOL (11 types) |
-| **State Transitions** | 2 actions per operation (INICIAR, COMPLETAR) | 3 actions per operation (TOMAR, PAUSAR, COMPLETAR) |
-| **Race Conditions** | Not handled (low concurrency) | Optimistic locking (version tokens) |
-| **Real-Time Updates** | None (page refresh) | SSE streaming (Phase 4) |
+- **`any` type in TypeScript:** CLAUDE.md forbids it. Use `unknown` for dynamic data, exact types for known shapes.
+- **Accessing localStorage without SSR guard:** Next.js renders server-side. Always check `typeof window !== 'undefined'`.
+- **Storing full spool objects in localStorage:** Decision D-02 is explicit — store only `tag_spool` strings. State is always fetched from backend.
+- **`useEffect` with missing deps:** The linter will catch this, and builds will fail. Always specify complete dependency arrays.
+- **Mutable state in hooks:** `useModalStack` and `useNotificationToast` must use functional state updates (`prev => ...`) to avoid stale closures.
+- **Duplicating parse logic:** `parseEstadoDetalle` in the frontend must mirror the backend exactly. If the backend adds a new Estado_Detalle format, both files must be updated together.
 
 ---
 
-**End of Research Document**
+## Don't Hand-Roll
 
-*Total document length: ~520 lines*
-*Research time: 2026-01-26 (1 hour)*
-*Ready for Phase 1 planning*
+| Problem | Don't Build | Use Instead | Why |
+|---------|-------------|-------------|-----|
+| Toast auto-dismiss timer | Custom timer manager | `setTimeout` inside `useNotificationToast.enqueue` | Sufficient for single-instance toast queue |
+| State machine framework | XState or custom FSM | Pure functions in `spool-state-machine.ts` | Only 7 states, 2 operations — no state machine library needed |
+| localStorage serialization | Custom binary format | `JSON.stringify`/`JSON.parse` with type guard | Already sufficient for string arrays |
+| Unique ID generation for toasts | UUID library | `Date.now() + counter ref` | No collision risk for single-tab single-user app |
+
+**Key insight:** This is a single-user, single-tab app with simple state. Over-engineering with state machine libraries or global state managers would add complexity with no benefit.
+
+---
+
+## Common Pitfalls
+
+### Pitfall 1: localStorage SSR Crash
+**What goes wrong:** `localStorage is not defined` error during Next.js server-side rendering.
+**Why it happens:** Next.js runs component initialization code on the server where `window` does not exist.
+**How to avoid:** Every `localStorage` access in `lib/local-storage.ts` must check `typeof window !== 'undefined'` first, or return empty defaults.
+**Warning signs:** Build error `ReferenceError: localStorage is not defined`.
+
+### Pitfall 2: parseEstadoDetalle Pattern Order Mismatch
+**What goes wrong:** A spool shows wrong `estado_trabajo` or `operacion_actual` — e.g., an ARM-in-progress spool shows as LIBRE.
+**Why it happens:** The regex match order in the frontend `parseEstadoDetalle` differs from the backend. The backend uses early returns, so order matters.
+**How to avoid:** Follow the exact 10-step order documented in Pattern 4. Tests must cover all known Estado_Detalle format strings.
+**Warning signs:** SpoolCard shows wrong badge or timer for a spool that has a non-null `estado_detalle`.
+
+### Pitfall 3: useModalStack ESC behavior regression
+**What goes wrong:** ESC closes ALL modals instead of just the top one.
+**Why it happens:** Phase 2 will modify `Modal.tsx` to respect `useModalStack`. If `clear()` is connected to ESC instead of `pop()`, all modals close.
+**How to avoid:** Export `pop` (for ESC key → close top) and `clear` (for success → close all) as separate functions. Document in the hook.
+
+### Pitfall 4: Toast duplicate IDs on fast consecutive calls
+**What goes wrong:** Two toasts appear but only one dismisses properly.
+**Why it happens:** Using only `Date.now()` for ID generation — two calls in the same millisecond produce the same ID.
+**How to avoid:** Combine `Date.now()` with a `useRef` counter (see Pattern 6). This is safe for single-tab apps.
+
+### Pitfall 5: SpoolCardData ≠ SpoolStatus field naming mismatch
+**What goes wrong:** `getSpoolStatus()` returns data but TypeScript reports field not found.
+**Why it happens:** Backend Python model uses `operacion_actual` (snake_case), frontend must use same naming. If frontend interface uses camelCase, the mapping breaks.
+**How to avoid:** Keep `SpoolCardData` in snake_case matching the API response exactly. Do not camelCase-convert in the API client.
+
+### Pitfall 6: Stale localStorage after v4.0 → v5.0 upgrade
+**What goes wrong:** App loads and tries to restore an old spool list that was stored under a different key format.
+**Why it happens:** If a prior version used a different localStorage key, loading it produces unexpected data.
+**How to avoid:** Use the versioned key `zeues_v5_spool_tags`. The `loadTags` function includes a type guard that rejects non-string-array content and returns `[]`.
+
+---
+
+## Code Examples
+
+### Existing hook pattern to follow (from `hooks/useDebounce.ts`)
+
+```typescript
+// Source: zeues-frontend/hooks/useDebounce.ts (existing reference)
+'use client';
+import { useState, useEffect } from 'react';
+
+export function useDebounce<T>(value: T, delay = 500): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+```
+
+**Pattern:** Named export, `'use client'` directive, generic typed, no external deps.
+
+### Existing API pattern to follow (from `lib/api.ts`)
+
+```typescript
+// Source: zeues-frontend/lib/api.ts — handleResponse helper (existing)
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData.message || errorData.detail || `Error ${response.status}: ${response.statusText}`;
+    const detail = typeof errorData.detail === 'string' ? errorData.detail : errorData.detail?.message;
+    throw new ApiError(response.status, message, detail);
+  }
+  return response.json();
+}
+```
+
+**Pattern:** New API functions reuse this helper — no custom error handling in `getSpoolStatus`/`batchGetStatus`.
+
+---
+
+## State of the Art
+
+| Old Approach | Current Approach | Impact |
+|--------------|------------------|--------|
+| Multi-page navigation (P1-P6) | Single page + modal stack | Phase 1 utilities are the foundation for this change |
+| `context.tsx` stores all flow state (worker, operation, spool, unions) | Per-hook state (`useModalStack`, `useNotificationToast`) + localStorage | Old context remains until Phase 5 cleanup |
+| Union selection page (seleccionar-uniones) | action_override=PAUSAR in FINALIZAR | Phase 1 API functions use new v5.0 endpoint signature |
+| `sessionStorage` for union selection | No session storage needed | Phase 1 does not use sessionStorage at all |
+
+**Deprecated (from TODO-v5-restructuring.md — to be removed in Phase 5):**
+- `lib/context.tsx` `accion`, `selectedUnions`, `pulgadasCompletadas` fields — not needed in v5.0
+- `lib/spool-selection-utils.ts` — entire file removed in Phase 5
+
+---
+
+## Open Questions
+
+1. **getValidOperations: ARM-COMPLETADO / SOLD-PAUSADO disambiguation**
+   - What we know: `estado_trabajo = "PAUSADO"` + `operacion_actual = "ARM"` can mean either "ARM is paused mid-work" OR "ARM is fully complete but stored as PAUSADO pending SOLD"
+   - What's unclear: The REQUIREMENTS.md maps `ARM-PAUSADO → SOLD` and `ARM-COMPLETADO → SOLD` both to SOLD. But the `parseEstadoDetalle` output for "ARM completado, SOLD pendiente" sets `estado_trabajo = "PAUSADO"` and `operacion_actual = "ARM"`. The state machine would show ARM as the valid operation.
+   - Recommendation: Use `uniones_arm_completadas` vs `total_uniones` to distinguish "ARM fully done" from "ARM partially paused". If `uniones_arm_completadas == total_uniones`, offer SOLD; else offer ARM. This uses already-available SpoolCardData fields. Resolve in planning.
+
+2. **IniciarRequest still has worker_nombre field**
+   - What we know: Plan 00-03 made `worker_nombre` optional in backend. `lib/types.ts` `IniciarRequest` still declares it as `string` (required).
+   - What's unclear: Should the frontend type be updated to `worker_nombre?: string` in Phase 1 (Task 1.1) or left for Phase 3/4?
+   - Recommendation: Update `IniciarRequest` in types.ts to `worker_nombre?: string` in Task 1.1 to match the current backend contract.
+
+---
+
+## Validation Architecture
+
+### Test Framework
+
+| Property | Value |
+|----------|-------|
+| Framework | Jest 30.2.0 + @testing-library/react 16.3.2 |
+| Config file | `zeues-frontend/jest.config.js` |
+| Quick run command | `cd zeues-frontend && npm test -- --testPathPattern="local-storage|spool-state-machine|parse-estado-detalle|useModalStack|useNotificationToast" --no-coverage` |
+| Full suite command | `cd zeues-frontend && npm test` |
+
+### Phase Requirements → Test Map
+
+| Req ID | Behavior | Test Type | Automated Command | File Exists? |
+|--------|----------|-----------|-------------------|-------------|
+| STATE-01 | getValidOperations returns correct operations per estado_trabajo | unit | `npm test -- --testPathPattern="spool-state-machine"` | ❌ Wave 0 |
+| STATE-02 | getValidActions returns INICIAR+CANCELAR (libre) or FINALIZAR+PAUSAR+CANCELAR (ocupado) | unit | `npm test -- --testPathPattern="spool-state-machine"` | ❌ Wave 0 |
+| STATE-03 | getValidActions identifies CANCELAR on libre spool via ocupado_por==null | unit | `npm test -- --testPathPattern="spool-state-machine"` | ❌ Wave 0 |
+| CARD-03 | loadTags/saveTags/addTag/removeTag round-trip correctly | unit | `npm test -- --testPathPattern="local-storage"` | ❌ Wave 0 |
+| CARD-03 | loadTags returns [] when localStorage empty or malformed | unit | `npm test -- --testPathPattern="local-storage"` | ❌ Wave 0 |
+| CARD-03 | SSR guard: loadTags/saveTags are no-ops when window undefined | unit | `npm test -- --testPathPattern="local-storage"` | ❌ Wave 0 |
+| STATE-01 | parseEstadoDetalle produces correct output for all 11 known formats | unit | `npm test -- --testPathPattern="parse-estado-detalle"` | ❌ Wave 0 |
+| MODAL-01/02 | useModalStack push/pop/clear/isOpen correct behavior | unit | `npm test -- --testPathPattern="useModalStack"` | ❌ Wave 0 |
+| MODAL-07 | useNotificationToast enqueue adds toast, auto-dismiss removes it | unit | `npm test -- --testPathPattern="useNotificationToast"` | ❌ Wave 0 |
+| UX-02 | useNotificationToast auto-dismiss fires within 3-5s | unit (fake timers) | `npm test -- --testPathPattern="useNotificationToast"` | ❌ Wave 0 |
+
+### Sampling Rate
+
+- **Per task commit:** Quick run targeting changed file's test pattern
+- **Per wave merge:** `cd zeues-frontend && npm test && npx tsc --noEmit`
+- **Phase gate:** Full suite green + `tsc --noEmit` + `npm run lint` before `/gsd:verify-work`
+
+### Wave 0 Gaps
+
+All test files are new (Phase 1 creates new files):
+
+- [ ] `__tests__/lib/local-storage.test.ts` — covers CARD-03 localStorage persistence
+- [ ] `__tests__/lib/spool-state-machine.test.ts` — covers STATE-01, STATE-02, STATE-03
+- [ ] `__tests__/lib/parse-estado-detalle.test.ts` — covers all 11 Estado_Detalle formats
+- [ ] `__tests__/hooks/useModalStack.test.ts` — covers MODAL-01, MODAL-02, push/pop/clear
+- [ ] `__tests__/hooks/useNotificationToast.test.ts` — covers MODAL-07, UX-02
+
+Existing infrastructure (`jest.config.js`, `jest.setup.js`, `@testing-library/react`) is sufficient — no new framework setup required.
+
+---
+
+## Sources
+
+### Primary (HIGH confidence)
+
+- `backend/services/estado_detalle_parser.py` — Complete list of Estado_Detalle formats with exact regex patterns. Frontend parser must mirror this exactly.
+- `backend/models/spool_status.py` — SpoolStatus Pydantic model defines the exact JSON response shape for `SpoolCardData` interface.
+- `backend/services/cycle_counter_service.py` — CycleCounterService documents all Estado_Detalle string formats for RECHAZADO/BLOQUEADO/REPARACION states.
+- `zeues-frontend/lib/types.ts` — Existing type contracts; `SpoolCardData` extends the Spool model pattern.
+- `zeues-frontend/lib/api.ts` — Established API client pattern (`handleResponse`, `ApiError`); new functions follow this pattern.
+- `zeues-frontend/hooks/useDebounce.ts` — Reference implementation for hook pattern (structure, exports, 'use client').
+- `zeues-frontend/jest.config.js` + `jest.setup.js` — Test infrastructure already in place; `__tests__/` is the correct location.
+- `.planning/v5.0-single-page/REQUIREMENTS.md` — STATE-01/02 decision maps, decision table (D-01 through D-09).
+
+### Secondary (MEDIUM confidence)
+
+- `zeues-frontend/package.json` — Confirmed React 18.3.0, Next.js 14.2.0, TypeScript 5.4.0, Jest 30.2.0. No new packages needed.
+- `zeues-frontend/tsconfig.json` — `strict: true` enforced, `@/*` path alias configured, `__tests__/` excluded from tsc.
+- `zeues-frontend/TODO-v5-restructuring.md` — Documents known tech debt; SSR guard issue and `any` type restrictions confirmed.
+
+---
+
+## Metadata
+
+**Confidence breakdown:**
+- Standard stack: HIGH — package.json confirms all versions, no new deps needed
+- Architecture: HIGH — backend parser source is authoritative, API response shape confirmed in spool_status.py
+- Pitfalls: HIGH — SSR guard and parser order verified from existing code and TODO doc
+- State machine logic: HIGH — directly from REQUIREMENTS.md STATE-01/02 tables
+
+**Research date:** 2026-03-10
+**Valid until:** 2026-04-10 (stable — React/Next.js/TypeScript versions won't change mid-milestone)
