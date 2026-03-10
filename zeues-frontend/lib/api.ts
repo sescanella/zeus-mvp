@@ -4,6 +4,7 @@
 import {
   Worker,
   Spool,
+  SpoolCardData,
   ReparacionResponse,
   DisponiblesResponse,
   MetricasResponse,
@@ -539,6 +540,50 @@ export async function getDashboardOccupied(): Promise<DashboardOccupiedSpool[]> 
     console.error('getDashboardOccupied error:', error);
     throw new Error('No se pudieron cargar los spools ocupados del dashboard.');
   }
+}
+
+// ==========================================
+// v5.0 SPOOL STATUS API FUNCTIONS
+// ==========================================
+
+/**
+ * GET /api/spool/{tag}/status
+ * Obtiene el estado completo de un spool individual.
+ *
+ * Returns SpoolCardData matching backend SpoolStatus model exactly.
+ * Used for single-card refresh and initial load.
+ *
+ * @param tag - TAG_SPOOL identifier
+ * @returns Promise<SpoolCardData> with all 12 status fields
+ * @throws ApiError if spool not found (404) or backend unavailable
+ */
+export async function getSpoolStatus(tag: string): Promise<SpoolCardData> {
+  const res = await fetch(`${API_URL}/api/spool/${tag}/status`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<SpoolCardData>(res);
+}
+
+/**
+ * POST /api/spools/batch-status
+ * Obtiene el estado de múltiples spools en una sola request.
+ *
+ * Used for 30s polling refresh of all tracked spool cards.
+ * Response shape: { spools: SpoolCardData[], total: number }
+ *
+ * @param tags - Array of TAG_SPOOL identifiers
+ * @returns Promise<SpoolCardData[]> array of spool statuses
+ * @throws ApiError if backend unavailable
+ */
+export async function batchGetStatus(tags: string[]): Promise<SpoolCardData[]> {
+  const res = await fetch(`${API_URL}/api/spools/batch-status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags }),
+  });
+  const data = await handleResponse<{ spools: SpoolCardData[]; total: number }>(res);
+  return data.spools;
 }
 
 // ==========================================
