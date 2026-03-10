@@ -4,7 +4,7 @@ Modelos Pydantic para operaciones de ocupación de spools (v3.0).
 Soporta TOMAR/PAUSAR/COMPLETAR con validación de ownership y batch operations.
 """
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime, date
 from .enums import ActionType
 
@@ -437,8 +437,17 @@ class FinalizarRequest(BaseModel):
     )
     selected_unions: list[str] = Field(
         ...,
-        description="Lista de union IDs seleccionadas (empty list = cancellation)",
+        description="Lista de union IDs seleccionadas (empty list = cancellation; ignored when action_override is set)",
         examples=[["OT-123+1", "OT-123+2"], []]
+    )
+    action_override: Optional[Literal['PAUSAR', 'COMPLETAR']] = Field(
+        None,
+        description=(
+            "Override auto-determination: "
+            "PAUSAR clears occupation without touching unions; "
+            "COMPLETAR selects all available unions automatically. "
+            "When None (default), auto-determination via _determine_action() is used."
+        )
     )
 
     model_config = ConfigDict(
@@ -456,7 +465,16 @@ class FinalizarRequest(BaseModel):
                     "worker_id": 93,
                     "worker_nombre": "MR(93)",
                     "operacion": "ARM",
-                    "selected_unions": []
+                    "selected_unions": [],
+                    "action_override": "PAUSAR"
+                },
+                {
+                    "tag_spool": "MK-1335-CW-25238-011",
+                    "worker_id": 93,
+                    "worker_nombre": "MR(93)",
+                    "operacion": "ARM",
+                    "selected_unions": [],
+                    "action_override": "COMPLETAR"
                 }
             ]
         }

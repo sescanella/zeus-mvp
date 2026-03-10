@@ -936,11 +936,13 @@ class OccupationService:
         worker_id = request.worker_id
         worker_nombre = request.worker_nombre
         operacion = request.operacion.value
-        selected_unions = request.selected_unions
+        selected_unions = list(request.selected_unions)  # mutable copy
+        action_override = getattr(request, 'action_override', None)
 
         logger.info(
             f"[P5 FINALIZAR] Started: {tag_spool} by worker {worker_id} ({worker_nombre}) "
             f"for {operacion}, {len(selected_unions)} unions selected"
+            + (f", action_override={action_override}" if action_override else "")
         )
 
         try:
@@ -985,7 +987,8 @@ class OccupationService:
                 )
 
             # Step 3: Handle zero-union cancellation (v4.0 only)
-            if len(selected_unions) == 0:
+            # NOTE: Skip cancellation path when action_override is set (v5.0 buttons)
+            if len(selected_unions) == 0 and not action_override:
                 logger.info(f"Zero unions selected - handling as cancellation for {tag_spool}")
 
                 # Clear occupation fields (with version retry)
@@ -1144,14 +1147,121 @@ class OccupationService:
                 f"{total_available} available for {operacion}"
             )
 
-            # Step 5: Auto-determine action (PAUSAR vs COMPLETAR)
-            try:
-                action_taken = self._determine_action(selected_count, total_available, operacion)
-                logger.info(f"Auto-determined action: {action_taken}")
-            except ValueError as e:
-                # Race condition - union became unavailable
-                logger.error(f"Race condition detected: {e}")
-                raise
+            # Step 4c: Handle action_override (v5.0 single-page frontend)
+            # action_override bypasses auto-determination via _determine_action()
+            if action_override:
+                if action_override == "COMPLETAR":
+                    # Auto-select all available unions (ignore request.selected_unions)
+                    selected_unions = [u.id for u in disponibles]
+                    selected_count = len(selected_unions)
+                    action_taken = "COMPLETAR"
+                    if selected_count == 0:
+                        logger.warning(
+                            f"action_override=COMPLETAR but 0 unions available for {tag_spool}"
+                        )
+                    logger.info(
+                        f"action_override=COMPLETAR: auto-selected {selected_count} unions for {tag_spool}"
+                    )
+                elif action_override == "PAUSAR":
+                    # PAUSAR override: skip union writes entirely, clear occupation only
+                    selected_unions = []
+                    selected_count = 0
+                    action_taken = "PAUSAR"
+                    logger.info(f"action_override=PAUSAR: skipping union writes for {tag_spool}")
+
+                    # Jump directly to occupation clearing + metadata logging
+                    # (skip Step 5 metrología check and Step 6 union processing)
+                    try:
+                        updates_dict = {
+                            "Ocupado_Por": "",
+                            "Fecha_Ocupacion": "",
+                            "Estado_Detalle": f"{operacion} parcial (pausado)"
+                        }
+
+                        from backend.core.column_map_cache import ColumnMapCache
+                        from backend.config import config
+
+                        column_map = ColumnMapCache.get_or_build(
+                            config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository
+                        )
+
+                        def normalize(name: str) -> str:
+                            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+                        tag_column_index = None
+                        for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+                            norm = normalize(col_name)
+                            if norm in column_map:
+                                tag_column_index = column_map[norm]
+                                break
+
+                        if tag_column_index is None:
+                            tag_column_index = 6  # Fallback
+
+                        column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
+                        row_num = self.sheets_repository.find_row_by_column_value(
+                            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                            column_letter=column_letter,
+                            value=tag_spool
+                        )
+
+                        if row_num is None:
+                            raise SpoolNoEncontradoError(tag_spool)
+
+                        batch_updates = [
+                            {"row": row_num, "column_name": key, "value": value}
+                            for key, value in updates_dict.items()
+                        ]
+
+                        self.sheets_repository.batch_update_by_column_name(
+                            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+                            updates=batch_updates
+                        )
+                        logger.info(f"✅ Occupation cleared for {tag_spool} (action_override=PAUSAR)")
+
+                    except Exception as e:
+                        logger.error(f"Failed to clear occupation for action_override=PAUSAR: {e}")
+
+                    # Log PAUSAR event to Metadata
+                    try:
+                        event = (
+                            MetadataEventBuilder()
+                            .for_finalizar(tag_spool, worker_id, worker_nombre, action_taken)
+                            .with_operacion(operacion)
+                            .with_metadata({
+                                "unions_processed": 0,
+                                "selected_unions": [],
+                                "pulgadas": 0.0,
+                                "action_override": "PAUSAR"
+                            })
+                            .build()
+                        )
+                        self.metadata_repository.log_event(**event)
+                        logger.info(f"✅ Metadata logged: PAUSAR_SPOOL for {tag_spool} (action_override)")
+
+                    except Exception as e:
+                        logger.error(f"❌ CRITICAL: Metadata logging failed for action_override=PAUSAR: {e}")
+
+                    return OccupationResponse(
+                        success=True,
+                        tag_spool=tag_spool,
+                        message=f"Trabajo pausado en {tag_spool} (acción directa)",
+                        action_taken="PAUSAR",
+                        unions_processed=0,
+                        pulgadas=0.0
+                    )
+            else:
+                # Step 5: Auto-determine action (PAUSAR vs COMPLETAR)
+                try:
+                    action_taken = self._determine_action(selected_count, total_available, operacion)
+                    logger.info(f"Auto-determined action: {action_taken}")
+                except ValueError as e:
+                    # Race condition - union became unavailable
+                    logger.error(f"Race condition detected: {e}")
+                    raise
+
+            # Dummy assignment to satisfy linter when action_override=COMPLETAR
+            # (action_taken is set above in the action_override=COMPLETAR branch)
 
             # Step 5.5: Check if metrología should trigger (after COMPLETAR determination)
             # Only check if action is COMPLETAR - PAUSAR means work is not done
