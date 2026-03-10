@@ -18,6 +18,7 @@ interface SpoolFilterPanelProps {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onClearFilters: () => void;
+  showSelectionControls?: boolean;
 }
 
 export function SpoolFilterPanel({
@@ -34,6 +35,7 @@ export function SpoolFilterPanel({
   onSelectAll,
   onDeselectAll,
   onClearFilters,
+  showSelectionControls = true,
 }: SpoolFilterPanelProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const nvInputRef = useRef<HTMLInputElement>(null);
@@ -151,32 +153,34 @@ export function SpoolFilterPanel({
           <span className="text-sm font-black text-white/70 font-mono">
             SELECCIONADOS: {selectedCount} / {filteredCount} FILTRADOS
           </span>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={onSelectAll}
-              className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-zeues-navy transition-colors"
-              aria-label="Seleccionar todos los spools filtrados"
-            >
-              TODOS
-            </button>
-            <button
-              onClick={onDeselectAll}
-              disabled={selectedCount === 0}
-              className="px-4 py-2 border-2 border-red-500 text-red-500 font-mono text-xs font-black active:bg-red-500 active:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Deseleccionar todos los spools"
-            >
-              NINGUNO
-            </button>
-            {activeFiltersCount > 0 && (
+          {showSelectionControls && (
+            <div className="flex gap-2 flex-wrap">
               <button
-                onClick={onClearFilters}
-                className="px-4 py-2 border-2 border-yellow-500 text-yellow-500 font-mono text-xs font-black active:bg-yellow-500 active:text-white transition-colors"
-                aria-label="Limpiar todos los filtros de busqueda"
+                onClick={onSelectAll}
+                className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-zeues-navy transition-colors"
+                aria-label="Seleccionar todos los spools filtrados"
               >
-                LIMPIAR FILTROS
+                TODOS
               </button>
-            )}
-          </div>
+              <button
+                onClick={onDeselectAll}
+                disabled={selectedCount === 0}
+                className="px-4 py-2 border-2 border-red-500 text-red-500 font-mono text-xs font-black active:bg-red-500 active:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Deseleccionar todos los spools"
+              >
+                NINGUNO
+              </button>
+              {activeFiltersCount > 0 && (
+                <button
+                  onClick={onClearFilters}
+                  className="px-4 py-2 border-2 border-yellow-500 text-yellow-500 font-mono text-xs font-black active:bg-yellow-500 active:text-white transition-colors"
+                  aria-label="Limpiar todos los filtros de busqueda"
+                >
+                  LIMPIAR FILTROS
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </>

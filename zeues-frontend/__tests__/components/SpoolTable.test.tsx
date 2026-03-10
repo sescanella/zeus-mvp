@@ -176,6 +176,69 @@ describe('SpoolTable — reparacion mode', () => {
   });
 });
 
+describe('SpoolTable — disabledSpools', () => {
+  const disabledTag = 'TEST-02';
+
+  it('renders disabled row with opacity-50 style', () => {
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} />);
+    const row = screen.getByRole('button', { name: /spool TEST-02/i });
+    expect(row.className).toMatch(/opacity-50/);
+  });
+
+  it('renders disabled row with cursor-not-allowed style', () => {
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} />);
+    const row = screen.getByRole('button', { name: /spool TEST-02/i });
+    expect(row.className).toMatch(/cursor-not-allowed/);
+  });
+
+  it('sets aria-disabled="true" on disabled row', () => {
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} />);
+    const row = screen.getByRole('button', { name: /spool TEST-02/i });
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('sets tabIndex=-1 on disabled row', () => {
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} />);
+    const row = screen.getByRole('button', { name: /spool TEST-02/i });
+    expect(row).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('does not call onToggleSelect when disabled row is clicked', () => {
+    const onToggle = jest.fn();
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} onToggleSelect={onToggle} />);
+    fireEvent.click(screen.getByRole('button', { name: /spool TEST-02/i }));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('does not call onToggleSelect on Enter for disabled row', () => {
+    const onToggle = jest.fn();
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} onToggleSelect={onToggle} />);
+    fireEvent.keyDown(screen.getByRole('button', { name: /spool TEST-02/i }), { key: 'Enter' });
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('does not call onToggleSelect on Space for disabled row', () => {
+    const onToggle = jest.fn();
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} onToggleSelect={onToggle} />);
+    fireEvent.keyDown(screen.getByRole('button', { name: /spool TEST-02/i }), { key: ' ' });
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('non-disabled rows still work when disabledSpools is provided', () => {
+    const onToggle = jest.fn();
+    render(<SpoolTable {...defaultProps} disabledSpools={[disabledTag]} onToggleSelect={onToggle} />);
+    fireEvent.click(screen.getByRole('button', { name: /Seleccionar spool TEST-01/i }));
+    expect(onToggle).toHaveBeenCalledWith('TEST-01');
+  });
+
+  it('defaults to no disabled rows when disabledSpools is omitted', () => {
+    const onToggle = jest.fn();
+    render(<SpoolTable {...defaultProps} onToggleSelect={onToggle} />);
+    fireEvent.click(screen.getByRole('button', { name: /Seleccionar spool TEST-02/i }));
+    expect(onToggle).toHaveBeenCalledWith('TEST-02');
+  });
+});
+
 describe('SpoolTable — accessibility', () => {
   it('all rows have role=button', () => {
     render(<SpoolTable {...defaultProps} />);

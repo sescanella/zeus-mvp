@@ -144,6 +144,42 @@ describe('SpoolFilterPanel — open state (modal)', () => {
   });
 });
 
+describe('SpoolFilterPanel — showSelectionControls', () => {
+  const openProps = { ...defaultProps, isOpen: true };
+
+  it('shows TODOS and NINGUNO buttons by default (no prop)', () => {
+    render(<SpoolFilterPanel {...openProps} />);
+    expect(screen.getByText('TODOS')).toBeInTheDocument();
+    expect(screen.getByText('NINGUNO')).toBeInTheDocument();
+  });
+
+  it('shows buttons when showSelectionControls=true', () => {
+    render(<SpoolFilterPanel {...openProps} showSelectionControls={true} />);
+    expect(screen.getByText('TODOS')).toBeInTheDocument();
+    expect(screen.getByText('NINGUNO')).toBeInTheDocument();
+  });
+
+  it('hides TODOS button when showSelectionControls=false', () => {
+    render(<SpoolFilterPanel {...openProps} showSelectionControls={false} />);
+    expect(screen.queryByText('TODOS')).not.toBeInTheDocument();
+  });
+
+  it('hides NINGUNO button when showSelectionControls=false', () => {
+    render(<SpoolFilterPanel {...openProps} showSelectionControls={false} />);
+    expect(screen.queryByText('NINGUNO')).not.toBeInTheDocument();
+  });
+
+  it('hides LIMPIAR FILTROS button when showSelectionControls=false even with active filters', () => {
+    render(<SpoolFilterPanel {...openProps} showSelectionControls={false} activeFiltersCount={2} />);
+    expect(screen.queryByRole('button', { name: /Limpiar todos los filtros/i })).not.toBeInTheDocument();
+  });
+
+  it('still shows counter when showSelectionControls=false', () => {
+    render(<SpoolFilterPanel {...openProps} showSelectionControls={false} />);
+    expect(screen.getByText('SELECCIONADOS: 3 / 10 FILTRADOS')).toBeInTheDocument();
+  });
+});
+
 describe('SpoolFilterPanel — accessibility', () => {
   it('passes axe audit in closed state', async () => {
     render(<SpoolFilterPanel {...defaultProps} />);

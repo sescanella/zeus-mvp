@@ -10,9 +10,10 @@ interface SpoolTableProps {
   selectedSpools: string[];
   onToggleSelect: (tag: string) => void;
   tipo: TipoParam;
+  disabledSpools?: string[];
 }
 
-export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo }: SpoolTableProps) {
+export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disabledSpools = [] }: SpoolTableProps) {
   return (
     <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto custom-scrollbar">
       <table className="w-full">
@@ -27,18 +28,20 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo }: Spo
           {spools.map((spool) => {
             const isSelected = selectedSpools.includes(spool.tag_spool);
             const isBloqueado = tipo === 'reparacion' && (spool as unknown as { bloqueado?: boolean }).bloqueado;
+            const isDisabled = disabledSpools.includes(spool.tag_spool);
+            const isInert = isDisabled || isBloqueado;
             const cycle = tipo === 'reparacion' ? (spool as unknown as { cycle?: number }).cycle : null;
 
             return (
               <tr
                 key={spool.tag_spool}
                 role="button"
-                tabIndex={isBloqueado ? -1 : 0}
-                aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isBloqueado ? ' (bloqueado)' : ''}`}
-                aria-disabled={isBloqueado ? true : undefined}
-                onClick={() => !isBloqueado && onToggleSelect(spool.tag_spool)}
+                tabIndex={isInert ? -1 : 0}
+                aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isBloqueado ? ' (bloqueado)' : ''}${isDisabled ? ' (ya agregado)' : ''}`}
+                aria-disabled={isInert ? true : undefined}
+                onClick={() => !isInert && onToggleSelect(spool.tag_spool)}
                 onKeyDown={(e) => {
-                  if (isBloqueado) return;
+                  if (isInert) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onToggleSelect(spool.tag_spool);
@@ -47,6 +50,8 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo }: Spo
                 className={`border-t-2 border-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
                   isBloqueado
                     ? 'bg-red-500/20 border-red-500 cursor-not-allowed'
+                    : isDisabled
+                    ? 'bg-white/10 opacity-50 cursor-not-allowed'
                     : isSelected
                     ? 'bg-zeues-orange/20 cursor-pointer'
                     : 'hover:bg-white/5 cursor-pointer'
@@ -55,6 +60,8 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo }: Spo
                 <td className="p-3 border-r-2 border-white/30">
                   {isBloqueado ? (
                     <Lock size={24} className="text-red-500" strokeWidth={3} />
+                  ) : isDisabled ? (
+                    <Lock size={24} className="text-white/30" strokeWidth={3} />
                   ) : isSelected ? (
                     <CheckSquare size={24} className="text-zeues-orange" strokeWidth={3} />
                   ) : (
