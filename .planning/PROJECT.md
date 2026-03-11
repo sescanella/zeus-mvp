@@ -1,18 +1,18 @@
-# ZEUES v3.0 - Real-Time Location Tracking
+# ZEUES v5.0 - Single Page Manufacturing Traceability
 
 ## What This Is
 
-ZEUES v3.0 transforms the manufacturing traceability system from progress tracking to real-time location/occupation tracking. Instead of asking "how complete is the work?", v3.0 answers "WHO has WHICH spool right now?" enabling collaborative sequential workflows where multiple workers (Armadores, Soldadores) can work on the same spool in flexible handoffs, with live visibility into which spools are DISPONIBLE vs OCUPADO on the manufacturing floor.
+ZEUES is a manufacturing traceability system for pipe spool fabrication. Workers manage spools from a single-page card interface with stacked modals — adding spools to their personal list, performing operations (ARM/SOLD/MET/REP) via modal flows, and tracking real-time state with 30-second auto-refresh. The system answers "WHO has WHICH spool right now?" with union-level granularity and pulgadas-diámetro as the primary business metric.
 
 ## Core Value
 
-**Track work at the union level with the correct business metric (pulgadas-diámetro)** - Enable workers to complete work by individual welds (unions), measure performance in pulgadas-diámetro (the actual billing metric), and support partial completion workflows where work can pause mid-union-set and be continued by any qualified worker.
+**Manage all spools from one screen, with every operation one click away.** Workers add spools to a persistent card list, tap a card to open operations, and complete workflows through a modal stack — no page navigation, no lost context.
 
 ## Requirements
 
 ### Validated
 
-✓ **v2.1 Features (Production, 244 tests passing):**
+✓ **v2.1 Features (Production):**
 - Worker management with multi-role system (Armador, Soldador, Metrología, Ayudante)
 - Spool tracking with TAG_SPOOL barcodes
 - Batch operations (up to 50 spools simultaneously)
@@ -21,143 +21,128 @@ ZEUES v3.0 transforms the manufacturing traceability system from progress tracki
 - FastAPI backend + Next.js mobile-first frontend
 - Deployed on Railway + Vercel in production
 
-✓ **v3.0 Real-Time Location Tracking (Shipped 2026-01-28, 31 plans, 161 min):**
+✓ **v3.0 Real-Time Location Tracking (Shipped 2026-01-28):**
+- Location tracking with TOMAR/PAUSAR/COMPLETAR workflows (Redis atomic locks)
+- Race condition prevention (optimistic locking, 10 concurrent tests validated)
+- Hierarchical state machines (6 states: 3 ARM + 3 SOLD)
+- SSE streaming for dashboard updates
+- Metrología instant inspection (APROBADO/RECHAZADO without occupation)
+- Bounded reparación cycles (max 3 before BLOQUEADO)
+- Collaborative worker handoffs without strict ownership
 
-**Location Tracking (6/6):**
-- ✓ **LOC-01**: Worker can TOMAR available spool — v3.0 (Redis atomic locks, 1-hour TTL)
-- ✓ **LOC-02**: Worker can PAUSAR spool without completing — v3.0 (releases lock, preserves progress)
-- ✓ **LOC-03**: Worker can COMPLETAR spool work — v3.0 (updates Sheets + releases lock)
-- ✓ **LOC-04**: System prevents race conditions — v3.0 (optimistic locking, validated with 10 concurrent tests)
-- ✓ **LOC-05**: Worker can see real-time DISPONIBLE spools — v3.0 (SSE with <10s latency)
-- ✓ **LOC-06**: Worker can see "who has what" dashboard — v3.0 (SSE streaming, EventSource with backoff)
+✓ **v4.0 Uniones System (Shipped 2026-02-02):**
+- Union-level data model (18-column Uniones sheet, 5 metrics columns in Operaciones)
+- Pulgadas-diámetro as primary business metric
+- INICIAR/FINALIZAR workflows with auto-determination (PAUSAR vs COMPLETAR)
+- Batch API writes (<1s p95 latency)
+- Persistent Redis locks (no TTL, supports 5-8h sessions)
+- Version detection routing v3.0 vs v4.0 workflows
 
-**State Management (4/4):**
-- ✓ **STATE-01**: System displays combined state — v3.0 (EstadoDetalleBuilder with occupation + ARM + SOLD)
-- ✓ **STATE-02**: Metadata logs all TOMAR/PAUSAR/COMPLETAR events — v3.0 (append-only audit trail)
-- ✓ **STATE-03**: Estado_Detalle column shows dynamic state — v3.0 (column 67, updated on every transition)
-- ✓ **STATE-04**: Hierarchical state machine — v3.0 (6 states total: 3 ARM + 3 SOLD, not 27)
+✓ **v5.0 Single Page + Modal Stack (Shipped 2026-03-11, 14 plans, 27 requirements):**
 
-**Collaborative Work (4/4):**
-- ✓ **COLLAB-01**: Any worker can continue partially-completed work — v3.0 (no strict ownership, worker handoffs tested)
-- ✓ **COLLAB-02**: System enforces operation dependencies — v3.0 (SOLD requires ARM initiated, guard validators)
-- ✓ **COLLAB-03**: System tracks multiple workers sequentially — v3.0 (Metadata sessions with durations)
-- ✓ **COLLAB-04**: Worker can view occupation history — v3.0 (GET /api/history/{tag_spool}, 519-line test suite)
+**Cards — Main Screen (6/6):**
+- ✓ **CARD-01**: "Añadir Spool" button opens modal with SpoolTable + filters — v5.0
+- ✓ **CARD-02**: Cards show TAG, operation, action, worker, elapsed time — v5.0
+- ✓ **CARD-03**: localStorage persistence (tags only) + 30s backend refresh — v5.0
+- ✓ **CARD-04**: MET APROBADA auto-removes spool from list — v5.0
+- ✓ **CARD-05**: MET RECHAZADA keeps spool for reparación — v5.0
+- ✓ **CARD-06**: Multiple spools operable individually — v5.0
 
-**Metrología (4/4):**
-- ✓ **METRO-01**: Metrólogo can COMPLETAR with binary result — v3.0 (APROBADO/RECHAZADO, 3-state machine)
-- ✓ **METRO-02**: Metrología workflow skips TOMAR — v3.0 (instant completion, no Redis lock)
-- ✓ **METRO-03**: RECHAZADO triggers "Pendiente reparación" — v3.0 (EstadoDetalleBuilder auto-display)
-- ✓ **METRO-04**: Metrología requires ARM + SOLD complete — v3.0 (prerequisite validation with 4 checks)
+**Modals — Operation Flow (8/8):**
+- ✓ **MODAL-01**: Card click → OperationModal (ARM/SOLD/REP/MET filtered by state) — v5.0
+- ✓ **MODAL-02**: ARM/SOLD/REP → ActionModal (INICIAR/FINALIZAR/PAUSAR/CANCELAR filtered) — v5.0
+- ✓ **MODAL-03**: INICIAR/FINALIZAR/PAUSAR → WorkerModal (role-filtered) — v5.0
+- ✓ **MODAL-04**: CANCELAR no worker needed — direct return — v5.0
+- ✓ **MODAL-05**: MET → MetrologiaModal (APROBADA/RECHAZADA two-step) — v5.0
+- ✓ **MODAL-06**: Worker/MET selection → API call → back to main — v5.0
+- ✓ **MODAL-07**: NotificationToast feedback after action (4s auto-dismiss) — v5.0
+- ✓ **MODAL-08**: No union selection — PAUSAR replaces partial completion — v5.0
 
-**Reparación (4/4):**
-- ✓ **REPAR-01**: Worker can TOMAR spool RECHAZADO — v3.0 (ReparacionService with 4-state machine)
-- ✓ **REPAR-02**: Reparación has no role restriction — v3.0 (OPERATION_TO_ROLES['REPARACION'] = [])
-- ✓ **REPAR-03**: COMPLETAR returns to metrología queue — v3.0 (Estado_Detalle="PENDIENTE_METROLOGIA")
-- ✓ **REPAR-04**: System limits cycles to 3 — v3.0 (CycleCounterService, BLOQUEADO after 3 rejections)
+**State Logic (6/6):**
+- ✓ **STATE-01**: Valid operations depend on spool state (state machine) — v5.0
+- ✓ **STATE-02**: Valid actions depend on occupation state — v5.0
+- ✓ **STATE-03**: CANCELAR libre = frontend-only removal — v5.0
+- ✓ **STATE-04**: CANCELAR occupied = backend reset + remove — v5.0
+- ✓ **STATE-05**: Timer from Fecha_Ocupacion when occupied — v5.0
+- ✓ **STATE-06**: PAUSADO static badge without timer — v5.0
 
-**Backward Compatibility (2/2):**
-- ✓ **BC-01**: v2.1 data migrated to v3.0 schema — v3.0 (66 columns: 63 v2.1 + 3 v3.0, 7-day rollback window)
-- ✓ **BC-02**: v2.1 tests preserved — v3.0 (233 tests archived to tests/v2.1-archive/)
+**API (3/3):**
+- ✓ **API-01**: GET /api/spool/{tag}/status — individual status with computed fields — v5.0
+- ✓ **API-02**: POST /api/spools/batch-status — batch refresh for polling — v5.0
+- ✓ **API-03**: FINALIZAR action_override (PAUSAR/COMPLETAR) — v5.0
 
-✓ **v4.0 Uniones System (Shipped 2026-02-02, 42 plans, 244 tests):**
-
-**Union-Level Tracking (all requirements validated in production):**
-- ✓ **UNION-01**: System reads pre-populated Uniones sheet — v4.0 (18 columns with audit fields)
-- ✓ **UNION-02**: System uses TAG_SPOOL as primary key — v4.0 (maintains Redis/Metadata/query compatibility)
-- ✓ **UNION-03**: Operaciones adds 5 metrics columns (68-72) — v4.0 (Total_Uniones, Pulgadas_ARM, Pulgadas_SOLD)
-- ✓ **UNION-04**: Metadata adds N_UNION column (position 11) — v4.0 (granular audit trail)
-- ✓ **UNION-05**: Legacy columns preserved — v4.0 (Armador/Soldador calculated on-demand from Uniones)
-- ✓ **WORK-01**: Worker can INICIAR spool — v4.0 (occupies without touching Uniones sheet)
-- ✓ **WORK-02**: Worker can FINALIZAR with union selection — v4.0 (checkboxes + pulgadas calculator)
-- ✓ **WORK-03**: Auto-determination PAUSAR vs COMPLETAR — v4.0 (based on selection count)
-- ✓ **WORK-04**: Partial completion workflows — v4.0 (worker A: 7/10, worker B: 3/10 later)
-- ✓ **WORK-05**: ARM→SOLD validation — v4.0 (SOLD requires >= 1 union armada)
-- ✓ **WORK-06**: Zero-union cancellation — v4.0 (modal confirmation + SPOOL_CANCELADO event)
-- ✓ **PERF-01**: Batch API writes — v4.0 (gspread.batch_update(), 1 call vs N loops)
-- ✓ **PERF-02**: <1s p95 latency — v4.0 (0.55s achieved in mock testing, production validation pending)
-- ✓ **PERF-03**: Batch metadata logging — v4.0 (900-row chunking)
-- ✓ **PERF-04**: Batch + granular events — v4.0 (1 spool-level + N union-level per FINALIZAR)
-- ✓ **METRIC-01**: Pulgadas-diámetro primary metric — v4.0 (displayed in dashboards)
-- ✓ **METRIC-02**: Worker performance in pulgadas/day — v4.0 (SUM(DN_UNION) calculations)
-- ✓ **METRIC-03**: Union-level metrics endpoint — v4.0 (GET /api/v4/uniones/{tag}/metricas)
-- ✓ **METRIC-04**: Granular union events — v4.0 (UNION_ARM/SOLD_REGISTRADA with N_UNION, DN_UNION)
-- ✓ **COMPAT-01**: Version detection by union count — v4.0 (count > 0 = v4.0)
-- ✓ **COMPAT-02**: v3.0 TOMAR/PAUSAR/COMPLETAR preserved — v4.0 (3-button UX maintained)
-- ✓ **COMPAT-03**: v4.0 INICIAR/FINALIZAR workflow — v4.0 (2-button UX with auto-determination)
-- ✓ **COMPAT-04**: Dual endpoint support — v4.0 (/api/v3/ + /api/v4/ routes)
-- ✓ **COMPAT-05**: Metrología/Reparación at spool level — v4.0 (union granularity deferred to v4.1)
-- ✓ **STATE-01**: Persistent Redis locks (no TTL) — v4.0 (supports 5-8h work sessions)
-- ✓ **STATE-02**: Lazy cleanup on INICIAR — v4.0 (removes locks >24h old)
-- ✓ **STATE-03**: Startup reconciliation — v4.0 (auto-recovery from Sheets.Ocupado_Por)
-- ✓ **STATE-04**: Auto-trigger metrología queue — v4.0 (when SOLD 100% complete)
+**UX (4/4):**
+- ✓ **UX-01**: Already-tracked spools disabled/grey in AddSpoolModal — v5.0
+- ✓ **UX-02**: Toast auto-dismiss 3-5s — v5.0
+- ✓ **UX-03**: No optimistic updates — wait for API response — v5.0
+- ✓ **UX-04**: Blueprint Industrial palette, mobile-first — v5.0
 
 ### Active
 
 **Next Milestone Planning:**
-- Fresh requirements needed - run `/gsd:new-milestone` to define v4.1+ goals
+- Fresh requirements needed — run `/gsd:new-milestone` to define v5.1+ goals
 
 ### Out of Scope
 
-**Explicitly excluded to prevent scope creep:**
-- **Automatic PAUSAR on timeout** — Manual only. Workers decide when to release spools. Automatic timeout could release spools mid-critical-operation.
-- **GPS/RFID physical tracking** — Logical occupation only (worker assignment), not physical location sensors. Avoids $50K+ RTLS hardware cost.
-- **Sub-1-second real-time sync** — 5-10 second refresh is sufficient for manufacturing floor (not warehouse picking). Google Sheets API limits make sub-second impossible.
-- **Reservation system** — No "reserve for later" without physically taking spool. Prevents inventory hoarding.
-- **Multi-operation TOMAR** — Worker can only TOMAR for ONE operation at a time (ARM or SOLD, not both). Prevents blocking.
-- **Retroactive edits** — Metadata is append-only (no editing history). Regulatory requirement.
-- **Complex role hierarchies** — Flat role system (Armador, Soldador, Metrología, Ayudante). No supervisor approval workflows in v3.0.
+- **Automatic PAUSAR on timeout** — Manual only. Workers decide when to release spools.
+- **GPS/RFID physical tracking** — Logical occupation only, not physical location sensors.
+- **Sub-1-second real-time sync** — 30s polling sufficient for manufacturing floor.
+- **Reservation system** — No "reserve for later" without physically taking spool.
+- **Multi-operation TOMAR** — Worker can only work one operation at a time per spool.
+- **Retroactive edits** — Metadata is append-only (regulatory requirement).
+- **Complex role hierarchies** — Flat role system, no supervisor approval workflows.
+- **Union-level selection in UI** — Eliminated in v5.0; action_override replaces manual union checkboxes.
 
 ## Context
 
-**Current Codebase State (v3.0 shipped 2026-01-28):**
-- ZEUES v3.0 in production (Railway + Vercel)
-- Python 3.11+ FastAPI backend with Clean Architecture + Redis for atomic locks
-- Next.js 14 TypeScript frontend (mobile-first for tablets with SSE streaming)
-- Google Sheets as database (source of truth, 66 columns: 63 v2.1 + 3 v3.0)
-- Redis infrastructure deployed for occupation locks and pub/sub events
-- 491,165 total lines of code (Python + TypeScript)
-- 1,852 lines of integration tests (95%+ coverage for v3.0 features)
-- Service Account authentication (zeus-mvp@zeus-mvp.iam.gserviceaccount.com)
+**Current Codebase State (v5.0 shipped 2026-03-11):**
+- ZEUES v5.0 in production (Railway + Vercel)
+- Python 3.11+ FastAPI backend (22,006 LOC) with Clean Architecture
+- Next.js 14 TypeScript frontend (4,489 LOC) — single-page modal architecture
+- Google Sheets as database (Operaciones 72 cols, Uniones 17 cols, Metadata 11 cols)
+- 301 Jest tests + 6 Playwright a11y tests passing
+- WCAG 2.1 Level AA compliant
 
-**v3.0 Achievements:**
-- Real-time occupation tracking with Redis atomic locks (1-hour TTL)
-- Hierarchical state machines (6 states: 3 ARM + 3 SOLD) preventing state explosion
-- SSE streaming for sub-10s dashboard updates with EventSource + exponential backoff
-- Instant metrología inspection (binary APROBADO/RECHAZADO without occupation)
-- Bounded reparación cycles (3-cycle limit before BLOQUEADO with supervisor override)
-- Collaborative workflows enabling worker handoffs without strict ownership
+**v5.0 Achievements:**
+- Replaced 9-page linear flow with single-page card list + modal stack
+- 7 v4.0 route directories deleted, ~3000+ lines of dead code removed
+- SpoolCard with live elapsed timer and 7-state badges (Blueprint Industrial palette)
+- 30s batch-status polling with Page Visibility API pause when tab hidden/modal open
+- Complete modal chain: AddSpool → Operation → Action → Worker → API → Toast
+- CANCELAR dual logic: frontend-only (libre) vs backend reset (occupied)
+- parseEstadoDetalle parser shared between backend (Python) and frontend (TypeScript)
 
-**Known Technical Debt (from v3.0 audit):**
-- Phase 4 missing formal VERIFICATION.md (code verified via integration checker)
-- Frontend metrología/reparación integration unverified (backend complete, UI may be missing)
-- No dedicated reparación router (endpoints in actions.py instead of separate router)
-- No E2E SSE test with real infrastructure (verified at code level only)
-- 7-day rollback window expires 2026-02-02 (v2.1 backup will be archived)
+**Known Technical Debt (from v5.0 audit — 6 items, all non-blocking):**
+- Unused `parseEstadoDetalle` TypeScript mirror (157 + 310 lines) — zero consumers
+- Unused `addTag`/`removeTag`/`clearTags` in local-storage.ts — superseded by SpoolListContext
+- Orphaned `UnionTable.tsx` — exists but no consumers
+- Stale v3.0 fields in `operation-config.ts` (skipP3, OPERATION_WORKFLOWS, ActionType)
+- Pre-existing TODO in api.ts:315 (getSpoolsReparacion cycle hardcoded to 0)
 
 ## Constraints
 
 - **Tech Stack (MUST keep)**: Python FastAPI + Next.js + Google Sheets (no database migration)
-- **Mobile-First**: Tablet UI with large buttons (h-16/h-20), touch-friendly, no complex desktop features
-- **Google Sheets Limits**: 60 writes/min/user, 200-500ms latency, no WebSocket support, eventual consistency
-- **Production Stability**: v2.1 MUST remain working during v3.0 development (244 tests passing, zero downtime)
-- **Manufacturing Scale**: 30-50 workers, 2,000+ spools, 10-15 req/sec peak load
-- **Regulatory**: Metadata audit trail mandatory (append-only, immutable), no retroactive edits
+- **Mobile-First**: Tablet UI with large buttons (h-16/h-20), touch-friendly
+- **Google Sheets Limits**: 60 writes/min/user, 200-500ms latency
+- **Manufacturing Scale**: 30-50 workers, 2,000+ spools, 10-15 req/sec peak
+- **Regulatory**: Metadata audit trail mandatory (append-only, immutable)
+- **Accessibility**: WCAG 2.1 Level AA compliance (axe-core + Playwright tests)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| **Branch-based migration over dual-write** | v2.1 stability critical. Branch isolation eliminates synchronization complexity. Build v3.0 in separate branch, one-time cutover when ready, 1-week rollback window. | ✓ Good — Migration executed successfully in Phase 1, 66 columns added, 7-day rollback active until 2026-02-02 |
-| **Server-Sent Events (SSE) over WebSockets** | Unidirectional updates only (server → client), HTTP-based simplicity, native browser support, auto-reconnect, lower resource usage for manufacturing floor scale | ✓ Good — Implemented in Phase 4, EventSource with exponential backoff (1s-30s), Page Visibility API for mobile lifecycle, sub-10s latency achieved |
-| **Redis cache + Google Sheets** | Google Sheets API limits (60 writes/min) require caching layer. Redis provides sub-50ms reads + atomic operations (SETNX) for race condition prevention. Reduces API calls 80-90%. | ✓ Good — Phase 2 deployed Redis with atomic locks (SET NX EX), 1-hour TTL, validated with 10 concurrent TOMAR tests (1 success, 9 conflicts) |
-| **python-statemachine 2.5.0** | Async-native state machine library with 100% test coverage, actively maintained (2025 updates), expressive API integrates with Pydantic validation, prevents state explosion with hierarchical design | ✓ Good — Integrated in Phase 3, separate ARM/SOLD machines, callbacks for Sheets updates, 6 states total (not 27) |
-| **Optimistic locking with version tokens** | Google Sheets doesn't support row-level locks. Low contention environment (10-20 workers on 2,000 spools = 0.5% collision rate) makes optimistic locking viable. Standard web pattern with 3x retry. | ✓ Good — Phase 2 implemented UUID4 version tokens, max 3 retries with jittered exponential backoff (100ms-10s), two-layer defense (Redis + version tokens) |
-| **5-second polling + SSE streaming** | Google Drive webhooks batch every 3 minutes (too slow). Polling gives predictable updates, well under Google Sheets API quotas (300 reads/100s/user = 180 req/min for 30 workers = ~6 req/sec shared). Combined with SSE for push notifications. | ⚠️ Revisit — Phase 4 implemented SSE only (no polling), relying on event publishing after Sheets writes. Load test with 30 concurrent users needed to validate quota usage. |
-| **Hierarchical state machine (6 states, not 27)** | v3.0 naive approach: 3 operations × 3 occupation states × 3 progress states = 27 states (unmaintainable). Hierarchical model: Separate ARM/SOLD machines + Estado_Detalle for display = 6 manageable states. | ✓ Good — Phase 3 implemented separate state machines, EstadoDetalleBuilder for combined display, prevents state explosion while maintaining clarity |
-| **Bounded reparación cycles (max 3)** | Infinite metrología → reparación loops could trap spools forever. Industry best practice: 3 attempts before supervisor escalation. After 3 failures, likely requires root cause analysis (design flaw, not execution error). | ✓ Good — Phase 6 implemented CycleCounterService with MAX_CYCLES=3, SpoolBloqueadoError (HTTP 403), EstadoDetalleService detects supervisor overrides |
-| **Metrología instant completion (no TOMAR)** | Metrología inspection takes seconds (visual check, measurements), not hours like ARM/SOLD. Occupying spool for inspection creates false "unavailable" signal. Instant COMPLETAR with result (APROBADO/RECHAZADO) matches workflow reality. | ✓ Good — Phase 5 implemented MetrologiaService.completar() without Redis lock, prerequisite validation (ARM+SOLD complete), binary resultado with 44 comprehensive tests |
-| **Cycle counting embedded in Estado_Detalle** | Avoid schema migration by parsing cycle count from Estado_Detalle string instead of dedicated column. Pattern: "RECHAZADO - Ciclo 2/3" | ✓ Good — Phase 6 implemented CycleCounterService for extraction/increment, resets to 0 after APROBADO, preserves cycles across state transitions |
-| **No role restriction for reparación** | Consistent with ARM/SOLD pattern where any worker with role can perform operation. All workers can repair, no special "Reparador" role needed. | ✓ Good — Phase 6 implemented OPERATION_TO_ROLES['REPARACION'] = [], test_any_worker_can_tomar_reparacion validates pattern |
+| **Single page + modal stack (no routing)** | Eliminates unnecessary navigation, all operations one click away from card list | ✓ Good — v5.0 replaced 9 pages with 1 page + 5 modals, zero page transitions |
+| **localStorage for spool tag persistence** | Simple, no backend needed, persists between sessions, only stores tag strings | ✓ Good — SpoolListContext syncs via useEffect, survives page reloads |
+| **30s polling via batch-status** | Balance between freshness and Google Sheets rate limits; pauses when tab hidden | ✓ Good — Page Visibility API + modal-open pause prevents wasted API calls |
+| **Estado_Detalle as state source** | Already encodes all needed info (operation, progress, cycle), avoids new columns | ✓ Good — parseEstadoDetalle extracts operacion_actual, estado_trabajo, ciclo_reparacion |
+| **action_override on FINALIZAR** | Eliminates union selection UI without breaking backend logic | ✓ Good — PAUSAR/COMPLETAR buttons directly map to override, simpler UX |
+| **CANCELAR dual logic** | Frontend-only for libre spools (no API), backend reset for occupied spools | ✓ Good — Clean separation, no unnecessary API calls for simple list removal |
+| **No optimistic updates** | Prevents frontend/backend state divergence; loading spinner + wait for response | ✓ Good — Simple mental model, no rollback complexity |
+| **Reuse existing components** | SpoolTable, Modal, SpoolFilterPanel extended with new props, not rewritten | ✓ Good — Backward-compatible prop additions (disabledSpools, isTopOfStack, showSelectionControls) |
+| **Hierarchical state machine (v3.0)** | 6 manageable states vs 27 combinatorial states | ✓ Good — Still valid in v5.0, getValidOperations/getValidActions use same logic |
+| **Bounded reparación cycles (v3.0)** | Max 3 before BLOQUEADO, prevents infinite loops | ✓ Good — Still enforced, BLOQUEADO spools show no operations in OperationModal |
+| **Metrología instant completion (v3.0)** | No occupation needed for quick inspection | ✓ Good — MetrologiaModal two-step flow (resultado → worker) matches workflow |
 
 ---
-*Last updated: 2026-02-02 after v4.0 milestone completion*
+*Last updated: 2026-03-11 after v5.0 milestone*

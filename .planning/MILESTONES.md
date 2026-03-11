@@ -1,5 +1,35 @@
 # Project Milestones: ZEUES Manufacturing Traceability System
 
+## v5.0 Single Page + Modal Stack (Shipped: 2026-03-11)
+
+**Delivered:** Complete UX rewrite replacing 9-page linear navigation with a single-page card list + modal stack architecture. Workers manage all spools from one screen, with operations one click away via stacked modals.
+
+**Phases completed:** 0-5 (14 plans total)
+
+**Key accomplishments:**
+
+- Backend endpoints: parseEstadoDetalle parser + SpoolStatus model, GET /api/spool/{tag}/status, POST /api/spools/batch-status for 30s polling, action_override on FINALIZAR eliminating union selection UI
+- Frontend foundations: SpoolCardData types mirroring backend, spool-state-machine (getValidOperations/getValidActions pure functions), useModalStack hook for multi-step modal navigation, useNotificationToast with 4s auto-dismiss
+- Core visual components: SpoolCard with live elapsed timer and 7-state badges, NotificationToast with ARIA live region, backward-compatible SpoolTable/SpoolFilterPanel/Modal prop extensions
+- Complete modal stack: AddSpoolModal (reuses SpoolTable), OperationModal (state-filtered ARM/SOLD/REP/MET), ActionModal (occupation-filtered INICIAR/FINALIZAR/PAUSAR/CANCELAR), WorkerModal (role-filtered), MetrologiaModal (two-step APROBADA/RECHAZADA)
+- Single-page integration: page.tsx rewrite with SpoolListContext (useReducer + localStorage sync), 30s batch-status polling with Page Visibility API pause, CANCELAR dual logic (frontend-only vs backend reset), MET APROBADA auto-remove
+- Dead code cleanup: 7 v4.0 route directories deleted, ~3000+ lines removed, Playwright a11y tests rewritten for single-page modal architecture, full build pipeline green (301 Jest tests passing)
+
+**Stats:**
+
+- 142 files changed, +16,814 / -12,708 lines
+- 4,489 LOC frontend + 22,006 LOC backend
+- 6 phases, 14 plans, 27/27 requirements satisfied
+- 1 day development (2026-03-10)
+
+**Git range:** `d496014` → `3ade704`
+
+**Tech Debt:** 6 minor items (unused parseEstadoDetalle TS mirror, orphaned UnionTable.tsx, stale v3.0 fields in operation-config.ts) — all non-blocking
+
+**What's next:** Define v5.1+ goals with `/gsd:new-milestone`
+
+---
+
 ## v4.0 Uniones System (Shipped: 2026-02-02)
 
 **Delivered:** Union-level tracking with pulgadas-diámetro as primary business metric, enabling partial completion workflows with INICIAR/FINALIZAR operations, comprehensive audit trail with batch + granular metadata logging, and dual v3.0/v4.0 workflow support.
