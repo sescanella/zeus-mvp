@@ -114,7 +114,7 @@ Plans:
 
 **Goal:** Ensamblar todo en la pantalla principal funcional.
 **Requirements:** [CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, MODAL-01, MODAL-02, MODAL-03, MODAL-04, MODAL-05, MODAL-06, MODAL-07, MODAL-08, STATE-01, STATE-02, STATE-03, STATE-04, STATE-05, STATE-06, UX-01, UX-02, UX-03, UX-04]
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 04-01-PLAN.md — SpoolListContext + spool-state-machine type cleanup

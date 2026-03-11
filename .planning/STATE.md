@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-11T01:35:09.759Z"
-last_activity: "2026-03-11 - Completed 03-01: AddSpoolModal, OperationModal, ActionModal presentational modals"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-11T01:50:00.000Z"
+last_activity: "2026-03-11 - Completed 04-02: page.tsx v5.0 single-page modal orchestration"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 100
 ---
 
@@ -28,11 +28,11 @@ See: .planning/v5.0-single-page/ROADMAP.md
 ## Current Position
 
 Phase: 4 (Frontend — Integración)
-Plan: 01 COMPLETE
-Status: Phase 4 in progress — plan 01 done
-Last activity: 2026-03-11 - Completed 04-01: SpoolListContext + spool-state-machine type cleanup
+Plan: 02 COMPLETE
+Status: Phase 4 COMPLETE — all plans done
+Last activity: 2026-03-11 - Completed 04-02: page.tsx v5.0 single-page modal orchestration
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -102,6 +102,12 @@ Progress: [█████████░] 92%
 - localStorage syncs via useEffect on spools array, not inside action handlers — single sync point
 - Re-export type { SpoolCardData } from './types' in spool-state-machine.ts preserves OperationModal/ActionModal backward compatibility
 
+### Plan 04-02 Decisions (2026-03-11)
+- Two-component file pattern: Page (default export) wraps HomePage in SpoolListProvider — clean hooks usage inside provider boundary
+- useRef(refreshAll) stores stable reference for 30s polling interval — avoids stale closure without adding refreshAll to useEffect deps
+- mockSpools as mutable let variable in tests — SWC mock factory limitations prevent jest.fn().mockReturnValue() pattern for useSpoolList
+- CANCELAR operacion falls back to selectedOperation when operacion_actual is null — covers edge case where spool card has no operacion_actual set
+
 ## Previous Milestones
 
 - v4.0: Shipped 2026-02-02 (7 phases, 42 plans)
@@ -109,6 +115,6 @@ Progress: [█████████░] 92%
 
 ## Session Continuity
 
-Last session: 2026-03-11T01:35:09.756Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-11T01:50:00.000Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
