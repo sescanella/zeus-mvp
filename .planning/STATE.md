@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-10T23:25:49.458Z"
-last_activity: "2026-03-10 - Completed 02-02: disabledSpools, showSelectionControls, Modal isTopOfStack"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-11T00:13:00Z"
+last_activity: "2026-03-11 - Completed 03-02: WorkerModal (role-filtered), MetrologiaModal (two-step inspection)"
 progress:
-  total_phases: 7
-  completed_phases: 6
-  total_plans: 20
-  completed_plans: 20
-  percent: 97
+  total_phases: 6
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 10
+  percent: 90
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/v5.0-single-page/ROADMAP.md
 
 ## Current Position
 
-Phase: 2 (Frontend — Componentes Core)
+Phase: 3 (Frontend — Modales)
 Plan: 02 COMPLETE
-Status: Phase 2 in progress — plans 01, 02 done
-Last activity: 2026-03-10 - Completed 02-02: disabledSpools, showSelectionControls, Modal isTopOfStack
+Status: Phase 3 in progress — plans 01, 02 done
+Last activity: 2026-03-11 - Completed 03-02: WorkerModal (role-filtered), MetrologiaModal (two-step inspection)
 
-Progress: [██████████] 97%
+Progress: [█████████░] 90%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -90,6 +90,12 @@ Progress: [██████████] 97%
 - isTopOfStack uses strict false check (=== false) so omitted/undefined prop defaults to top-of-stack ESC behavior
 - Grey Lock icon (text-white/30) used for disabled-from-stack rows; red Lock reserved for bloqueado (reparacion)
 
+### Plan 03-02 Decisions (2026-03-11)
+- WorkerModal maps Operation (ARM/SOLD/REP/MET) to OperationType via toOperationType() helper for OPERATION_TO_ROLES lookup
+- MetrologiaModal prefetches workers on open (not on step transition) to eliminate perceived delay between step 1 and step 2
+- finalizarSpool called with action_override only — no selected_unions (MODAL-08 satisfied)
+- worker_nombre NOT sent in IniciarRequest — backend derives via WorkerService (per Plan 00-03 decision)
+
 ## Previous Milestones
 
 - v4.0: Shipped 2026-02-02 (7 phases, 42 plans)
@@ -97,6 +103,6 @@ Progress: [██████████] 97%
 
 ## Session Continuity
 
-Last session: 2026-03-10T23:21:19.944Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-11T00:13:00Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

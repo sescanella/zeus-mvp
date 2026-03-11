@@ -65,16 +65,16 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — NotificationToast + SpoolCard + SpoolCardList (new components)
-- [ ] 02-02-PLAN.md — SpoolTable + SpoolFilterPanel + Modal modifications (backward-compatible props)
+- [x] 02-01-PLAN.md — NotificationToast + SpoolCard + SpoolCardList (new components)
+- [x] 02-02-PLAN.md — SpoolTable + SpoolFilterPanel + Modal modifications (backward-compatible props)
 
 ### Tasks
-- [ ] 2.1 — Crear NotificationToast.tsx (toast con auto-dismiss, role="alert")
-- [ ] 2.2 — Crear SpoolCard.tsx (card individual con estado, timer, badges)
-- [ ] 2.3 — Crear SpoolCardList.tsx (contenedor con empty state)
-- [ ] 2.4 — Modificar SpoolTable.tsx (añadir prop disabledSpools)
-- [ ] 2.5 — Modificar SpoolFilterPanel.tsx (añadir prop showSelectionControls)
-- [ ] 2.6 — Modificar Modal.tsx (ESC solo cierra modal top del stack)
+- [x] 2.1 — Crear NotificationToast.tsx (toast con auto-dismiss, role="alert")
+- [x] 2.2 — Crear SpoolCard.tsx (card individual con estado, timer, badges)
+- [x] 2.3 — Crear SpoolCardList.tsx (contenedor con empty state)
+- [x] 2.4 — Modificar SpoolTable.tsx (añadir prop disabledSpools)
+- [x] 2.5 — Modificar SpoolFilterPanel.tsx (añadir prop showSelectionControls)
+- [x] 2.6 — Modificar Modal.tsx (ESC solo cierra modal top del stack)
 
 ### Success Criteria
 - SpoolCard renderiza todos los estados posibles (libre, iniciado, pausado, completado, rechazado, bloqueado)
@@ -87,6 +87,12 @@ Plans:
 ## Phase 3: Frontend — Modales
 
 **Goal:** Crear los 5 modales del flujo de operaciones.
+**Requirements:** [MODAL-01, MODAL-02, MODAL-03, MODAL-04, MODAL-05, MODAL-06, MODAL-07, MODAL-08, UX-01, STATE-01, STATE-02]
+**Plans:** 2/2 plans complete
+
+Plans:
+- [ ] 03-01-PLAN.md — AddSpoolModal + OperationModal + ActionModal (presentational modals)
+- [ ] 03-02-PLAN.md — WorkerModal + MetrologiaModal (API-calling modals)
 
 ### Tasks
 - [ ] 3.1 — Crear AddSpoolModal.tsx (reutiliza SpoolTable + SpoolFilterPanel)
