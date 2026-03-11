@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-11T00:13:00Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-11T00:15:23.292Z"
 last_activity: "2026-03-11 - Completed 03-02: WorkerModal (role-filtered), MetrologiaModal (two-step inspection)"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
   completed_plans: 10
   percent: 90
@@ -28,11 +28,11 @@ See: .planning/v5.0-single-page/ROADMAP.md
 ## Current Position
 
 Phase: 3 (Frontend — Modales)
-Plan: 02 COMPLETE
-Status: Phase 3 in progress — plans 01, 02 done
-Last activity: 2026-03-11 - Completed 03-02: WorkerModal (role-filtered), MetrologiaModal (two-step inspection)
+Plan: 01 COMPLETE
+Status: Phase 3 in progress — plan 01 done
+Last activity: 2026-03-11 - Completed 03-01: AddSpoolModal, OperationModal, ActionModal presentational modals
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -90,11 +90,11 @@ Progress: [█████████░] 90%
 - isTopOfStack uses strict false check (=== false) so omitted/undefined prop defaults to top-of-stack ESC behavior
 - Grey Lock icon (text-white/30) used for disabled-from-stack rows; red Lock reserved for bloqueado (reparacion)
 
-### Plan 03-02 Decisions (2026-03-11)
-- WorkerModal maps Operation (ARM/SOLD/REP/MET) to OperationType via toOperationType() helper for OPERATION_TO_ROLES lookup
-- MetrologiaModal prefetches workers on open (not on step transition) to eliminate perceived delay between step 1 and step 2
-- finalizarSpool called with action_override only — no selected_unions (MODAL-08 satisfied)
-- worker_nombre NOT sent in IniciarRequest — backend derives via WorkerService (per Plan 00-03 decision)
+### Plan 03-01 Decisions (2026-03-11)
+- Arrow-function jest.mock factories (no TypeScript type annotations) — SWC transformer rejects TS types in mock factory callbacks
+- MET operation routes to onSelectMet() not onSelectOperation() — MetrologiaModal uses different flow than ARM/SOLD/REP
+- CANCELAR always calls onCancel() directly in ActionModal — no worker step needed (MODAL-04); applies to both libre and occupied spools
+- AddSpoolModal uses getSpoolsParaIniciar('ARM') — best available endpoint for full spool list (documented limitation)
 
 ## Previous Milestones
 
@@ -103,6 +103,6 @@ Progress: [█████████░] 90%
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:13:00Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-11T00:15:23.290Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
