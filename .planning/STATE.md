@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-11T01:47:59.509Z"
-last_activity: "2026-03-11 - Completed 04-02: page.tsx v5.0 single-page modal orchestration"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-11T02:04:14.976Z"
+last_activity: "2026-03-11 - Completed 05-01: deleted ~3100 lines of dead v4.0 multi-page flow code"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_plans: 14
+  completed_plans: 13
+  percent: 93
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/v5.0-single-page/ROADMAP.md
 
 ## Current Position
 
-Phase: 4 (Frontend — Integración)
-Plan: 02 COMPLETE
-Status: Phase 4 COMPLETE — all plans done
-Last activity: 2026-03-11 - Completed 04-02: page.tsx v5.0 single-page modal orchestration
+Phase: 5 (Limpieza)
+Plan: 01 COMPLETE
+Status: Phase 5 IN PROGRESS — plan 01 done, plan 02 remaining
+Last activity: 2026-03-11 - Completed 05-01: deleted ~3100 lines of dead v4.0 multi-page flow code
 
-Progress: [██████████] 100%
+Progress: [█████████░] 93%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -102,6 +102,12 @@ Progress: [██████████] 100%
 - localStorage syncs via useEffect on spools array, not inside action handlers — single sync point
 - Re-export type { SpoolCardData } from './types' in spool-state-machine.ts preserves OperationModal/ActionModal backward compatibility
 
+### Plan 05-01 Decisions (2026-03-11)
+- context.tsx deletion and layout.tsx AppProvider removal done atomically in single commit — prevents broken intermediate build state
+- SpoolListProvider stays in page.tsx (not layout.tsx) — root layout is now provider-free
+- .next/ cache cleared after route directory deletions — stale type declarations in .next/types/app/ caused false TS errors
+- UnionTable.tsx has no live consumers (confirmed via grep) — retained, deferred to future cleanup
+
 ### Plan 04-02 Decisions (2026-03-11)
 - Two-component file pattern: Page (default export) wraps HomePage in SpoolListProvider — clean hooks usage inside provider boundary
 - useRef(refreshAll) stores stable reference for 30s polling interval — avoids stale closure without adding refreshAll to useEffect deps
@@ -115,6 +121,6 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-11T01:50:00.000Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-11T02:04:14.972Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None

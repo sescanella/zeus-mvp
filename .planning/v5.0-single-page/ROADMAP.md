@@ -117,16 +117,16 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 04-01-PLAN.md — SpoolListContext + spool-state-machine type cleanup
-- [ ] 04-02-PLAN.md — page.tsx rewrite with modal wiring + polling + CANCELAR + auto-remove
+- [x] 04-01-PLAN.md — SpoolListContext + spool-state-machine type cleanup
+- [x] 04-02-PLAN.md — page.tsx rewrite with modal wiring + polling + CANCELAR + auto-remove
 
 ### Tasks
-- [ ] 4.1 — Crear SpoolListContext (nuevo context para card list + localStorage sync)
-- [ ] 4.2 — Reescribir app/page.tsx (single page: Anadir Spool + SpoolCardList + Toasts)
-- [ ] 4.3 — Wire flujo modal completo (AddSpool → select → Operation → Action → Worker → API → refresh card)
-- [ ] 4.4 — Implementar polling 30s (batch-status para refrescar todos los cards)
-- [ ] 4.5 — Implementar auto-remove en MET APROBADA
-- [ ] 4.6 — Implementar CANCELAR dual (frontend-only vs backend según ocupado_por)
+- [x] 4.1 — Crear SpoolListContext (nuevo context para card list + localStorage sync)
+- [x] 4.2 — Reescribir app/page.tsx (single page: Anadir Spool + SpoolCardList + Toasts)
+- [x] 4.3 — Wire flujo modal completo (AddSpool → select → Operation → Action → Worker → API → refresh card)
+- [x] 4.4 — Implementar polling 30s (batch-status para refrescar todos los cards)
+- [x] 4.5 — Implementar auto-remove en MET APROBADA
+- [x] 4.6 — Implementar CANCELAR dual (frontend-only vs backend según ocupado_por)
 
 ### Success Criteria
 - Flujo E2E funciona: anadir spool → operar → ver resultado en card
@@ -141,6 +141,11 @@ Plans:
 ## Phase 5: Limpieza
 
 **Goal:** Eliminar código muerto del flujo multi-pantalla.
+**Plans:** 1/2 plans executed
+
+Plans:
+- [ ] 05-01-PLAN.md — Delete dead pages, components, context.tsx, barrel cleanup
+- [ ] 05-02-PLAN.md — Rewrite accessibility tests for v5.0 + final verification
 
 ### Tasks
 - [ ] 5.1 — Eliminar páginas: operacion/, tipo-interaccion/, seleccionar-spool/, seleccionar-uniones/, confirmar/, exito/, resultado-metrologia/
