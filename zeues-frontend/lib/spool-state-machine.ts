@@ -8,37 +8,14 @@
  * These are pure functions with no side effects — safe to call anywhere.
  *
  * Plan: 01-02-PLAN.md Feature 2
+ * Updated: 04-01-PLAN.md Task 2 — removed local duplicate types, import from types.ts
  */
 
-// TODO: Once Plan 01-01 adds these to lib/types.ts, replace with:
-// import type { SpoolCardData, EstadoTrabajo, OperacionActual } from './types';
+import type { SpoolCardData } from './types';
 
-type EstadoTrabajo =
-  | 'LIBRE'
-  | 'EN_PROGRESO'
-  | 'PAUSADO'
-  | 'COMPLETADO'
-  | 'RECHAZADO'
-  | 'BLOQUEADO'
-  | 'PENDIENTE_METROLOGIA';
-
-type OperacionActual = 'ARM' | 'SOLD' | 'REPARACION' | null;
-
-/** Minimal SpoolCardData interface — full definition lives in lib/types.ts (Plan 01-01) */
-export interface SpoolCardData {
-  tag_spool: string;
-  ocupado_por: string | null;
-  fecha_ocupacion: string | null;
-  estado_detalle: string | null;
-  total_uniones: number | null;
-  uniones_arm_completadas: number | null;
-  uniones_sold_completadas: number | null;
-  pulgadas_arm: number | null;
-  pulgadas_sold: number | null;
-  operacion_actual: OperacionActual;
-  estado_trabajo: EstadoTrabajo | null;
-  ciclo_rep: number | null;
-}
+// Re-export SpoolCardData so existing consumers (OperationModal, ActionModal, tests)
+// that import from '@/lib/spool-state-machine' continue to work without changes.
+export type { SpoolCardData } from './types';
 
 /** Available operation types for a spool */
 export type Operation = 'ARM' | 'SOLD' | 'MET' | 'REP';
