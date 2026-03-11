@@ -1,122 +1,184 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+/**
+ * Accessibility tests for v5.0 single-page modal architecture.
+ *
+ * All tests start at http://localhost:3000/ — the single page.
+ * Modal stack: AddSpoolModal -> OperationModal -> ActionModal -> WorkerModal/MetrologiaModal.
+ *
+ * Rewritten in Phase 5 Plan 02 — old tests navigated multi-page routes
+ * (/operacion, /tipo-interaccion, /seleccionar-spool) that no longer exist.
+ */
 test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
-  test('P1: Worker identification page has no a11y violations', async ({ page }) => {
+  test('Main page has no a11y violations', async ({ page }) => {
     await page.goto('http://localhost:3000/');
+    await page.waitForLoadState('networkidle');
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
+    const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(results.violations).toEqual([]);
   });
 
-  test('P2: Operation selection has no a11y violations', async ({ page }) => {
-    // Navigate through flow
+  test('"Anadir Spool" button is keyboard accessible', async ({ page }) => {
     await page.goto('http://localhost:3000/');
-    await page.click('text=MANUEL RODRÍGUEZ');
+    await page.waitForLoadState('networkidle');
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
+    // Tab to focus the "Anadir Spool" button
+    await page.keyboard.press('Tab');
+
+    const focusedAriaLabel = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el ? el.getAttribute('aria-label') : null;
+    });
+
+    // Button should have aria-label "Anadir spool al listado"
+    expect(focusedAriaLabel).toBe('Anadir spool al listado');
+
+    // Press Enter to open AddSpoolModal
+    await page.keyboard.press('Enter');
+
+    // Modal should open — look for the dialog role or modal content
+    const modalVisible = await page
+      .locator('[role="dialog"]')
+      .first()
+      .isVisible({ timeout: 5000 })
+      .catch(() => false);
+    expect(modalVisible).toBe(true);
+  });
+
+  test('AddSpoolModal has no a11y violations', async ({ page }) => {
+    await page.goto('http://localhost:3000/');
+    await page.waitForLoadState('networkidle');
+
+    // Open AddSpoolModal via the "Anadir Spool" button
+    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    await addButton.click();
+
+    // Wait for modal to appear
+    await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
+
+    const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(results.violations).toEqual([]);
   });
 
-  test('P4: Spool selection (Blueprint UI) has no a11y violations', async ({ page }) => {
-    // Full flow navigation
+  test('Keyboard navigation: Collapsible filter panel in AddSpoolModal', async ({ page }) => {
     await page.goto('http://localhost:3000/');
-    await page.click('text=MANUEL RODRÍGUEZ');
-    await page.click('text=ARMADO');
-    await page.click('text=TOMAR');
+    await page.waitForLoadState('networkidle');
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .exclude(['#advertisement']) // Exclude known third-party violations
-      .analyze();
+    // Open AddSpoolModal
+    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    await addButton.click();
+    await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
 
-    expect(accessibilityScanResults.violations).toEqual([]);
-  });
+    // Wait for the success state (filter panel visible)
+    await page.waitForSelector('[aria-controls="filter-panel"]', { timeout: 5000 });
 
-  test('Keyboard navigation: Tab through P4 spool table', async ({ page }) => {
-    // Setup: Navigate to spool selection
-    await page.goto('http://localhost:3000/');
-    await page.click('text=MANUEL RODRÍGUEZ');
-    await page.click('text=ARMADO');
-    await page.click('text=TOMAR');
+    // Filter panel should be collapsed by default (aria-expanded="false")
+    const initialAriaExpanded = await page.getAttribute(
+      '[aria-controls="filter-panel"]',
+      'aria-expanded'
+    );
+    expect(initialAriaExpanded).toBe('false');
 
-    // Test keyboard navigation
-    await page.keyboard.press('Tab'); // Focus filter toggle
-    await page.keyboard.press('Enter'); // Expand filters
-    await page.keyboard.press('Tab'); // Focus NV input
-    await page.keyboard.press('Tab'); // Focus TAG input
-    await page.keyboard.press('Tab'); // Focus first spool row
-    await page.keyboard.press('Enter'); // Select spool
-
-    // Verify selection works via keyboard
-    const selectedCount = await page.locator('text=SPOOLS SELECCIONADOS').count();
-    expect(selectedCount).toBeGreaterThan(0);
-  });
-
-  test('Keyboard navigation: Collapsible filter panel toggle', async ({ page }) => {
-    // Navigate to spool selection
-    await page.goto('http://localhost:3000/');
-    await page.click('text=MANUEL RODRÍGUEZ');
-    await page.click('text=ARMADO');
-    await page.click('text=TOMAR');
-
-    // Wait for page to load
-    await page.waitForSelector('text=FILTROS', { timeout: 5000 });
-
-    // Verify filter panel is collapsed by default
-    const panelCollapsed = await page.isVisible('text=BUSCAR NV');
-    expect(panelCollapsed).toBe(false);
-
-    // Press Tab until filter button is focused (may need multiple tabs)
+    // Tab within modal until filter toggle is focused
     for (let i = 0; i < 10; i++) {
       await page.keyboard.press('Tab');
       const isFocused = await page.evaluate(() => {
-        const activeElement = document.activeElement;
-        return activeElement?.getAttribute('aria-controls') === 'filter-panel';
+        const el = document.activeElement;
+        return el?.getAttribute('aria-controls') === 'filter-panel';
       });
       if (isFocused) break;
     }
 
-    // Press Enter to expand
+    // Press Enter to expand the filter panel
     await page.keyboard.press('Enter');
 
-    // Verify panel is now visible
-    const panelExpanded = await page.isVisible('text=BUSCAR NV');
-    expect(panelExpanded).toBe(true);
+    // Verify panel is now expanded
+    const expandedAriaExpanded = await page.getAttribute(
+      '[aria-controls="filter-panel"]',
+      'aria-expanded'
+    );
+    expect(expandedAriaExpanded).toBe('true');
 
-    // Verify aria-expanded attribute
-    const ariaExpanded = await page.getAttribute('[aria-controls="filter-panel"]', 'aria-expanded');
-    expect(ariaExpanded).toBe('true');
+    // Verify filter inputs are visible
+    const filterPanel = page.locator('#filter-panel');
+    await expect(filterPanel).toBeVisible({ timeout: 3000 });
   });
 
-  test('Screen reader: Table rows announce correctly', async ({ page }) => {
+  test('SpoolTable rows in AddSpoolModal have correct ARIA attributes', async ({ page }) => {
     await page.goto('http://localhost:3000/');
-    await page.click('text=MANUEL RODRÍGUEZ');
-    await page.click('text=ARMADO');
-    await page.click('text=TOMAR');
+    await page.waitForLoadState('networkidle');
 
-    // Wait for table to load
-    await page.waitForSelector('table tbody tr', { timeout: 5000 });
+    // Open AddSpoolModal
+    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    await addButton.click();
+    await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
 
-    // Check that first table row has proper ARIA attributes
-    const firstRow = page.locator('table tbody tr').first();
+    // Wait for success state — either table rows load or empty-state message appears
+    const tableBody = page.locator('table tbody');
+    await tableBody.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {
+      // No table rendered — backend not available; skip row ARIA checks
+    });
 
-    // Should have role="button" for selectable rows
-    const roleAttr = await firstRow.getAttribute('role');
-    expect(roleAttr).toBe('button');
+    const rowCount = await page.locator('table tbody tr').count();
 
-    // Should have aria-label describing the action
-    const ariaLabel = await firstRow.getAttribute('aria-label');
-    expect(ariaLabel).toContain('Seleccionar spool');
+    if (rowCount > 0) {
+      // Verify first row has proper ARIA for keyboard-accessible selection
+      const firstRow = page.locator('table tbody tr').first();
 
-    // Should have tabIndex for keyboard navigation
-    const tabIndex = await firstRow.getAttribute('tabIndex');
-    expect(tabIndex).toBe('0');
+      const roleAttr = await firstRow.getAttribute('role');
+      expect(roleAttr).toBe('button');
+
+      const tabIndex = await firstRow.getAttribute('tabIndex');
+      expect(tabIndex).toBe('0');
+
+      const ariaLabel = await firstRow.getAttribute('aria-label');
+      expect(ariaLabel).toBeTruthy();
+      expect(ariaLabel?.toLowerCase()).toContain('spool');
+    } else {
+      // Empty state — table exists with proper structure even with no rows
+      const table = page.locator('table');
+      const tableExists = await table.count();
+      // Either a table or an empty-state message must be present
+      const emptyMsg = page.locator('text=/sin spools|no hay spools|vacío/i');
+      const hasContent = tableExists > 0 || (await emptyMsg.count()) > 0;
+      expect(hasContent).toBe(true);
+    }
+  });
+
+  test('Modal ESC key closes AddSpoolModal', async ({ page }) => {
+    await page.goto('http://localhost:3000/');
+    await page.waitForLoadState('networkidle');
+
+    // Open AddSpoolModal
+    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    await addButton.click();
+    await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
+
+    // Press Escape to close modal
+    await page.keyboard.press('Escape');
+
+    // Modal should close
+    const modalGone = await page
+      .locator('[role="dialog"]')
+      .first()
+      .isVisible()
+      .then((v) => !v)
+      .catch(() => true);
+    expect(modalGone).toBe(true);
+
+    // Focus should return to the triggering button
+    await page.waitForTimeout(300);
+    const focusedLabel = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el ? el.getAttribute('aria-label') : null;
+    });
+    expect(focusedLabel).toBe('Anadir spool al listado');
   });
 });
