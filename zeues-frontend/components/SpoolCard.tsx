@@ -170,10 +170,6 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
     onRemove(spool.tag_spool);
   };
 
-  const handleRemoveKeyDown = (e: React.KeyboardEvent) => {
-    e.stopPropagation();
-  };
-
   return (
     <div className="relative bg-zeues-navy border-4 border-white/20 rounded-none hover:border-white/40 transition-colors">
       {/* Remove button — outside the clickable card area to avoid nested-interactive violation */}

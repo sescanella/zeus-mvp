@@ -1,197 +1,305 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import Link from 'next/link';
-import { Puzzle, Flame, SearchCheck, Monitor, Wrench } from 'lucide-react';
-import { BlueprintPageWrapper, Loading, ErrorMessage } from '@/components';
-import { useAppState } from '@/lib/context';
-import { getWorkers } from '@/lib/api';
+/**
+ * page.tsx — v5.0 single-page application
+ *
+ * Wires all components and modals together with SpoolListContext.
+ * Modal chain: add-spool -> operation -> action -> worker (or metrologia).
+ * 30s polling with Page Visibility API + modal pause.
+ * CANCELAR dual logic: frontend-only (libre) vs backend (occupied).
+ *
+ * Plan: 04-02-PLAN.md Task 1
+ */
 
-export default function OperacionSelectionPage() {
-  const router = useRouter();
-  const { setState } = useAppState();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+import React, { useState, useEffect, useRef } from 'react';
+import { SpoolListProvider, useSpoolList } from '@/lib/SpoolListContext';
+import { useModalStack } from '@/hooks/useModalStack';
+import { useNotificationToast } from '@/hooks/useNotificationToast';
+import { AddSpoolModal } from '@/components/AddSpoolModal';
+import { OperationModal } from '@/components/OperationModal';
+import { ActionModal } from '@/components/ActionModal';
+import { WorkerModal } from '@/components/WorkerModal';
+import { MetrologiaModal } from '@/components/MetrologiaModal';
+import { SpoolCardList } from '@/components/SpoolCardList';
+import { NotificationToast } from '@/components/NotificationToast';
+import { finalizarSpool, cancelarReparacion } from '@/lib/api';
+import type { SpoolCardData } from '@/lib/types';
+import type { Operation, Action } from '@/lib/spool-state-machine';
 
-  const fetchWorkers = async () => {
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parses worker ID from ocupado_por format "MR(93)" -> 93.
+ * Returns null if format does not match.
+ */
+function parseWorkerIdFromOcupadoPor(ocupadoPor: string): number | null {
+  const match = ocupadoPor.match(/\((\d+)\)$/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// ─── HomePage (inner component) ───────────────────────────────────────────────
+
+function HomePage() {
+  const { spools, addSpool, removeSpool, refreshAll, refreshSingle } =
+    useSpoolList();
+  const modalStack = useModalStack();
+  const { toasts, enqueue, dismiss } = useNotificationToast();
+
+  // Selected spool/operation/action state for modal chain
+  const [selectedSpool, setSelectedSpool] = useState<SpoolCardData | null>(
+    null
+  );
+  const [selectedOperation, setSelectedOperation] =
+    useState<Operation | null>(null);
+  const [selectedAction, setSelectedAction] = useState<Action | null>(null);
+
+  // Stable ref for refreshAll — safe for use in setInterval without stale closure
+  const refreshAllRef = useRef(refreshAll);
+  useEffect(() => {
+    refreshAllRef.current = refreshAll;
+  }, [refreshAll]);
+
+  // ── 30s Polling ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (
+        document.visibilityState === 'visible' &&
+        modalStack.stack.length === 0
+      ) {
+        refreshAllRef.current();
+      }
+    }, 30_000);
+
+    // Also pause polling when tab becomes hidden
+    const handleVisibilityChange = () => {
+      // Nothing needed here — the interval check handles it
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [modalStack.stack.length]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
+  const handleAddSpool = async (tag: string) => {
+    await addSpool(tag);
+    modalStack.pop();
+    enqueue(`Spool ${tag} agregado`, 'success');
+  };
+
+  const handleCardClick = (spool: SpoolCardData) => {
+    setSelectedSpool(spool);
+    modalStack.push('operation');
+  };
+
+  const handleSelectOperation = (op: Operation) => {
+    setSelectedOperation(op);
+    modalStack.push('action');
+  };
+
+  const handleSelectMet = () => {
+    modalStack.push('metrologia');
+  };
+
+  const handleSelectAction = (action: Action) => {
+    setSelectedAction(action);
+    modalStack.push('worker');
+  };
+
+  const handleWorkerComplete = async () => {
+    if (!selectedSpool) return;
+    const tag = selectedSpool.tag_spool;
+    modalStack.clear();
+    await refreshSingle(tag);
+    enqueue('Operacion completada', 'success');
+    setSelectedSpool(null);
+    setSelectedOperation(null);
+    setSelectedAction(null);
+  };
+
+  const handleMetComplete = async (resultado: 'APROBADO' | 'RECHAZADO') => {
+    if (!selectedSpool) return;
+    const tag = selectedSpool.tag_spool;
+    modalStack.clear();
+
+    if (resultado === 'APROBADO') {
+      removeSpool(tag);
+      enqueue(`Metrologia aprobada — ${tag}`, 'success');
+    } else {
+      await refreshSingle(tag);
+      enqueue(`Metrologia rechazada — ${tag}`, 'success');
+    }
+
+    setSelectedSpool(null);
+    setSelectedOperation(null);
+    setSelectedAction(null);
+  };
+
+  const handleCancel = async () => {
+    if (!selectedSpool) return;
+    const tag = selectedSpool.tag_spool;
+    const { ocupado_por, operacion_actual } = selectedSpool;
+
+    // Libre spool — frontend-only removal (STATE-03)
+    if (!ocupado_por) {
+      removeSpool(tag);
+      modalStack.clear();
+      setSelectedSpool(null);
+      setSelectedOperation(null);
+      setSelectedAction(null);
+      return;
+    }
+
+    // Occupied spool — parse worker ID
+    const workerId = parseWorkerIdFromOcupadoPor(ocupado_por);
+    if (workerId === null) {
+      enqueue('Error: no se pudo determinar el trabajador', 'error');
+      return;
+    }
+
     try {
-      setLoading(true);
-      setError('');
+      if (operacion_actual === 'REPARACION') {
+        await cancelarReparacion({ tag_spool: tag, worker_id: workerId });
+      } else {
+        // ARM or SOLD — zero-union CANCELAR path
+        const operacion = (operacion_actual ?? selectedOperation ?? 'ARM') as
+          | 'ARM'
+          | 'SOLD';
+        await finalizarSpool({
+          tag_spool: tag,
+          worker_id: workerId,
+          operacion,
+          selected_unions: [],
+        });
+      }
 
-      // API call real - fetch todos los trabajadores y guardar en context
-      const workersData = await getWorkers();
-
-      // Guardar en context para reutilizar en P2 sin re-fetch
-      setState({ allWorkers: workersData });
+      removeSpool(tag);
+      modalStack.clear();
+      enqueue(`Spool ${tag} cancelado`, 'success');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al cargar trabajadores. Intenta nuevamente.';
-      setError(message);
-    } finally {
-      setLoading(false);
+      const message =
+        err instanceof Error ? err.message : 'Error al cancelar spool';
+      enqueue(message, 'error');
+    }
+
+    setSelectedSpool(null);
+    setSelectedOperation(null);
+    setSelectedAction(null);
+  };
+
+  const handleRemoveCard = (tag: string) => {
+    removeSpool(tag);
+  };
+
+  const handleModalClose = () => {
+    modalStack.pop();
+    if (modalStack.stack.length <= 1) {
+      // After pop, stack will be empty — reset selection
+      setSelectedSpool(null);
+      setSelectedOperation(null);
+      setSelectedAction(null);
     }
   };
 
-  useEffect(() => {
-    fetchWorkers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Solo ejecutar una vez al montar
+  // ── Render ───────────────────────────────────────────────────────────────────
 
-  const handleSelectOperation = (operacion: 'ARM' | 'SOLD' | 'METROLOGIA' | 'REPARACION') => {
-    setState({ selectedOperation: operacion });
-    router.push('/operacion');
-  };
-
-  // Si está cargando o hay error, mostrar en diseño Blueprint Industrial
-  if (loading || error) {
-    return (
-      <BlueprintPageWrapper>
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          {/* Logo */}
-          <div className="mb-12">
-            <Image
-              src="/logos/logo-grisclaro-F8F9FA.svg"
-              alt="Kronos Mining"
-              width={140}
-              height={56}
-              priority
-            />
-          </div>
-
-          {loading ? (
-            <Loading />
-          ) : (
-            <div className="max-w-2xl mx-auto px-6">
-              <ErrorMessage message={error} onRetry={fetchWorkers} />
-            </div>
-          )}
-        </div>
-      </BlueprintPageWrapper>
-    );
-  }
-
-  // Pantalla principal Blueprint Industrial
   return (
-    <BlueprintPageWrapper>
-      {/* Logo + Dashboard Link */}
-      <div className="relative flex justify-center pt-4 pb-3 narrow:header-compact border-b-4 border-white/30">
-        <Image
-          src="/logos/logo-grisclaro-F8F9FA.svg"
-          alt="Kronos Mining"
-          width={140}
-          height={56}
-          priority
+    <div className="min-h-screen bg-zeues-navy text-white">
+      {/* Header */}
+      <header className="p-4 text-center border-b-4 border-white/30">
+        <h1 className="text-2xl font-bold font-mono tracking-widest">ZEUES</h1>
+      </header>
+
+      {/* Add Spool button */}
+      <div className="px-4 py-4">
+        <button
+          onClick={() => modalStack.push('add-spool')}
+          className="w-full h-16 bg-zeues-orange text-white font-bold font-mono rounded-none text-lg tracking-widest"
+          aria-label="Anadir spool al listado"
+        >
+          + Anadir Spool
+        </button>
+      </div>
+
+      {/* Spool card list */}
+      <div className="px-4">
+        <SpoolCardList
+          spools={spools}
+          onCardClick={handleCardClick}
+          onRemove={handleRemoveCard}
         />
-
-        {/* Dashboard Link - Top Right */}
-        <Link
-          href="/dashboard"
-          aria-label="Ver panel de control de spools ocupados"
-          className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-white hover:bg-white/10 active:bg-zeues-orange active:border-zeues-orange transition-all duration-200 group focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-        >
-          <Monitor size={24} strokeWidth={3} className="text-white group-active:text-white" />
-          <span className="text-sm font-black font-mono text-white tracking-wider group-active:text-white">
-            DASHBOARD
-          </span>
-        </Link>
       </div>
 
-      <div className="px-10 narrow:px-5 py-6 border-b-4 border-white/30">
-        <h2 className="text-3xl narrow:text-2xl font-black text-center text-white tracking-[0.25em] font-mono">
-          SELECCIONA OPERACIÓN
-        </h2>
-      </div>
+      {/* ── Modals ── */}
 
-      <div className="flex flex-col p-8 narrow:p-5 gap-6">
-        {/* Card Armado */}
-        <button
-          onClick={() => handleSelectOperation('ARM')}
-          aria-label="Seleccionar operación Armado"
-          className="
-            h-[20vh] narrow:h-32 w-full
-            bg-transparent
-            border-4 border-white
-            flex flex-col items-center justify-center gap-4 cursor-pointer
-            active:bg-zeues-orange active:text-white
-            transition-all duration-200
-            relative
-            group
-            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
-          "
-        >
-          <Puzzle size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-            ARMADO
-          </h3>
-        </button>
+      <AddSpoolModal
+        isOpen={modalStack.isOpen('add-spool')}
+        onAdd={handleAddSpool}
+        onClose={handleModalClose}
+        alreadyTracked={spools.map((s) => s.tag_spool)}
+        isTopOfStack={modalStack.isOpen('add-spool')}
+      />
 
-        {/* Card Soldadura */}
-        <button
-          onClick={() => handleSelectOperation('SOLD')}
-          aria-label="Seleccionar operación Soldadura"
-          className="
-            h-[20vh] narrow:h-32 w-full
-            bg-transparent
-            border-4 border-white
-            flex flex-col items-center justify-center gap-4 cursor-pointer
-            active:bg-zeues-orange active:text-white
-            transition-all duration-200
-            relative
-            group
-            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
-          "
-        >
-          <Flame size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-            SOLDADURA
-          </h3>
-        </button>
+      {selectedSpool && (
+        <>
+          <OperationModal
+            isOpen={modalStack.isOpen('operation')}
+            spool={selectedSpool}
+            onSelectOperation={handleSelectOperation}
+            onSelectMet={handleSelectMet}
+            onClose={handleModalClose}
+            isTopOfStack={modalStack.isOpen('operation')}
+          />
 
-        {/* Card Metrología */}
-        <button
-          onClick={() => handleSelectOperation('METROLOGIA')}
-          aria-label="Seleccionar operación Metrología"
-          className="
-            h-[20vh] narrow:h-32 w-full
-            bg-transparent
-            border-4 border-white
-            flex flex-col items-center justify-center gap-4 cursor-pointer
-            active:bg-zeues-orange active:text-white
-            transition-all duration-200
-            relative
-            group
-            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
-          "
-        >
-          <SearchCheck size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-            METROLOGÍA
-          </h3>
-        </button>
+          {selectedOperation && (
+            <ActionModal
+              isOpen={modalStack.isOpen('action')}
+              spool={selectedSpool}
+              operation={selectedOperation}
+              onSelectAction={handleSelectAction}
+              onCancel={handleCancel}
+              onClose={handleModalClose}
+              isTopOfStack={modalStack.isOpen('action')}
+            />
+          )}
 
-        {/* Card Reparación */}
-        <button
-          onClick={() => handleSelectOperation('REPARACION')}
-          aria-label="Seleccionar operación Reparación"
-          className="
-            h-[20vh] narrow:h-32 w-full
-            bg-transparent
-            border-4 border-white
-            flex flex-col items-center justify-center gap-4 cursor-pointer
-            active:bg-zeues-orange active:text-white
-            transition-all duration-200
-            relative
-            group
-            focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset
-          "
-        >
-          <Wrench size={80} strokeWidth={3} className="text-zeues-orange group-active:text-white" />
-          <h3 className="text-5xl narrow:text-4xl font-black text-white tracking-[0.2em] font-mono group-active:text-white">
-            REPARACIÓN
-          </h3>
-        </button>
-      </div>
-    </BlueprintPageWrapper>
+          {selectedOperation && selectedAction && (
+            <WorkerModal
+              isOpen={modalStack.isOpen('worker')}
+              spool={selectedSpool}
+              operation={selectedOperation}
+              action={selectedAction}
+              onComplete={handleWorkerComplete}
+              onClose={handleModalClose}
+              isTopOfStack={modalStack.isOpen('worker')}
+            />
+          )}
+
+          <MetrologiaModal
+            isOpen={modalStack.isOpen('metrologia')}
+            spool={selectedSpool}
+            onComplete={handleMetComplete}
+            onClose={handleModalClose}
+            isTopOfStack={modalStack.isOpen('metrologia')}
+          />
+        </>
+      )}
+
+      {/* Toast overlay */}
+      <NotificationToast toasts={toasts} onDismiss={dismiss} />
+    </div>
+  );
+}
+
+// ─── Page (default export, wraps HomePage in SpoolListProvider) ───────────────
+
+export default function Page() {
+  return (
+    <SpoolListProvider>
+      <HomePage />
+    </SpoolListProvider>
   );
 }
