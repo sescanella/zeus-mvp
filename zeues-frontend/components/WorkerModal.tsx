@@ -189,9 +189,9 @@ export function WorkerModal({
                 onClick={() => handleWorkerClick(worker)}
                 disabled={apiLoading}
                 className="w-full h-16 font-mono font-black text-white bg-[#0a3a6e] border border-white/20 rounded hover:bg-[#1a4a7e] disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                aria-label={`Seleccionar ${worker.nombre_completo}`}
+                aria-label={`Seleccionar ${worker.nombre} ${worker.apellido || ''}`.trim()}
               >
-                {worker.nombre_completo}
+                {worker.nombre} {worker.apellido || ''}
               </button>
             ))}
 

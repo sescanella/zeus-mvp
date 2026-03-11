@@ -74,7 +74,7 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
       onClick={handleBackdropClick}
     >
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 transition-opacity duration-200" />
+      <div className="fixed inset-0 bg-black/50 transition-opacity duration-200 pointer-events-none" />
 
       {/* Modal content */}
       <div
