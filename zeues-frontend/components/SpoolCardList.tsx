@@ -7,7 +7,6 @@ import type { SpoolCardData } from '@/lib/types';
 interface SpoolCardListProps {
   spools: SpoolCardData[];
   onCardClick: (spool: SpoolCardData) => void;
-  onRemove: (tag: string) => void;
 }
 
 /**
@@ -17,11 +16,11 @@ interface SpoolCardListProps {
  * a PackageOpen icon and instructions to add a spool.
  *
  * When non-empty, renders one SpoolCard per spool in a vertical flex layout.
- * onCardClick and onRemove are forwarded to each card.
+ * onCardClick is forwarded to each card.
  *
  * Plan: 02-01-PLAN.md Task 2
  */
-export function SpoolCardList({ spools, onCardClick, onRemove }: SpoolCardListProps) {
+export function SpoolCardList({ spools, onCardClick }: SpoolCardListProps) {
   if (spools.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -47,7 +46,6 @@ export function SpoolCardList({ spools, onCardClick, onRemove }: SpoolCardListPr
           key={spool.tag_spool}
           spool={spool}
           onCardClick={onCardClick}
-          onRemove={onRemove}
         />
       ))}
     </div>

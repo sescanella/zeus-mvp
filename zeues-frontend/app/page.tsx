@@ -190,10 +190,6 @@ function HomePage() {
     setSelectedAction(null);
   };
 
-  const handleRemoveCard = (tag: string) => {
-    removeSpool(tag);
-  };
-
   const handleModalClose = () => {
     modalStack.pop();
     if (modalStack.stack.length <= 1) {
@@ -229,7 +225,6 @@ function HomePage() {
         <SpoolCardList
           spools={spools}
           onCardClick={handleCardClick}
-          onRemove={handleRemoveCard}
         />
       </div>
 

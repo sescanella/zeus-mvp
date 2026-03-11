@@ -17,6 +17,26 @@ interface AddSpoolModalProps {
 
 type FetchState = 'loading' | 'success' | 'error';
 
+/** Score spool relevance: exact=3, prefix=2, contains=1, no match=0 */
+function relevanceScore(spool: Spool, searchTag: string, searchNV: string): number {
+  let score = 0;
+  if (searchTag) {
+    const tag = spool.tag_spool.toLowerCase();
+    const q = searchTag.toLowerCase();
+    if (tag === q) score += 3;
+    else if (tag.startsWith(q)) score += 2;
+    else if (tag.includes(q)) score += 1;
+  }
+  if (searchNV) {
+    const nv = (spool.nv || '').toLowerCase();
+    const q = searchNV.toLowerCase();
+    if (nv === q) score += 3;
+    else if (nv.startsWith(q)) score += 2;
+    else if (nv.includes(q)) score += 1;
+  }
+  return score;
+}
+
 /**
  * AddSpoolModal — Modal for adding spools to the tracked card list.
  *
@@ -64,12 +84,19 @@ export function AddSpoolModal({
     }
   }, [isOpen, fetchSpools]);
 
-  // Apply filters to spool list
-  const filteredSpools = spools.filter((s) => {
-    const tagMatch = !searchTag || s.tag_spool.toLowerCase().includes(searchTag.toLowerCase());
-    const nvMatch = !searchNV || (s.nv || '').toLowerCase().includes(searchNV.toLowerCase());
-    return tagMatch && nvMatch;
-  });
+  // Apply filters to spool list and sort by relevance (prefix > contains)
+  const filteredSpools = spools
+    .filter((s) => {
+      const tagMatch = !searchTag || s.tag_spool.toLowerCase().includes(searchTag.toLowerCase());
+      const nvMatch = !searchNV || (s.nv || '').toLowerCase().includes(searchNV.toLowerCase());
+      return tagMatch && nvMatch;
+    })
+    .sort((a, b) => {
+      if (!searchTag && !searchNV) return 0;
+      const scoreA = relevanceScore(a, searchTag, searchNV);
+      const scoreB = relevanceScore(b, searchTag, searchNV);
+      return scoreB - scoreA;
+    });
 
   const activeFiltersCount = (searchNV ? 1 : 0) + (searchTag ? 1 : 0);
 

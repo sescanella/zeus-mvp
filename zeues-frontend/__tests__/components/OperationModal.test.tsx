@@ -16,14 +16,7 @@ jest.mock('@/components/Modal', () => ({
   ),
 }));
 
-jest.mock('@/lib/spool-state-machine', () => ({
-  getValidOperations: jest.fn(),
-}));
-
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
-
-import { getValidOperations } from '@/lib/spool-state-machine';
-const mockGetValidOperations = getValidOperations as jest.Mock;
 
 function makeSpool(overrides: Partial<SpoolCardData> = {}): SpoolCardData {
   return {
@@ -55,67 +48,31 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-// ─── STATE-01: Valid operations per spool state ───────────────────────────────
+// ─── Always shows all 4 operations ──────────────────────────────────────────
 
-describe('OperationModal — STATE-01: valid operations', () => {
-  it('LIBRE spool shows only ARM button', () => {
-    mockGetValidOperations.mockReturnValue(['ARM']);
+describe('OperationModal — always shows all 4 operations', () => {
+  it('shows all 4 operation buttons regardless of spool state', () => {
     render(<OperationModal {...defaultProps} spool={makeSpool({ estado_trabajo: 'LIBRE' })} />);
     expect(screen.getByRole('button', { name: /ARMADO/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /SOLDADURA/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /METROLOGIA/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /REPARACION/i })).not.toBeInTheDocument();
-  });
-
-  it('COMPLETADO spool shows only MET button', () => {
-    mockGetValidOperations.mockReturnValue(['MET']);
-    render(
-      <OperationModal
-        {...defaultProps}
-        spool={makeSpool({ estado_trabajo: 'COMPLETADO' })}
-      />
-    );
+    expect(screen.getByRole('button', { name: /SOLDADURA/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /METROLOGIA/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /ARMADO/i })).not.toBeInTheDocument();
-  });
-
-  it('RECHAZADO spool shows only REP button', () => {
-    mockGetValidOperations.mockReturnValue(['REP']);
-    render(
-      <OperationModal
-        {...defaultProps}
-        spool={makeSpool({ estado_trabajo: 'RECHAZADO' })}
-      />
-    );
     expect(screen.getByRole('button', { name: /REPARACION/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /ARMADO/i })).not.toBeInTheDocument();
   });
 
-  it('EN_PROGRESO ARM spool shows only ARM button', () => {
-    mockGetValidOperations.mockReturnValue(['ARM']);
-    render(
-      <OperationModal
-        {...defaultProps}
-        spool={makeSpool({ estado_trabajo: 'EN_PROGRESO', operacion_actual: 'ARM' })}
-      />
-    );
+  it('shows all 4 operations for BLOQUEADO spool', () => {
+    render(<OperationModal {...defaultProps} spool={makeSpool({ estado_trabajo: 'BLOQUEADO' })} />);
     expect(screen.getByRole('button', { name: /ARMADO/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /SOLDADURA/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SOLDADURA/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /METROLOGIA/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /REPARACION/i })).toBeInTheDocument();
   });
 
-  it('BLOQUEADO spool shows empty state with no operation buttons', () => {
-    mockGetValidOperations.mockReturnValue([]);
-    render(
-      <OperationModal
-        {...defaultProps}
-        spool={makeSpool({ estado_trabajo: 'BLOQUEADO' })}
-      />
-    );
-    expect(screen.queryByRole('button', { name: /ARMADO/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /SOLDADURA/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /METROLOGIA/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /REPARACION/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/sin operaciones/i)).toBeInTheDocument();
+  it('shows all 4 operations for EN_PROGRESO spool', () => {
+    render(<OperationModal {...defaultProps} spool={makeSpool({ estado_trabajo: 'EN_PROGRESO', operacion_actual: 'ARM' })} />);
+    expect(screen.getByRole('button', { name: /ARMADO/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SOLDADURA/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /METROLOGIA/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /REPARACION/i })).toBeInTheDocument();
   });
 });
 
@@ -123,66 +80,36 @@ describe('OperationModal — STATE-01: valid operations', () => {
 
 describe('OperationModal — callbacks', () => {
   it('clicking ARM button calls onSelectOperation("ARM")', () => {
-    mockGetValidOperations.mockReturnValue(['ARM']);
     const onSelectOperation = jest.fn();
-    render(
-      <OperationModal
-        {...defaultProps}
-        onSelectOperation={onSelectOperation}
-        spool={makeSpool({ estado_trabajo: 'LIBRE' })}
-      />
-    );
+    render(<OperationModal {...defaultProps} onSelectOperation={onSelectOperation} />);
     fireEvent.click(screen.getByRole('button', { name: /ARMADO/i }));
     expect(onSelectOperation).toHaveBeenCalledWith('ARM');
   });
 
   it('clicking SOLD button calls onSelectOperation("SOLD")', () => {
-    mockGetValidOperations.mockReturnValue(['SOLD']);
     const onSelectOperation = jest.fn();
-    render(
-      <OperationModal
-        {...defaultProps}
-        onSelectOperation={onSelectOperation}
-        spool={makeSpool({ estado_trabajo: 'PAUSADO', operacion_actual: 'ARM' })}
-      />
-    );
+    render(<OperationModal {...defaultProps} onSelectOperation={onSelectOperation} />);
     fireEvent.click(screen.getByRole('button', { name: /SOLDADURA/i }));
     expect(onSelectOperation).toHaveBeenCalledWith('SOLD');
   });
 
   it('clicking REP button calls onSelectOperation("REP")', () => {
-    mockGetValidOperations.mockReturnValue(['REP']);
     const onSelectOperation = jest.fn();
-    render(
-      <OperationModal
-        {...defaultProps}
-        onSelectOperation={onSelectOperation}
-        spool={makeSpool({ estado_trabajo: 'RECHAZADO' })}
-      />
-    );
+    render(<OperationModal {...defaultProps} onSelectOperation={onSelectOperation} />);
     fireEvent.click(screen.getByRole('button', { name: /REPARACION/i }));
     expect(onSelectOperation).toHaveBeenCalledWith('REP');
   });
 
   it('clicking MET button calls onSelectMet() instead of onSelectOperation', () => {
-    mockGetValidOperations.mockReturnValue(['MET']);
     const onSelectOperation = jest.fn();
     const onSelectMet = jest.fn();
-    render(
-      <OperationModal
-        {...defaultProps}
-        onSelectOperation={onSelectOperation}
-        onSelectMet={onSelectMet}
-        spool={makeSpool({ estado_trabajo: 'COMPLETADO' })}
-      />
-    );
+    render(<OperationModal {...defaultProps} onSelectOperation={onSelectOperation} onSelectMet={onSelectMet} />);
     fireEvent.click(screen.getByRole('button', { name: /METROLOGIA/i }));
     expect(onSelectMet).toHaveBeenCalled();
     expect(onSelectOperation).not.toHaveBeenCalled();
   });
 
   it('does not render when isOpen=false', () => {
-    mockGetValidOperations.mockReturnValue(['ARM']);
     render(<OperationModal {...defaultProps} isOpen={false} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -193,7 +120,6 @@ describe('OperationModal — callbacks', () => {
 describe('OperationModal — accessibility', () => {
   it('has no axe violations', async () => {
     jest.useRealTimers();
-    mockGetValidOperations.mockReturnValue(['ARM']);
     const { container } = render(<OperationModal {...defaultProps} />);
     const results = await axe(container);
     expect(results).toHaveNoViolations();

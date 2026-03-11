@@ -215,12 +215,6 @@ jest.mock('@/components/SpoolCardList', () => ({
             {s.tag_spool}
           </button>
         ))}
-        <button
-          data-testid="remove-OT-001"
-          onClick={() => (props.onRemove as (tag: string) => void)('OT-001')}
-        >
-          remove
-        </button>
       </div>
     );
   },

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
 import type { SpoolCardData } from '@/lib/types';
 
 export type { SpoolCardData };
@@ -9,7 +8,6 @@ export type { SpoolCardData };
 export interface SpoolCardProps {
   spool: SpoolCardData;
   onCardClick: (spool: SpoolCardData) => void;
-  onRemove: (tag: string) => void;
 }
 
 // ─── Estado color map ──────────────────────────────────────────────────────────
@@ -138,7 +136,7 @@ function formatElapsed(totalSeconds: number): string {
  *
  * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
+export function SpoolCard({ spool, onCardClick }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
 
   const elapsed = useElapsedSeconds(
@@ -165,31 +163,15 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
     }
   };
 
-  const handleRemoveClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onRemove(spool.tag_spool);
-  };
-
   return (
-    <div className="relative bg-zeues-navy border-4 border-white/20 rounded-none hover:border-white/40 transition-colors">
-      {/* Remove button — outside the clickable card area to avoid nested-interactive violation */}
-      <button
-        onClick={handleRemoveClick}
-        aria-label={`Quitar spool ${spool.tag_spool} del listado`}
-        className="absolute top-2 right-2 text-white/40 hover:text-white/80 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset rounded-sm p-0.5 z-10"
-      >
-        <X size={14} aria-hidden="true" />
-      </button>
-
-      {/* Clickable card content area */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
-        onClick={() => onCardClick(spool)}
-        onKeyDown={handleKeyDown}
-        className="px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset pr-10"
-      >
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
+      onClick={() => onCardClick(spool)}
+      onKeyDown={handleKeyDown}
+      className="bg-zeues-navy border-4 border-white/20 rounded-none hover:border-white/40 transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+    >
         {/* Tag */}
         <div className="text-lg font-black font-mono text-white">
           {spool.tag_spool}
@@ -227,7 +209,6 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
             {formatElapsed(elapsed)}
           </div>
         )}
-      </div>
     </div>
   );
 }

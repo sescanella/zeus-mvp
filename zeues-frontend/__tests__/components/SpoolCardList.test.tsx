@@ -24,11 +24,9 @@ const makeSpool = (tag: string): SpoolCardData => ({
 const spools = [makeSpool('OT-001'), makeSpool('OT-002'), makeSpool('OT-003')];
 
 const mockOnCardClick = jest.fn();
-const mockOnRemove = jest.fn();
 
 const defaultProps = {
   onCardClick: mockOnCardClick,
-  onRemove: mockOnRemove,
 };
 
 beforeEach(() => {
@@ -101,12 +99,6 @@ describe('SpoolCardList — callback propagation', () => {
     const card = screen.getByRole('button', { name: /^Spool OT-001/ });
     fireEvent.click(card);
     expect(mockOnCardClick).toHaveBeenCalledWith(makeSpool('OT-001'));
-  });
-
-  it('calls onRemove with tag when remove button is clicked', () => {
-    render(<SpoolCardList spools={[makeSpool('OT-001')]} {...defaultProps} />);
-    fireEvent.click(screen.getByLabelText('Quitar spool OT-001 del listado'));
-    expect(mockOnRemove).toHaveBeenCalledWith('OT-001');
   });
 
   it('propagates onCardClick for each card independently', () => {

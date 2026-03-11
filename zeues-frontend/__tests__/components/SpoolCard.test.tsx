@@ -45,11 +45,9 @@ const pausadoSpool: SpoolCardData = {
 };
 
 const mockOnCardClick = jest.fn();
-const mockOnRemove = jest.fn();
 
 const defaultProps = {
   onCardClick: mockOnCardClick,
-  onRemove: mockOnRemove,
 };
 
 beforeEach(() => {
@@ -252,24 +250,6 @@ describe('SpoolCard — interaction', () => {
     expect(mockOnCardClick).toHaveBeenCalledWith(baseOccupied);
   });
 
-  it('renders remove button with correct aria-label', () => {
-    render(<SpoolCard spool={baseOccupied} {...defaultProps} />);
-    expect(
-      screen.getByLabelText('Quitar spool OT-001 del listado')
-    ).toBeInTheDocument();
-  });
-
-  it('calls onRemove with tag when remove button is clicked', () => {
-    render(<SpoolCard spool={baseOccupied} {...defaultProps} />);
-    fireEvent.click(screen.getByLabelText('Quitar spool OT-001 del listado'));
-    expect(mockOnRemove).toHaveBeenCalledWith('OT-001');
-  });
-
-  it('remove button does not trigger onCardClick (stopPropagation)', () => {
-    render(<SpoolCard spool={baseOccupied} {...defaultProps} />);
-    fireEvent.click(screen.getByLabelText('Quitar spool OT-001 del listado'));
-    expect(mockOnCardClick).not.toHaveBeenCalled();
-  });
 });
 
 // ─── Accessibility ────────────────────────────────────────────────────────────
