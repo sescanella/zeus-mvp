@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-11T00:21:10.753Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-11T01:35:09.759Z"
 last_activity: "2026-03-11 - Completed 03-01: AddSpoolModal, OperationModal, ActionModal presentational modals"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
   percent: 100
 ---
 
@@ -27,12 +27,12 @@ See: .planning/v5.0-single-page/ROADMAP.md
 
 ## Current Position
 
-Phase: 3 (Frontend — Modales)
+Phase: 4 (Frontend — Integración)
 Plan: 01 COMPLETE
-Status: Phase 3 in progress — plan 01 done
-Last activity: 2026-03-11 - Completed 03-01: AddSpoolModal, OperationModal, ActionModal presentational modals
+Status: Phase 4 in progress — plan 01 done
+Last activity: 2026-03-11 - Completed 04-01: SpoolListContext + spool-state-machine type cleanup
 
-Progress: [██████████] 100%
+Progress: [█████████░] 92%
 
 ## Milestone: v5.0 Single Page + Modal Stack
 
@@ -96,6 +96,12 @@ Progress: [██████████] 100%
 - CANCELAR always calls onCancel() directly in ActionModal — no worker step needed (MODAL-04); applies to both libre and occupied spools
 - AddSpoolModal uses getSpoolsParaIniciar('ARM') — best available endpoint for full spool list (documented limitation)
 
+### Plan 04-01 Decisions (2026-03-11)
+- refreshAll uses useRef (spoolsRef.current) to avoid stale closure — safe for 30s polling interval in page.tsx
+- addSpool duplicate guard in both spoolsRef.current.some() (early exit) AND reducer (double safety)
+- localStorage syncs via useEffect on spools array, not inside action handlers — single sync point
+- Re-export type { SpoolCardData } from './types' in spool-state-machine.ts preserves OperationModal/ActionModal backward compatibility
+
 ## Previous Milestones
 
 - v4.0: Shipped 2026-02-02 (7 phases, 42 plans)
@@ -103,6 +109,6 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:15:23.290Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-03-11T01:35:09.756Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None

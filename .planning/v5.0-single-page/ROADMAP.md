@@ -91,15 +91,15 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 03-01-PLAN.md — AddSpoolModal + OperationModal + ActionModal (presentational modals)
-- [ ] 03-02-PLAN.md — WorkerModal + MetrologiaModal (API-calling modals)
+- [x] 03-01-PLAN.md — AddSpoolModal + OperationModal + ActionModal (presentational modals)
+- [x] 03-02-PLAN.md — WorkerModal + MetrologiaModal (API-calling modals)
 
 ### Tasks
-- [ ] 3.1 — Crear AddSpoolModal.tsx (reutiliza SpoolTable + SpoolFilterPanel)
-- [ ] 3.2 — Crear OperationModal.tsx (ARM/SOLD/REP/MET filtrado por estado)
-- [ ] 3.3 — Crear ActionModal.tsx (INICIAR/FINALIZAR/PAUSAR/CANCELAR filtrado por estado)
-- [ ] 3.4 — Crear WorkerModal.tsx (workers filtrados por rol)
-- [ ] 3.5 — Crear MetrologiaModal.tsx (APROBADA/RECHAZADA)
+- [x] 3.1 — Crear AddSpoolModal.tsx (reutiliza SpoolTable + SpoolFilterPanel)
+- [x] 3.2 — Crear OperationModal.tsx (ARM/SOLD/REP/MET filtrado por estado)
+- [x] 3.3 — Crear ActionModal.tsx (INICIAR/FINALIZAR/PAUSAR/CANCELAR filtrado por estado)
+- [x] 3.4 — Crear WorkerModal.tsx (workers filtrados por rol)
+- [x] 3.5 — Crear MetrologiaModal.tsx (APROBADA/RECHAZADA)
 
 ### Success Criteria
 - Flujo completo: Card → Operation → Action → Worker → API → Toast
@@ -113,17 +113,23 @@ Plans:
 ## Phase 4: Frontend — Integración
 
 **Goal:** Ensamblar todo en la pantalla principal funcional.
+**Requirements:** [CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, MODAL-01, MODAL-02, MODAL-03, MODAL-04, MODAL-05, MODAL-06, MODAL-07, MODAL-08, STATE-01, STATE-02, STATE-03, STATE-04, STATE-05, STATE-06, UX-01, UX-02, UX-03, UX-04]
+**Plans:** 1/2 plans executed
+
+Plans:
+- [ ] 04-01-PLAN.md — SpoolListContext + spool-state-machine type cleanup
+- [ ] 04-02-PLAN.md — page.tsx rewrite with modal wiring + polling + CANCELAR + auto-remove
 
 ### Tasks
 - [ ] 4.1 — Crear SpoolListContext (nuevo context para card list + localStorage sync)
-- [ ] 4.2 — Reescribir app/page.tsx (single page: Añadir Spool + SpoolCardList + Toasts)
+- [ ] 4.2 — Reescribir app/page.tsx (single page: Anadir Spool + SpoolCardList + Toasts)
 - [ ] 4.3 — Wire flujo modal completo (AddSpool → select → Operation → Action → Worker → API → refresh card)
 - [ ] 4.4 — Implementar polling 30s (batch-status para refrescar todos los cards)
 - [ ] 4.5 — Implementar auto-remove en MET APROBADA
 - [ ] 4.6 — Implementar CANCELAR dual (frontend-only vs backend según ocupado_por)
 
 ### Success Criteria
-- Flujo E2E funciona: añadir spool → operar → ver resultado en card
+- Flujo E2E funciona: anadir spool → operar → ver resultado en card
 - Cards se refrescan cada 30s via batch-status
 - MET APROBADA remueve card con animación
 - CANCELAR funciona en ambos escenarios
