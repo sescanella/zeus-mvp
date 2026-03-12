@@ -129,9 +129,10 @@ class SOLDStateMachine(BaseOperationStateMachine):
 
             # Initial start: Update Soldador column
             try:
+                tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
                 row_num = self.sheets_repo.find_row_by_column_value(
                     sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                    column_letter="G",  # TAG_SPOOL column
+                    column_letter=tag_col_letter,
                     value=self.tag_spool
                 )
 
@@ -185,9 +186,10 @@ class SOLDStateMachine(BaseOperationStateMachine):
         fecha = fecha_operacion if fecha_operacion else date.today()
         if self.sheets_repo:
             # Find row for this spool
+            tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
+                column_letter=tag_col_letter,
                 value=self.tag_spool
             )
 
@@ -216,9 +218,10 @@ class SOLDStateMachine(BaseOperationStateMachine):
         # Clear Soldador if coming from EN_PROGRESO or PAUSADO (CANCELAR transition)
         if source and source.id in ['en_progreso', 'pausado'] and self.sheets_repo:
             # Find row for this spool
+            tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
+                column_letter=tag_col_letter,
                 value=self.tag_spool
             )
 

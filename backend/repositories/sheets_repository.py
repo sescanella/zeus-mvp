@@ -545,6 +545,43 @@ class SheetsRepository:
             index //= 26
         return letter
 
+    def get_tag_spool_column_letter(self, sheet_name: str = "Operaciones") -> str:
+        """
+        Dynamically resolve TAG_SPOOL column letter from header map.
+
+        Uses ColumnMapCache to find the TAG_SPOOL column index and converts
+        it to a column letter. Falls back to 'G' with a warning if not found.
+
+        Args:
+            sheet_name: Sheet name to look up (default: "Operaciones")
+
+        Returns:
+            str: Column letter (e.g., "G", "H", "AA")
+        """
+        from backend.core.column_map_cache import ColumnMapCache
+
+        try:
+            column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+            def normalize(name: str) -> str:
+                return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+            for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+                normalized = normalize(col_name)
+                if normalized in column_map:
+                    idx = column_map[normalized]
+                    return self._index_to_column_letter(idx)
+        except Exception as e:
+            logger.warning(
+                f"Failed to resolve TAG_SPOOL column dynamically: {e}"
+            )
+
+        # Emergency fallback with warning
+        logger.warning(
+            "TAG_SPOOL column not found in map, falling back to 'G'"
+        )
+        return "G"
+
     @staticmethod
     def _column_letter_to_index(column: str) -> int:
         """
@@ -889,12 +926,10 @@ class SheetsRepository:
                 break
 
         if tag_column_index is None:
-            # Fallback to hardcoded index 6 (column G, 0-indexed) if dynamic lookup fails
-            self.logger.warning(
-                f"TAG_SPOOL column not found in column map, falling back to column G (index 6). "
-                f"Available columns: {list(column_map.keys())[:10]}..."
+            raise ValueError(
+                f"TAG_SPOOL column not found in column map for sheet. "
+                f"Available columns: {list(column_map.keys())[:15]}"
             )
-            tag_column_index = 6  # Column G is index 6 (0-indexed: A=0, B=1, ..., G=6)
 
         # Convert column index to letter
         column_letter = self._index_to_column_letter(tag_column_index)
@@ -952,12 +987,10 @@ class SheetsRepository:
                 break
 
         if tag_column_index is None:
-            # Fallback to hardcoded G (column index 6, 0-indexed) if dynamic lookup fails
-            self.logger.warning(
-                f"TAG_SPOOL column not found in column map, falling back to column G. "
-                f"Available columns: {list(column_map.keys())[:10]}..."
+            raise ValueError(
+                f"TAG_SPOOL column not found in column map for sheet. "
+                f"Available columns: {list(column_map.keys())[:15]}"
             )
-            tag_column_index = 6  # Column G is index 6 (0-indexed: A=0, B=1, ..., G=6)
 
         # Convert column index to letter
         column_letter = self._index_to_column_letter(tag_column_index)
@@ -1420,9 +1453,10 @@ class SheetsRepository:
         sheet_name = config.HOJA_OPERACIONES_NOMBRE
 
         # Step 1: Find spool row
+        tag_col_letter = self.get_tag_spool_column_letter(sheet_name)
         row_num = self.find_row_by_column_value(
             sheet_name=sheet_name,
-            column_letter="G",  # TAG_SPOOL column
+            column_letter=tag_col_letter,
             value=tag_spool
         )
 

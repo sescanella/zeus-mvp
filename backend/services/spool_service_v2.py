@@ -102,20 +102,20 @@ class SpoolServiceV2:
             ValueError: Si TAG_SPOOL está vacío
         """
         # Obtener índices dinámicamente por nombre de columna (column_map ya inicializado en constructor)
-        idx_tag_spool = self.sheets_service._get_col_idx("TAG_SPOOL", fallback_idx=6)
-        idx_ot = self.sheets_service._get_col_idx("OT", fallback_idx=1)
-        idx_nv = self.sheets_service._get_col_idx("NV", fallback_idx=7)
-        idx_fecha_materiales = self.sheets_service._get_col_idx("Fecha_Materiales", fallback_idx=32)
-        idx_fecha_armado = self.sheets_service._get_col_idx("Fecha_Armado", fallback_idx=33)
-        idx_armador = self.sheets_service._get_col_idx("Armador", fallback_idx=34)
-        idx_fecha_soldadura = self.sheets_service._get_col_idx("Fecha_Soldadura", fallback_idx=35)
-        idx_soldador = self.sheets_service._get_col_idx("Soldador", fallback_idx=36)
-        idx_fecha_qc_metrologia = self.sheets_service._get_col_idx("Fecha_QC_Metrología", fallback_idx=37)
-        idx_total_uniones = self.sheets_service._get_col_idx("Total_Uniones", fallback_idx=67)
-        idx_uniones_arm = self.sheets_service._get_col_idx("Uniones_ARM_Completadas", fallback_idx=68)
-        idx_uniones_sold = self.sheets_service._get_col_idx("Uniones_SOLD_Completadas", fallback_idx=69)
-        idx_pulgadas_arm = self.sheets_service._get_col_idx("Pulgadas_ARM", fallback_idx=70)
-        idx_pulgadas_sold = self.sheets_service._get_col_idx("Pulgadas_SOLD", fallback_idx=71)
+        idx_tag_spool = self.sheets_service._get_col_idx("TAG_SPOOL")
+        idx_ot = self.sheets_service._get_col_idx("OT")
+        idx_nv = self.sheets_service._get_col_idx("NV")
+        idx_fecha_materiales = self.sheets_service._get_col_idx("Fecha_Materiales")
+        idx_fecha_armado = self.sheets_service._get_col_idx("Fecha_Armado")
+        idx_armador = self.sheets_service._get_col_idx("Armador")
+        idx_fecha_soldadura = self.sheets_service._get_col_idx("Fecha_Soldadura")
+        idx_soldador = self.sheets_service._get_col_idx("Soldador")
+        idx_fecha_qc_metrologia = self.sheets_service._get_col_idx("Fecha_QC_Metrologia")
+        idx_total_uniones = self.sheets_service._get_col_idx("Total_Uniones")
+        idx_uniones_arm = self.sheets_service._get_col_idx("Uniones_ARM_Completadas")
+        idx_uniones_sold = self.sheets_service._get_col_idx("Uniones_SOLD_Completadas")
+        idx_pulgadas_arm = self.sheets_service._get_col_idx("Pulgadas_ARM")
+        idx_pulgadas_sold = self.sheets_service._get_col_idx("Pulgadas_SOLD")
 
         logger.debug(
             f"Column indices: TAG_SPOOL={idx_tag_spool}, "
@@ -232,12 +232,12 @@ class SpoolServiceV2:
                 pulgadas_sold = None
 
         # 12. v3.0: Parse Ocupado_Por (columna 64)
-        idx_ocupado_por = self.sheets_service._get_col_idx("Ocupado_Por", fallback_idx=64)
+        idx_ocupado_por = self.sheets_service._get_col_idx("Ocupado_Por")
         ocupado_por_raw = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
         ocupado_por = ocupado_por_raw if ocupado_por_raw else None
 
         # 13. v3.0: Parse Estado_Detalle (columna 67) - CRITICAL for REPARACION filter
-        idx_estado_detalle = self.sheets_service._get_col_idx("Estado_Detalle", fallback_idx=66)
+        idx_estado_detalle = self.sheets_service._get_col_idx("Estado_Detalle")
         estado_detalle_raw = row[idx_estado_detalle].strip() if idx_estado_detalle < len(row) and row[idx_estado_detalle] else None
         estado_detalle = estado_detalle_raw if estado_detalle_raw else None
 

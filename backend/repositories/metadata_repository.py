@@ -15,6 +15,7 @@ from backend.config import config
 from backend.models.metadata import MetadataEvent, EventoTipo, Accion
 from backend.exceptions import SheetsConnectionError, SheetsUpdateError
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.core.column_map_cache import ColumnMapCache
 
 
 def retry_on_sheets_error(max_retries: int = 3, backoff_seconds: float = 1.0):
@@ -82,6 +83,30 @@ class MetadataRepository:
         self.logger = logging.getLogger(__name__)
         self.sheets_repo = sheets_repo
         self._worksheet: Optional[gspread.Worksheet] = None
+
+    def _get_column_map(self) -> dict[str, int]:
+        """
+        Obtiene el column_map para la hoja Metadata via ColumnMapCache.
+
+        Returns:
+            dict[str, int]: Mapeo {nombre_columna_normalizado: índice}
+        """
+        return ColumnMapCache.get_or_build(
+            sheet_name=config.HOJA_METADATA_NOMBRE,
+            sheets_repository=self.sheets_repo
+        )
+
+    def _get_tag_spool_index(self, column_map: dict[str, int]) -> int:
+        """
+        Resolve TAG_SPOOL column index from column_map.
+
+        Args:
+            column_map: Dynamic column mapping
+
+        Returns:
+            int: Column index for TAG_SPOOL (fallback: 3)
+        """
+        return column_map.get("tagspool", 3)
 
     def _get_worksheet(self) -> gspread.Worksheet:
         """
@@ -153,13 +178,17 @@ class MetadataRepository:
             worksheet = self._get_worksheet()
             all_values = worksheet.get_all_values()
 
-            # Filtrar por tag_spool (columna D, índice 3)
+            # Get dynamic column map for Metadata sheet
+            column_map = self._get_column_map()
+            tag_spool_idx = self._get_tag_spool_index(column_map)
+
+            # Filtrar por tag_spool (dynamic index from column_map)
             # Saltar fila de headers (índice 0)
             events = []
             for row in all_values[1:]:  # Desde fila 2 en adelante
-                if len(row) >= 9 and row[3] == tag_spool:  # Columna D (tag_spool)
+                if len(row) >= 9 and row[tag_spool_idx] == tag_spool:
                     try:
-                        event = MetadataEvent.from_sheets_row(row)
+                        event = MetadataEvent.from_sheets_row(row, column_map=column_map)
                         events.append(event)
                     except Exception as e:
                         self.logger.warning(f"Error al parsear evento: {e}, row={row}")
@@ -200,6 +229,9 @@ class MetadataRepository:
             all_values = worksheet.get_all_values()
             self.logger.info(f"[METADATA DEBUG] ✅ Read {len(all_values)} rows from sheet (including header)")
 
+            # Get dynamic column map for Metadata sheet
+            column_map = self._get_column_map()
+
             # Parsear TODOS los eventos (saltar header row 0)
             self.logger.info("[METADATA DEBUG] Parsing events from rows...")
             events = []
@@ -207,7 +239,7 @@ class MetadataRepository:
             for row_idx, row in enumerate(all_values[1:], start=2):  # Desde fila 2
                 if len(row) >= 9:  # Validar que tenga todas las columnas
                     try:
-                        event = MetadataEvent.from_sheets_row(row)
+                        event = MetadataEvent.from_sheets_row(row, column_map=column_map)
                         events.append(event)
                     except Exception as e:
                         parse_errors += 1

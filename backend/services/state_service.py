@@ -580,9 +580,10 @@ class StateService:
         )
 
         # Find row for this spool
+        tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
         row_num = self.sheets_repo.find_row_by_column_value(
             sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-            column_letter="G",  # TAG_SPOOL column
+            column_letter=tag_col_letter,
             value=tag_spool
         )
 
@@ -654,9 +655,10 @@ class StateService:
             # We just update the display to show it's ready for inspection
             estado_detalle = "En Cola Metrología"
 
+            tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
+                column_letter=tag_col_letter,
                 value=tag_spool
             )
 

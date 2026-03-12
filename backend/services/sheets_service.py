@@ -93,16 +93,23 @@ class SheetsService:
         logger.debug(f"Built column map with {len(column_map)} entries")
         return column_map
 
-    def _get_col_idx(self, column_name: str, fallback_idx: Optional[int] = None) -> Optional[int]:
+    def _get_col_idx(self, column_name: str, fallback_idx: Optional[int] = None) -> int:
         """
         Obtiene el índice de una columna por su nombre.
 
+        The column map is validated at startup, so all critical columns
+        should always be present. fallback_idx is kept for backward
+        compatibility but logs a WARNING if used.
+
         Args:
             column_name: Nombre de la columna (ej: "Fecha_Armado")
-            fallback_idx: Índice legacy a usar si no hay mapeo
+            fallback_idx: DEPRECATED - Legacy fallback index (logs warning if used)
 
         Returns:
-            Índice de la columna, o fallback_idx si no se encuentra
+            Índice de la columna
+
+        Raises:
+            ValueError: Si la columna no se encuentra y no hay fallback
         """
         normalized = column_name.lower().replace(" ", "").replace("_", "")
 
@@ -111,12 +118,15 @@ class SheetsService:
 
         if fallback_idx is not None:
             logger.warning(
-                f"Column '{column_name}' not found in map, using fallback index {fallback_idx}"
+                f"Column '{column_name}' not found in map, using DEPRECATED fallback index {fallback_idx}. "
+                f"This indicates a column map issue — investigate."
             )
             return fallback_idx
 
-        logger.error(f"Column '{column_name}' not found and no fallback provided")
-        return None
+        raise ValueError(
+            f"Column '{column_name}' not found in column map. "
+            f"Available: {list(self._column_map.keys())[:15]}"
+        )
 
     # ==================== WORKER SHEET CONSTANTS (STABLE) ====================
     # Hoja "Trabajadores" - Estructura estable (no cambia)
@@ -396,28 +406,28 @@ class SheetsService:
             row = row + [''] * (72 - len(row))
             logger.debug(f"Fila corta rellenada a 72 columnas (original: {len(row) - (72 - len(row))})")
 
-        # 1. Obtener índices usando mapeo dinámico
-        idx_tag_spool = self._get_col_idx("SPLIT", fallback_idx=5)  # Real column name in Sheet
-        idx_ot = self._get_col_idx("OT", fallback_idx=1)  # v4.0: Orden de Trabajo
-        idx_nv = self._get_col_idx("NV", fallback_idx=7)
-        idx_fecha_materiales = self._get_col_idx("Fecha_Materiales", fallback_idx=32)
-        idx_fecha_armado = self._get_col_idx("Fecha_Armado", fallback_idx=33)
-        idx_armador = self._get_col_idx("Armador", fallback_idx=34)
-        idx_fecha_soldadura = self._get_col_idx("Fecha_Soldadura", fallback_idx=35)
-        idx_soldador = self._get_col_idx("Soldador", fallback_idx=36)
+        # 1. Obtener índices usando mapeo dinámico (column map validated at startup)
+        idx_tag_spool = self._get_col_idx("SPLIT")  # Real column name in Sheet
+        idx_ot = self._get_col_idx("OT")  # v4.0: Orden de Trabajo
+        idx_nv = self._get_col_idx("NV")
+        idx_fecha_materiales = self._get_col_idx("Fecha_Materiales")
+        idx_fecha_armado = self._get_col_idx("Fecha_Armado")
+        idx_armador = self._get_col_idx("Armador")
+        idx_fecha_soldadura = self._get_col_idx("Fecha_Soldadura")
+        idx_soldador = self._get_col_idx("Soldador")
 
         # v3.0: Índices de columnas de ocupación
-        idx_ocupado_por = self._get_col_idx("Ocupado_Por", fallback_idx=64)
-        idx_fecha_ocupacion = self._get_col_idx("Fecha_Ocupacion", fallback_idx=65)
-        idx_version = self._get_col_idx("version", fallback_idx=66)
-        idx_estado_detalle = self._get_col_idx("Estado_Detalle", fallback_idx=67)
+        idx_ocupado_por = self._get_col_idx("Ocupado_Por")
+        idx_fecha_ocupacion = self._get_col_idx("Fecha_Ocupacion")
+        idx_version = self._get_col_idx("version")
+        idx_estado_detalle = self._get_col_idx("Estado_Detalle")
 
         # v4.0: Índices de columnas de métricas de uniones
-        idx_total_uniones = self._get_col_idx("Total_Uniones", fallback_idx=67)
-        idx_uniones_arm = self._get_col_idx("Uniones_ARM_Completadas", fallback_idx=68)
-        idx_uniones_sold = self._get_col_idx("Uniones_SOLD_Completadas", fallback_idx=69)
-        idx_pulgadas_arm = self._get_col_idx("Pulgadas_ARM", fallback_idx=70)
-        idx_pulgadas_sold = self._get_col_idx("Pulgadas_SOLD", fallback_idx=71)
+        idx_total_uniones = self._get_col_idx("Total_Uniones")
+        idx_uniones_arm = self._get_col_idx("Uniones_ARM_Completadas")
+        idx_uniones_sold = self._get_col_idx("Uniones_SOLD_Completadas")
+        idx_pulgadas_arm = self._get_col_idx("Pulgadas_ARM")
+        idx_pulgadas_sold = self._get_col_idx("Pulgadas_SOLD")
 
         # 2. Parsear SPLIT (spool identifier - obligatorio)
         tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None

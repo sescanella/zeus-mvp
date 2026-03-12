@@ -139,18 +139,39 @@ class MetadataEvent(BaseModel):
         ]
 
     @classmethod
-    def from_sheets_row(cls, row: list[str]) -> "MetadataEvent":
+    def from_sheets_row(cls, row: list[str], column_map: Optional[dict] = None) -> "MetadataEvent":
         """
         Crea un MetadataEvent desde una fila de Google Sheets.
 
         Args:
             row: Lista de valores de una fila de Sheets (columnas A-K, backward compatible with A-J)
+            column_map: Optional dynamic column mapping {normalized_name: index}.
+                        If None, falls back to hardcoded indices for backward compatibility.
 
         Returns:
             MetadataEvent: Instancia del evento
         """
+        def get_idx(name: str, fallback: int) -> int:
+            """Resolve column index from column_map or fallback to hardcoded index."""
+            if column_map is None:
+                return fallback
+            normalized = name.lower().replace(" ", "").replace("_", "")
+            return column_map.get(normalized, fallback)
+
+        idx_id = get_idx("ID", 0)
+        idx_timestamp = get_idx("Timestamp", 1)
+        idx_evento_tipo = get_idx("Evento_Tipo", 2)
+        idx_tag_spool = get_idx("TAG_SPOOL", 3)
+        idx_worker_id = get_idx("Worker_ID", 4)
+        idx_worker_nombre = get_idx("Worker_Nombre", 5)
+        idx_operacion = get_idx("Operacion", 6)
+        idx_accion = get_idx("Accion", 7)
+        idx_fecha_operacion = get_idx("Fecha_Operacion", 8)
+        idx_metadata_json = get_idx("Metadata_JSON", 9)
+        idx_n_union = get_idx("N_UNION", 10)
+
         # Parse timestamp with backward compatibility
-        timestamp_str = row[1]
+        timestamp_str = row[idx_timestamp]
         try:
             # Try new format DD-MM-YYYY HH:MM:SS
             timestamp = datetime.strptime(timestamp_str, "%d-%m-%Y %H:%M:%S").replace(tzinfo=pytz.timezone('America/Santiago'))
@@ -158,25 +179,25 @@ class MetadataEvent(BaseModel):
             # Fallback to old ISO 8601 format
             timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
 
-        # Parse n_union (column K, index 10) with backward compatibility
+        # Parse n_union with backward compatibility
         n_union = None
-        if len(row) > 10 and row[10]:
+        if len(row) > idx_n_union and row[idx_n_union]:
             try:
-                n_union = int(row[10])
+                n_union = int(row[idx_n_union])
             except (ValueError, TypeError):
                 # Gracefully handle non-integer values
                 pass
 
         return cls(
-            id=row[0],
+            id=row[idx_id],
             timestamp=timestamp,
-            evento_tipo=EventoTipo(row[2]),
-            tag_spool=row[3],
-            worker_id=int(row[4]),
-            worker_nombre=row[5],
-            operacion=row[6],
-            accion=Accion(row[7]),
-            fecha_operacion=row[8],
-            metadata_json=row[9] if len(row) > 9 and row[9] else None,
+            evento_tipo=EventoTipo(row[idx_evento_tipo]),
+            tag_spool=row[idx_tag_spool],
+            worker_id=int(row[idx_worker_id]),
+            worker_nombre=row[idx_worker_nombre],
+            operacion=row[idx_operacion],
+            accion=Accion(row[idx_accion]),
+            fecha_operacion=row[idx_fecha_operacion],
+            metadata_json=row[idx_metadata_json] if len(row) > idx_metadata_json and row[idx_metadata_json] else None,
             n_union=n_union
         )

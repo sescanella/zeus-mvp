@@ -727,7 +727,10 @@ class OccupationService:
                         break
 
                 if tag_column_index is None:
-                    tag_column_index = 6  # Fallback to column G
+                    raise ValueError(
+                        f"TAG_SPOOL column not found in column map for sheet. "
+                        f"Available columns: {list(column_map.keys())[:15]}"
+                    )
 
                 column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
 
@@ -1103,7 +1106,10 @@ class OccupationService:
                         break
 
                 if tag_column_index is None:
-                    tag_column_index = 6  # Fallback
+                    raise ValueError(
+                        f"TAG_SPOOL column not found in column map for sheet. "
+                        f"Available columns: {list(column_map.keys())[:15]}"
+                    )
 
                 batch_updates = [{"column_name": k, "value": v} for k, v in updates_dict.items()]
 
@@ -1230,7 +1236,10 @@ class OccupationService:
                                 break
 
                         if tag_column_index is None:
-                            tag_column_index = 6  # Fallback
+                            raise ValueError(
+                                f"TAG_SPOOL column not found in column map for sheet. "
+                                f"Available columns: {list(column_map.keys())[:15]}"
+                            )
 
                         column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
                         row_num = self.sheets_repository.find_row_by_column_value(
@@ -1457,7 +1466,10 @@ class OccupationService:
                         break
 
                 if tag_column_index is None:
-                    tag_column_index = 6  # Fallback
+                    raise ValueError(
+                        f"TAG_SPOOL column not found in column map for sheet. "
+                        f"Available columns: {list(column_map.keys())[:15]}"
+                    )
 
                 column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
                 row_num = self.sheets_repository.find_row_by_column_value(
@@ -1681,7 +1693,10 @@ class OccupationService:
                     break
 
             if tag_column_index is None:
-                tag_column_index = 6  # Fallback
+                raise ValueError(
+                    f"TAG_SPOOL column not found in column map for sheet. "
+                    f"Available columns: {list(column_map.keys())[:15]}"
+                )
 
             column_letter = self.sheets_repository._index_to_column_letter(tag_column_index)
             row_num = self.sheets_repository.find_row_by_column_value(

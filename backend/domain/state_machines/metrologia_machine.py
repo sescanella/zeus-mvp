@@ -69,9 +69,10 @@ class MetrologiaStateMachine(BaseOperationStateMachine):
         fecha = fecha_operacion if fecha_operacion else date.today()
         if self.sheets_repo:
             # Find row for this spool
+            tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
+                column_letter=tag_col_letter,
                 value=self.tag_spool
             )
 
@@ -103,9 +104,10 @@ class MetrologiaStateMachine(BaseOperationStateMachine):
         """
         if self.sheets_repo:
             # Find row for this spool
+            tag_col_letter = self.sheets_repo.get_tag_spool_column_letter(config.HOJA_OPERACIONES_NOMBRE)
             row_num = self.sheets_repo.find_row_by_column_value(
                 sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-                column_letter="G",  # TAG_SPOOL column
+                column_letter=tag_col_letter,
                 value=self.tag_spool
             )
 
