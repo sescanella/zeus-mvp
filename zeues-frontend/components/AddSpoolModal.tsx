@@ -43,7 +43,10 @@ function relevanceScore(spool: Spool, searchTag: string, searchNV: string): numb
  * Fetches all available spools via getSpoolsParaIniciar('ARM').
  * Renders SpoolFilterPanel (showSelectionControls=false) + SpoolTable
  * with alreadyTracked tags greyed out (disabledSpools).
- * Clicking a non-disabled row fires onAdd(tag).
+ *
+ * Multi-add: after adding a spool, the modal stays open for adding more.
+ * Shows a counter of spools added in this session.
+ * User closes the modal manually via the LISTO button when done.
  *
  * Plan: 03-01-PLAN.md Task 1
  */
@@ -63,6 +66,9 @@ export function AddSpoolModal({
   const [searchNV, setSearchNV] = useState('');
   const [searchTag, setSearchTag] = useState('');
 
+  // Multi-add session state
+  const [addedThisSession, setAddedThisSession] = useState<string[]>([]);
+
   const fetchSpools = useCallback(async () => {
     setFetchState('loading');
     setErrorMessage('');
@@ -77,9 +83,10 @@ export function AddSpoolModal({
     }
   }, []);
 
-  // Fetch when modal opens
+  // Fetch when modal opens, reset session counter
   useEffect(() => {
     if (isOpen) {
+      setAddedThisSession([]);
       fetchSpools();
     }
   }, [isOpen, fetchSpools]);
@@ -106,8 +113,13 @@ export function AddSpoolModal({
   };
 
   const handleRowClick = (tag: string) => {
+    // Track which spools were added this session
+    setAddedThisSession((prev) => [...prev, tag]);
     onAdd(tag);
   };
+
+  // Combine alreadyTracked with spools added this session for disabling
+  const allDisabled = [...new Set([...alreadyTracked, ...addedThisSession])];
 
   return (
     <Modal
@@ -145,6 +157,13 @@ export function AddSpoolModal({
 
       {fetchState === 'success' && (
         <>
+          {/* Session counter — shows how many spools were added */}
+          {addedThisSession.length > 0 && (
+            <div className="mb-3 px-3 py-2 bg-green-900/30 border-2 border-green-400/40 font-mono text-sm text-green-400 font-black">
+              {addedThisSession.length} spool{addedThisSession.length > 1 ? 's' : ''} agregado{addedThisSession.length > 1 ? 's' : ''}
+            </div>
+          )}
+
           <SpoolFilterPanel
             isOpen={isFilterOpen}
             onOpen={() => setIsFilterOpen(true)}
@@ -167,8 +186,17 @@ export function AddSpoolModal({
             selectedSpools={[]}
             onToggleSelect={handleRowClick}
             tipo={null}
-            disabledSpools={alreadyTracked}
+            disabledSpools={allDisabled}
           />
+
+          {/* LISTO button to close modal */}
+          <button
+            onClick={onClose}
+            className="w-full h-14 mt-4 bg-zeues-orange text-white font-mono font-black text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            aria-label="Cerrar modal de agregar spools"
+          >
+            LISTO
+          </button>
         </>
       )}
     </Modal>

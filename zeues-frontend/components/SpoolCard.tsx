@@ -7,7 +7,6 @@ export type { SpoolCardData };
 
 export interface SpoolCardProps {
   spool: SpoolCardData;
-  isSelected?: boolean;
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
 }
@@ -138,7 +137,7 @@ function formatElapsed(totalSeconds: number): string {
  *
  * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, isSelected = false, onCardClick, onRemove }: SpoolCardProps) {
+export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
 
   const elapsed = useElapsedSeconds(
@@ -169,15 +168,10 @@ export function SpoolCard({ spool, isSelected = false, onCardClick, onRemove }: 
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
-      aria-pressed={isSelected}
+      aria-label={`Procesar spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
       onClick={() => onCardClick(spool)}
       onKeyDown={handleKeyDown}
-      className={`bg-zeues-navy border-4 rounded-none transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
-        isSelected
-          ? 'border-zeues-orange bg-zeues-orange/10'
-          : 'border-white/20 hover:border-white/40'
-      }`}
+      className="bg-zeues-navy border-4 rounded-none transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset border-white/20 hover:border-white/40"
     >
         {/* Tag + Remove button */}
         <div className="flex items-center justify-between">

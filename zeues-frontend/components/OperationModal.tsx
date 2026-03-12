@@ -14,7 +14,7 @@ const OPERATION_LABELS: Record<Operation, string> = {
 
 interface OperationModalProps {
   isOpen: boolean;
-  spools: SpoolCardData[];
+  spool: SpoolCardData;
   onSelectOperation: (op: Operation) => void;
   onSelectMet: () => void;
   onClose: () => void;
@@ -32,7 +32,7 @@ interface OperationModalProps {
  */
 export function OperationModal({
   isOpen,
-  spools,
+  spool,
   onSelectOperation,
   onSelectMet,
   onClose,
@@ -60,7 +60,7 @@ export function OperationModal({
           SELECCIONAR OPERACION
         </h2>
         <p className="text-sm text-white/70 font-mono mt-1">
-          {spools.length === 1 ? spools[0].tag_spool : `${spools.length} spools seleccionados`}
+          {spool.tag_spool}
         </p>
       </div>
 

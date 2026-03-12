@@ -4,17 +4,17 @@
  * page.tsx — v5.0 single-page application
  *
  * Wires all components and modals together with SpoolListContext.
- * Modal chain: select spools -> operation -> action -> worker (or metrologia).
+ * Modal chain: click card -> operation -> action -> worker (or metrologia).
  * 30s polling with Page Visibility API + modal pause.
  * CANCELAR dual logic: frontend-only (libre) vs backend (occupied).
  *
- * Multi-select: card click toggles selection, "Procesar" button opens modal chain.
- * Validation: only spools with compatible actions can be selected together.
+ * Single-spool processing: card click opens modal chain for ONE spool.
+ * Multi-add: AddSpoolModal allows adding multiple spools before closing.
  *
  * Plan: 04-02-PLAN.md Task 1
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SpoolListProvider, useSpoolList } from '@/lib/SpoolListContext';
 import { useModalStack } from '@/hooks/useModalStack';
 import { useNotificationToast } from '@/hooks/useNotificationToast';
@@ -25,7 +25,12 @@ import { WorkerModal } from '@/components/WorkerModal';
 import { MetrologiaModal } from '@/components/MetrologiaModal';
 import { SpoolCardList } from '@/components/SpoolCardList';
 import { NotificationToast } from '@/components/NotificationToast';
-import { finalizarSpool, cancelarReparacion } from '@/lib/api';
+import {
+  finalizarSpool,
+  cancelarReparacion,
+  pausarReparacion,
+  completarReparacion,
+} from '@/lib/api';
 import type { SpoolCardData } from '@/lib/types';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 
@@ -40,16 +45,6 @@ function parseWorkerIdFromOcupadoPor(ocupadoPor: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-/**
- * Returns a compatibility key for a spool.
- * Spools with the same key can be selected together:
- * - "occupied" for spools with ocupado_por (actions: FINALIZAR, PAUSAR, CANCELAR)
- * - "free" for libre spools (actions: INICIAR, CANCELAR)
- */
-function getCompatibilityKey(spool: SpoolCardData): string {
-  return spool.ocupado_por !== null && spool.ocupado_por !== '' ? 'occupied' : 'free';
-}
-
 // ─── HomePage (inner component) ───────────────────────────────────────────────
 
 function HomePage() {
@@ -58,17 +53,12 @@ function HomePage() {
   const modalStack = useModalStack();
   const { toasts, enqueue, dismiss } = useNotificationToast();
 
-  // Multi-select state: set of selected spool tags
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  // Single spool selection for processing
+  const [selectedSpool, setSelectedSpool] = useState<SpoolCardData | null>(null);
   const [selectedOperation, setSelectedOperation] =
     useState<Operation | null>(null);
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
-
-  // Derive selected spool objects from tags (always fresh from spools array)
-  const selectedSpools = useMemo(
-    () => spools.filter((s) => selectedTags.has(s.tag_spool)),
-    [spools, selectedTags]
-  );
+  const [apiLoading, setApiLoading] = useState(false);
 
   // Stable ref for refreshAll — safe for use in setInterval without stale closure
   const refreshAllRef = useRef(refreshAll);
@@ -99,76 +89,22 @@ function HomePage() {
     };
   }, [modalStack.stack.length]);
 
-  // ── Clean up stale selections when spools list changes ──────────────────────
-  useEffect(() => {
-    const currentTags = new Set(spools.map((s) => s.tag_spool));
-    setSelectedTags((prev) => {
-      const next = new Set<string>();
-      prev.forEach((tag) => {
-        if (currentTags.has(tag)) next.add(tag);
-      });
-      return next.size === prev.size ? prev : next;
-    });
-  }, [spools]);
-
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const handleAddSpool = async (tag: string) => {
     await addSpool(tag);
-    modalStack.pop();
     enqueue(`Spool ${tag} agregado`, 'success');
   };
 
-  /**
-   * Toggle spool selection with compatibility validation.
-   * Only allows selecting spools with compatible actions (all free or all occupied).
-   */
-  const handleCardClick = (spool: SpoolCardData) => {
-    setSelectedTags((prev) => {
-      const next = new Set(prev);
-      const tag = spool.tag_spool;
-
-      // If already selected, deselect
-      if (next.has(tag)) {
-        next.delete(tag);
-        return next;
-      }
-
-      // Compatibility check: if there are already selected spools,
-      // the new spool must have the same compatibility key
-      if (next.size > 0) {
-        const existingTag = next.values().next().value;
-        if (existingTag !== undefined) {
-          const existingSpool = spools.find((s) => s.tag_spool === existingTag);
-          if (existingSpool) {
-            const existingKey = getCompatibilityKey(existingSpool);
-            const newKey = getCompatibilityKey(spool);
-            if (existingKey !== newKey) {
-              enqueue(
-                existingKey === 'occupied'
-                  ? 'Solo puedes seleccionar spools ocupados juntos'
-                  : 'Solo puedes seleccionar spools libres juntos',
-                'error'
-              );
-              return prev;
-            }
-          }
-        }
-      }
-
-      next.add(tag);
-      return next;
-    });
+  const handleAddSpoolClose = () => {
+    modalStack.pop();
   };
 
   /**
-   * "Procesar" button handler — opens modal chain for selected spools.
+   * Card click opens the modal chain for a single spool.
    */
-  const handleProcesar = () => {
-    if (selectedSpools.length === 0) return;
-
-    // For MET, only allow single spool selection
-    // (metrologia is a per-spool operation with binary result)
+  const handleCardClick = (spool: SpoolCardData) => {
+    setSelectedSpool(spool);
     modalStack.push('operation');
   };
 
@@ -178,47 +114,112 @@ function HomePage() {
   };
 
   const handleSelectMet = () => {
-    if (selectedSpools.length !== 1) {
-      enqueue('Metrologia solo permite un spool a la vez', 'error');
-      return;
-    }
     modalStack.push('metrologia');
   };
 
-  const handleSelectAction = (action: Action) => {
+  /**
+   * Executes FINALIZAR or PAUSAR API call directly using the worker from ocupado_por.
+   * Skips the WorkerModal since the worker is already known.
+   */
+  const executeDirectAction = async (
+    action: 'FINALIZAR' | 'PAUSAR',
+    spool: SpoolCardData,
+    operation: Operation,
+    workerId: number,
+  ) => {
+    const tag = spool.tag_spool;
+
+    if (operation === 'ARM' || operation === 'SOLD') {
+      const actionOverride: 'COMPLETAR' | 'PAUSAR' =
+        action === 'FINALIZAR' ? 'COMPLETAR' : 'PAUSAR';
+      await finalizarSpool({
+        tag_spool: tag,
+        worker_id: workerId,
+        operacion: operation as 'ARM' | 'SOLD',
+        action_override: actionOverride,
+      });
+    } else if (operation === 'REP') {
+      if (action === 'FINALIZAR') {
+        await completarReparacion({ tag_spool: tag, worker_id: workerId });
+      } else {
+        await pausarReparacion({ tag_spool: tag, worker_id: workerId });
+      }
+    }
+  };
+
+  const handleSelectAction = async (action: Action) => {
     setSelectedAction(action);
-    modalStack.push('worker');
+
+    // INICIAR: show WorkerModal (user picks the worker)
+    if (action === 'INICIAR') {
+      modalStack.push('worker');
+      return;
+    }
+
+    // FINALIZAR / PAUSAR: use the worker already assigned in ocupado_por
+    if (
+      (action === 'FINALIZAR' || action === 'PAUSAR') &&
+      selectedSpool &&
+      selectedOperation
+    ) {
+      const ocupadoPor = selectedSpool.ocupado_por;
+      if (!ocupadoPor) {
+        enqueue('Error: spool no tiene trabajador asignado', 'error');
+        return;
+      }
+
+      const workerId = parseWorkerIdFromOcupadoPor(ocupadoPor);
+      if (workerId === null) {
+        enqueue('Error: formato de trabajador invalido', 'error');
+        return;
+      }
+
+      setApiLoading(true);
+      try {
+        await executeDirectAction(action, selectedSpool, selectedOperation, workerId);
+        const tag = selectedSpool.tag_spool;
+        modalStack.clear();
+
+        try {
+          await refreshSingle(tag);
+        } catch {
+          // Spool may have been removed — ignore refresh errors
+        }
+
+        enqueue('Operacion completada', 'success');
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Error al ejecutar la operacion';
+        enqueue(message, 'error');
+      } finally {
+        setApiLoading(false);
+        setSelectedSpool(null);
+        setSelectedOperation(null);
+        setSelectedAction(null);
+      }
+    }
   };
 
   const handleWorkerComplete = async () => {
-    const tags = selectedSpools.map((s) => s.tag_spool);
+    if (!selectedSpool) return;
+    const tag = selectedSpool.tag_spool;
     modalStack.clear();
 
-    // Refresh all affected spools
-    for (const tag of tags) {
-      try {
-        await refreshSingle(tag);
-      } catch {
-        // Spool may have been removed — ignore refresh errors
-      }
+    try {
+      await refreshSingle(tag);
+    } catch {
+      // Spool may have been removed — ignore refresh errors
     }
 
-    const count = tags.length;
-    enqueue(
-      count === 1
-        ? 'Operacion completada'
-        : `Operacion completada para ${count} spools`,
-      'success'
-    );
-    setSelectedTags(new Set());
+    enqueue('Operacion completada', 'success');
+    setSelectedSpool(null);
     setSelectedOperation(null);
     setSelectedAction(null);
   };
 
   const handleMetComplete = async (resultado: 'APROBADO' | 'RECHAZADO') => {
-    if (selectedSpools.length === 0) return;
-    const spool = selectedSpools[0];
-    const tag = spool.tag_spool;
+    if (!selectedSpool) return;
+    const tag = selectedSpool.tag_spool;
     modalStack.clear();
 
     if (resultado === 'APROBADO') {
@@ -229,72 +230,61 @@ function HomePage() {
       enqueue(`Metrologia rechazada — ${tag}`, 'success');
     }
 
-    setSelectedTags(new Set());
+    setSelectedSpool(null);
     setSelectedOperation(null);
     setSelectedAction(null);
   };
 
   const handleCancel = async () => {
-    if (selectedSpools.length === 0) return;
+    if (!selectedSpool) return;
 
-    // CANCELAR processes each spool individually
-    let successCount = 0;
-    let errorCount = 0;
+    const { tag_spool: tag, ocupado_por, operacion_actual } = selectedSpool;
 
-    for (const spool of selectedSpools) {
-      const tag = spool.tag_spool;
-      const { ocupado_por, operacion_actual } = spool;
-
-      // Libre spool — frontend-only removal (STATE-03)
-      if (!ocupado_por) {
-        removeSpool(tag);
-        successCount++;
-        continue;
-      }
-
-      // Occupied spool — parse worker ID
-      const workerId = parseWorkerIdFromOcupadoPor(ocupado_por);
-      if (workerId === null) {
-        errorCount++;
-        continue;
-      }
-
-      try {
-        if (operacion_actual === 'REPARACION') {
-          await cancelarReparacion({ tag_spool: tag, worker_id: workerId });
-        } else {
-          const operacion = (operacion_actual ?? selectedOperation ?? 'ARM') as
-            | 'ARM'
-            | 'SOLD';
-          await finalizarSpool({
-            tag_spool: tag,
-            worker_id: workerId,
-            operacion,
-            selected_unions: [],
-          });
-        }
-        removeSpool(tag);
-        successCount++;
-      } catch {
-        errorCount++;
-      }
+    // Libre spool — frontend-only removal (STATE-03)
+    if (!ocupado_por) {
+      removeSpool(tag);
+      modalStack.clear();
+      enqueue('Spool cancelado', 'success');
+      setSelectedSpool(null);
+      setSelectedOperation(null);
+      setSelectedAction(null);
+      return;
     }
 
-    modalStack.clear();
-
-    if (errorCount === 0) {
-      const msg = successCount === 1
-        ? `Spool cancelado`
-        : `${successCount} spools cancelados`;
-      enqueue(msg, 'success');
-    } else {
-      enqueue(
-        `${successCount} cancelados, ${errorCount} con error`,
-        errorCount === selectedSpools.length ? 'error' : 'success'
-      );
+    // Occupied spool — parse worker ID
+    const workerId = parseWorkerIdFromOcupadoPor(ocupado_por);
+    if (workerId === null) {
+      modalStack.clear();
+      enqueue('Error: formato de trabajador invalido', 'error');
+      setSelectedSpool(null);
+      setSelectedOperation(null);
+      setSelectedAction(null);
+      return;
     }
 
-    setSelectedTags(new Set());
+    try {
+      if (operacion_actual === 'REPARACION') {
+        await cancelarReparacion({ tag_spool: tag, worker_id: workerId });
+      } else {
+        const operacion = (operacion_actual ?? selectedOperation ?? 'ARM') as
+          | 'ARM'
+          | 'SOLD';
+        await finalizarSpool({
+          tag_spool: tag,
+          worker_id: workerId,
+          operacion,
+          selected_unions: [],
+        });
+      }
+      removeSpool(tag);
+      modalStack.clear();
+      enqueue('Spool cancelado', 'success');
+    } catch {
+      modalStack.clear();
+      enqueue('Error al cancelar spool', 'error');
+    }
+
+    setSelectedSpool(null);
     setSelectedOperation(null);
     setSelectedAction(null);
   };
@@ -305,16 +295,11 @@ function HomePage() {
       // After pop, stack will be empty — reset operation/action selection
       setSelectedOperation(null);
       setSelectedAction(null);
+      setSelectedSpool(null);
     }
   };
 
-  const handleClearSelection = () => {
-    setSelectedTags(new Set());
-  };
-
   // ── Render ───────────────────────────────────────────────────────────────────
-
-  const selectionCount = selectedTags.size;
 
   return (
     <div className="min-h-screen bg-zeues-navy text-white">
@@ -338,50 +323,26 @@ function HomePage() {
       <div className="px-4">
         <SpoolCardList
           spools={spools}
-          selectedTags={selectedTags}
           onCardClick={handleCardClick}
           onRemove={removeSpool}
         />
       </div>
-
-      {/* Selection action bar — fixed at bottom when spools are selected */}
-      {selectionCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-zeues-navy border-t-4 border-zeues-orange p-4 flex gap-3 z-40">
-          <button
-            onClick={handleClearSelection}
-            className="h-14 px-4 font-mono font-black text-white/60 border-2 border-white/30 hover:text-white hover:border-white/50 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
-            aria-label="Deseleccionar todos los spools"
-          >
-            LIMPIAR
-          </button>
-          <button
-            onClick={handleProcesar}
-            className="flex-1 h-14 bg-zeues-orange text-white font-mono font-black text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-            aria-label={`Procesar ${selectionCount} spool${selectionCount > 1 ? 's' : ''} seleccionado${selectionCount > 1 ? 's' : ''}`}
-          >
-            PROCESAR {selectionCount} SPOOL{selectionCount > 1 ? 'S' : ''}
-          </button>
-        </div>
-      )}
-
-      {/* Bottom padding when selection bar is visible to prevent overlap */}
-      {selectionCount > 0 && <div className="h-24" />}
 
       {/* ── Modals ── */}
 
       <AddSpoolModal
         isOpen={modalStack.isOpen('add-spool')}
         onAdd={handleAddSpool}
-        onClose={handleModalClose}
+        onClose={handleAddSpoolClose}
         alreadyTracked={spools.map((s) => s.tag_spool)}
         isTopOfStack={modalStack.isOpen('add-spool')}
       />
 
-      {selectedSpools.length > 0 && (
+      {selectedSpool && (
         <>
           <OperationModal
             isOpen={modalStack.isOpen('operation')}
-            spools={selectedSpools}
+            spool={selectedSpool}
             onSelectOperation={handleSelectOperation}
             onSelectMet={handleSelectMet}
             onClose={handleModalClose}
@@ -391,7 +352,7 @@ function HomePage() {
           {selectedOperation && (
             <ActionModal
               isOpen={modalStack.isOpen('action')}
-              spools={selectedSpools}
+              spool={selectedSpool}
               operation={selectedOperation}
               onSelectAction={handleSelectAction}
               onCancel={handleCancel}
@@ -403,7 +364,7 @@ function HomePage() {
           {selectedOperation && selectedAction && (
             <WorkerModal
               isOpen={modalStack.isOpen('worker')}
-              spools={selectedSpools}
+              spool={selectedSpool}
               operation={selectedOperation}
               action={selectedAction}
               onComplete={handleWorkerComplete}
@@ -412,16 +373,30 @@ function HomePage() {
             />
           )}
 
-          {selectedSpools.length === 1 && (
-            <MetrologiaModal
-              isOpen={modalStack.isOpen('metrologia')}
-              spool={selectedSpools[0]}
-              onComplete={handleMetComplete}
-              onClose={handleModalClose}
-              isTopOfStack={modalStack.isOpen('metrologia')}
-            />
-          )}
+          <MetrologiaModal
+            isOpen={modalStack.isOpen('metrologia')}
+            spool={selectedSpool}
+            onComplete={handleMetComplete}
+            onClose={handleModalClose}
+            isTopOfStack={modalStack.isOpen('metrologia')}
+          />
         </>
+      )}
+
+      {/* Loading overlay for direct API calls (FINALIZAR/PAUSAR without WorkerModal) */}
+      {apiLoading && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="status"
+          aria-label="Procesando operacion"
+        >
+          <div className="flex flex-col items-center gap-3 bg-zeues-navy border-4 border-white p-8">
+            <div className="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+            <p className="text-white font-mono font-black text-sm tracking-widest">
+              PROCESANDO...
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Toast overlay */}
