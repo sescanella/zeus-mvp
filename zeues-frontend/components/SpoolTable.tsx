@@ -25,7 +25,7 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
           </tr>
         </thead>
         <tbody>
-          {spools.map((spool) => {
+          {spools.map((spool, index) => {
             const isSelected = selectedSpools.includes(spool.tag_spool);
             const isBloqueado = tipo === 'reparacion' && (spool as unknown as { bloqueado?: boolean }).bloqueado;
             const isDisabled = disabledSpools.includes(spool.tag_spool);
@@ -34,7 +34,7 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
 
             return (
               <tr
-                key={spool.tag_spool}
+                key={`${spool.tag_spool}-${index}`}
                 role="button"
                 tabIndex={isInert ? -1 : 0}
                 aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isBloqueado ? ' (bloqueado)' : ''}${isDisabled ? ' (ya agregado)' : ''}`}

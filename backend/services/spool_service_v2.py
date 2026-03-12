@@ -650,11 +650,25 @@ class SpoolServiceV2:
                 logger.warning(f"Skipping invalid row {row_idx}: {str(e)}")
                 continue
 
+        # Deduplicar por TAG_SPOOL (Google Sheets puede tener filas duplicadas)
+        seen_tags = set()
+        unique_spools = []
+        for spool in spools_disponibles:
+            if spool.tag_spool not in seen_tags:
+                seen_tags.add(spool.tag_spool)
+                unique_spools.append(spool)
+
+        if len(unique_spools) < len(spools_disponibles):
+            logger.warning(
+                f"[FilterRegistry] Deduplicated {len(spools_disponibles)} -> {len(unique_spools)} spools "
+                f"({len(spools_disponibles) - len(unique_spools)} duplicates removed)"
+            )
+
         logger.info(
-            f"[FilterRegistry] Found {len(spools_disponibles)} spools for {operation} {action} "
+            f"[FilterRegistry] Found {len(unique_spools)} spools for {operation} {action} "
             f"(applied {len(filters)} filters)"
         )
-        return spools_disponibles
+        return unique_spools
 
     def find_spool_by_tag(self, tag_spool: str) -> Optional[Spool]:
         """

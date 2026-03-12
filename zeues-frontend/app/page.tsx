@@ -206,7 +206,7 @@ function HomePage() {
     <div className="min-h-screen bg-zeues-navy text-white">
       {/* Header */}
       <header className="p-4 text-center border-b-4 border-white/30">
-        <h1 className="text-2xl font-bold font-mono tracking-widest">ZEUES</h1>
+        <img src="/logos/logo-grisclaro-F8F9FA.svg" alt="KM" className="h-10 mx-auto" />
       </header>
 
       {/* Add Spool button */}
