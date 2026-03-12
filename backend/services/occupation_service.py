@@ -703,6 +703,12 @@ class OccupationService:
                     "Estado_Detalle": estado_detalle       # Column 67
                 }
 
+                # Write worker name to Armador/Soldador column
+                if operacion == "ARM":
+                    updates_dict["Armador"] = worker_nombre
+                elif operacion == "SOLD":
+                    updates_dict["Soldador"] = worker_nombre
+
                 # Get spool row number for batch update
                 from backend.core.column_map_cache import ColumnMapCache
                 from backend.config import config

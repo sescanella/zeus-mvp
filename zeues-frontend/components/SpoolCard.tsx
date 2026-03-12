@@ -7,7 +7,9 @@ export type { SpoolCardData };
 
 export interface SpoolCardProps {
   spool: SpoolCardData;
+  isSelected?: boolean;
   onCardClick: (spool: SpoolCardData) => void;
+  onRemove?: (tag: string) => void;
 }
 
 // ─── Estado color map ──────────────────────────────────────────────────────────
@@ -136,7 +138,7 @@ function formatElapsed(totalSeconds: number): string {
  *
  * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, onCardClick }: SpoolCardProps) {
+export function SpoolCard({ spool, isSelected = false, onCardClick, onRemove }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
 
   const elapsed = useElapsedSeconds(
@@ -167,14 +169,31 @@ export function SpoolCard({ spool, onCardClick }: SpoolCardProps) {
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
+      aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
+      aria-pressed={isSelected}
       onClick={() => onCardClick(spool)}
       onKeyDown={handleKeyDown}
-      className="bg-zeues-navy border-4 border-white/20 rounded-none hover:border-white/40 transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+      className={`bg-zeues-navy border-4 rounded-none transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
+        isSelected
+          ? 'border-zeues-orange bg-zeues-orange/10'
+          : 'border-white/20 hover:border-white/40'
+      }`}
     >
-        {/* Tag */}
-        <div className="text-lg font-black font-mono text-white">
-          {spool.tag_spool}
+        {/* Tag + Remove button */}
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-black font-mono text-white">
+            {spool.tag_spool}
+          </div>
+          {onRemove && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(spool.tag_spool); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onRemove(spool.tag_spool); } }}
+              aria-label={`Eliminar spool ${spool.tag_spool}`}
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Badges row */}

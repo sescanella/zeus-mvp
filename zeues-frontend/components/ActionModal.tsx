@@ -21,7 +21,7 @@ const OPERATION_LABELS: Record<Operation, string> = {
 
 interface ActionModalProps {
   isOpen: boolean;
-  spool: SpoolCardData;
+  spools: SpoolCardData[];
   operation: Operation;
   onSelectAction: (action: Action) => void;
   onCancel: () => void;
@@ -40,14 +40,16 @@ interface ActionModalProps {
  */
 export function ActionModal({
   isOpen,
-  spool,
+  spools,
   operation,
   onSelectAction,
   onCancel,
   onClose,
   isTopOfStack,
 }: ActionModalProps) {
-  const validActions = getValidActions(spool);
+  // For multi-select, use the first spool to determine valid actions.
+  // All selected spools should have compatible states (enforced at selection time).
+  const validActions = spools.length > 0 ? getValidActions(spools[0]) : [];
 
   const handleActionClick = (action: Action) => {
     if (action === 'CANCELAR') {
@@ -71,7 +73,7 @@ export function ActionModal({
           SELECCIONAR ACCION
         </h2>
         <p className="text-sm text-white/70 font-mono mt-1">
-          {spool.tag_spool} — {OPERATION_LABELS[operation]}
+          {spools.length === 1 ? spools[0].tag_spool : `${spools.length} spools`} — {OPERATION_LABELS[operation]}
         </p>
       </div>
 
