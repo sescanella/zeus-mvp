@@ -306,17 +306,26 @@ export async function getSpoolsReparacion(): Promise<{
       filtro_aplicado: string;
     }>(res);
 
-    // Transform response to match expected format
-    return {
-      spools: data.spools.map((spool) => ({
+    // Transform response — extract cycle/bloqueado from estado_detalle
+    const spools = data.spools.map((spool) => {
+      const ed = spool.estado_detalle || '';
+      const isBloqueado = ed.includes('BLOQUEADO');
+      const cycleMatch = ed.match(/Ciclo (\d+)\/3/);
+      const cycle = isBloqueado ? 3 : cycleMatch ? parseInt(cycleMatch[1], 10) : 0;
+
+      return {
         tag_spool: spool.tag_spool,
-        estado_detalle: spool.estado_detalle || '',
+        estado_detalle: ed,
         fecha_rechazo: spool.fecha_qc_metrologia || '',
-        cycle: 0, // TODO: Extract cycle/bloqueado from backend response when available
-        bloqueado: false
-      })),
+        cycle,
+        bloqueado: isBloqueado,
+      };
+    });
+
+    return {
+      spools,
       total: data.total,
-      bloqueados: 0,
+      bloqueados: spools.filter((s) => s.bloqueado).length,
       filtro_aplicado: data.filtro_aplicado
     };
   } catch (error) {

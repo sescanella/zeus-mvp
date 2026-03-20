@@ -191,10 +191,11 @@ class FilterRegistry:
         OcupacionFilter(),
     ]
 
-    # REPARACION - FINALIZAR: Spools en reparación ocupados por el trabajador
-    _REPARACION_FINALIZAR_FILTERS: List[SpoolFilter] = [
-        # TODO: Definir filtros para REPARACION FINALIZAR
-    ]
+    # REPARACION - FINALIZAR: No usado (REPARACION usa endpoints v3.0: tomar/pausar/completar)
+    # El filtrado de spools ocupados se realiza en get_spools_ocupados_por_worker()
+    # y la validación de ownership en pausar_reparacion()/completar_reparacion().
+    # Esta entrada existe por simetría con las demás operaciones.
+    _REPARACION_FINALIZAR_FILTERS: List[SpoolFilter] = []
 
     # ============================================================================
     # MAPEO: (operacion, accion) -> filtros

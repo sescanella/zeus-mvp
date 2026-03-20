@@ -34,10 +34,10 @@ class RoleRepository:
     | 95     | Metrologia     | TRUE       | ← Multi-rol
     """
 
-    # Índices de columnas (0-indexed)
-    IDX_ID = 0       # A - Id del trabajador
-    IDX_ROL = 1      # B - Rol (string)
-    IDX_ACTIVO = 2   # C - Activo (TRUE/FALSE)
+    # Column name constants for header-based lookup
+    COL_ID = "id"
+    COL_ROL = "rol"
+    COL_ACTIVO = "activo"
 
     def __init__(self, spreadsheet: gspread.Spreadsheet, hoja_nombre: str = "Roles"):
         """
@@ -45,6 +45,7 @@ class RoleRepository:
 
         IMPORTANT: Usa lazy loading para evitar llamadas API innecesarias.
         El worksheet solo se obtiene cuando se usa por primera vez.
+        Column indices are resolved dynamically from the header row.
 
         Args:
             spreadsheet: Instancia de Google Spreadsheet autenticada
@@ -53,6 +54,7 @@ class RoleRepository:
         self.spreadsheet = spreadsheet
         self.hoja_nombre = hoja_nombre
         self._worksheet = None  # Lazy loading
+        self._column_map: dict[str, int] | None = None  # Built on first read
         logger.info(f"✅ RoleRepository inicializado (lazy): hoja '{hoja_nombre}'")
 
     def _get_worksheet(self) -> gspread.Worksheet:
@@ -76,6 +78,48 @@ class RoleRepository:
                 )
         return self._worksheet
 
+    def _get_column_map(self, header_row: list[str]) -> dict[str, int]:
+        """
+        Builds or returns cached column name -> index mapping from header row.
+
+        Args:
+            header_row: First row from the Roles sheet
+
+        Returns:
+            dict mapping lowercase column names to 0-based indices
+        """
+        if self._column_map is None:
+            self._column_map = {
+                col.strip().lower(): idx
+                for idx, col in enumerate(header_row)
+                if col.strip()
+            }
+            logger.debug(f"Roles column map built: {self._column_map}")
+        return self._column_map
+
+    def _get_all_rows(self) -> tuple[list[list[str]], dict[str, int]]:
+        """
+        Reads all rows and returns (data_rows, column_map).
+        Header row is used to build column map, data rows skip the header.
+
+        Returns:
+            Tuple of (data_rows_without_header, column_map)
+        """
+        try:
+            all_rows = self._get_worksheet().get_all_values()
+        except gspread.exceptions.APIError as e:
+            logger.error(f"Error al leer hoja Roles: {str(e)}")
+            raise SheetsConnectionError(
+                "Error al acceder a hoja Roles",
+                details=str(e)
+            )
+
+        if not all_rows:
+            return [], {}
+
+        column_map = self._get_column_map(all_rows[0])
+        return all_rows[1:], column_map
+
     def get_roles_by_worker_id(self, worker_id: int) -> List[WorkerRole]:
         """
         Obtiene todos los roles activos de un trabajador.
@@ -97,25 +141,20 @@ class RoleRepository:
             >>> repo.get_roles_by_worker_id(999)  # Worker sin roles
             []
         """
-        try:
-            # Obtener todas las filas (skip header row)
-            all_rows = self._get_worksheet().get_all_values()[1:]
-        except gspread.exceptions.APIError as e:
-            logger.error(f"Error al leer hoja Roles: {str(e)}")
-            raise SheetsConnectionError(
-                "Error al acceder a hoja Roles",
-                details=str(e)
-            )
+        data_rows, col = self._get_all_rows()
+        idx_id = col.get(self.COL_ID, 0)
+        idx_rol = col.get(self.COL_ROL, 1)
+        idx_activo = col.get(self.COL_ACTIVO, 2)
 
         roles = []
-        for row_idx, row in enumerate(all_rows, start=2):  # start=2 porque row 1 es header
-            if len(row) < 3:
+        for row_idx, row in enumerate(data_rows, start=2):  # start=2 porque row 1 es header
+            if len(row) <= max(idx_id, idx_rol, idx_activo):
                 logger.debug(f"Fila {row_idx} incompleta, saltando: {row}")
-                continue  # Skip filas incompletas
+                continue
 
             # Parsear Id
             try:
-                row_id = int(row[self.IDX_ID])
+                row_id = int(row[idx_id])
             except (ValueError, IndexError):
                 logger.warning(f"Fila {row_idx} con Id inválido, saltando: {row}")
                 continue
@@ -125,7 +164,7 @@ class RoleRepository:
                 continue
 
             # Parsear rol
-            rol_str = row[self.IDX_ROL].strip()
+            rol_str = row[idx_rol].strip()
             try:
                 rol = RolTrabajador(rol_str)
             except ValueError:
@@ -133,7 +172,7 @@ class RoleRepository:
                 continue
 
             # Parsear activo
-            activo_str = row[self.IDX_ACTIVO].strip().upper()
+            activo_str = row[idx_activo].strip().upper()
             activo = activo_str == "TRUE"
 
             # Solo retornar roles activos
@@ -207,24 +246,20 @@ class RoleRepository:
                 ...
             ]
         """
-        try:
-            all_rows = self._get_worksheet().get_all_values()[1:]  # Skip header
-        except gspread.exceptions.APIError as e:
-            logger.error(f"Error al leer hoja Roles: {str(e)}")
-            raise SheetsConnectionError(
-                "Error al acceder a hoja Roles",
-                details=str(e)
-            )
+        data_rows, col = self._get_all_rows()
+        idx_id = col.get(self.COL_ID, 0)
+        idx_rol = col.get(self.COL_ROL, 1)
+        idx_activo = col.get(self.COL_ACTIVO, 2)
 
         roles = []
-        for row_idx, row in enumerate(all_rows, start=2):
-            if len(row) < 3:
+        for row_idx, row in enumerate(data_rows, start=2):
+            if len(row) <= max(idx_id, idx_rol, idx_activo):
                 continue
 
             try:
-                row_id = int(row[self.IDX_ID])
-                rol = RolTrabajador(row[self.IDX_ROL].strip())
-                activo = row[self.IDX_ACTIVO].strip().upper() == "TRUE"
+                row_id = int(row[idx_id])
+                rol = RolTrabajador(row[idx_rol].strip())
+                activo = row[idx_activo].strip().upper() == "TRUE"
 
                 roles.append(WorkerRole(
                     id=row_id,
