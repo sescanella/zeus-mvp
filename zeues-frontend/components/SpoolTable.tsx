@@ -11,11 +11,12 @@ interface SpoolTableProps {
   onToggleSelect: (tag: string) => void;
   tipo: TipoParam;
   disabledSpools?: string[];
+  maxHeight?: string;
 }
 
-export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disabledSpools = [] }: SpoolTableProps) {
+export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disabledSpools = [], maxHeight = 'max-h-96' }: SpoolTableProps) {
   return (
-    <div className="border-4 border-white overflow-hidden max-h-96 overflow-y-auto custom-scrollbar">
+    <div className={`border-4 border-white overflow-hidden ${maxHeight} overflow-y-auto custom-scrollbar`}>
       <table className="w-full">
         <thead className="sticky top-0 bg-zeues-navy border-b-4 border-white">
           <tr>
