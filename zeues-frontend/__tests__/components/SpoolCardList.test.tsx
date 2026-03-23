@@ -9,6 +9,7 @@ import type { SpoolCardData } from '@/lib/types';
 const makeSpool = (tag: string): SpoolCardData => ({
   tag_spool: tag,
   ocupado_por: null,
+  ocupado_por_display: null,
   fecha_ocupacion: null,
   estado_detalle: null,
   total_uniones: 3,

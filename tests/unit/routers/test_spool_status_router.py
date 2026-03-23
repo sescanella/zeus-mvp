@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from backend.main import app
-from backend.core.dependency import get_sheets_repository
+from backend.core.dependency import get_sheets_repository, get_worker_service
 from backend.models.spool import Spool
 
 
@@ -67,17 +67,27 @@ def mock_repo_returning_none():
 
 
 @pytest.fixture
-def client_with_spool(mock_repo_returning_spool):
+def mock_worker_service():
+    """WorkerService mock that returns an empty list of workers."""
+    service = MagicMock()
+    service.get_all_active_workers = MagicMock(return_value=[])
+    return service
+
+
+@pytest.fixture
+def client_with_spool(mock_repo_returning_spool, mock_worker_service):
     """TestClient with SheetsRepository overridden to return a spool."""
     app.dependency_overrides[get_sheets_repository] = lambda: mock_repo_returning_spool
+    app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client_without_spool(mock_repo_returning_none):
+def client_without_spool(mock_repo_returning_none, mock_worker_service):
     """TestClient with SheetsRepository overridden to return None."""
     app.dependency_overrides[get_sheets_repository] = lambda: mock_repo_returning_none
+    app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -162,8 +172,11 @@ def test_get_spool_status_libre_spool():
     libre_spool = make_mock_spool(tag_spool="LIBRE-TAG", estado_detalle=None)
     repo = MagicMock()
     repo.get_spool_by_tag = MagicMock(return_value=libre_spool)
+    worker_svc = MagicMock()
+    worker_svc.get_all_active_workers = MagicMock(return_value=[])
 
     app.dependency_overrides[get_sheets_repository] = lambda: repo
+    app.dependency_overrides[get_worker_service] = lambda: worker_svc
     try:
         client = TestClient(app)
         response = client.get("/api/spool/LIBRE-TAG/status")

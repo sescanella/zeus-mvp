@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import type { SpoolCardData } from '@/lib/types';
 
 export type { SpoolCardData };
@@ -12,7 +13,6 @@ export interface SpoolCardProps {
 }
 
 // ─── Estado color map ──────────────────────────────────────────────────────────
-
 const ESTADO_COLORS: Record<NonNullable<SpoolCardData['estado_trabajo']>, string> = {
   LIBRE: 'text-white border-white/30',
   EN_PROGRESO: 'text-zeues-orange border-zeues-orange',
@@ -20,7 +20,23 @@ const ESTADO_COLORS: Record<NonNullable<SpoolCardData['estado_trabajo']>, string
   COMPLETADO: 'text-green-400 border-green-400',
   RECHAZADO: 'text-red-400 border-red-400',
   PENDIENTE_METROLOGIA: 'text-blue-300 border-blue-300',
-  BLOQUEADO: 'text-red-600 border-red-600 opacity-75',
+  BLOQUEADO: 'text-red-500 border-red-500 bg-red-600/20',
+};
+
+const OPERACION_LABELS: Record<string, string> = {
+  ARM: 'Armado',
+  SOLD: 'Soldadura',
+  REPARACION: 'Reparación',
+};
+
+const ESTADO_LABELS: Record<string, string> = {
+  LIBRE: 'Libre',
+  EN_PROGRESO: 'En Progreso',
+  PAUSADO: 'Pausado',
+  COMPLETADO: 'Completado',
+  RECHAZADO: 'Rechazado',
+  PENDIENTE_METROLOGIA: 'Pend. Metrología',
+  BLOQUEADO: 'Bloqueado',
 };
 
 // ─── useElapsedSeconds ─────────────────────────────────────────────────────────
@@ -75,10 +91,9 @@ function useElapsedSeconds(
 }
 
 /**
- * Parse "DD-MM-YYYY HH:MM:SS" string into a UTC millisecond timestamp.
- * Treats the date/time values as representing Chile local time (UTC-3 typical).
- * For elapsed-time display purposes, we interpret the string as local wall-clock
- * time and compare against Date.now() — both measured in the same timezone context.
+ * Parse "DD-MM-YYYY HH:MM:SS" string into a local millisecond timestamp.
+ * Constructs the Date using local time fields so that elapsed calculation
+ * matches the device's clock — both start time and Date.now() are in local time.
  *
  * Returns null if the string is missing or doesn't match the expected pattern.
  */
@@ -89,19 +104,14 @@ function parseFechaOcupacion(raw: string): number | null {
   if (!match) return null;
 
   const [, dd, mm, yyyy, hh, min, ss] = match;
-  // Construct as UTC to avoid local timezone ambiguity in tests.
-  // The backend writes Chile local time; we compute elapsed relative to
-  // a fixed UTC epoch where Chile = UTC-3.
-  // For display, we use Date.UTC treating the fields as UTC to keep tests
-  // deterministic (jest.setSystemTime sets UTC epoch).
-  const ms = Date.UTC(
+  const ms = new Date(
     parseInt(yyyy, 10),
     parseInt(mm, 10) - 1,
     parseInt(dd, 10),
     parseInt(hh, 10),
     parseInt(min, 10),
     parseInt(ss, 10)
-  );
+  ).getTime();
 
   return ms;
 }
@@ -151,11 +161,9 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
       ? (ESTADO_COLORS[spool.estado_trabajo] ?? 'text-white border-white/30')
       : 'text-white border-white/30';
 
-  // Operacion label: REPARACION → REP for display
-  const operacionLabel =
-    spool.operacion_actual === 'REPARACION'
-      ? 'REP'
-      : spool.operacion_actual ?? null;
+  const operacionLabel = spool.operacion_actual
+    ? (OPERACION_LABELS[spool.operacion_actual] ?? spool.operacion_actual)
+    : null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -168,10 +176,10 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Procesar spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${spool.estado_trabajo}` : ''}`}
+      aria-label={`Procesar spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${ESTADO_LABELS[spool.estado_trabajo] ?? spool.estado_trabajo}` : ''}`}
       onClick={() => onCardClick(spool)}
       onKeyDown={handleKeyDown}
-      className="bg-zeues-navy border-4 rounded-none transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset border-white/20 hover:border-white/40"
+      className="bg-zeues-navy border-4 rounded-none transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset border-white/20 hover:border-white/40 active:bg-white/5"
     >
         {/* Tag + Remove button */}
         <div className="flex items-center justify-between">
@@ -185,7 +193,7 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
               aria-label={`Eliminar spool ${spool.tag_spool}`}
               className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
             >
-              ✕
+              <X size={16} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -194,7 +202,7 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
         <div className="flex flex-wrap gap-2 mt-1">
           {/* Operacion badge */}
           {operacionLabel !== null && (
-            <span className="font-mono font-black text-xs px-2 py-0.5 border-2 text-zeues-orange border-zeues-orange">
+            <span className="font-mono font-black text-sm px-2 py-0.5 border-2 text-zeues-orange border-zeues-orange">
               {operacionLabel}
             </span>
           )}
@@ -202,19 +210,24 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
           {/* Estado badge */}
           {spool.estado_trabajo !== null && (
             <span
-              className={`font-mono font-black text-xs px-2 py-0.5 border-2 ${estadoColors}`}
+              className={`font-mono font-black text-sm px-2 py-0.5 border-2 ${estadoColors}`}
             >
-              {spool.estado_trabajo}
+              {ESTADO_LABELS[spool.estado_trabajo] ?? spool.estado_trabajo}
             </span>
           )}
         </div>
 
-        {/* Worker */}
-        {spool.ocupado_por !== null && spool.ocupado_por !== '' && (
-          <div className="mt-1 font-mono text-xs text-white/70">
-            {spool.ocupado_por}
-          </div>
-        )}
+        {/* Worker — TODO: add ocupado_por_display to SpoolCardData type when backend provides it */}
+        {(() => {
+          type WithDisplay = SpoolCardData & { ocupado_por_display?: string | null };
+          const s = spool as WithDisplay;
+          const workerName = s.ocupado_por_display ?? s.ocupado_por;
+          return workerName ? (
+            <div className="mt-1 font-mono text-sm text-white/90">
+              {workerName}
+            </div>
+          ) : null;
+        })()}
 
         {/* Elapsed timer — hidden when PAUSADO (STATE-06) */}
         {!isPausado && elapsed !== null && (

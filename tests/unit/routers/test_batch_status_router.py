@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from backend.main import app
-from backend.core.dependency import get_sheets_repository
+from backend.core.dependency import get_sheets_repository, get_worker_service
 from backend.models.spool import Spool
 
 
@@ -84,28 +84,39 @@ SPOOL_B = make_mock_spool(
 
 
 @pytest.fixture
-def client_with_two_spools():
+def mock_worker_service():
+    """WorkerService mock that returns an empty list of workers."""
+    service = MagicMock()
+    service.get_all_active_workers = MagicMock(return_value=[])
+    return service
+
+
+@pytest.fixture
+def client_with_two_spools(mock_worker_service):
     """TestClient with two known spools (A-001, B-002) in the mock repo."""
     repo = _make_repo_for_spools(SPOOL_A, SPOOL_B)
     app.dependency_overrides[get_sheets_repository] = lambda: repo
+    app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client_with_no_spools():
+def client_with_no_spools(mock_worker_service):
     """TestClient where all tag lookups return None (empty repo)."""
     repo = _make_repo_for_spools()
     app.dependency_overrides[get_sheets_repository] = lambda: repo
+    app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client_with_one_spool():
+def client_with_one_spool(mock_worker_service):
     """TestClient with only SPOOL_A (A-001) available."""
     repo = _make_repo_for_spools(SPOOL_A)
     app.dependency_overrides[get_sheets_repository] = lambda: repo
+    app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
     yield TestClient(app)
     app.dependency_overrides.clear()
 

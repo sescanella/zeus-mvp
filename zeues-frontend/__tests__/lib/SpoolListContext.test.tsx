@@ -47,6 +47,7 @@ function makeSpoolCard(tag: string): SpoolCardData {
   return {
     tag_spool: tag,
     ocupado_por: null,
+    ocupado_por_display: null,
     fecha_ocupacion: null,
     estado_detalle: null,
     total_uniones: null,

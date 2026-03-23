@@ -14,6 +14,7 @@ Reference:
 """
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel, Field
@@ -37,6 +38,9 @@ class SpoolStatus(BaseModel):
     tag_spool: str = Field(..., description="TAG unico del spool")
     ocupado_por: Optional[str] = Field(
         None, description="Trabajador que ocupa el spool (formato 'MR(93)')"
+    )
+    ocupado_por_display: Optional[str] = Field(
+        None, description="Nombre completo del trabajador (ej: 'Mauricio Rodriguez')"
     )
     fecha_ocupacion: Optional[str] = Field(
         None, description="Timestamp cuando fue ocupado (DD-MM-YYYY HH:MM:SS)"
@@ -76,7 +80,9 @@ class SpoolStatus(BaseModel):
     )
 
     @classmethod
-    def from_spool(cls, spool: "Spool") -> "SpoolStatus":
+    def from_spool(
+        cls, spool: "Spool", workers: dict[int, str] | None = None
+    ) -> "SpoolStatus":
         """
         Build a SpoolStatus from a Spool object.
 
@@ -85,14 +91,30 @@ class SpoolStatus(BaseModel):
 
         Args:
             spool: A Spool object (frozen Pydantic model).
+            workers: Optional mapping of worker_id -> "Nombre Apellido"
+                for resolving ocupado_por_display.
 
         Returns:
             SpoolStatus with all pass-through and computed fields populated.
         """
         parsed = parse_estado_detalle(spool.estado_detalle)
+
+        # Resolve ocupado_por_display from workers dict
+        ocupado_por_display: str | None = None
+        if spool.ocupado_por and workers:
+            match = re.search(r"\((\d+)\)$", spool.ocupado_por)
+            if match:
+                worker_id = int(match.group(1))
+                ocupado_por_display = workers.get(worker_id, spool.ocupado_por)
+            else:
+                ocupado_por_display = spool.ocupado_por
+        elif spool.ocupado_por:
+            ocupado_por_display = spool.ocupado_por
+
         return cls(
             tag_spool=spool.tag_spool,
             ocupado_por=spool.ocupado_por,
+            ocupado_por_display=ocupado_por_display,
             fecha_ocupacion=spool.fecha_ocupacion,
             estado_detalle=spool.estado_detalle,
             total_uniones=spool.total_uniones,

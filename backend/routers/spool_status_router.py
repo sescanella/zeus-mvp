@@ -18,8 +18,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.core.dependency import get_sheets_repository
+from backend.core.dependency import get_sheets_repository, get_worker_service
 from backend.repositories.sheets_repository import SheetsRepository
+from backend.services.worker_service import WorkerService
 from backend.models.spool_status import (
     SpoolStatus,
     BatchStatusRequest,
@@ -45,6 +46,7 @@ router = APIRouter()
 async def get_spool_status(
     tag: str,
     sheets_repo: Annotated[SheetsRepository, Depends(get_sheets_repository)],
+    worker_service: Annotated[WorkerService, Depends(get_worker_service)],
 ) -> SpoolStatus:
     """
     Fetch a spool by tag and return its computed SpoolStatus.
@@ -52,6 +54,7 @@ async def get_spool_status(
     Args:
         tag: The spool TAG_SPOOL identifier.
         sheets_repo: Injected SheetsRepository (singleton, cached).
+        worker_service: Injected WorkerService for resolving worker names.
 
     Returns:
         SpoolStatus with pass-through and computed fields.
@@ -63,7 +66,12 @@ async def get_spool_status(
     if spool is None:
         logger.info(f"Spool not found for status request: tag={tag!r}")
         raise HTTPException(status_code=404, detail=f"Spool {tag} not found")
-    return SpoolStatus.from_spool(spool)
+
+    # Build workers lookup: {id: "Nombre Apellido"}
+    all_workers = worker_service.get_all_active_workers()
+    workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
+
+    return SpoolStatus.from_spool(spool, workers=workers_map)
 
 
 @router.post(
@@ -80,6 +88,7 @@ async def get_spool_status(
 async def batch_spool_status(
     request: BatchStatusRequest,
     sheets_repo: Annotated[SheetsRepository, Depends(get_sheets_repository)],
+    worker_service: Annotated[WorkerService, Depends(get_worker_service)],
 ) -> BatchStatusResponse:
     """
     Fetch multiple spools by tag and return their computed SpoolStatus objects.
@@ -87,15 +96,20 @@ async def batch_spool_status(
     Args:
         request: BatchStatusRequest with tags list (1-100 tags).
         sheets_repo: Injected SheetsRepository (singleton, cached).
+        worker_service: Injected WorkerService for resolving worker names.
 
     Returns:
         BatchStatusResponse with found spools and total count.
     """
+    # Build workers lookup once for all spools: {id: "Nombre Apellido"}
+    all_workers = worker_service.get_all_active_workers()
+    workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
+
     results: list[SpoolStatus] = []
     for tag in request.tags:
         spool = sheets_repo.get_spool_by_tag(tag)
         if spool is not None:
-            results.append(SpoolStatus.from_spool(spool))
+            results.append(SpoolStatus.from_spool(spool, workers=workers_map))
 
     logger.debug(
         f"batch-status: requested={len(request.tags)} found={len(results)}"
