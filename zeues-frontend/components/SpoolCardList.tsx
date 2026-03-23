@@ -47,15 +47,14 @@ export function SpoolCardList({ spools, onCardClick, onRemove }: SpoolCardListPr
     );
   }
 
-  // Sort: priority 1 > 2 > 3 > null (null treated as 99), then by fecha_ocupacion oldest first
+  // Sort: priority 1 > 2 > 3 > null (99), then by fecha_ocupacion newest first (nulls last)
   const sorted = [...spools].sort((a, b) => {
     const pa = priorities.get(a.tag_spool) ?? 99;
     const pb = priorities.get(b.tag_spool) ?? 99;
     if (pa !== pb) return pa - pb;
-    // Same priority: sort by fecha_ocupacion (oldest first, nulls last)
     const fa = a.fecha_ocupacion ?? '';
     const fb = b.fecha_ocupacion ?? '';
-    return fa.localeCompare(fb);
+    return fb.localeCompare(fa);
   });
 
   return (
