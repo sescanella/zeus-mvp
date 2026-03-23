@@ -139,7 +139,7 @@ export function AddSpoolModal({
         <button
           onClick={onClose}
           aria-label="Cerrar modal"
-          className="p-1 text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
         >
           <X size={24} strokeWidth={3} />
         </button>
@@ -159,7 +159,7 @@ export function AddSpoolModal({
           <button
             onClick={fetchSpools}
             aria-label="Reintentar cargar spools"
-            className="px-6 py-3 border-2 border-white text-white font-mono font-black text-sm active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+            className="px-6 py-3 border-2 border-white text-white font-mono font-black text-sm cursor-pointer active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
           >
             REINTENTAR
           </button>
@@ -224,7 +224,7 @@ export function AddSpoolModal({
             {hasFilter && (
               <button
                 onClick={handleClearFilters}
-                className="text-xs font-black text-yellow-500 font-mono px-2 py-1 border border-yellow-500 active:bg-yellow-500 active:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-inset cursor-pointer"
+                className="text-xs font-black text-yellow-500 font-mono px-3 py-2 min-h-[44px] border border-yellow-500 active:bg-yellow-500 active:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-inset cursor-pointer"
                 aria-label="Limpiar filtros de busqueda"
               >
                 LIMPIAR

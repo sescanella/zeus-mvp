@@ -4,7 +4,7 @@ interface LoadingProps {
 
 export function Loading({ message = 'CARGANDO' }: LoadingProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16">
+    <div className="flex flex-col items-center justify-center py-16" role="status" aria-label="Cargando">
       {/* Border progresivo OPTIMIZADO - cuadrado que se dibuja */}
       <div className="relative w-48 h-48 mb-8">
         {/* Top border - izquierda a derecha */}

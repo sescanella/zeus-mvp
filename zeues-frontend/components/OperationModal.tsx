@@ -71,7 +71,7 @@ export function OperationModal({
             key={op}
             onClick={() => handleOperationClick(op)}
             aria-label={OPERATION_LABELS[op]}
-            className="w-full h-16 border-4 border-white font-mono font-black text-lg text-white active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+            className="w-full h-16 border-4 border-white font-mono font-black text-lg text-white cursor-pointer hover:bg-white/10 active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
           >
             {OPERATION_LABELS[op]}
           </button>

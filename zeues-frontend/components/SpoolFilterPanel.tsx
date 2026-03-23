@@ -103,7 +103,7 @@ export function SpoolFilterPanel({
           <button
             onClick={handleClose}
             aria-label="Cerrar filtros de busqueda"
-            className="p-1 text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
             <X size={24} strokeWidth={3} />
           </button>
@@ -157,7 +157,7 @@ export function SpoolFilterPanel({
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={onSelectAll}
-                className="px-4 py-2 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-zeues-navy transition-colors"
+                className="px-4 py-3 border-2 border-white text-white font-mono text-xs font-black active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                 aria-label="Seleccionar todos los spools filtrados"
               >
                 TODOS
@@ -165,7 +165,7 @@ export function SpoolFilterPanel({
               <button
                 onClick={onDeselectAll}
                 disabled={selectedCount === 0}
-                className="px-4 py-2 border-2 border-red-500 text-red-500 font-mono text-xs font-black active:bg-red-500 active:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-3 border-2 border-red-500 text-red-500 font-mono text-xs font-black active:bg-red-500 active:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                 aria-label="Deseleccionar todos los spools"
               >
                 NINGUNO
@@ -173,7 +173,7 @@ export function SpoolFilterPanel({
               {activeFiltersCount > 0 && (
                 <button
                   onClick={onClearFilters}
-                  className="px-4 py-2 border-2 border-yellow-500 text-yellow-500 font-mono text-xs font-black active:bg-yellow-500 active:text-white transition-colors"
+                  className="px-4 py-3 border-2 border-yellow-500 text-yellow-500 font-mono text-xs font-black active:bg-yellow-500 active:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                   aria-label="Limpiar todos los filtros de busqueda"
                 >
                   LIMPIAR FILTROS

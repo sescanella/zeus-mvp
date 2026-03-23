@@ -15,8 +15,8 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #F8FAFC; /* slate-50 */
-  color: #0F172A; /* slate-900 */
+  background-color: #001F3F; /* zeues-navy */
+  color: #FFFFFF; /* white */
 }
 
 /* Mobile-first: botones táctiles grandes */
@@ -240,4 +240,13 @@ button {
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* Accessibility: respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

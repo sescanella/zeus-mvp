@@ -82,10 +82,10 @@ export function ActionModal({
             key={action}
             onClick={() => handleActionClick(action)}
             aria-label={ACTION_LABELS[action]}
-            className={`w-full h-16 border-4 font-mono font-black text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
+            className={`w-full h-16 border-4 font-mono font-black text-lg cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
               action === 'CANCELAR'
                 ? 'border-red-500 text-red-500 active:bg-red-500 active:text-white'
-                : 'border-white text-white active:bg-white active:text-zeues-navy'
+                : 'border-white text-white hover:bg-white/10 active:bg-white active:text-zeues-navy'
             }`}
           >
             {ACTION_LABELS[action]}

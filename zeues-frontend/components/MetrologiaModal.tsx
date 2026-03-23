@@ -107,7 +107,7 @@ export function MetrologiaModal({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabel="Completar inspección de metrología"
-      className="bg-[#001F3F] max-w-sm"
+      className="bg-zeues-navy border-4 border-white rounded-none max-w-sm"
       isTopOfStack={isTopOfStack}
     >
       <div className="flex flex-col gap-4">
@@ -131,14 +131,14 @@ export function MetrologiaModal({
           <div className="flex flex-col gap-3">
             <button
               onClick={() => handleResultadoSelect('APROBADO')}
-              className="w-full h-16 font-mono font-black border-2 border-green-400 text-green-400 rounded hover:bg-green-400/10 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-inset"
+              className="w-full h-16 font-mono font-black border-2 border-green-400 text-green-400 rounded cursor-pointer hover:bg-green-400/10 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-inset"
               aria-label="Marcar como APROBADA"
             >
               APROBADA
             </button>
             <button
               onClick={() => handleResultadoSelect('RECHAZADO')}
-              className="w-full h-16 font-mono font-black border-2 border-red-400 text-red-400 rounded hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+              className="w-full h-16 font-mono font-black border-2 border-red-400 text-red-400 rounded cursor-pointer hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
               aria-label="Marcar como RECHAZADA"
             >
               RECHAZADA
@@ -161,7 +161,7 @@ export function MetrologiaModal({
                   key={worker.id}
                   onClick={() => handleWorkerClick(worker)}
                   disabled={apiLoading}
-                  className="w-full h-16 font-mono font-black text-white bg-[#0a3a6e] border border-white/20 rounded hover:bg-[#1a4a7e] disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                  className="w-full h-16 font-mono font-black text-white bg-zeues-navy/80 border border-white/20 rounded cursor-pointer hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                   aria-label={`Seleccionar inspector ${worker.nombre} ${worker.apellido || ''}`.trim()}
                 >
                   {worker.nombre} {worker.apellido || ''}
@@ -193,7 +193,7 @@ export function MetrologiaModal({
             <button
               onClick={handleBack}
               disabled={apiLoading}
-              className="w-full h-10 font-mono font-black text-white/60 border border-white/20 rounded hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm mt-1"
+              className="w-full h-12 font-mono font-black text-white/60 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm mt-1"
               aria-label="Volver a selección de resultado"
             >
               VOLVER
@@ -205,7 +205,7 @@ export function MetrologiaModal({
         <button
           onClick={onClose}
           disabled={apiLoading}
-          className="w-full h-10 font-mono font-black text-white/60 border border-white/20 rounded hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+          className="w-full h-12 font-mono font-black text-white/60 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
           aria-label="Cancelar y cerrar"
         >
           CANCELAR

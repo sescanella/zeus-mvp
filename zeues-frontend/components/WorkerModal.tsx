@@ -165,7 +165,7 @@ export function WorkerModal({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabel={`Seleccionar trabajador para ${actionLabel} ${operation}`}
-      className="bg-[#001F3F] max-w-sm"
+      className="bg-zeues-navy border-4 border-white rounded-none max-w-sm"
       isTopOfStack={isTopOfStack}
     >
       <div className="flex flex-col gap-4">
@@ -193,7 +193,7 @@ export function WorkerModal({
                 key={worker.id}
                 onClick={() => handleWorkerClick(worker)}
                 disabled={apiLoading}
-                className="w-full h-16 font-mono font-black text-white bg-[#0a3a6e] border border-white/20 rounded hover:bg-[#1a4a7e] disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                className="w-full h-16 font-mono font-black text-white bg-zeues-navy/80 border border-white/20 rounded cursor-pointer hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                 aria-label={`Seleccionar ${worker.nombre} ${worker.apellido || ''}`.trim()}
               >
                 {worker.nombre} {worker.apellido || ''}
@@ -226,7 +226,7 @@ export function WorkerModal({
         <button
           onClick={onClose}
           disabled={apiLoading}
-          className="w-full h-10 font-mono font-black text-white/60 border border-white/20 rounded hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+          className="w-full h-12 font-mono font-black text-white/60 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
           aria-label="Cancelar y cerrar"
         >
           CANCELAR

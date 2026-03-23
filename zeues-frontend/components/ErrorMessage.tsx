@@ -30,49 +30,49 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
     network: {
       icon: WifiOff,
       title: 'Error de Conexión',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200',
-      textColor: 'text-orange-700',
+      bgColor: 'bg-orange-900/20',
+      borderColor: 'border-orange-500/40',
+      textColor: 'text-orange-400',
       showRetry: true,
     },
     'not-found': {
       icon: Search,
       title: 'No Encontrado',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
-      textColor: 'text-blue-700',
+      bgColor: 'bg-blue-900/20',
+      borderColor: 'border-blue-500/40',
+      textColor: 'text-blue-400',
       showRetry: false,
     },
     validation: {
       icon: CircleAlert,
       title: 'Error de Validación',
-      bgColor: 'bg-yellow-50',
-      borderColor: 'border-yellow-200',
-      textColor: 'text-yellow-700',
+      bgColor: 'bg-yellow-900/20',
+      borderColor: 'border-yellow-500/40',
+      textColor: 'text-yellow-400',
       showRetry: false,
     },
     forbidden: {
       icon: CircleX,
       title: 'No Autorizado',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-      textColor: 'text-red-700',
+      bgColor: 'bg-red-900/20',
+      borderColor: 'border-red-500/40',
+      textColor: 'text-red-400',
       showRetry: false,
     },
     server: {
       icon: CircleX,
       title: 'Error del Servidor',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-      textColor: 'text-red-700',
+      bgColor: 'bg-red-900/20',
+      borderColor: 'border-red-500/40',
+      textColor: 'text-red-400',
       showRetry: true,
     },
     generic: {
       icon: CircleX,
       title: 'Error',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-      textColor: 'text-red-700',
+      bgColor: 'bg-red-900/20',
+      borderColor: 'border-red-500/40',
+      textColor: 'text-red-400',
       showRetry: false,
     },
   };
@@ -82,7 +82,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
   const IconComponent = errorConfig.icon;
 
   return (
-    <div className={`${errorConfig.bgColor} border ${errorConfig.borderColor} rounded-lg p-4`}>
+    <div role="alert" className={`${errorConfig.bgColor} border ${errorConfig.borderColor} rounded-lg p-4`}>
       <div className="flex items-start gap-3">
         <IconComponent
           size={28}
@@ -99,7 +99,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
           {shouldShowRetry && (
             <button
               onClick={onRetry}
-              className={`mt-3 ${errorConfig.textColor} underline text-sm font-semibold hover:no-underline`}
+              className="mt-3 px-4 py-2 border-2 border-white text-white font-mono font-black text-sm cursor-pointer active:bg-white active:text-zeues-navy transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset min-h-[44px]"
             >
               Reintentar
             </button>

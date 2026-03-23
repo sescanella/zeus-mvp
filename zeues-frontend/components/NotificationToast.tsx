@@ -43,9 +43,9 @@ export function NotificationToast({ toasts, onDismiss }: NotificationToastProps)
             <button
               onClick={() => onDismiss(toast.id)}
               aria-label="Cerrar notificacion"
-              className="shrink-0 text-white/70 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset rounded-sm p-0.5"
+              className="shrink-0 text-white/70 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset rounded-sm min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
-              <X size={16} aria-hidden="true" />
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
         );

@@ -312,7 +312,7 @@ function HomePage() {
       <div className="px-4 py-4">
         <button
           onClick={() => modalStack.push('add-spool')}
-          className="w-full h-16 bg-zeues-orange text-white font-bold font-mono rounded-none text-lg tracking-widest"
+          className="w-full h-16 bg-zeues-orange text-white font-bold font-mono rounded-none text-lg tracking-widest cursor-pointer"
           aria-label="Anadir spool al listado"
         >
           + Anadir Spool
