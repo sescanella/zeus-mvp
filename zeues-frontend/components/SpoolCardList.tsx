@@ -42,7 +42,7 @@ export function SpoolCardList({ spools, onCardClick, onRemove, estadoFilter }: S
           No hay spools en tu lista
         </p>
         <p className="text-white/30 font-mono text-sm">
-          Usa el boton Anadir Spool para comenzar
+          Usa el botón Añadir Spool para comenzar
         </p>
       </div>
     );

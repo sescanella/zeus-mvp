@@ -22,11 +22,11 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
     expect(results.violations).toEqual([]);
   });
 
-  test('"Anadir Spool" button is keyboard accessible', async ({ page }) => {
+  test('"Añadir Spool" button is keyboard accessible', async ({ page }) => {
     await page.goto('http://localhost:3000/');
     await page.waitForLoadState('networkidle');
 
-    // Tab to focus the "Anadir Spool" button
+    // Tab to focus the "Añadir Spool" button
     await page.keyboard.press('Tab');
 
     const focusedAriaLabel = await page.evaluate(() => {
@@ -34,8 +34,8 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
       return el ? el.getAttribute('aria-label') : null;
     });
 
-    // Button should have aria-label "Anadir spool al listado"
-    expect(focusedAriaLabel).toBe('Anadir spool al listado');
+    // Button should have aria-label "Añadir spool al listado"
+    expect(focusedAriaLabel).toBe('Añadir spool al listado');
 
     // Press Enter to open AddSpoolModal
     await page.keyboard.press('Enter');
@@ -53,8 +53,8 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
     await page.goto('http://localhost:3000/');
     await page.waitForLoadState('networkidle');
 
-    // Open AddSpoolModal via the "Anadir Spool" button
-    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    // Open AddSpoolModal via the "Añadir Spool" button
+    const addButton = page.locator('button[aria-label="Añadir spool al listado"]');
     await addButton.click();
 
     // Wait for modal to appear
@@ -72,7 +72,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
     await page.waitForLoadState('networkidle');
 
     // Open AddSpoolModal
-    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    const addButton = page.locator('button[aria-label="Añadir spool al listado"]');
     await addButton.click();
     await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
 
@@ -116,7 +116,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
     await page.waitForLoadState('networkidle');
 
     // Open AddSpoolModal
-    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    const addButton = page.locator('button[aria-label="Añadir spool al listado"]');
     await addButton.click();
     await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
 
@@ -157,7 +157,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
     await page.waitForLoadState('networkidle');
 
     // Open AddSpoolModal
-    const addButton = page.locator('button[aria-label="Anadir spool al listado"]');
+    const addButton = page.locator('button[aria-label="Añadir spool al listado"]');
     await addButton.click();
     await page.locator('[role="dialog"]').first().waitFor({ state: 'visible', timeout: 5000 });
 
@@ -179,6 +179,6 @@ test.describe('Accessibility Compliance (WCAG 2.1 Level AA)', () => {
       const el = document.activeElement;
       return el ? el.getAttribute('aria-label') : null;
     });
-    expect(focusedLabel).toBe('Anadir spool al listado');
+    expect(focusedLabel).toBe('Añadir spool al listado');
   });
 });

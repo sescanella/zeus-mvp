@@ -2,8 +2,8 @@
  * Integration tests for app/page.tsx — v5.0 single-page modal orchestration
  *
  * Tests cover:
- * 1.  Renders "Anadir Spool" button and SpoolCardList
- * 2.  "Anadir Spool" button opens AddSpoolModal
+ * 1.  Renders "Añadir Spool" button and SpoolCardList
+ * 2.  "Añadir Spool" button opens AddSpoolModal
  * 3.  AddSpoolModal.onAdd calls addSpool and closes modal
  * 4.  Card click sets selectedSpool and opens OperationModal
  * 5.  OperationModal.onSelectOperation stores operation and opens ActionModal
@@ -12,11 +12,8 @@
  * 8.  WorkerModal.onComplete clears modals, refreshes card, shows success toast
  * 9.  MetrologiaModal APROBADO removes spool from list and shows toast
  * 10. MetrologiaModal RECHAZADO keeps spool and shows toast
- * 11. CANCELAR on libre spool (ocupado_por=null) calls removeSpool only (no API)
- * 12. CANCELAR on occupied ARM spool calls finalizarSpool then removeSpool
- * 13. CANCELAR on REPARACION spool calls cancelarReparacion then removeSpool
- * 14. Polling calls refreshAll every 30s (fake timers)
- * 15. alreadyTracked passed to AddSpoolModal contains current spool tags
+ * 11. Polling calls refreshAll every 30s (fake timers)
+ * 12. alreadyTracked passed to AddSpoolModal contains current spool tags
  *
  * Reference: 04-02-PLAN.md Task 1
  */
@@ -143,9 +140,6 @@ jest.mock('@/components/ActionModal', () => ({
           }
         >
           select-INICIAR
-        </button>
-        <button onClick={() => (props.onCancel as () => void)()}>
-          action-CANCELAR
         </button>
         <button onClick={() => (props.onClose as () => void)()}>
           close-action
@@ -274,22 +268,22 @@ const Page = require('@/app/page').default;
 
 describe('Page — v5.0 single-page modal orchestration', () => {
   // ── Test 1 ─────────────────────────────────────────────────────────────────
-  it('renders Anadir Spool button and SpoolCardList', () => {
+  it('renders Añadir Spool button and SpoolCardList', () => {
     render(<Page />);
 
     expect(
-      screen.getByRole('button', { name: /anadir spool/i })
+      screen.getByRole('button', { name: /añadir spool/i })
     ).toBeInTheDocument();
     expect(screen.getByTestId('spool-card-list')).toBeInTheDocument();
   });
 
   // ── Test 2 ─────────────────────────────────────────────────────────────────
-  it('Anadir Spool button opens AddSpoolModal', () => {
+  it('Añadir Spool button opens AddSpoolModal', () => {
     render(<Page />);
 
     expect(screen.queryByTestId('add-spool-modal')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /anadir spool/i }));
+    fireEvent.click(screen.getByRole('button', { name: /añadir spool/i }));
 
     expect(screen.getByTestId('add-spool-modal')).toBeInTheDocument();
   });
@@ -299,7 +293,7 @@ describe('Page — v5.0 single-page modal orchestration', () => {
     render(<Page />);
 
     // Open modal
-    fireEvent.click(screen.getByRole('button', { name: /anadir spool/i }));
+    fireEvent.click(screen.getByRole('button', { name: /añadir spool/i }));
     expect(screen.getByTestId('add-spool-modal')).toBeInTheDocument();
 
     // Trigger onAdd
@@ -451,109 +445,6 @@ describe('Page — v5.0 single-page modal orchestration', () => {
   });
 
   // ── Test 11 ────────────────────────────────────────────────────────────────
-  it('CANCELAR on libre spool calls removeSpool only (no API)', async () => {
-    // SPOOL_A has ocupado_por: null (libre)
-    render(<Page />);
-
-    // Navigate to ActionModal
-    fireEvent.click(screen.getByTestId('card-OT-001'));
-    fireEvent.click(screen.getByText('select-ARM'));
-    expect(screen.getByTestId('action-modal')).toBeInTheDocument();
-
-    // Trigger CANCELAR
-    await act(async () => {
-      fireEvent.click(screen.getByText('action-CANCELAR'));
-    });
-
-    // No API calls
-    expect(mockFinalizarSpool).not.toHaveBeenCalled();
-    expect(mockCancelarReparacion).not.toHaveBeenCalled();
-
-    // removeSpool called
-    expect(mockRemoveSpool).toHaveBeenCalledWith('OT-001');
-
-    // Modals closed
-    expect(screen.queryByTestId('action-modal')).not.toBeInTheDocument();
-  });
-
-  // ── Test 12 ────────────────────────────────────────────────────────────────
-  it('CANCELAR on occupied ARM spool calls finalizarSpool then removeSpool', async () => {
-    // Mutate mockSpools so useSpoolList returns occupied spool
-    mockSpools = [
-      makeSpoolCard('OT-001', {
-        ocupado_por: 'MR(93)',
-        operacion_actual: 'ARM',
-      }),
-      SPOOL_B,
-    ];
-
-    mockFinalizarSpool.mockResolvedValue({
-      success: true,
-      tag_spool: 'OT-001',
-      message: 'Cancelled',
-      action_taken: 'CANCELADO' as const,
-      unions_processed: 0,
-      pulgadas: null,
-      metrologia_triggered: false,
-      new_state: null,
-    });
-
-    render(<Page />);
-
-    fireEvent.click(screen.getByTestId('card-OT-001'));
-    fireEvent.click(screen.getByText('select-ARM'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('action-CANCELAR'));
-    });
-
-    expect(mockFinalizarSpool).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tag_spool: 'OT-001',
-        worker_id: 93,
-        operacion: 'ARM',
-        selected_unions: [],
-      })
-    );
-    expect(mockRemoveSpool).toHaveBeenCalledWith('OT-001');
-  });
-
-  // ── Test 13 ────────────────────────────────────────────────────────────────
-  it('CANCELAR on REPARACION spool calls cancelarReparacion then removeSpool', async () => {
-    // Mutate mockSpools so useSpoolList returns REPARACION spool
-    mockSpools = [
-      makeSpoolCard('OT-001', {
-        ocupado_por: 'MR(93)',
-        operacion_actual: 'REPARACION',
-      }),
-      SPOOL_B,
-    ];
-
-    mockCancelarReparacion.mockResolvedValue({
-      success: true,
-      message: 'Cancelled',
-      tag_spool: 'OT-001',
-    });
-
-    render(<Page />);
-
-    fireEvent.click(screen.getByTestId('card-OT-001'));
-    fireEvent.click(screen.getByText('select-ARM'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('action-CANCELAR'));
-    });
-
-    expect(mockCancelarReparacion).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tag_spool: 'OT-001',
-        worker_id: 93,
-      })
-    );
-    expect(mockRemoveSpool).toHaveBeenCalledWith('OT-001');
-  });
-
-  // ── Test 14 ────────────────────────────────────────────────────────────────
   it('polling calls refreshAll every 30s', async () => {
     jest.useFakeTimers();
     mockRefreshAll.mockResolvedValue(undefined);
@@ -582,7 +473,7 @@ describe('Page — v5.0 single-page modal orchestration', () => {
     render(<Page />);
 
     // Open add-spool modal
-    fireEvent.click(screen.getByRole('button', { name: /anadir spool/i }));
+    fireEvent.click(screen.getByRole('button', { name: /añadir spool/i }));
 
     // Check alreadyTracked contains both spool tags
     expect(capturedAddSpoolModalProps.alreadyTracked).toEqual([

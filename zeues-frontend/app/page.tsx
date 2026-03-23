@@ -348,9 +348,9 @@ function HomePage() {
           <button
             onClick={() => modalStack.push('add-spool')}
             className="flex-1 h-16 bg-zeues-orange text-white font-bold font-mono rounded-none text-lg tracking-widest cursor-pointer focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-            aria-label="Anadir spool al listado"
+            aria-label="Añadir spool al listado"
           >
-            + Anadir Spool
+            + Añadir Spool
           </button>
           <button
             onClick={() => setShowFilter(!showFilter)}

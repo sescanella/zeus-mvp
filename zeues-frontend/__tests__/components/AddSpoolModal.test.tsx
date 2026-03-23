@@ -41,7 +41,7 @@ jest.mock('@/components/SpoolFilterPanel', () => ({
 jest.mock('@/components/Modal', () => ({
   Modal: jest.fn((props) =>
     props.isOpen ? (
-      <div role="dialog" aria-modal="true" aria-label="Anadir spool">
+      <div role="dialog" aria-modal="true" aria-label="Añadir spool">
         {props.children}
         {props.onClose && (
           <button aria-label="Cerrar" onClick={props.onClose}>

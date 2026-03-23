@@ -258,7 +258,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
               <button
                 onClick={() => setConfirmingRemove(false)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setConfirmingRemove(false); } }}
-                aria-label="Cancelar eliminacion"
+                aria-label="Cancelar eliminación"
                 className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
               >
                 <X size={16} aria-hidden="true" />

@@ -53,10 +53,10 @@ describe('SpoolCardList — empty state', () => {
     expect(screen.getByText(/No hay spools en tu lista/i)).toBeInTheDocument();
   });
 
-  it('renders empty state subtext about Anadir Spool button', () => {
+  it('renders empty state subtext about Añadir Spool button', () => {
     renderWithProvider(<SpoolCardList spools={[]} {...defaultProps} />);
     expect(
-      screen.getByText(/Usa el boton Anadir Spool para comenzar/i)
+      screen.getByText(/Usa el botón Añadir Spool para comenzar/i)
     ).toBeInTheDocument();
   });
 
