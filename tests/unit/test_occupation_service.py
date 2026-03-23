@@ -65,7 +65,7 @@ def mock_metadata_repository():
 def mock_conflict_service():
     """Mock ConflictService."""
     service = MagicMock()
-    service.generate_version_token = MagicMock(return_value="version-uuid")
+    service.generate_version_token = MagicMock(return_value="0")
     service.update_with_retry = AsyncMock()
     return service
 

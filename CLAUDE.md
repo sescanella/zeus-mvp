@@ -46,7 +46,6 @@ INICIAR/FINALIZAR now write ONLY when user confirms in P5 (confirmation screen):
 - COMPLETAR updates: `Fecha_Armado`/`Soldadura`, v4.0 counters, pulgadas
 - PAUSAR clears: `Ocupado_Por`, `Fecha_Ocupacion` (no dates/counters)
 - Metadata ALWAYS includes pulgadas (sum of DN_UNION)
-- No version column updates (no optimistic locking)
 
 **Key Changes:**
 - Service: `backend/services/occupation_service.py` (iniciar_spool, finalizar_spool refactored)
@@ -275,7 +274,6 @@ main.py
 **Key Patterns:**
 - Service Layer + Repository Pattern
 - Hierarchical State Machines (python-statemachine 2.5.0)
-- Version-aware updates (ConflictService with retry)
 - Direct Sheets validation (Ocupado_Por column check)
 - Event Sourcing (Metadata sheet)
 
@@ -299,19 +297,18 @@ lib/
 
 ## Google Sheets Data Model
 
-**Operaciones Sheet (72 columns - v4.0 ready):**
+**Operaciones Sheet (71 columns - v4.0 ready):**
 - v2.1 columns (63): TAG_SPOOL, Armador, Soldador, Fecha_Armado, Fecha_Soldadura, etc.
-- v3.0 columns (4):
+- v3.0 columns (3):
   - `Ocupado_Por` (64): Current worker (format: "MR(93)" or null)
   - `Fecha_Ocupacion` (65): Timestamp (DD-MM-YYYY HH:MM:SS)
-  - `version` (66): UUID4 for optimistic locking
-  - `Estado_Detalle` (67): Human-readable state display
+  - `Estado_Detalle` (66): Human-readable state display
 - v4.0 NEW (5):
-  - `Total_Uniones` (68): Count of unions in spool
-  - `Uniones_ARM_Completadas` (69): Count of completed armado unions
-  - `Uniones_SOLD_Completadas` (70): Count of completed soldadura unions
-  - `Pulgadas_ARM` (71): Sum of DN_UNION for completed ARM
-  - `Pulgadas_SOLD` (72): Sum of DN_UNION for completed SOLD
+  - `Total_Uniones` (67): Count of unions in spool
+  - `Uniones_ARM_Completadas` (68): Count of completed armado unions
+  - `Uniones_SOLD_Completadas` (69): Count of completed soldadura unions
+  - `Pulgadas_ARM` (70): Sum of DN_UNION for completed ARM
+  - `Pulgadas_SOLD` (71): Sum of DN_UNION for completed SOLD
 
 **Uniones Sheet (17 columns - v4.0 simplified):**
 - Core fields: ID, OT, N_UNION, TAG_SPOOL, DN_UNION, TIPO_UNION
@@ -643,7 +640,7 @@ python backend/scripts/validate_uniones_sheet.py --fix
 
 **FastAPI startup validation:**
 - Integrated at `main.py` startup event (after cache warming)
-- Validates Operaciones (72 cols), Metadata (11 cols), Uniones (18 cols)
+- Validates Operaciones (71 cols), Metadata (11 cols), Uniones (18 cols)
 - Deployment fails fast if schema incomplete
 - Extra columns allowed, only missing columns cause failure
 
@@ -667,10 +664,11 @@ python backend/scripts/validate_uniones_sheet.py --fix
 
 ---
 
-**Last updated:** 2026-03-02 (No Conformidad form removed)
-**Document version:** 3.4
+**Last updated:** 2026-03-23 (version column removed from Operaciones)
+**Document version:** 3.5
 
 **Recent changes:**
+- Removed version column from Operaciones sheet (no optimistic locking) (Mar 23, 2026)
 - Removed No Conformidad form module (backend + frontend) (Mar 2, 2026)
 
 **Security improvements (Feb 6, 2026):**

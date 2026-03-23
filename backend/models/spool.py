@@ -134,12 +134,6 @@ class Spool(BaseModel):
         description="Fecha cuando el spool fue ocupado en formato YYYY-MM-DD (columna 65)",
         examples=["2026-01-26"]
     )
-    version: int = Field(
-        0,
-        description="Token de versión para optimistic locking - incrementa en cada TOMAR/PAUSAR/COMPLETAR (columna 66)",
-        ge=0
-    )
-
     # v3.0: Estado detallado
     estado_detalle: Optional[str] = Field(
         None,

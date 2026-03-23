@@ -425,7 +425,6 @@ class SheetsService:
         # v3.0: Índices de columnas de ocupación
         idx_ocupado_por = self._get_col_idx("Ocupado_Por")
         idx_fecha_ocupacion = self._get_col_idx("Fecha_Ocupacion")
-        idx_version = self._get_col_idx("version")
         idx_estado_detalle = self._get_col_idx("Estado_Detalle")
 
         # v4.0: Índices de columnas de métricas de uniones
@@ -472,15 +471,6 @@ class SheetsService:
         fecha_ocupacion = row[idx_fecha_ocupacion].strip() if idx_fecha_ocupacion < len(row) and row[idx_fecha_ocupacion] else None
         if fecha_ocupacion == '':
             fecha_ocupacion = None
-
-        # Version defaults to 0 if empty or invalid
-        version = 0
-        if idx_version < len(row) and row[idx_version]:
-            try:
-                version = int(row[idx_version])
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid version value '{row[idx_version]}' for {tag_spool}, defaulting to 0")
-                version = 0
 
         # Estado_Detalle (v3.0)
         estado_detalle = row[idx_estado_detalle].strip() if idx_estado_detalle < len(row) and row[idx_estado_detalle] else None
@@ -580,7 +570,6 @@ class SheetsService:
             # v3.0: Campos de ocupación
             ocupado_por=ocupado_por,
             fecha_ocupacion=fecha_ocupacion,
-            version=version,
             estado_detalle=estado_detalle
         )
 

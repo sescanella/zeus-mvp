@@ -675,37 +675,14 @@ class SheetsRepository:
 
     def get_version(self, sheet_name: str, row: int) -> int:
         """
-        Lee el valor de la columna version para una fila (v3.0).
+        Stub: version column removed from Operaciones sheet.
 
-        Args:
-            sheet_name: Nombre de la hoja
-            row: Número de fila (1-indexed)
+        Kept for backward compatibility with callers.
 
         Returns:
-            int: Version token (default 0)
+            int: Always 0
         """
-        if self._compatibility_mode == "v2.1":
-            return 0
-
-        all_rows = self.read_worksheet(sheet_name)
-        if row >= len(all_rows):
-            return 0
-
-        from backend.core.column_map_cache import ColumnMapCache
-        column_map = ColumnMapCache.get_or_build(sheet_name, self)
-
-        def normalize(name: str) -> str:
-            return name.lower().replace(" ", "").replace("_", "")
-
-        idx = column_map.get(normalize("version"))
-        if idx is None or idx >= len(all_rows[row]):
-            return 0
-
-        value = all_rows[row][idx]
-        try:
-            return int(value) if value else 0
-        except (ValueError, TypeError):
-            return 0
+        return 0
 
     def set_ocupado_por(
         self,
@@ -756,33 +733,6 @@ class SheetsRepository:
             column_name="Fecha_Ocupacion",
             value=fecha if fecha else ""
         )
-
-    def increment_version(self, sheet_name: str, row: int) -> int:
-        """
-        Incrementa el token de versión para una fila (v3.0 optimistic locking).
-
-        Args:
-            sheet_name: Nombre de la hoja
-            row: Número de fila (1-indexed)
-
-        Returns:
-            int: Nueva versión después de incrementar
-        """
-        if self._compatibility_mode == "v2.1":
-            self.logger.warning("Skipping increment_version in v2.1 compatibility mode")
-            return 0
-
-        current_version = self.get_version(sheet_name, row)
-        new_version = current_version + 1
-
-        self.update_cell_by_column_name(
-            sheet_name=sheet_name,
-            row=row,
-            column_name="version",
-            value=new_version
-        )
-
-        return new_version
 
     def update_spool_occupation(
         self,
@@ -892,63 +842,14 @@ class SheetsRepository:
 
     def get_spool_version(self, tag_spool: str) -> str:
         """
-        Get current version token for a spool (v3.0 optimistic locking).
+        Stub: version column removed from Operaciones sheet.
 
-        Args:
-            tag_spool: TAG del spool
+        Kept for backward compatibility with callers.
 
         Returns:
-            str: Current version token (UUID4 string) or "0" if not set
-
-        Raises:
-            SpoolNoEncontradoError: If spool not found
+            str: Always "0"
         """
-        from backend.exceptions import SpoolNoEncontradoError
-        from backend.config import config
-        from backend.core.column_map_cache import ColumnMapCache
-
-        # Get column map for dynamic column lookup
-        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
-
-        # Normalize column name helper
-        def normalize(name: str) -> str:
-            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
-
-        # Try to find TAG_SPOOL column (could be named "TAG_SPOOL" or "SPLIT" in the sheet)
-        tag_column_index = None
-        tag_column_names_to_try = ["TAG_SPOOL", "SPLIT", "tag_spool"]
-
-        for col_name in tag_column_names_to_try:
-            normalized = normalize(col_name)
-            if normalized in column_map:
-                tag_column_index = column_map[normalized]
-                self.logger.debug(f"Found TAG column as '{col_name}' at index {tag_column_index}")
-                break
-
-        if tag_column_index is None:
-            raise ValueError(
-                f"TAG_SPOOL column not found in column map for sheet. "
-                f"Available columns: {list(column_map.keys())[:15]}"
-            )
-
-        # Convert column index to letter
-        column_letter = self._index_to_column_letter(tag_column_index)
-
-        # Find spool row by TAG_SPOOL column
-        row_num = self.find_row_by_column_value(
-            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-            column_letter=column_letter,
-            value=tag_spool
-        )
-
-        if row_num is None:
-            raise SpoolNoEncontradoError(tag_spool)
-
-        # Read version using dynamic column mapping
-        version = self.get_version(config.HOJA_OPERACIONES_NOMBRE, row_num)
-
-        # Return as string (UUID4 format expected)
-        return str(version) if version else "0"
+        return "0"
 
     def get_spool_by_tag(self, tag_spool: str) -> Optional['Spool']:
         """
@@ -1053,16 +954,10 @@ class SheetsRepository:
         try:
             # v3.0 fields: only read and parse if in v3.0 mode
             if self._compatibility_mode == "v3.0":
-                version_raw = get_col_value("version")
-                try:
-                    version_value = int(version_raw) if version_raw else 0
-                except (ValueError, TypeError):
-                    version_value = 0
                 ocupado_por_value = get_col_value("Ocupado_Por")
                 fecha_ocupacion_value = get_col_value("Fecha_Ocupacion")
                 estado_detalle_value = get_col_value("Estado_Detalle")
             else:
-                version_value = 0
                 ocupado_por_value = None
                 fecha_ocupacion_value = None
                 estado_detalle_value = None
@@ -1139,7 +1034,6 @@ class SheetsRepository:
                 soldador=get_col_value("Soldador"),
                 ocupado_por=ocupado_por_value,
                 fecha_ocupacion=fecha_ocupacion_value,
-                version=version_value,
                 estado_detalle=estado_detalle_value,
             )
             return spool
@@ -1246,7 +1140,6 @@ class SheetsRepository:
                         soldador=get_col_value(row_data, "Soldador"),
                         ocupado_por=ocupado_por,
                         fecha_ocupacion=get_col_value(row_data, "Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
-                        version=int(get_col_value(row_data, "version") or 0) if self._compatibility_mode == "v3.0" else 0,
                         estado_detalle=get_col_value(row_data, "Estado_Detalle") if self._compatibility_mode == "v3.0" else None,
                     )
                     ready_spools.append(spool)
@@ -1395,7 +1288,6 @@ class SheetsRepository:
                     soldador=get_col_value(row_data, "Soldador"),
                     ocupado_por=get_col_value(row_data, "Ocupado_Por") if self._compatibility_mode == "v3.0" else None,
                     fecha_ocupacion=get_col_value(row_data, "Fecha_Ocupacion") if self._compatibility_mode == "v3.0" else None,
-                    version=int(get_col_value(row_data, "version") or 0) if self._compatibility_mode == "v3.0" else 0,
                     estado_detalle=get_col_value(row_data, "Estado_Detalle") if self._compatibility_mode == "v3.0" else None,
                 )
                 spools.append(spool)
@@ -1411,44 +1303,29 @@ class SheetsRepository:
         self,
         tag_spool: str,
         updates: dict,
-        expected_version: str
+        expected_version: str = "0"
     ) -> str:
         """
-        Update spool with version check for optimistic locking (v3.0).
+        Update spool fields in Operaciones sheet.
 
-        This is the critical method for preventing race conditions via version validation.
-
-        Flow:
-        1. Read current version from sheet using dynamic header mapping
-        2. Compare with expected_version
-        3. If mismatch: raise VersionConflictError
-        4. If match: update all fields atomically + increment version
-        5. Return new version token
+        Version checking removed (column deleted from sheet).
+        Retains retry-on-transient-error via @retry_on_sheets_error decorator.
+        The expected_version parameter is kept for backward compatibility but ignored.
 
         Args:
             tag_spool: TAG del spool a actualizar
             updates: Dictionary of {column_name: value} updates
-            expected_version: Version token expected by this operation
+            expected_version: Ignored (kept for API compatibility)
 
         Returns:
-            str: New version token after successful update
+            str: Always "0" (no version tracking)
 
         Raises:
             SpoolNoEncontradoError: If spool not found
-            VersionConflictError: If version mismatch (concurrent update detected)
             SheetsUpdateError: If update fails
-
-        Example:
-            >>> repo.update_spool_with_version(
-            ...     tag_spool="TAG-123",
-            ...     updates={"Ocupado_Por": "MR(93)", "Fecha_Ocupacion": "2026-01-27"},
-            ...     expected_version="550e8400-e29b-41d4-a716-446655440000"
-            ... )
-            "7c9e6679-7425-40de-944b-e07fc1f90ae7"  # New version
         """
-        from backend.exceptions import SpoolNoEncontradoError, VersionConflictError
+        from backend.exceptions import SpoolNoEncontradoError
         from backend.config import config
-        import uuid
 
         sheet_name = config.HOJA_OPERACIONES_NOMBRE
 
@@ -1463,24 +1340,8 @@ class SheetsRepository:
         if row_num is None:
             raise SpoolNoEncontradoError(tag_spool)
 
-        # Step 2: Read current version using dynamic header mapping
-        current_version = self.get_version(sheet_name, row_num)
-        current_version_str = str(current_version) if current_version else "0"
-
-        # Step 3: Version check - raise VersionConflictError if mismatch
-        if current_version_str != expected_version:
-            raise VersionConflictError(
-                expected=expected_version,
-                actual=current_version_str,
-                message=f"Spool {tag_spool} was modified by another operation"
-            )
-
-        # Step 4: Generate new version token (UUID4)
-        new_version = str(uuid.uuid4())
-
-        # Step 5: Prepare batch update (all updates + version increment)
+        # Step 2: Prepare batch update
         batch_updates = []
-
         for column_name, value in updates.items():
             batch_updates.append({
                 "row": row_num,
@@ -1488,29 +1349,20 @@ class SheetsRepository:
                 "value": value
             })
 
-        # Add version update to batch
-        batch_updates.append({
-            "row": row_num,
-            "column_name": "version",
-            "value": new_version
-        })
-
-        # Step 6: Execute atomic batch update
+        # Step 3: Execute batch update
         try:
             self.batch_update_by_column_name(sheet_name, batch_updates)
 
             self.logger.info(
-                f"✅ Spool {tag_spool} updated with version check: "
-                f"version {expected_version} → {new_version}, "
-                f"{len(updates)} fields updated"
+                f"Spool {tag_spool} updated: {len(updates)} fields written"
             )
 
-            return new_version
+            return "0"
 
         except Exception as e:
             raise SheetsUpdateError(
-                f"Failed to update spool {tag_spool} with version check: {e}",
-                updates={"expected_version": expected_version, "updates": updates}
+                f"Failed to update spool {tag_spool}: {e}",
+                updates={"updates": updates}
             )
 
 

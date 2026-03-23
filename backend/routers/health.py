@@ -484,7 +484,6 @@ async def test_spool_constructor(
             "fecha_qc_metrologia_raw": get_col_value("Fecha_QC_Metrología"),
             "ocupado_por": get_col_value("Ocupado_Por"),
             "fecha_ocupacion": get_col_value("Fecha_Ocupacion"),
-            "version": get_col_value("version"),
             "estado_detalle": get_col_value("Estado_Detalle"),
         }
 
@@ -501,7 +500,6 @@ async def test_spool_constructor(
                 soldador=all_values["soldador"],
                 ocupado_por=None,  # v2.1 mode
                 fecha_ocupacion=None,  # v2.1 mode
-                version=0,  # v2.1 mode
                 estado_detalle=None,  # v2.1 mode
             )
             return {
@@ -522,8 +520,7 @@ async def test_spool_constructor(
                     "armador": spool.armador,
                     "soldador": spool.soldador,
                     "fecha_materiales": str(spool.fecha_materiales) if spool.fecha_materiales else None,
-                    "ocupado_por": spool.ocupado_por,
-                    "version": spool.version
+                    "ocupado_por": spool.ocupado_por
                 }
             }
         except Exception as e:

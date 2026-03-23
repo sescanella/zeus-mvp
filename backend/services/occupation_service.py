@@ -54,7 +54,6 @@ from backend.exceptions import (
     NoAutorizadoError,
     LockExpiredError,
     SheetsUpdateError,
-    VersionConflictError,
     ArmPrerequisiteError
 )
 
@@ -175,13 +174,10 @@ class OccupationService:
                 )
 
                 logger.info(
-                    f"✅ Sheets updated: {tag_spool} occupied by {worker_nombre} "
-                    f"on {fecha_ocupacion_str} (version: {new_version})"
+                    f"Sheets updated: {tag_spool} occupied by {worker_nombre} "
+                    f"on {fecha_ocupacion_str}"
                 )
 
-            except VersionConflictError as e:
-                logger.error(f"Version conflict persists after retries: {e}")
-                raise
             except Exception as e:
                 logger.error(f"Sheets update failed: {e}")
                 raise SheetsUpdateError(
@@ -289,13 +285,10 @@ class OccupationService:
                 )
 
                 logger.info(
-                    f"✅ Sheets updated: {tag_spool} marked as '{estado_pausado}', "
-                    f"occupation cleared (version: {new_version})"
+                    f"Sheets updated: {tag_spool} marked as '{estado_pausado}', "
+                    f"occupation cleared"
                 )
 
-            except VersionConflictError as e:
-                logger.error(f"Version conflict persists after retries for PAUSAR: {e}")
-                raise
             except Exception as e:
                 logger.error(f"Sheets update failed for PAUSAR: {e}")
                 raise SheetsUpdateError(
@@ -411,14 +404,10 @@ class OccupationService:
                 )
 
                 logger.info(
-                    f"✅ Sheets updated: {tag_spool} {operacion} completed on {fecha_str}, "
-                    f"occupation cleared (version: {new_version})"
+                    f"Sheets updated: {tag_spool} {operacion} completed on {fecha_str}, "
+                    f"occupation cleared"
                 )
 
-            except VersionConflictError as e:
-                # Max retries exhausted
-                logger.error(f"Version conflict persists after retries for COMPLETAR: {e}")
-                raise
             except Exception as e:
                 logger.error(f"Sheets update failed for COMPLETAR: {e}")
                 raise SheetsUpdateError(

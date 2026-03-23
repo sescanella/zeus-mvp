@@ -45,7 +45,6 @@ OPERACIONES_V4_COLUMNS = {
         "Fecha_Soldadura",
         "Ocupado_Por",
         "Fecha_Ocupacion",
-        "version",
         "Estado_Detalle"
     ],
     # v4.0 additions (68-72)
