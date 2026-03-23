@@ -205,8 +205,8 @@ export interface FinalizarResponse {
 
 export interface UnionEditable {
   n_union: number;
-  dn_union: number;
-  tipo_union: string;
+  dn_union: number | null;
+  tipo_union: string | null;
   has_work: boolean;
 }
 
@@ -218,7 +218,7 @@ export interface GetAllUnionsResponse {
 
 export interface SaveUnionsRequest {
   tag_spool: string;
-  unions: { n_union: number; dn_union: number; tipo_union: string }[];
+  unions: { n_union: number; dn_union: number | null; tipo_union: string | null }[];
 }
 
 export interface SaveUnionsResponse {

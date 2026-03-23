@@ -539,13 +539,16 @@ async def guardar_uniones(
                 to_create.append({"n_union": n, "dn_union": u.dn_union, "tipo_union": u.tipo_union})
             else:
                 ex = existing_by_n[n]
+                ex_dn = int(ex["dn_union"]) if ex["dn_union"] is not None else None
+                ex_tipo = ex["tipo_union"]
+                changed = ex_dn != u.dn_union or ex_tipo != u.tipo_union
                 # HIGH-3: Block dn_union/tipo_union changes on unions with work
-                if ex["has_work"] and (int(ex["dn_union"]) != u.dn_union or ex["tipo_union"] != u.tipo_union):
+                if ex["has_work"] and changed:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"No se puede modificar unión {n} — tiene trabajo registrado"
+                        detail=f"No se puede modificar union {n} — tiene trabajo registrado"
                     )
-                if int(ex["dn_union"]) != u.dn_union or ex["tipo_union"] != u.tipo_union:
+                if changed:
                     to_update.append({"n_union": n, "dn_union": u.dn_union, "tipo_union": u.tipo_union})
 
         # Existing unions not in incoming: delete (if no work)

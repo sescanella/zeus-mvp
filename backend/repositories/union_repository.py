@@ -1282,11 +1282,13 @@ class UnionRepository:
 
                 try:
                     n_union = int(get_val(n_union_col_idx))
-                    dn_union = float(get_val(dn_union_col_idx))
-                    tipo_union = get_val(tipo_union_col_idx)
                 except (ValueError, TypeError):
                     self.logger.warning(f"Failed to parse union row for {tag_spool}")
                     continue
+
+                dn_raw = get_val(dn_union_col_idx)
+                dn_union = float(dn_raw) if dn_raw else None
+                tipo_union = get_val(tipo_union_col_idx) or None
 
                 results.append({
                     "n_union": n_union,
@@ -1349,9 +1351,9 @@ class UnionRepository:
                 if "TAG_SPOOL" in col_indices:
                     row[col_indices["TAG_SPOOL"]] = tag_spool
                 if "DN_UNION" in col_indices:
-                    row[col_indices["DN_UNION"]] = u["dn_union"]
+                    row[col_indices["DN_UNION"]] = u["dn_union"] if u["dn_union"] is not None else ""
                 if "TIPO_UNION" in col_indices:
-                    row[col_indices["TIPO_UNION"]] = u["tipo_union"]
+                    row[col_indices["TIPO_UNION"]] = u["tipo_union"] if u["tipo_union"] is not None else ""
                 if "version" in col_indices:
                     row[col_indices["version"]] = str(uuid.uuid4())
 
@@ -1425,13 +1427,13 @@ class UnionRepository:
                 dn_letter = _col_idx_to_letter(dn_union_col_idx)
                 batch_data.append({
                     'range': f'{dn_letter}{row_num}',
-                    'values': [[u["dn_union"]]]
+                    'values': [[u["dn_union"] if u["dn_union"] is not None else ""]]
                 })
 
                 tipo_letter = _col_idx_to_letter(tipo_union_col_idx)
                 batch_data.append({
                     'range': f'{tipo_letter}{row_num}',
-                    'values': [[u["tipo_union"]]]
+                    'values': [[u["tipo_union"] if u["tipo_union"] is not None else ""]]
                 })
                 updated += 1
 

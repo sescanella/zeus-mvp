@@ -36,6 +36,10 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [defaultDn, setDefaultDn] = useState<number | null>(null);
+  const [defaultTipo, setDefaultTipo] = useState<string | null>(null);
+  const [flashedRows, setFlashedRows] = useState<Set<number>>(new Set());
+  const [countUnlocked, setCountUnlocked] = useState(false);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const prevRowCountRef = useRef(0);
 
@@ -70,7 +74,11 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
 
   useEffect(() => {
     if (isOpen) {
-      setRows([]); // Clear stale rows immediately
+      setRows([]);
+      setDefaultDn(null);
+      setDefaultTipo(null);
+      setFlashedRows(new Set());
+      setCountUnlocked(false);
       loadUnions();
       setConfirmDelete(null);
     }
@@ -91,10 +99,10 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
     currentRows.map((r, i) => ({ ...r, n_union: i + 1 }));
 
   const handleCountChange = (newCount: number) => {
+    if (!countUnlocked) return;
     if (newCount < 1 || newCount > MAX_UNIONS) return;
     setRows(prev => {
       if (newCount > prev.length) {
-        // Add empty rows
         const toAdd = Array.from({ length: newCount - prev.length }, (_, i) => ({
           n_union: prev.length + i + 1,
           dn_union: null as number | null,
@@ -104,11 +112,10 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         return [...prev, ...toAdd];
       }
       if (newCount < prev.length) {
-        // Only remove rows without work, from the end
         const minProtected = prev.reduce(
           (max, r) => (r.has_work && r.n_union > max ? r.n_union : max), 0
         );
-        if (newCount < minProtected) return prev; // Can't go below rows with work
+        if (newCount < minProtected) return prev;
         return renumber(prev.slice(0, newCount));
       }
       return prev;
@@ -142,6 +149,35 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
     ));
   };
 
+  const applyDefaultToEmpty = (field: 'dn_union' | 'tipo_union', value: number | string) => {
+    setRows(prev => {
+      const affected = new Set<number>();
+      const updated = prev.map(r => {
+        if (r.has_work) return r;
+        if (r[field] !== null) return r;
+        affected.add(r.n_union);
+        return { ...r, [field]: value };
+      });
+      if (affected.size > 0) {
+        setFlashedRows(affected);
+        setTimeout(() => setFlashedRows(new Set()), 400);
+      }
+      return updated;
+    });
+  };
+
+  const handleDefaultDnChange = (value: string) => {
+    const parsed = value === '' ? null : parseInt(value, 10);
+    setDefaultDn(parsed);
+    if (parsed !== null) applyDefaultToEmpty('dn_union', parsed);
+  };
+
+  const handleDefaultTipoChange = (value: string) => {
+    const val = value === '' ? null : value;
+    setDefaultTipo(val);
+    if (val !== null) applyDefaultToEmpty('tipo_union', val);
+  };
+
   const isRowComplete = (row: UnionRow): boolean =>
     row.dn_union !== null && row.tipo_union !== null;
 
@@ -149,16 +185,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
 
   const handleGuardar = async () => {
     setError(null);
-
-    const firstIncomplete = rows.find((r) => !isRowComplete(r));
-    if (firstIncomplete) {
-      setError('Completa todos los campos antes de guardar');
-      const card = cardRefs.current.get(firstIncomplete.n_union);
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      return;
-    }
+    if (rows.length === 0) return;
 
     setSaving(true);
     try {
@@ -166,8 +193,8 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         tag_spool: spool.tag_spool,
         unions: rows.map((r) => ({
           n_union: r.n_union,
-          dn_union: r.dn_union!,
-          tipo_union: r.tipo_union!,
+          dn_union: r.dn_union,
+          tipo_union: r.tipo_union,
         })),
       });
       onComplete();
@@ -196,55 +223,104 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
       className="bg-zeues-navy border-4 border-white max-w-lg"
     >
       {/* Header */}
-      <div className="mb-4">
+      <div className="mb-3">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-mono font-black text-lg text-white">UNIONES</h2>
             <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
           </div>
           <span className="font-mono text-sm text-white/70">
-            {completedCount}/{rows.length} completas
+            {completedCount}/{rows.length}
           </span>
         </div>
-        {/* Quantity input — bulk add/remove */}
+
+        {/* Quantity control — locked by default */}
         <div className="flex items-center gap-3 mt-3">
           <label htmlFor="union-count" className="font-mono font-black text-sm text-white/70">
             CANTIDAD
           </label>
-          <div className="flex items-center">
+          {!countUnlocked ? (
             <button
-              onClick={() => handleCountChange(rows.length - 1)}
-              disabled={rows.length <= 1}
-              aria-label="Reducir cantidad de uniones"
-              className="h-12 w-12 border-2 border-white text-white font-mono font-black text-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              onClick={() => setCountUnlocked(true)}
+              aria-label="Desbloquear cambio de cantidad"
+              className="h-10 px-4 border-2 border-white/30 text-white/50 font-mono font-black text-sm hover:border-white/50 hover:text-white/70 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
             >
-              -
+              {rows.length} — CAMBIAR
             </button>
-            <input
-              id="union-count"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={MAX_UNIONS}
-              value={rows.length}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                if (!isNaN(val)) handleCountChange(val);
-              }}
-              aria-label="Cantidad total de uniones"
-              className="h-12 w-16 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-lg text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <button
-              onClick={() => handleCountChange(rows.length + 1)}
-              disabled={rows.length >= MAX_UNIONS}
-              aria-label="Aumentar cantidad de uniones"
-              className="h-12 w-12 border-2 border-white text-white font-mono font-black text-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
-            >
-              +
-            </button>
-          </div>
+          ) : (
+            <div className="flex items-center">
+              <button
+                onClick={() => handleCountChange(rows.length - 1)}
+                disabled={rows.length <= 1}
+                aria-label="Reducir cantidad de uniones"
+                className="h-10 w-10 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              >
+                -
+              </button>
+              <input
+                id="union-count"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_UNIONS}
+                value={rows.length}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val)) handleCountChange(val);
+                }}
+                aria-label="Cantidad total de uniones"
+                className="h-10 w-14 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-lg text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={() => handleCountChange(rows.length + 1)}
+                disabled={rows.length >= MAX_UNIONS}
+                aria-label="Aumentar cantidad de uniones"
+                className="h-10 w-10 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              >
+                +
+              </button>
+              <button
+                onClick={() => setCountUnlocked(false)}
+                aria-label="Bloquear cantidad"
+                className="ml-2 h-10 px-3 border-2 border-white/30 text-white/50 font-mono text-xs hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+              >
+                OK
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Fill empty — auto-apply defaults */}
+      {!loading && rows.length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-mono font-black text-xs text-white/50 shrink-0">
+            RELLENAR
+          </span>
+          <select
+            value={defaultDn ?? ''}
+            onChange={(e) => handleDefaultDnChange(e.target.value)}
+            aria-label="DN por defecto para uniones vacias"
+            className="h-9 flex-1 bg-zeues-navy border-2 border-white/50 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+          >
+            <option value="">DN</option>
+            {DN_UNION_OPTIONS.map((dn) => (
+              <option key={dn} value={dn}>{dn}</option>
+            ))}
+          </select>
+          <select
+            value={defaultTipo ?? ''}
+            onChange={(e) => handleDefaultTipoChange(e.target.value)}
+            aria-label="Tipo por defecto para uniones vacias"
+            className="h-9 flex-1 bg-zeues-navy border-2 border-white/50 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+          >
+            <option value="">TIPO</option>
+            {TIPO_UNION_OPTIONS.map((tipo) => (
+              <option key={tipo} value={tipo}>{tipo}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Loading state */}
       {loading && (
@@ -255,33 +331,36 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
 
       {/* Error message */}
       {error && (
-        <div role="alert" className="text-red-400 font-mono font-black text-sm mb-3 px-1">
+        <div role="alert" className="text-red-400 font-mono font-black text-sm mb-2 px-1">
           {error}
         </div>
       )}
 
-      {/* Union cards — scrollable */}
+      {/* Union cards — compact, scrollable */}
       {!loading && (
-        <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-1.5 max-h-[55vh] overflow-y-auto pr-1">
           {rows.map((row) => {
             const complete = isRowComplete(row);
             const isConfirmingThis = confirmDelete === row.n_union;
 
-            let borderClass = 'border-white/30';
-            if (row.has_work) {
+            const isFlashing = flashedRows.has(row.n_union);
+            let borderClass = 'border-white/20';
+            if (isFlashing) {
+              borderClass = 'border-zeues-orange bg-zeues-orange/10';
+            } else if (row.has_work) {
               borderClass = 'border-white/10 bg-white/5';
             } else if (!complete) {
-              borderClass = 'border-yellow-400';
+              borderClass = 'border-yellow-400/60';
             }
 
             return (
               <div
                 key={row.n_union}
                 ref={(el) => setCardRef(row.n_union, el)}
-                className={`border-2 p-3 flex items-center gap-3 ${borderClass}`}
+                className={`border p-1.5 flex items-center gap-2 transition-colors duration-300 ${borderClass}`}
               >
                 {/* N_UNION label */}
-                <span className="font-mono font-black text-lg text-white min-w-[3rem] text-center">
+                <span className="font-mono font-black text-sm text-white/70 min-w-[2rem] text-center">
                   {row.n_union}
                 </span>
 
@@ -291,7 +370,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                   onChange={(e) => handleDnChange(row.n_union, e.target.value)}
                   disabled={row.has_work}
                   aria-label={`DN union ${row.n_union}`}
-                  className="h-12 flex-1 bg-zeues-navy border-2 border-white text-white font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">DN</option>
                   {DN_UNION_OPTIONS.map((dn) => (
@@ -305,7 +384,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                   onChange={(e) => handleTipoChange(row.n_union, e.target.value)}
                   disabled={row.has_work}
                   aria-label={`Tipo union ${row.n_union}`}
-                  className="h-12 flex-1 bg-zeues-navy border-2 border-white text-white font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">TIPO</option>
                   {TIPO_UNION_OPTIONS.map((tipo) => (
@@ -318,7 +397,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                   <button
                     onClick={() => handleDeleteRow(row.n_union)}
                     aria-label={`Eliminar union ${row.n_union}`}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-white/10 font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                   >
                     X
                   </button>
@@ -328,52 +407,43 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                     <button
                       onClick={() => handleDeleteRow(row.n_union)}
                       aria-label={`Confirmar eliminar union ${row.n_union}`}
-                      className="min-h-[44px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border-2 border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+                      className="min-h-[36px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
                     >
-                      Sí
+                      Si
                     </button>
                     <button
                       onClick={() => setConfirmDelete(null)}
                       aria-label="Cancelar eliminacion"
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                     >
                       No
                     </button>
                   </div>
                 )}
                 {row.has_work && (
-                  <span className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/20 font-mono text-xs">
-                    ---
-                  </span>
+                  <span className="min-w-[36px] min-h-[36px]" />
                 )}
               </div>
             );
           })}
-
-          {/* Quick add hint when scrolled to bottom */}
-          {rows.length < MAX_UNIONS && (
-            <p className="text-center font-mono text-xs text-white/30 py-2">
-              Usa el control de cantidad arriba para agregar mas
-            </p>
-          )}
         </div>
       )}
 
       {/* Footer buttons */}
       {!loading && (
-        <div className="flex flex-col gap-3 mt-4">
+        <div className="flex flex-col gap-2 mt-3">
           <button
             onClick={handleGuardar}
             disabled={saving || rows.length === 0}
             aria-label="Guardar uniones"
-            className="w-full h-16 bg-zeues-orange text-white font-mono font-black text-lg disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            className="w-full h-14 bg-zeues-orange text-white font-mono font-black text-lg disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
             {saving ? 'GUARDANDO...' : 'GUARDAR'}
           </button>
           <button
             onClick={onClose}
             aria-label="Cancelar y cerrar"
-            className="w-full h-12 border-2 border-white/30 text-white/70 font-mono hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            className="w-full h-10 border border-white/30 text-white/70 font-mono text-sm hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
             CANCELAR
           </button>

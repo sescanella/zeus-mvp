@@ -178,10 +178,10 @@ class FinalizarResponseV4(BaseModel):
 
 
 class CreateUnionInput(BaseModel):
-    """Single union data for creation/update."""
+    """Single union data for creation/update. Fields nullable for partial saves."""
     n_union: int = Field(..., ge=1, le=20)
-    dn_union: int = Field(..., ge=1, le=50)
-    tipo_union: Literal['BW', 'SO', 'FILL', 'BR']
+    dn_union: Optional[int] = Field(None, ge=1, le=50)
+    tipo_union: Optional[Literal['BW', 'SO', 'FILL', 'BR']] = None
 
 
 class SaveUnionsRequest(BaseModel):
@@ -193,8 +193,8 @@ class SaveUnionsRequest(BaseModel):
 class UnionEditable(BaseModel):
     """Union with has_work flag for frontend editability."""
     n_union: int
-    dn_union: float
-    tipo_union: str
+    dn_union: Optional[float] = None
+    tipo_union: Optional[str] = None
     has_work: bool  # True if ARM_WORKER or SOL_WORKER is set
 
 

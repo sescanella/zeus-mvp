@@ -286,29 +286,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
             </span>
           )}
 
-          {/* Uniones badge */}
-          {onUnionesClick && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onUnionesClick(spool); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onUnionesClick(spool);
-                }
-              }}
-              aria-label={`Gestionar uniones spool ${spool.tag_spool}${spool.total_uniones ? `: ${spool.total_uniones} uniones` : ': sin uniones'}`}
-              className={`font-mono font-black text-sm px-2 py-0.5 border-2 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
-                spool.total_uniones === 0 || spool.total_uniones === null
-                  ? 'text-yellow-400 border-yellow-400 hover:bg-yellow-400/10'
-                  : 'text-white/50 border-white/50 hover:bg-white/10'
-              }`}
-            >
-              {spool.total_uniones === 0 || spool.total_uniones === null
-                ? 'SIN UNIONES'
-                : `U:${spool.total_uniones}`}
-            </button>
-          )}
+          {/* Uniones badge removed — button is on right side of card */}
         </div>
 
         {/* Completion history */}
@@ -348,6 +326,31 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           );
         })()}
       </div>
+
+      {/* Uniones button — right side */}
+      {onUnionesClick && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onUnionesClick(spool); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onUnionesClick(spool);
+            }
+          }}
+          aria-label={`Gestionar uniones spool ${spool.tag_spool}${spool.total_uniones ? `: ${spool.total_uniones} uniones` : ': sin uniones'}`}
+          className="flex flex-col items-center justify-center w-20 shrink-0 min-h-[5rem] border-l-4 border-white/20 cursor-pointer transition-colors duration-200 hover:bg-white/5 active:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+        >
+          <span className="font-mono text-xs font-black tracking-widest text-white/70">Uniones</span>
+          <span className={`font-mono text-xl font-black ${
+            spool.total_uniones === 0 || spool.total_uniones === null
+              ? 'text-yellow-400'
+              : 'text-white'
+          }`}>
+            {spool.total_uniones ?? 0}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
