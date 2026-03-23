@@ -45,9 +45,9 @@ const ESTADO_LABELS: Record<string, string> = {
 const PRIORITY_COLORS: Record<number, string> = {
   1: 'bg-red-600 text-white border-red-500',
   2: 'bg-zeues-orange text-white border-zeues-orange',
-  3: 'bg-white/10 text-white border-white/30',
+  3: 'bg-white/20 text-white border-white/30',
 };
-const PRIORITY_DEFAULT = 'bg-white/5 text-white/30 border-white/10';
+const PRIORITY_DEFAULT = 'bg-white/5 text-white/50 border-white/10';
 
 // ─── Priority cycle ────────────────────────────────────────────────────────────
 function nextPriority(current: number | null): number | null {
@@ -193,7 +193,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
   };
 
   return (
-    <div className="flex border-4 rounded-none border-white/20 hover:border-white/40 active:bg-white/5 min-h-[5rem]">
+    <div className="flex border-4 rounded-none border-white/20 min-h-[5rem]">
       {/* Priority block — left side */}
       <button
         onClick={(e) => {
@@ -208,9 +208,9 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           }
         }}
         aria-label={`Prioridad spool ${spool.tag_spool}: ${priority ?? 'sin prioridad'}. Click para cambiar`}
-        className={`flex flex-col items-center justify-center w-16 shrink-0 border-r-4 border-white/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${priority !== null ? PRIORITY_COLORS[priority] : PRIORITY_DEFAULT}`}
+        className={`flex flex-col items-center justify-center w-16 shrink-0 min-h-[5rem] border-r-4 border-white/20 cursor-pointer transition-colors duration-200 hover:opacity-80 active:opacity-60 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${priority !== null ? PRIORITY_COLORS[priority] : PRIORITY_DEFAULT}`}
       >
-        <span className="font-mono text-[10px] font-black tracking-widest uppercase">PRIO</span>
+        <span className="font-mono text-xs font-black tracking-widest uppercase">PRIO</span>
         <span className="font-mono text-2xl font-black">{priority ?? '-'}</span>
       </button>
 
@@ -221,7 +221,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
         aria-label={`Procesar spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${ESTADO_LABELS[spool.estado_trabajo] ?? spool.estado_trabajo}` : ''}`}
         onClick={() => onCardClick(spool)}
         onKeyDown={handleKeyDown}
-        className="flex-1 bg-zeues-navy px-4 py-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+        className="flex-1 bg-zeues-navy px-4 py-3 cursor-pointer hover:bg-white/5 active:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
       >
         {/* Tag + Remove button */}
         <div className="flex items-center justify-between">
@@ -286,25 +286,26 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           )}
         </div>
 
-        {/* Worker + Timer on same row */}
-        <div className="flex items-center justify-between mt-1">
-          {/* Worker name — TODO: add ocupado_por_display to SpoolCardData type when backend provides it */}
-          {(() => {
-            type WithDisplay = SpoolCardData & { ocupado_por_display?: string | null };
-            const s = spool as WithDisplay;
-            const workerName = s.ocupado_por_display ?? s.ocupado_por;
-            return workerName ? (
-              <span className="font-mono text-sm text-white/90">{workerName}</span>
-            ) : null;
-          })()}
-
-          {/* Timer — to the right of worker name, hidden when PAUSADO (STATE-06) */}
-          {!isPausado && elapsed !== null && (
-            <span className="font-mono text-sm font-black text-zeues-orange">
-              {formatElapsed(elapsed)}
-            </span>
-          )}
-        </div>
+        {/* Worker + Timer on same row — only render if there's content */}
+        {(() => {
+          type WithDisplay = SpoolCardData & { ocupado_por_display?: string | null };
+          const s = spool as WithDisplay;
+          const workerName = s.ocupado_por_display ?? s.ocupado_por;
+          const showTimer = !isPausado && elapsed !== null;
+          if (!workerName && !showTimer) return null;
+          return (
+            <div className="flex items-center justify-between mt-1">
+              {workerName && (
+                <span className="font-mono text-sm text-white/90">{workerName}</span>
+              )}
+              {showTimer && (
+                <span className="font-mono text-sm font-black text-zeues-orange">
+                  {formatElapsed(elapsed!)}
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
