@@ -51,6 +51,7 @@ const pausadoSpool: SpoolCardData = {
 const mockOnCardClick = jest.fn();
 
 const defaultProps = {
+  priority: null as number | null,
   onCardClick: mockOnCardClick,
 };
 
@@ -231,12 +232,78 @@ describe('SpoolCard — elapsed timer', () => {
   });
 });
 
+// ─── Priority block ───────────────────────────────────────────────────────────
+
+describe('SpoolCard — priority block', () => {
+  it('shows "-" when priority is null', () => {
+    render(<SpoolCard spool={baseOccupied} {...defaultProps} priority={null} />);
+    expect(screen.getByText('-')).toBeInTheDocument();
+  });
+
+  it('shows priority number when priority is set', () => {
+    render(<SpoolCard spool={baseOccupied} {...defaultProps} priority={2} />);
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('calls onPriorityChange with next priority when priority button is clicked', () => {
+    const mockOnPriorityChange = jest.fn();
+    render(
+      <SpoolCard
+        spool={baseOccupied}
+        {...defaultProps}
+        priority={null}
+        onPriorityChange={mockOnPriorityChange}
+      />
+    );
+    const prioBtn = screen.getByRole('button', { name: /Prioridad spool OT-001/ });
+    fireEvent.click(prioBtn);
+    expect(mockOnPriorityChange).toHaveBeenCalledWith('OT-001', 1);
+  });
+
+  it('cycles priority null → 1 → 2 → 3 → null', () => {
+    const mockOnPriorityChange = jest.fn();
+    const { rerender } = render(
+      <SpoolCard spool={baseOccupied} {...defaultProps} priority={null} onPriorityChange={mockOnPriorityChange} />
+    );
+    const prioBtn = () => screen.getByRole('button', { name: /Prioridad spool OT-001/ });
+
+    fireEvent.click(prioBtn());
+    expect(mockOnPriorityChange).toHaveBeenLastCalledWith('OT-001', 1);
+
+    rerender(<SpoolCard spool={baseOccupied} {...defaultProps} priority={1} onPriorityChange={mockOnPriorityChange} />);
+    fireEvent.click(prioBtn());
+    expect(mockOnPriorityChange).toHaveBeenLastCalledWith('OT-001', 2);
+
+    rerender(<SpoolCard spool={baseOccupied} {...defaultProps} priority={2} onPriorityChange={mockOnPriorityChange} />);
+    fireEvent.click(prioBtn());
+    expect(mockOnPriorityChange).toHaveBeenLastCalledWith('OT-001', 3);
+
+    rerender(<SpoolCard spool={baseOccupied} {...defaultProps} priority={3} onPriorityChange={mockOnPriorityChange} />);
+    fireEvent.click(prioBtn());
+    expect(mockOnPriorityChange).toHaveBeenLastCalledWith('OT-001', null);
+  });
+
+  it('priority button click does NOT trigger onCardClick', () => {
+    render(
+      <SpoolCard
+        spool={baseOccupied}
+        {...defaultProps}
+        priority={null}
+        onPriorityChange={jest.fn()}
+      />
+    );
+    const prioBtn = screen.getByRole('button', { name: /Prioridad spool OT-001/ });
+    fireEvent.click(prioBtn);
+    expect(mockOnCardClick).not.toHaveBeenCalled();
+  });
+});
+
 // ─── Click and keyboard ───────────────────────────────────────────────────────
 
 describe('SpoolCard — interaction', () => {
   it('calls onCardClick with spool data when card is clicked', () => {
     render(<SpoolCard spool={baseOccupied} {...defaultProps} />);
-    // Click the card element — matches the full aria-label "Procesar spool OT-001 - En Progreso"
+    // Click the content area button — matches the full aria-label "Procesar spool OT-001 - En Progreso"
     const card = screen.getByRole('button', { name: /^Procesar spool OT-001/ });
     fireEvent.click(card);
     expect(mockOnCardClick).toHaveBeenCalledWith(baseOccupied);
@@ -294,7 +361,7 @@ describe('SpoolCard — accessibility', () => {
     expect(results).toHaveNoViolations();
   }, 10000);
 
-  it('card has tabIndex=0 for keyboard focus', () => {
+  it('content area has tabIndex=0 for keyboard focus', () => {
     render(<SpoolCard spool={baseOccupied} {...defaultProps} />);
     const card = screen.getByRole('button', { name: /^Procesar spool OT-001/ });
     expect(card).toHaveAttribute('tabindex', '0');

@@ -8,8 +8,10 @@ export type { SpoolCardData };
 
 export interface SpoolCardProps {
   spool: SpoolCardData;
+  priority: number | null; // 1=urgente, 2=alta, 3=normal, null=sin prioridad
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
+  onPriorityChange?: (tag: string, priority: number | null) => void;
 }
 
 // ─── Estado color map ──────────────────────────────────────────────────────────
@@ -38,6 +40,21 @@ const ESTADO_LABELS: Record<string, string> = {
   PENDIENTE_METROLOGIA: 'Pend. Metrología',
   BLOQUEADO: 'Bloqueado',
 };
+
+// ─── Priority color map ────────────────────────────────────────────────────────
+const PRIORITY_COLORS: Record<number, string> = {
+  1: 'bg-red-600 text-white border-red-500',
+  2: 'bg-zeues-orange text-white border-zeues-orange',
+  3: 'bg-white/10 text-white border-white/30',
+};
+const PRIORITY_DEFAULT = 'bg-white/5 text-white/30 border-white/10';
+
+// ─── Priority cycle ────────────────────────────────────────────────────────────
+function nextPriority(current: number | null): number | null {
+  if (current === null) return 1;
+  if (current === 3) return null;
+  return current + 1;
+}
 
 // ─── useElapsedSeconds ─────────────────────────────────────────────────────────
 
@@ -139,15 +156,17 @@ function formatElapsed(totalSeconds: number): string {
 /**
  * Individual spool card for the v5.0 single-page view.
  *
- * Shows TAG, operation badge, estado badge, worker, and elapsed timer.
- * Timer is hidden when estado_trabajo === 'PAUSADO' (STATE-06).
+ * Layout: flex row with priority block on the left and card content on the right.
+ * - Priority block: fixed w-16, clickable to cycle 1→2→3→null
+ * - Content block: tag, badges, worker + timer on same row
  *
- * Keyboard accessible: Enter/Space triggers onCardClick.
- * Remove button uses stopPropagation to avoid triggering onCardClick.
+ * Timer is hidden when estado_trabajo === 'PAUSADO' (STATE-06).
+ * Keyboard accessible: Enter/Space triggers onCardClick on content area.
+ * Priority button uses stopPropagation to avoid triggering onCardClick.
  *
  * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
+export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityChange }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -174,14 +193,36 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Procesar spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${ESTADO_LABELS[spool.estado_trabajo] ?? spool.estado_trabajo}` : ''}`}
-      onClick={() => onCardClick(spool)}
-      onKeyDown={handleKeyDown}
-      className="bg-zeues-navy border-4 rounded-none transition-colors px-4 py-3 min-h-[4rem] cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset border-white/20 hover:border-white/40 active:bg-white/5"
-    >
+    <div className="flex border-4 rounded-none border-white/20 hover:border-white/40 active:bg-white/5 min-h-[5rem]">
+      {/* Priority block — left side */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onPriorityChange?.(spool.tag_spool, nextPriority(priority));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            onPriorityChange?.(spool.tag_spool, nextPriority(priority));
+          }
+        }}
+        aria-label={`Prioridad spool ${spool.tag_spool}: ${priority ?? 'sin prioridad'}. Click para cambiar`}
+        className={`flex flex-col items-center justify-center w-16 shrink-0 border-r-4 border-white/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${priority !== null ? PRIORITY_COLORS[priority] : PRIORITY_DEFAULT}`}
+      >
+        <span className="font-mono text-[10px] font-black tracking-widest uppercase">PRIO</span>
+        <span className="font-mono text-2xl font-black">{priority ?? '-'}</span>
+      </button>
+
+      {/* Content — right side (clickable for card action) */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Procesar spool ${spool.tag_spool}${spool.estado_trabajo ? ` - ${ESTADO_LABELS[spool.estado_trabajo] ?? spool.estado_trabajo}` : ''}`}
+        onClick={() => onCardClick(spool)}
+        onKeyDown={handleKeyDown}
+        className="flex-1 bg-zeues-navy px-4 py-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+      >
         {/* Tag + Remove button */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -245,24 +286,26 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
           )}
         </div>
 
-        {/* Worker — TODO: add ocupado_por_display to SpoolCardData type when backend provides it */}
-        {(() => {
-          type WithDisplay = SpoolCardData & { ocupado_por_display?: string | null };
-          const s = spool as WithDisplay;
-          const workerName = s.ocupado_por_display ?? s.ocupado_por;
-          return workerName ? (
-            <div className="mt-1 font-mono text-sm text-white/90">
-              {workerName}
-            </div>
-          ) : null;
-        })()}
+        {/* Worker + Timer on same row */}
+        <div className="flex items-center justify-between mt-1">
+          {/* Worker name — TODO: add ocupado_por_display to SpoolCardData type when backend provides it */}
+          {(() => {
+            type WithDisplay = SpoolCardData & { ocupado_por_display?: string | null };
+            const s = spool as WithDisplay;
+            const workerName = s.ocupado_por_display ?? s.ocupado_por;
+            return workerName ? (
+              <span className="font-mono text-sm text-white/90">{workerName}</span>
+            ) : null;
+          })()}
 
-        {/* Elapsed timer — hidden when PAUSADO (STATE-06) */}
-        {!isPausado && elapsed !== null && (
-          <div className="mt-1 font-mono text-sm font-black text-zeues-orange">
-            {formatElapsed(elapsed)}
-          </div>
-        )}
+          {/* Timer — to the right of worker name, hidden when PAUSADO (STATE-06) */}
+          {!isPausado && elapsed !== null && (
+            <span className="font-mono text-sm font-black text-zeues-orange">
+              {formatElapsed(elapsed)}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

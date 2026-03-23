@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { axe } from 'jest-axe';
 import { SpoolCardList } from '@/components/SpoolCardList';
+import { SpoolListProvider } from '@/lib/SpoolListContext';
 import type { SpoolCardData } from '@/lib/types';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -31,6 +32,11 @@ const defaultProps = {
   onCardClick: mockOnCardClick,
 };
 
+// Helper: wrap SpoolCardList in SpoolListProvider (required by useSpoolList hook)
+function renderWithProvider(ui: React.ReactElement) {
+  return render(<SpoolListProvider>{ui}</SpoolListProvider>);
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -39,26 +45,26 @@ beforeEach(() => {
 
 describe('SpoolCardList — empty state', () => {
   it('renders empty state message when spools array is empty', () => {
-    render(<SpoolCardList spools={[]} {...defaultProps} />);
+    renderWithProvider(<SpoolCardList spools={[]} {...defaultProps} />);
     expect(screen.getByText(/No hay spools en tu lista/i)).toBeInTheDocument();
   });
 
   it('renders empty state subtext about Anadir Spool button', () => {
-    render(<SpoolCardList spools={[]} {...defaultProps} />);
+    renderWithProvider(<SpoolCardList spools={[]} {...defaultProps} />);
     expect(
       screen.getByText(/Usa el boton Anadir Spool para comenzar/i)
     ).toBeInTheDocument();
   });
 
   it('renders PackageOpen icon in empty state', () => {
-    const { container } = render(<SpoolCardList spools={[]} {...defaultProps} />);
+    const { container } = renderWithProvider(<SpoolCardList spools={[]} {...defaultProps} />);
     // Lucide icons render as SVG elements
     const svg = container.querySelector('svg');
     expect(svg).toBeInTheDocument();
   });
 
   it('does not render any spool cards in empty state', () => {
-    render(<SpoolCardList spools={[]} {...defaultProps} />);
+    renderWithProvider(<SpoolCardList spools={[]} {...defaultProps} />);
     expect(screen.queryByRole('button', { name: /^Spool/ })).not.toBeInTheDocument();
   });
 });
@@ -66,27 +72,27 @@ describe('SpoolCardList — empty state', () => {
 // ─── Non-empty state ───────────────────────────────────────────────────────────
 
 describe('SpoolCardList — with spools', () => {
-  it('renders correct number of spool cards for 3 spools', () => {
-    render(<SpoolCardList spools={spools} {...defaultProps} />);
-    const cards = screen.getAllByRole('button', { name: /^Spool/ });
+  it('renders correct number of content-area buttons for 3 spools', () => {
+    renderWithProvider(<SpoolCardList spools={spools} {...defaultProps} />);
+    const cards = screen.getAllByRole('button', { name: /^Procesar spool/ });
     expect(cards).toHaveLength(3);
   });
 
   it('renders a card for each spool tag', () => {
-    render(<SpoolCardList spools={spools} {...defaultProps} />);
+    renderWithProvider(<SpoolCardList spools={spools} {...defaultProps} />);
     expect(screen.getByText('OT-001')).toBeInTheDocument();
     expect(screen.getByText('OT-002')).toBeInTheDocument();
     expect(screen.getByText('OT-003')).toBeInTheDocument();
   });
 
   it('renders 1 card when spools has 1 item', () => {
-    render(<SpoolCardList spools={[makeSpool('SINGLE-01')]} {...defaultProps} />);
-    const cards = screen.getAllByRole('button', { name: /^Spool/ });
+    renderWithProvider(<SpoolCardList spools={[makeSpool('SINGLE-01')]} {...defaultProps} />);
+    const cards = screen.getAllByRole('button', { name: /^Procesar spool/ });
     expect(cards).toHaveLength(1);
   });
 
   it('does not render empty state when spools is non-empty', () => {
-    render(<SpoolCardList spools={spools} {...defaultProps} />);
+    renderWithProvider(<SpoolCardList spools={spools} {...defaultProps} />);
     expect(
       screen.queryByText(/No hay spools en tu lista/i)
     ).not.toBeInTheDocument();
@@ -97,17 +103,27 @@ describe('SpoolCardList — with spools', () => {
 
 describe('SpoolCardList — callback propagation', () => {
   it('calls onCardClick with spool data when a card is clicked', () => {
-    render(<SpoolCardList spools={[makeSpool('OT-001')]} {...defaultProps} />);
-    const card = screen.getByRole('button', { name: /^Spool OT-001/ });
+    renderWithProvider(<SpoolCardList spools={[makeSpool('OT-001')]} {...defaultProps} />);
+    const card = screen.getByRole('button', { name: /^Procesar spool OT-001/ });
     fireEvent.click(card);
     expect(mockOnCardClick).toHaveBeenCalledWith(makeSpool('OT-001'));
   });
 
   it('propagates onCardClick for each card independently', () => {
-    render(<SpoolCardList spools={spools} {...defaultProps} />);
-    fireEvent.click(screen.getByRole('button', { name: /^Spool OT-002/ }));
+    renderWithProvider(<SpoolCardList spools={spools} {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Procesar spool OT-002/ }));
     expect(mockOnCardClick).toHaveBeenCalledWith(makeSpool('OT-002'));
     expect(mockOnCardClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── Sorting ──────────────────────────────────────────────────────────────────
+
+describe('SpoolCardList — priority sorting', () => {
+  it('renders spools in original order when no priorities are set', () => {
+    renderWithProvider(<SpoolCardList spools={spools} {...defaultProps} />);
+    const tags = screen.getAllByText(/^OT-00[123]$/).map((el) => el.textContent);
+    expect(tags).toEqual(['OT-001', 'OT-002', 'OT-003']);
   });
 });
 
@@ -115,13 +131,13 @@ describe('SpoolCardList — callback propagation', () => {
 
 describe('SpoolCardList — accessibility', () => {
   it('passes axe audit with empty spools', async () => {
-    const { container } = render(<SpoolCardList spools={[]} {...defaultProps} />);
+    const { container } = renderWithProvider(<SpoolCardList spools={[]} {...defaultProps} />);
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   }, 10000);
 
   it('passes axe audit with spools present', async () => {
-    const { container } = render(
+    const { container } = renderWithProvider(
       <SpoolCardList spools={[makeSpool('OT-001'), makeSpool('OT-002')]} {...defaultProps} />
     );
     const results = await axe(container);

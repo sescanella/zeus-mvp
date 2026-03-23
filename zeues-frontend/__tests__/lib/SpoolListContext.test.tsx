@@ -6,12 +6,15 @@
  * 2. addSpool fetches status and adds to list
  * 3. addSpool rejects duplicate tags
  * 4. removeSpool removes from list
- * 5. removeSpool syncs localStorage via saveTags
+ * 5. removeSpool syncs localStorage via savePersistedSpools
  * 6. refreshAll calls batchGetStatus with all tracked tags
  * 7. refreshAll is no-op when list is empty
  * 8. refreshSingle updates one spool in place
- * 9. On mount, loads tags from localStorage and hydrates via batchGetStatus
+ * 9. On mount, loads persisted spools from localStorage and hydrates via batchGetStatus
  * 10. On mount with empty localStorage, state is empty array (no API call)
+ * 11. setPriority updates priorities map
+ * 12. setPriority persists via savePersistedSpools on next render
+ * 13. priorities exposed in context value
  *
  * Reference: 04-01-PLAN.md Task 1
  */
@@ -29,17 +32,19 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('@/lib/local-storage', () => ({
+  loadPersistedSpools: jest.fn(),
+  savePersistedSpools: jest.fn(),
   loadTags: jest.fn(),
-  saveTags: jest.fn(),
 }));
 
 import { getSpoolStatus, batchGetStatus } from '@/lib/api';
-import { loadTags, saveTags } from '@/lib/local-storage';
+import { loadPersistedSpools, savePersistedSpools } from '@/lib/local-storage';
+import type { PersistedSpool } from '@/lib/local-storage';
 
 const mockGetSpoolStatus = getSpoolStatus as jest.MockedFunction<typeof getSpoolStatus>;
 const mockBatchGetStatus = batchGetStatus as jest.MockedFunction<typeof batchGetStatus>;
-const mockLoadTags = loadTags as jest.MockedFunction<typeof loadTags>;
-const mockSaveTags = saveTags as jest.MockedFunction<typeof saveTags>;
+const mockLoadPersistedSpools = loadPersistedSpools as jest.MockedFunction<typeof loadPersistedSpools>;
+const mockSavePersistedSpools = savePersistedSpools as jest.MockedFunction<typeof savePersistedSpools>;
 
 // ─── Helper: build a minimal SpoolCardData ────────────────────────────────────
 
@@ -72,8 +77,8 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Default: empty localStorage (no persisted tags)
-  mockLoadTags.mockReturnValue([]);
+  // Default: empty localStorage (no persisted spools)
+  mockLoadPersistedSpools.mockReturnValue([]);
   mockBatchGetStatus.mockResolvedValue([]);
 });
 
@@ -99,7 +104,7 @@ describe('useSpoolList', () => {
 
     // Wait for mount effect
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -119,7 +124,7 @@ describe('useSpoolList', () => {
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     // Add spool once
@@ -147,7 +152,7 @@ describe('useSpoolList', () => {
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -163,8 +168,8 @@ describe('useSpoolList', () => {
     expect(result.current.spools).toHaveLength(0);
   });
 
-  // Test 5: removeSpool syncs localStorage via saveTags
-  it('removeSpool syncs localStorage via saveTags', async () => {
+  // Test 5: removeSpool syncs localStorage via savePersistedSpools
+  it('removeSpool syncs localStorage via savePersistedSpools', async () => {
     const spoolCard1 = makeSpoolCard('OT-001');
     const spoolCard2 = makeSpoolCard('OT-002');
     mockGetSpoolStatus
@@ -174,7 +179,7 @@ describe('useSpoolList', () => {
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -185,15 +190,22 @@ describe('useSpoolList', () => {
       await result.current.addSpool('OT-002');
     });
 
-    mockSaveTags.mockClear();
+    mockSavePersistedSpools.mockClear();
 
     act(() => {
       result.current.removeSpool('OT-001');
     });
 
-    // saveTags called with remaining tags
+    // savePersistedSpools called with remaining spool
     await waitFor(() => {
-      expect(mockSaveTags).toHaveBeenCalledWith(['OT-002']);
+      expect(mockSavePersistedSpools).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ tag: 'OT-002' }),
+        ])
+      );
+      // OT-001 should NOT be in the persisted list
+      const lastCall = mockSavePersistedSpools.mock.calls[mockSavePersistedSpools.mock.calls.length - 1][0] as PersistedSpool[];
+      expect(lastCall.find((s) => s.tag === 'OT-001')).toBeUndefined();
     });
   });
 
@@ -214,7 +226,7 @@ describe('useSpoolList', () => {
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -241,7 +253,7 @@ describe('useSpoolList', () => {
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     // Clear the initial batchGetStatus call from mount
@@ -266,7 +278,7 @@ describe('useSpoolList', () => {
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -291,10 +303,13 @@ describe('useSpoolList', () => {
     expect(result.current.spools.find((s) => s.tag_spool === 'OT-002')).toEqual(spoolCard2);
   });
 
-  // Test 9: On mount, loads tags from localStorage and hydrates via batchGetStatus
-  it('on mount with persisted tags, loads and hydrates via batchGetStatus', async () => {
-    const persistedTags = ['OT-001', 'OT-002'];
-    mockLoadTags.mockReturnValue(persistedTags);
+  // Test 9: On mount, loads persisted spools from localStorage and hydrates via batchGetStatus
+  it('on mount with persisted spools, loads priorities and hydrates via batchGetStatus', async () => {
+    const persisted: PersistedSpool[] = [
+      { tag: 'OT-001', priority: 1 },
+      { tag: 'OT-002', priority: null },
+    ];
+    mockLoadPersistedSpools.mockReturnValue(persisted);
 
     const hydratedCards = [makeSpoolCard('OT-001'), makeSpoolCard('OT-002')];
     mockBatchGetStatus.mockResolvedValue(hydratedCards);
@@ -305,19 +320,22 @@ describe('useSpoolList', () => {
       expect(result.current.spools).toHaveLength(2);
     });
 
-    expect(mockLoadTags).toHaveBeenCalled();
+    expect(mockLoadPersistedSpools).toHaveBeenCalled();
     expect(mockBatchGetStatus).toHaveBeenCalledWith(['OT-001', 'OT-002']);
     expect(result.current.spools).toEqual(hydratedCards);
+    // Priorities should be loaded
+    expect(result.current.priorities.get('OT-001')).toBe(1);
+    expect(result.current.priorities.get('OT-002')).toBeNull();
   });
 
   // Test 10: On mount with empty localStorage, state is empty array (no API call)
   it('on mount with empty localStorage, state is empty array and no API call', async () => {
-    mockLoadTags.mockReturnValue([]);
+    mockLoadPersistedSpools.mockReturnValue([]);
 
     const { result } = renderHook(() => useSpoolList(), { wrapper });
 
     await waitFor(() => {
-      expect(mockLoadTags).toHaveBeenCalled();
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
     });
 
     // Give time for any async operations
@@ -327,5 +345,105 @@ describe('useSpoolList', () => {
 
     expect(mockBatchGetStatus).not.toHaveBeenCalled();
     expect(result.current.spools).toHaveLength(0);
+  });
+
+  // Test 11: setPriority updates priorities map in context
+  it('setPriority updates priorities map', async () => {
+    const spoolCard = makeSpoolCard('OT-001');
+    mockGetSpoolStatus.mockResolvedValue(spoolCard);
+
+    const { result } = renderHook(() => useSpoolList(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      await result.current.addSpool('OT-001');
+    });
+
+    expect(result.current.priorities.get('OT-001')).toBeUndefined();
+
+    act(() => {
+      result.current.setPriority('OT-001', 1);
+    });
+
+    expect(result.current.priorities.get('OT-001')).toBe(1);
+
+    act(() => {
+      result.current.setPriority('OT-001', null);
+    });
+
+    expect(result.current.priorities.get('OT-001')).toBeNull();
+  });
+
+  // Test 12: setPriority persists via savePersistedSpools
+  it('setPriority triggers savePersistedSpools with correct priority', async () => {
+    const spoolCard = makeSpoolCard('OT-001');
+    mockGetSpoolStatus.mockResolvedValue(spoolCard);
+
+    const { result } = renderHook(() => useSpoolList(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      await result.current.addSpool('OT-001');
+    });
+
+    mockSavePersistedSpools.mockClear();
+
+    act(() => {
+      result.current.setPriority('OT-001', 2);
+    });
+
+    await waitFor(() => {
+      expect(mockSavePersistedSpools).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ tag: 'OT-001', priority: 2 }),
+        ])
+      );
+    });
+  });
+
+  // Test 13: priorities is exposed in context value with correct initial state
+  it('priorities is an empty Map on initial render with no persisted spools', async () => {
+    const { result } = renderHook(() => useSpoolList(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
+    });
+
+    expect(result.current.priorities).toBeInstanceOf(Map);
+    expect(result.current.priorities.size).toBe(0);
+  });
+
+  // Test 14: removeSpool also removes priority from priorities map
+  it('removeSpool removes priority from priorities map', async () => {
+    const spoolCard = makeSpoolCard('OT-001');
+    mockGetSpoolStatus.mockResolvedValue(spoolCard);
+
+    const { result } = renderHook(() => useSpoolList(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockLoadPersistedSpools).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      await result.current.addSpool('OT-001');
+    });
+
+    act(() => {
+      result.current.setPriority('OT-001', 1);
+    });
+
+    expect(result.current.priorities.get('OT-001')).toBe(1);
+
+    act(() => {
+      result.current.removeSpool('OT-001');
+    });
+
+    expect(result.current.priorities.has('OT-001')).toBe(false);
   });
 });
