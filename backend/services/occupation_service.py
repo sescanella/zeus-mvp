@@ -992,7 +992,16 @@ class OccupationService:
             if not spool:
                 raise SpoolNoEncontradoError(tag_spool)
 
-            # Step 2.5: Detect v3.0 spools and use simplified COMPLETAR path
+            # Step 2.5: CANCELAR — version-agnostic, must come before any version branching
+            # WHY: Cancellation (0 unions selected) applies equally to v3.0 and v4.0 spools.
+            # If we check v3.0 first, v3.0 spools can never cancel because _finalizar_v30_spool()
+            # always performs COMPLETAR. Moving cancellation before version detection fixes this.
+            # NOTE: Skip cancellation path when action_override is set (v5.0 buttons)
+            if len(selected_unions) == 0 and not action_override:
+                logger.info(f"Zero unions selected - cancelling occupation for {tag_spool}")
+                return await self._cancelar_spool(tag_spool, worker_id, worker_nombre, operacion, spool)
+
+            # Step 3: Detect v3.0 spools and use simplified COMPLETAR path
             #
             # v3.0 detection: total_uniones = None (no column) or 0 (CONTAR.SI formula)
             # v4.0 detection: total_uniones >= 1 (has registered unions)
@@ -1021,74 +1030,6 @@ class OccupationService:
                     worker_nombre=worker_nombre,
                     operacion=operacion,
                     spool=spool
-                )
-
-            # Step 3: Handle zero-union cancellation (v4.0 only)
-            # NOTE: Skip cancellation path when action_override is set (v5.0 buttons)
-            if len(selected_unions) == 0 and not action_override:
-                logger.info(f"Zero unions selected - handling as cancellation for {tag_spool}")
-
-                # Clear occupation fields + dirty columns from INICIAR (with version retry)
-                try:
-                    updates_dict = {
-                        "Ocupado_Por": "",
-                        "Fecha_Ocupacion": ""
-                    }
-
-                    # Clear Armador/Soldador ONLY if the operation's date is empty
-                    # (meaning it was never completed — the value was set by INICIAR)
-                    if operacion == "ARM" and not spool.fecha_armado:
-                        updates_dict["Armador"] = ""
-                    elif operacion == "SOLD" and not spool.fecha_soldadura:
-                        updates_dict["Soldador"] = ""
-
-                    # Rebuild Estado_Detalle to reflect post-cancellation state
-                    from backend.services.estado_detalle_builder import EstadoDetalleBuilder
-                    builder = EstadoDetalleBuilder()
-                    arm_state = "completado" if spool.fecha_armado else "pendiente"
-                    sold_state = "completado" if spool.fecha_soldadura else "pendiente"
-                    estado_detalle = builder.build(
-                        ocupado_por=None,
-                        arm_state=arm_state,
-                        sold_state=sold_state
-                    )
-                    updates_dict["Estado_Detalle"] = estado_detalle
-
-                    await self.conflict_service.update_with_retry(
-                        tag_spool=tag_spool,
-                        updates=updates_dict,
-                        operation="CANCELAR"
-                    )
-
-                    logger.info(f"✅ Occupation cleared for {tag_spool}")
-
-                except Exception as e:
-                    logger.error(f"Failed to clear occupation during cancellation: {e}")
-                    # Continue - lock already released
-
-                # Log cancellation event to Metadata
-                try:
-                    event = (
-                        MetadataEventBuilder()
-                        .for_cancelar(tag_spool, worker_id, worker_nombre)
-                        .with_operacion(operacion)
-                        .with_metadata({"reason": "zero_unions_selected"})
-                        .build()
-                    )
-                    self.metadata_repository.log_event(**event)
-
-                    logger.info(f"✅ Metadata logged: CANCELAR_SPOOL for {tag_spool}")
-
-                except Exception as e:
-                    logger.error(f"❌ CRITICAL: Metadata logging failed for cancellation: {e}")
-
-
-                return OccupationResponse(
-                    success=True,
-                    tag_spool=tag_spool,
-                    message=f"Trabajo cancelado en {tag_spool}",
-                    action_taken="CANCELADO",
-                    unions_processed=0
                 )
 
             # Step 4a: Handle REPARACION workflow (spool-level only, no unions)
@@ -1632,6 +1573,87 @@ class OccupationService:
         except Exception as e:
             logger.error(f"❌ FINALIZAR operation failed: {e}")
             raise
+
+    async def _cancelar_spool(
+        self,
+        tag_spool: str,
+        worker_id: int,
+        worker_nombre: str,
+        operacion: str,
+        spool,
+    ) -> OccupationResponse:
+        """
+        Cancel occupation for a spool when zero unions are selected.
+
+        Clears Ocupado_Por, Fecha_Ocupacion, and conditionally Armador/Soldador
+        if the operation's date was never completed (i.e., set only by INICIAR).
+        Rebuilds Estado_Detalle and logs CANCELAR_SPOOL to Metadata.
+
+        Version-agnostic: works for both v3.0 and v4.0 spools.
+        """
+        logger.info(f"[CANCELAR] Cancelling occupation for {tag_spool} by worker {worker_id} ({worker_nombre})")
+
+        # Clear occupation fields + dirty columns from INICIAR (with version retry)
+        try:
+            updates_dict = {
+                "Ocupado_Por": "",
+                "Fecha_Ocupacion": ""
+            }
+
+            # Clear Armador/Soldador ONLY if the operation's date is empty
+            # (meaning it was never completed — the value was set by INICIAR)
+            if operacion == "ARM" and not spool.fecha_armado:
+                updates_dict["Armador"] = ""
+            elif operacion == "SOLD" and not spool.fecha_soldadura:
+                updates_dict["Soldador"] = ""
+
+            # Rebuild Estado_Detalle to reflect post-cancellation state
+            from backend.services.estado_detalle_builder import EstadoDetalleBuilder
+            builder = EstadoDetalleBuilder()
+            arm_state = "completado" if spool.fecha_armado else "pendiente"
+            sold_state = "completado" if spool.fecha_soldadura else "pendiente"
+            estado_detalle = builder.build(
+                ocupado_por=None,
+                arm_state=arm_state,
+                sold_state=sold_state
+            )
+            updates_dict["Estado_Detalle"] = estado_detalle
+
+            await self.conflict_service.update_with_retry(
+                tag_spool=tag_spool,
+                updates=updates_dict,
+                operation="CANCELAR"
+            )
+
+            logger.info(f"Occupation cleared for {tag_spool}")
+
+        except Exception as e:
+            logger.error(f"Failed to clear occupation during cancellation: {e}")
+            # Continue - lock already released
+
+        # Log cancellation event to Metadata
+        try:
+            event = (
+                MetadataEventBuilder()
+                .for_cancelar(tag_spool, worker_id, worker_nombre)
+                .with_operacion(operacion)
+                .with_metadata({"reason": "zero_unions_selected"})
+                .build()
+            )
+            self.metadata_repository.log_event(**event)
+
+            logger.info(f"Metadata logged: CANCELAR_SPOOL for {tag_spool}")
+
+        except Exception as e:
+            logger.error(f"CRITICAL: Metadata logging failed for cancellation: {e}")
+
+        return OccupationResponse(
+            success=True,
+            tag_spool=tag_spool,
+            message=f"Trabajo cancelado en {tag_spool}",
+            action_taken="CANCELADO",
+            unions_processed=0
+        )
 
     async def _finalizar_v30_spool(
         self,
