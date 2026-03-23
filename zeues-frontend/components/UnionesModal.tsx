@@ -90,10 +90,28 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
   const renumber = (currentRows: UnionRow[]): UnionRow[] =>
     currentRows.map((r, i) => ({ ...r, n_union: i + 1 }));
 
-  const handleAddRow = () => {
+  const handleCountChange = (newCount: number) => {
+    if (newCount < 1 || newCount > MAX_UNIONS) return;
     setRows(prev => {
-      if (prev.length >= MAX_UNIONS) return prev;
-      return [...prev, { n_union: prev.length + 1, dn_union: null, tipo_union: null, has_work: false }];
+      if (newCount > prev.length) {
+        // Add empty rows
+        const toAdd = Array.from({ length: newCount - prev.length }, (_, i) => ({
+          n_union: prev.length + i + 1,
+          dn_union: null as number | null,
+          tipo_union: null as string | null,
+          has_work: false,
+        }));
+        return [...prev, ...toAdd];
+      }
+      if (newCount < prev.length) {
+        // Only remove rows without work, from the end
+        const minProtected = prev.reduce(
+          (max, r) => (r.has_work && r.n_union > max ? r.n_union : max), 0
+        );
+        if (newCount < minProtected) return prev; // Can't go below rows with work
+        return renumber(prev.slice(0, newCount));
+      }
+      return prev;
     });
   };
 
@@ -178,14 +196,54 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
       className="bg-zeues-navy border-4 border-white max-w-lg"
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="font-mono font-black text-lg text-white">UNIONES</h2>
-          <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-mono font-black text-lg text-white">UNIONES</h2>
+            <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
+          </div>
+          <span className="font-mono text-sm text-white/70">
+            {completedCount}/{rows.length} completas
+          </span>
         </div>
-        <span className="font-mono text-sm text-white/70">
-          {completedCount}/{rows.length} completas
-        </span>
+        {/* Quantity input — bulk add/remove */}
+        <div className="flex items-center gap-3 mt-3">
+          <label htmlFor="union-count" className="font-mono font-black text-sm text-white/70">
+            CANTIDAD
+          </label>
+          <div className="flex items-center">
+            <button
+              onClick={() => handleCountChange(rows.length - 1)}
+              disabled={rows.length <= 1}
+              aria-label="Reducir cantidad de uniones"
+              className="h-12 w-12 border-2 border-white text-white font-mono font-black text-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+            >
+              -
+            </button>
+            <input
+              id="union-count"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_UNIONS}
+              value={rows.length}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) handleCountChange(val);
+              }}
+              aria-label="Cantidad total de uniones"
+              className="h-12 w-16 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-lg text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button
+              onClick={() => handleCountChange(rows.length + 1)}
+              disabled={rows.length >= MAX_UNIONS}
+              aria-label="Aumentar cantidad de uniones"
+              className="h-12 w-12 border-2 border-white text-white font-mono font-black text-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+            >
+              +
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Loading state */}
@@ -292,15 +350,11 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
             );
           })}
 
-          {/* Add button */}
+          {/* Quick add hint when scrolled to bottom */}
           {rows.length < MAX_UNIONS && (
-            <button
-              onClick={handleAddRow}
-              aria-label="Agregar union"
-              className="w-full h-12 border-2 border-dashed border-white/30 text-white/70 font-mono hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
-            >
-              + AGREGAR UNION
-            </button>
+            <p className="text-center font-mono text-xs text-white/30 py-2">
+              Usa el control de cantidad arriba para agregar mas
+            </p>
           )}
         </div>
       )}
