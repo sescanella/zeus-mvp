@@ -9,6 +9,7 @@ interface SpoolCardListProps {
   spools: SpoolCardData[];
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
+  onUnionesClick?: (spool: SpoolCardData) => void;
   estadoFilter?: EstadoTrabajo | null;
 }
 
@@ -27,7 +28,7 @@ interface SpoolCardListProps {
  *
  * Plan: 02-01-PLAN.md Task 2
  */
-export function SpoolCardList({ spools, onCardClick, onRemove, estadoFilter }: SpoolCardListProps) {
+export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, estadoFilter }: SpoolCardListProps) {
   const { priorities, setPriority } = useSpoolList();
 
   if (spools.length === 0) {
@@ -81,6 +82,7 @@ export function SpoolCardList({ spools, onCardClick, onRemove, estadoFilter }: S
           priority={priorities.get(spool.tag_spool) ?? null}
           onCardClick={onCardClick}
           onRemove={onRemove}
+          onUnionesClick={onUnionesClick}
           onPriorityChange={setPriority}
         />
       ))}

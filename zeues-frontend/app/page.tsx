@@ -23,6 +23,7 @@ import { OperationModal } from '@/components/OperationModal';
 import { ActionModal } from '@/components/ActionModal';
 import { WorkerModal } from '@/components/WorkerModal';
 import { MetrologiaModal } from '@/components/MetrologiaModal';
+import { UnionesModal } from '@/components/UnionesModal';
 import { SpoolCardList } from '@/components/SpoolCardList';
 import { NotificationToast } from '@/components/NotificationToast';
 import {
@@ -96,6 +97,7 @@ function HomePage() {
     useState<Operation | null>(null);
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
+  const [unionesSpool, setUnionesSpool] = useState<SpoolCardData | null>(null);
 
   // Stable ref for refreshAll — safe for use in setInterval without stale closure
   const refreshAllRef = useRef(refreshAll);
@@ -146,21 +148,22 @@ function HomePage() {
 
     const knownOp = deriveOperation(spool);
     if (knownOp) {
-      handleSelectOperation(knownOp);
+      handleSelectOperation(knownOp, spool);
       return;
     }
 
     modalStack.push('operation');
   };
 
-  const handleSelectOperation = (op: Operation) => {
+  const handleSelectOperation = (op: Operation, spoolOverride?: SpoolCardData) => {
     setSelectedOperation(op);
 
+    const effectiveSpool = spoolOverride ?? selectedSpool;
     // Skip ActionModal when only one valid action
-    if (selectedSpool) {
-      const actions = getValidActions(selectedSpool);
+    if (effectiveSpool) {
+      const actions = getValidActions(effectiveSpool);
       if (actions.length === 1) {
-        handleSelectAction(actions[0]);
+        handleSelectAction(actions[0], effectiveSpool, op);
         return;
       }
     }
@@ -202,8 +205,11 @@ function HomePage() {
     }
   };
 
-  const handleSelectAction = async (action: Action) => {
+  const handleSelectAction = async (action: Action, spoolOverride?: SpoolCardData, opOverride?: Operation) => {
     setSelectedAction(action);
+
+    const effectiveSpool = spoolOverride ?? selectedSpool;
+    const effectiveOp = opOverride ?? selectedOperation;
 
     // INICIAR: show WorkerModal (user picks the worker)
     if (action === 'INICIAR') {
@@ -211,13 +217,26 @@ function HomePage() {
       return;
     }
 
+    // Intercept PAUSAR when spool has no unions — open UnionesModal first
+    if (
+      action === 'PAUSAR' &&
+      effectiveSpool &&
+      effectiveOp &&
+      (effectiveOp === 'ARM' || effectiveOp === 'SOLD') &&
+      (effectiveSpool.total_uniones === null || effectiveSpool.total_uniones === 0)
+    ) {
+      setUnionesSpool(effectiveSpool);
+      modalStack.push('uniones');
+      return;
+    }
+
     // FINALIZAR / PAUSAR: use the worker already assigned in ocupado_por
     if (
       (action === 'FINALIZAR' || action === 'PAUSAR') &&
-      selectedSpool &&
-      selectedOperation
+      effectiveSpool &&
+      effectiveOp
     ) {
-      const ocupadoPor = selectedSpool.ocupado_por;
+      const ocupadoPor = effectiveSpool.ocupado_por;
       if (!ocupadoPor) {
         enqueue('Error: spool no tiene trabajador asignado', 'error');
         return;
@@ -231,8 +250,8 @@ function HomePage() {
 
       setApiLoading(true);
       try {
-        await executeDirectAction(action, selectedSpool, selectedOperation, workerId);
-        const tag = selectedSpool.tag_spool;
+        await executeDirectAction(action, effectiveSpool, effectiveOp, workerId);
+        const tag = effectiveSpool.tag_spool;
         modalStack.clear();
 
         try {
@@ -340,6 +359,52 @@ function HomePage() {
     }
   };
 
+  const handleUnionesClick = (spool: SpoolCardData) => {
+    setUnionesSpool(spool);
+    modalStack.push('uniones');
+  };
+
+  const handleUnionesComplete = async () => {
+    modalStack.pop();
+
+    // If triggered by PAUSAR intercept, execute the pending PAUSAR
+    if (unionesSpool && selectedAction === 'PAUSAR' && selectedOperation &&
+        (selectedOperation === 'ARM' || selectedOperation === 'SOLD')) {
+      const ocupadoPor = unionesSpool.ocupado_por;
+      const workerId = ocupadoPor ? parseWorkerIdFromOcupadoPor(ocupadoPor) : null;
+      if (workerId !== null) {
+        setApiLoading(true);
+        try {
+          await executeDirectAction('PAUSAR', unionesSpool, selectedOperation, workerId);
+          try {
+            await refreshSingle(unionesSpool.tag_spool);
+          } catch {
+            // Spool may have changed — ignore refresh errors
+          }
+          enqueue('Uniones guardadas y spool pausado', 'success');
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Error al pausar';
+          enqueue(message, 'error');
+        } finally {
+          setApiLoading(false);
+        }
+      }
+    } else if (unionesSpool) {
+      // Direct union edit (not from PAUSAR intercept)
+      try {
+        await refreshSingle(unionesSpool.tag_spool);
+      } catch {
+        // ignore
+      }
+      enqueue('Uniones guardadas', 'success');
+    }
+
+    setUnionesSpool(null);
+    setSelectedSpool(null);
+    setSelectedOperation(null);
+    setSelectedAction(null);
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -407,6 +472,7 @@ function HomePage() {
           spools={spools}
           onCardClick={handleCardClick}
           onRemove={handleRemove}
+          onUnionesClick={handleUnionesClick}
           estadoFilter={estadoFilter}
         />
       </div>
@@ -465,6 +531,16 @@ function HomePage() {
         </>
       )}
 
+      {unionesSpool && (
+        <UnionesModal
+          isOpen={modalStack.isOpen('uniones')}
+          spool={unionesSpool}
+          onComplete={handleUnionesComplete}
+          onClose={() => { modalStack.pop(); setUnionesSpool(null); }}
+          isTopOfStack={modalStack.isOpen('uniones')}
+        />
+      )}
+
       {/* Loading overlay for direct API calls (FINALIZAR/PAUSAR without WorkerModal) */}
       {apiLoading && (
         <div
@@ -473,7 +549,7 @@ function HomePage() {
           aria-label="Procesando operacion"
         >
           <div className="flex flex-col items-center gap-3 bg-zeues-navy border-4 border-white p-8">
-            <div className="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             <p className="text-white font-mono font-black text-sm tracking-widest">
               PROCESANDO...
             </p>

@@ -68,7 +68,7 @@ export function SpoolFilterPanel({
           ref={triggerRef}
           onClick={onOpen}
           aria-haspopup="dialog"
-          aria-label="Abrir filtros de busqueda"
+          aria-label="Abrir filtros de búsqueda"
           className="w-full p-4 cursor-pointer hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
         >
           <div className="flex items-center justify-between">
@@ -94,15 +94,15 @@ export function SpoolFilterPanel({
       <Modal
         isOpen={isOpen}
         onClose={handleClose}
-        ariaLabel="Filtros de busqueda"
+        ariaLabel="Filtros de búsqueda"
         className="bg-zeues-navy border-4 border-white rounded-none max-w-lg"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-black text-white/50 font-mono">FILTROS DE BUSQUEDA</span>
+          <span className="text-xs font-black text-white/50 font-mono">FILTROS DE BÚSQUEDA</span>
           <button
             onClick={handleClose}
-            aria-label="Cerrar filtros de busqueda"
+            aria-label="Cerrar filtros de búsqueda"
             className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
             <X size={24} strokeWidth={3} />
@@ -124,7 +124,7 @@ export function SpoolFilterPanel({
                 value={searchNV}
                 onChange={(e) => onSearchNVChange(e.target.value)}
                 placeholder="NV-2024-..."
-                aria-label="Buscar por numero de nota de venta"
+                aria-label="Buscar por número de nota de venta"
                 className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
               />
             </div>
@@ -174,7 +174,7 @@ export function SpoolFilterPanel({
                 <button
                   onClick={onClearFilters}
                   className="px-4 py-3 border-2 border-yellow-500 text-yellow-500 font-mono text-xs font-black active:bg-yellow-500 active:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                  aria-label="Limpiar todos los filtros de busqueda"
+                  aria-label="Limpiar todos los filtros de búsqueda"
                 >
                   LIMPIAR FILTROS
                 </button>

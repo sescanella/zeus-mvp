@@ -149,7 +149,7 @@ export function WorkerModal({
       await executeForSpool(worker.id);
       onComplete();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al ejecutar la operacion';
+      const message = err instanceof Error ? err.message : 'Error al ejecutar la operación';
       setApiError(message);
     } finally {
       setApiLoading(false);

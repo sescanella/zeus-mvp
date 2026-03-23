@@ -1,0 +1,330 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Modal } from '@/components/Modal';
+import { getTodasUniones, guardarUniones } from '@/lib/api';
+import type { SpoolCardData } from '@/lib/types';
+
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+const TIPO_UNION_OPTIONS = ['BW', 'SO', 'FILL', 'BR'] as const;
+const DN_UNION_OPTIONS = Array.from({ length: 50 }, (_, i) => i + 1);
+const MAX_UNIONS = 20;
+
+// ─── Types ──────────────────────────────────────────────────────────────────────
+
+interface UnionRow {
+  n_union: number;
+  dn_union: number | null;
+  tipo_union: string | null;
+  has_work: boolean;
+}
+
+interface UnionesModalProps {
+  isOpen: boolean;
+  spool: SpoolCardData;
+  onComplete: () => void;
+  onClose: () => void;
+  isTopOfStack?: boolean;
+}
+
+// ─── Component ──────────────────────────────────────────────────────────────────
+
+export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack = true }: UnionesModalProps) {
+  const [rows, setRows] = useState<UnionRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const prevRowCountRef = useRef(0);
+
+  const loadUnions = useCallback(async () => {
+    if (!spool.tag_spool) return;
+
+    const hasExisting = spool.total_uniones !== null && spool.total_uniones > 0;
+    if (!hasExisting) {
+      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false }]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getTodasUniones(spool.tag_spool);
+      const loaded: UnionRow[] = data.unions.map((u) => ({
+        n_union: u.n_union,
+        dn_union: u.dn_union,
+        tipo_union: u.tipo_union,
+        has_work: u.has_work,
+      }));
+      setRows(loaded.length > 0 ? loaded : [{ n_union: 1, dn_union: null, tipo_union: null, has_work: false }]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al cargar uniones';
+      setError(msg);
+      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [spool.tag_spool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isOpen) {
+      setRows([]); // Clear stale rows immediately
+      loadUnions();
+      setConfirmDelete(null);
+    }
+  }, [isOpen, loadUnions]);
+
+  // Auto-scroll to newly added row
+  useEffect(() => {
+    if (rows.length > prevRowCountRef.current && rows.length > 0) {
+      const lastCard = cardRefs.current.get(rows.length);
+      if (lastCard) {
+        lastCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+    prevRowCountRef.current = rows.length;
+  }, [rows.length]);
+
+  const renumber = (currentRows: UnionRow[]): UnionRow[] =>
+    currentRows.map((r, i) => ({ ...r, n_union: i + 1 }));
+
+  const handleAddRow = () => {
+    setRows(prev => {
+      if (prev.length >= MAX_UNIONS) return prev;
+      return [...prev, { n_union: prev.length + 1, dn_union: null, tipo_union: null, has_work: false }];
+    });
+  };
+
+  const handleDeleteRow = (n_union: number) => {
+    const row = rows.find((r) => r.n_union === n_union);
+    if (!row || row.has_work) return;
+
+    const isExisting = spool.total_uniones !== null && spool.total_uniones > 0 && n_union <= spool.total_uniones;
+    if (isExisting && confirmDelete !== n_union) {
+      setConfirmDelete(n_union);
+      return;
+    }
+
+    setConfirmDelete(null);
+    const filtered = rows.filter((r) => r.n_union !== n_union);
+    setRows(renumber(filtered));
+  };
+
+  const handleDnChange = (n_union: number, value: string) => {
+    setRows(rows.map((r) =>
+      r.n_union === n_union ? { ...r, dn_union: value === '' ? null : parseInt(value, 10) } : r
+    ));
+  };
+
+  const handleTipoChange = (n_union: number, value: string) => {
+    setRows(rows.map((r) =>
+      r.n_union === n_union ? { ...r, tipo_union: value === '' ? null : value } : r
+    ));
+  };
+
+  const isRowComplete = (row: UnionRow): boolean =>
+    row.dn_union !== null && row.tipo_union !== null;
+
+  const completedCount = rows.filter(isRowComplete).length;
+
+  const handleGuardar = async () => {
+    setError(null);
+
+    const firstIncomplete = rows.find((r) => !isRowComplete(r));
+    if (firstIncomplete) {
+      setError('Completa todos los campos antes de guardar');
+      const card = cardRefs.current.get(firstIncomplete.n_union);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await guardarUniones({
+        tag_spool: spool.tag_spool,
+        unions: rows.map((r) => ({
+          n_union: r.n_union,
+          dn_union: r.dn_union!,
+          tipo_union: r.tipo_union!,
+        })),
+      });
+      onComplete();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar uniones';
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setCardRef = useCallback((n_union: number, el: HTMLDivElement | null) => {
+    if (el) {
+      cardRefs.current.set(n_union, el);
+    } else {
+      cardRefs.current.delete(n_union);
+    }
+  }, []);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabel={`Gestionar uniones del spool ${spool.tag_spool}`}
+      isTopOfStack={isTopOfStack}
+      className="bg-zeues-navy border-4 border-white max-w-lg"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-mono font-black text-lg text-white">UNIONES</h2>
+          <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
+        </div>
+        <span className="font-mono text-sm text-white/70">
+          {completedCount}/{rows.length} completas
+        </span>
+      </div>
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
+      {/* Error message */}
+      {error && (
+        <div role="alert" className="text-red-400 font-mono font-black text-sm mb-3 px-1">
+          {error}
+        </div>
+      )}
+
+      {/* Union cards — scrollable */}
+      {!loading && (
+        <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
+          {rows.map((row) => {
+            const complete = isRowComplete(row);
+            const isConfirmingThis = confirmDelete === row.n_union;
+
+            let borderClass = 'border-white/30';
+            if (row.has_work) {
+              borderClass = 'border-white/10 bg-white/5';
+            } else if (!complete) {
+              borderClass = 'border-yellow-400';
+            }
+
+            return (
+              <div
+                key={row.n_union}
+                ref={(el) => setCardRef(row.n_union, el)}
+                className={`border-2 p-3 flex items-center gap-3 ${borderClass}`}
+              >
+                {/* N_UNION label */}
+                <span className="font-mono font-black text-lg text-white min-w-[3rem] text-center">
+                  {row.n_union}
+                </span>
+
+                {/* DN_UNION dropdown */}
+                <select
+                  value={row.dn_union ?? ''}
+                  onChange={(e) => handleDnChange(row.n_union, e.target.value)}
+                  disabled={row.has_work}
+                  aria-label={`DN union ${row.n_union}`}
+                  className="h-12 flex-1 bg-zeues-navy border-2 border-white text-white font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">DN</option>
+                  {DN_UNION_OPTIONS.map((dn) => (
+                    <option key={dn} value={dn}>{dn}</option>
+                  ))}
+                </select>
+
+                {/* TIPO_UNION dropdown */}
+                <select
+                  value={row.tipo_union ?? ''}
+                  onChange={(e) => handleTipoChange(row.n_union, e.target.value)}
+                  disabled={row.has_work}
+                  aria-label={`Tipo union ${row.n_union}`}
+                  className="h-12 flex-1 bg-zeues-navy border-2 border-white text-white font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">TIPO</option>
+                  {TIPO_UNION_OPTIONS.map((tipo) => (
+                    <option key={tipo} value={tipo}>{tipo}</option>
+                  ))}
+                </select>
+
+                {/* Delete button or confirmation */}
+                {!row.has_work && !isConfirmingThis && (
+                  <button
+                    onClick={() => handleDeleteRow(row.n_union)}
+                    aria-label={`Eliminar union ${row.n_union}`}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-white/10 font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                  >
+                    X
+                  </button>
+                )}
+                {!row.has_work && isConfirmingThis && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => handleDeleteRow(row.n_union)}
+                      aria-label={`Confirmar eliminar union ${row.n_union}`}
+                      className="min-h-[44px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border-2 border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+                    >
+                      Sí
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      aria-label="Cancelar eliminacion"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                    >
+                      No
+                    </button>
+                  </div>
+                )}
+                {row.has_work && (
+                  <span className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/20 font-mono text-xs">
+                    ---
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Add button */}
+          {rows.length < MAX_UNIONS && (
+            <button
+              onClick={handleAddRow}
+              aria-label="Agregar union"
+              className="w-full h-12 border-2 border-dashed border-white/30 text-white/70 font-mono hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+            >
+              + AGREGAR UNION
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Footer buttons */}
+      {!loading && (
+        <div className="flex flex-col gap-3 mt-4">
+          <button
+            onClick={handleGuardar}
+            disabled={saving || rows.length === 0}
+            aria-label="Guardar uniones"
+            className="w-full h-16 bg-zeues-orange text-white font-mono font-black text-lg disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+          >
+            {saving ? 'GUARDANDO...' : 'GUARDAR'}
+          </button>
+          <button
+            onClick={onClose}
+            aria-label="Cancelar y cerrar"
+            className="w-full h-12 border-2 border-white/30 text-white/70 font-mono hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+          >
+            CANCELAR
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}

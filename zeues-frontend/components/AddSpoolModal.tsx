@@ -129,13 +129,13 @@ export function AddSpoolModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      ariaLabel="Anadir spool"
+      ariaLabel="Añadir spool"
       isTopOfStack={isTopOfStack}
       className="bg-zeues-navy border-4 border-white rounded-none max-w-lg !p-4"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xl font-black text-white font-mono tracking-widest">ANADIR SPOOL</h2>
+        <h2 className="text-xl font-black text-white font-mono tracking-widest">AÑADIR SPOOL</h2>
         <button
           onClick={onClose}
           aria-label="Cerrar modal"
@@ -191,7 +191,7 @@ export function AddSpoolModal({
                   value={searchNV}
                   onChange={(e) => setSearchNV(e.target.value)}
                   placeholder="Ej: 123"
-                  aria-label="Buscar por numero de nota de venta"
+                  aria-label="Buscar por número de nota de venta"
                   className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
                 />
               </div>
@@ -225,7 +225,7 @@ export function AddSpoolModal({
               <button
                 onClick={handleClearFilters}
                 className="text-xs font-black text-yellow-500 font-mono px-3 py-2 min-h-[44px] border border-yellow-500 active:bg-yellow-500 active:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-inset cursor-pointer"
-                aria-label="Limpiar filtros de busqueda"
+                aria-label="Limpiar filtros de búsqueda"
               >
                 LIMPIAR
               </button>

@@ -12,6 +12,7 @@ export interface SpoolCardProps {
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
   onPriorityChange?: (tag: string, priority: number | null) => void;
+  onUnionesClick?: (spool: SpoolCardData) => void;
 }
 
 // ─── Estado color map ──────────────────────────────────────────────────────────
@@ -166,7 +167,7 @@ function formatElapsed(totalSeconds: number): string {
  *
  * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityChange }: SpoolCardProps) {
+export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityChange, onUnionesClick }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -283,6 +284,30 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
             >
               {ESTADO_LABELS[spool.estado_trabajo] ?? spool.estado_trabajo}
             </span>
+          )}
+
+          {/* Uniones badge */}
+          {onUnionesClick && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onUnionesClick(spool); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUnionesClick(spool);
+                }
+              }}
+              aria-label={`Gestionar uniones spool ${spool.tag_spool}${spool.total_uniones ? `: ${spool.total_uniones} uniones` : ': sin uniones'}`}
+              className={`font-mono font-black text-sm px-2 py-0.5 border-2 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
+                spool.total_uniones === 0 || spool.total_uniones === null
+                  ? 'text-yellow-400 border-yellow-400 hover:bg-yellow-400/10'
+                  : 'text-white/50 border-white/50 hover:bg-white/10'
+              }`}
+            >
+              {spool.total_uniones === 0 || spool.total_uniones === null
+                ? 'SIN UNIONES'
+                : `U:${spool.total_uniones}`}
+            </button>
           )}
         </div>
 

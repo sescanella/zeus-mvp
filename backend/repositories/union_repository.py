@@ -4,17 +4,34 @@ Repositorio para operaciones en la hoja Uniones (union-level tracking).
 v4.0: Union-level CRUD operations with dynamic column mapping.
 """
 import logging
+import uuid
 from typing import Optional, Literal
 from datetime import datetime
 
 from backend.models.union import Union
-from backend.repositories.sheets_repository import SheetsRepository
+from backend.repositories.sheets_repository import SheetsRepository, retry_on_sheets_error
 from backend.core.column_map_cache import ColumnMapCache
-from backend.utils.date_formatter import now_chile
+from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
 from backend.exceptions import SheetsConnectionError
 
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize(name: str) -> str:
+    """Normalize column name for lookup (lowercase, no spaces/underscores/slashes)."""
+    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+
+
+def _col_idx_to_letter(idx: int) -> str:
+    """Convert a 0-based column index to a Sheets column letter (A, B, ..., Z, AA, ...)."""
+    result = ""
+    idx += 1
+    while idx > 0:
+        idx -= 1
+        result = chr(65 + (idx % 26)) + result
+        idx //= 26
+    return result
 
 
 class UnionRepository:
@@ -95,12 +112,8 @@ class UnionRepository:
             # Get column mapping (dynamic, no hardcoded indices)
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                """Normalize column name for lookup."""
-                return name.lower().replace(" ", "").replace("_", "")
-
             # Find OT column index (Column B)
-            ot_col_key = normalize("OT")
+            ot_col_key = _normalize("OT")
             if ot_col_key not in column_map:
                 raise ValueError(f"OT column not found in {self._sheet_name} sheet")
 
@@ -159,12 +172,8 @@ class UnionRepository:
             # Get column mapping (dynamic, no hardcoded indices)
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                """Normalize column name for lookup."""
-                return name.lower().replace(" ", "").replace("_", "")
-
             # Find TAG_SPOOL column index
-            tag_col_key = normalize("TAG_SPOOL")
+            tag_col_key = _normalize("TAG_SPOOL")
             if tag_col_key not in column_map:
                 raise ValueError(f"TAG_SPOOL column not found in {self._sheet_name} sheet")
 
@@ -225,13 +234,9 @@ class UnionRepository:
             # Get column mapping (dynamic, no hardcoded indices)
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                """Normalize column name for lookup."""
-                return name.lower().replace(" ", "").replace("_", "")
-
             # Find OT and N_UNION column indices
-            ot_col_key = normalize("OT")
-            n_union_col_key = normalize("N_UNION")
+            ot_col_key = _normalize("OT")
+            n_union_col_key = _normalize("N_UNION")
 
             if ot_col_key not in column_map or n_union_col_key not in column_map:
                 raise ValueError(f"OT or N_UNION column not found in {self._sheet_name} sheet")
@@ -682,14 +687,11 @@ class UnionRepository:
 
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "")
-
-            tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
-            ot_col_idx = column_map.get(normalize("OT"))
-            n_union_col_idx = column_map.get(normalize("N_UNION"))
-            arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
-            arm_worker_col_idx = column_map.get(normalize("ARM_WORKER"))
+            tag_spool_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            ot_col_idx = column_map.get(_normalize("OT"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            arm_fecha_fin_col_idx = column_map.get(_normalize("ARM_FECHA_FIN"))
+            arm_worker_col_idx = column_map.get(_normalize("ARM_WORKER"))
 
             if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, arm_worker_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
@@ -723,33 +725,20 @@ class UnionRepository:
             if not union_id_to_row:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
                 return 0
-
-            from backend.utils.date_formatter import format_datetime_for_sheets
             formatted_timestamp = format_datetime_for_sheets(timestamp)
-
-            def col_idx_to_letter(idx: int) -> str:
-                result = ""
-                idx += 1
-                while idx > 0:
-                    idx -= 1
-                    result = chr(65 + (idx % 26)) + result
-                    idx //= 26
-                return result
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
-                arm_fecha_fin_letter = col_idx_to_letter(arm_fecha_fin_col_idx)
+                arm_fecha_fin_letter = _col_idx_to_letter(arm_fecha_fin_col_idx)
                 batch_data.append({
                     'range': f'{arm_fecha_fin_letter}{row_num}',
                     'values': [[formatted_timestamp]]
                 })
-                arm_worker_letter = col_idx_to_letter(arm_worker_col_idx)
+                arm_worker_letter = _col_idx_to_letter(arm_worker_col_idx)
                 batch_data.append({
                     'range': f'{arm_worker_letter}{row_num}',
                     'values': [[worker]]
                 })
-
-            from backend.repositories.sheets_repository import retry_on_sheets_error
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
@@ -803,15 +792,12 @@ class UnionRepository:
 
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "")
-
-            tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
-            ot_col_idx = column_map.get(normalize("OT"))
-            n_union_col_idx = column_map.get(normalize("N_UNION"))
-            arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
-            sol_fecha_fin_col_idx = column_map.get(normalize("SOL_FECHA_FIN"))
-            sol_worker_col_idx = column_map.get(normalize("SOL_WORKER"))
+            tag_spool_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            ot_col_idx = column_map.get(_normalize("OT"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            arm_fecha_fin_col_idx = column_map.get(_normalize("ARM_FECHA_FIN"))
+            sol_fecha_fin_col_idx = column_map.get(_normalize("SOL_FECHA_FIN"))
+            sol_worker_col_idx = column_map.get(_normalize("SOL_WORKER"))
 
             if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, sol_fecha_fin_col_idx, sol_worker_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
@@ -851,33 +837,20 @@ class UnionRepository:
             if not union_id_to_row:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
                 return 0
-
-            from backend.utils.date_formatter import format_datetime_for_sheets
             formatted_timestamp = format_datetime_for_sheets(timestamp)
-
-            def col_idx_to_letter(idx: int) -> str:
-                result = ""
-                idx += 1
-                while idx > 0:
-                    idx -= 1
-                    result = chr(65 + (idx % 26)) + result
-                    idx //= 26
-                return result
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
-                sol_fecha_fin_letter = col_idx_to_letter(sol_fecha_fin_col_idx)
+                sol_fecha_fin_letter = _col_idx_to_letter(sol_fecha_fin_col_idx)
                 batch_data.append({
                     'range': f'{sol_fecha_fin_letter}{row_num}',
                     'values': [[formatted_timestamp]]
                 })
-                sol_worker_letter = col_idx_to_letter(sol_worker_col_idx)
+                sol_worker_letter = _col_idx_to_letter(sol_worker_col_idx)
                 batch_data.append({
                     'range': f'{sol_worker_letter}{row_num}',
                     'values': [[worker]]
                 })
-
-            from backend.repositories.sheets_repository import retry_on_sheets_error
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
@@ -913,13 +886,9 @@ class UnionRepository:
             ValueError: If required fields are missing
         """
 
-        def normalize(name: str) -> str:
-            """Normalize column name for lookup."""
-            return name.lower().replace(" ", "").replace("_", "")
-
         def get_col(col_name: str) -> Optional[str]:
             """Get column value by name using dynamic mapping."""
-            normalized = normalize(col_name)
+            normalized = _normalize(col_name)
             if normalized not in column_map:
                 return None
 
@@ -1060,15 +1029,12 @@ class UnionRepository:
 
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "")
-
-            tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
-            ot_col_idx = column_map.get(normalize("OT"))
-            n_union_col_idx = column_map.get(normalize("N_UNION"))
-            arm_fecha_inicio_col_idx = column_map.get(normalize("ARM_FECHA_INICIO"))
-            arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
-            arm_worker_col_idx = column_map.get(normalize("ARM_WORKER"))
+            tag_spool_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            ot_col_idx = column_map.get(_normalize("OT"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            arm_fecha_inicio_col_idx = column_map.get(_normalize("ARM_FECHA_INICIO"))
+            arm_fecha_fin_col_idx = column_map.get(_normalize("ARM_FECHA_FIN"))
+            arm_worker_col_idx = column_map.get(_normalize("ARM_WORKER"))
 
             if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_inicio_col_idx, arm_fecha_fin_col_idx, arm_worker_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
@@ -1101,42 +1067,29 @@ class UnionRepository:
             if not union_id_to_row:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
                 return 0
-
-            from backend.utils.date_formatter import format_datetime_for_sheets
             formatted_timestamp_inicio = format_datetime_for_sheets(timestamp_inicio)
             formatted_timestamp_fin = format_datetime_for_sheets(timestamp_fin)
-
-            def col_idx_to_letter(idx: int) -> str:
-                result = ""
-                idx += 1
-                while idx > 0:
-                    idx -= 1
-                    result = chr(65 + (idx % 26)) + result
-                    idx //= 26
-                return result
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
                 # Write ARM_WORKER
-                arm_worker_letter = col_idx_to_letter(arm_worker_col_idx)
+                arm_worker_letter = _col_idx_to_letter(arm_worker_col_idx)
                 batch_data.append({
                     'range': f'{arm_worker_letter}{row_num}',
                     'values': [[worker]]
                 })
                 # Write ARM_FECHA_INICIO
-                arm_fecha_inicio_letter = col_idx_to_letter(arm_fecha_inicio_col_idx)
+                arm_fecha_inicio_letter = _col_idx_to_letter(arm_fecha_inicio_col_idx)
                 batch_data.append({
                     'range': f'{arm_fecha_inicio_letter}{row_num}',
                     'values': [[formatted_timestamp_inicio]]
                 })
                 # Write ARM_FECHA_FIN
-                arm_fecha_fin_letter = col_idx_to_letter(arm_fecha_fin_col_idx)
+                arm_fecha_fin_letter = _col_idx_to_letter(arm_fecha_fin_col_idx)
                 batch_data.append({
                     'range': f'{arm_fecha_fin_letter}{row_num}',
                     'values': [[formatted_timestamp_fin]]
                 })
-
-            from backend.repositories.sheets_repository import retry_on_sheets_error
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
@@ -1197,16 +1150,13 @@ class UnionRepository:
 
             column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
 
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "")
-
-            tag_spool_col_idx = column_map.get(normalize("TAG_SPOOL"))
-            ot_col_idx = column_map.get(normalize("OT"))
-            n_union_col_idx = column_map.get(normalize("N_UNION"))
-            arm_fecha_fin_col_idx = column_map.get(normalize("ARM_FECHA_FIN"))
-            sol_fecha_inicio_col_idx = column_map.get(normalize("SOL_FECHA_INICIO"))
-            sol_fecha_fin_col_idx = column_map.get(normalize("SOL_FECHA_FIN"))
-            sol_worker_col_idx = column_map.get(normalize("SOL_WORKER"))
+            tag_spool_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            ot_col_idx = column_map.get(_normalize("OT"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            arm_fecha_fin_col_idx = column_map.get(_normalize("ARM_FECHA_FIN"))
+            sol_fecha_inicio_col_idx = column_map.get(_normalize("SOL_FECHA_INICIO"))
+            sol_fecha_fin_col_idx = column_map.get(_normalize("SOL_FECHA_FIN"))
+            sol_worker_col_idx = column_map.get(_normalize("SOL_WORKER"))
 
             if any(idx is None for idx in [tag_spool_col_idx, ot_col_idx, n_union_col_idx, arm_fecha_fin_col_idx, sol_fecha_inicio_col_idx, sol_fecha_fin_col_idx, sol_worker_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
@@ -1245,42 +1195,29 @@ class UnionRepository:
             if not union_id_to_row:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
                 return 0
-
-            from backend.utils.date_formatter import format_datetime_for_sheets
             formatted_timestamp_inicio = format_datetime_for_sheets(timestamp_inicio)
             formatted_timestamp_fin = format_datetime_for_sheets(timestamp_fin)
-
-            def col_idx_to_letter(idx: int) -> str:
-                result = ""
-                idx += 1
-                while idx > 0:
-                    idx -= 1
-                    result = chr(65 + (idx % 26)) + result
-                    idx //= 26
-                return result
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
                 # Write SOL_WORKER
-                sol_worker_letter = col_idx_to_letter(sol_worker_col_idx)
+                sol_worker_letter = _col_idx_to_letter(sol_worker_col_idx)
                 batch_data.append({
                     'range': f'{sol_worker_letter}{row_num}',
                     'values': [[worker]]
                 })
                 # Write SOL_FECHA_INICIO
-                sol_fecha_inicio_letter = col_idx_to_letter(sol_fecha_inicio_col_idx)
+                sol_fecha_inicio_letter = _col_idx_to_letter(sol_fecha_inicio_col_idx)
                 batch_data.append({
                     'range': f'{sol_fecha_inicio_letter}{row_num}',
                     'values': [[formatted_timestamp_inicio]]
                 })
                 # Write SOL_FECHA_FIN
-                sol_fecha_fin_letter = col_idx_to_letter(sol_fecha_fin_col_idx)
+                sol_fecha_fin_letter = _col_idx_to_letter(sol_fecha_fin_col_idx)
                 batch_data.append({
                     'range': f'{sol_fecha_fin_letter}{row_num}',
                     'values': [[formatted_timestamp_fin]]
                 })
-
-            from backend.repositories.sheets_repository import retry_on_sheets_error
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_batch():
@@ -1297,3 +1234,375 @@ class UnionRepository:
         except Exception as e:
             self.logger.error(f"Failed to batch update SOLD full for TAG_SPOOL {tag_spool}: {e}", exc_info=True)
             raise SheetsConnectionError(f"Failed to batch update SOLD full: {e}")
+
+    def get_all_by_tag(self, tag_spool: str) -> list[dict]:
+        """
+        Get all unions for a spool with has_work flag for editability.
+
+        Args:
+            tag_spool: TAG_SPOOL to filter by
+
+        Returns:
+            list[dict]: Each dict has n_union, dn_union, tipo_union, has_work
+        """
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+
+            if not all_rows or len(all_rows) < 2:
+                return []
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            tag_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            dn_union_col_idx = column_map.get(_normalize("DN_UNION"))
+            tipo_union_col_idx = column_map.get(_normalize("TIPO_UNION"))
+            arm_worker_col_idx = column_map.get(_normalize("ARM_WORKER"))
+            sol_worker_col_idx = column_map.get(_normalize("SOL_WORKER"))
+
+            if any(idx is None for idx in [tag_col_idx, n_union_col_idx, dn_union_col_idx, tipo_union_col_idx]):
+                raise ValueError("Required columns not found in Uniones sheet")
+
+            results = []
+            for row_data in all_rows[1:]:
+                if not row_data or len(row_data) <= tag_col_idx:
+                    continue
+
+                if row_data[tag_col_idx] != tag_spool:
+                    continue
+
+                def get_val(idx: Optional[int]) -> str:
+                    if idx is None or idx >= len(row_data):
+                        return ""
+                    return str(row_data[idx]).strip() if row_data[idx] else ""
+
+                arm_worker = get_val(arm_worker_col_idx)
+                sol_worker = get_val(sol_worker_col_idx)
+                has_work = bool(arm_worker or sol_worker)
+
+                try:
+                    n_union = int(get_val(n_union_col_idx))
+                    dn_union = float(get_val(dn_union_col_idx))
+                    tipo_union = get_val(tipo_union_col_idx)
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Failed to parse union row for {tag_spool}")
+                    continue
+
+                results.append({
+                    "n_union": n_union,
+                    "dn_union": dn_union,
+                    "tipo_union": tipo_union,
+                    "has_work": has_work,
+                })
+
+            self.logger.debug(f"get_all_by_tag: Found {len(results)} unions for {tag_spool}")
+            return results
+
+        except Exception as e:
+            self.logger.error(f"Failed to get_all_by_tag for {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")
+
+    def create_unions_batch(self, ot: str, tag_spool: str, unions: list) -> int:
+        """
+        Append new union rows to the Uniones sheet.
+
+        Args:
+            ot: Work order number
+            tag_spool: Spool TAG identifier
+            unions: List of dicts with n_union, dn_union, tipo_union
+
+        Returns:
+            int: Count of created unions
+        """
+        if not unions:
+            return 0
+
+        try:
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            # Get all column indices
+            col_names = ["ID", "OT", "N_UNION", "TAG_SPOOL", "DN_UNION", "TIPO_UNION",
+                         "ARM_FECHA_INICIO", "ARM_FECHA_FIN", "ARM_WORKER",
+                         "SOL_FECHA_INICIO", "SOL_FECHA_FIN", "SOL_WORKER",
+                         "NDT_UNION", "R_NDT_UNION", "NDT_FECHA", "NDT_STATUS", "version"]
+
+            col_indices = {}
+            for name in col_names:
+                key = _normalize(name)
+                if key in column_map:
+                    col_indices[name] = column_map[key]
+
+            # Determine row width (max column index + 1)
+            max_col = max(col_indices.values()) + 1
+
+            rows_to_append = []
+            for u in unions:
+                row = [""] * max_col
+                union_id = f"{ot}+{u['n_union']}"
+
+                if "ID" in col_indices:
+                    row[col_indices["ID"]] = union_id
+                if "OT" in col_indices:
+                    row[col_indices["OT"]] = ot
+                if "N_UNION" in col_indices:
+                    row[col_indices["N_UNION"]] = u["n_union"]
+                if "TAG_SPOOL" in col_indices:
+                    row[col_indices["TAG_SPOOL"]] = tag_spool
+                if "DN_UNION" in col_indices:
+                    row[col_indices["DN_UNION"]] = u["dn_union"]
+                if "TIPO_UNION" in col_indices:
+                    row[col_indices["TIPO_UNION"]] = u["tipo_union"]
+                if "version" in col_indices:
+                    row[col_indices["version"]] = str(uuid.uuid4())
+
+                rows_to_append.append(row)
+
+            @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+            def _execute_append():
+                worksheet = self._get_worksheet()
+                worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+
+            _execute_append()
+            ColumnMapCache.invalidate(self._sheet_name)
+
+            self.logger.info(f"create_unions_batch: {len(rows_to_append)} unions created for {tag_spool}")
+            return len(rows_to_append)
+
+        except Exception as e:
+            self.logger.error(f"Failed to create unions for {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to create unions: {e}")
+
+    def update_unions_batch(self, tag_spool: str, unions: list) -> int:
+        """
+        Update DN_UNION and TIPO_UNION for existing unions.
+
+        Args:
+            tag_spool: Spool TAG identifier
+            unions: List of dicts with n_union, dn_union, tipo_union
+
+        Returns:
+            int: Count of updated unions
+        """
+        if not unions:
+            return 0
+
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+            if not all_rows or len(all_rows) < 2:
+                return 0
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            tag_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            dn_union_col_idx = column_map.get(_normalize("DN_UNION"))
+            tipo_union_col_idx = column_map.get(_normalize("TIPO_UNION"))
+
+            if any(idx is None for idx in [tag_col_idx, n_union_col_idx, dn_union_col_idx, tipo_union_col_idx]):
+                raise ValueError("Required columns not found in Uniones sheet")
+
+            # Build n_union -> sheet row number mapping
+            n_union_to_row: dict[int, int] = {}
+            for row_idx, row_data in enumerate(all_rows[1:], start=2):
+                if not row_data or len(row_data) <= max(tag_col_idx, n_union_col_idx):
+                    continue
+                if row_data[tag_col_idx] != tag_spool:
+                    continue
+                try:
+                    row_n = int(row_data[n_union_col_idx])
+                    n_union_to_row[row_n] = row_idx
+                except (ValueError, TypeError):
+                    continue
+
+            batch_data = []
+            updated = 0
+            for u in unions:
+                row_num = n_union_to_row.get(u["n_union"])
+                if row_num is None:
+                    self.logger.warning(f"Union {tag_spool}+{u['n_union']} not found for update")
+                    continue
+
+                dn_letter = _col_idx_to_letter(dn_union_col_idx)
+                batch_data.append({
+                    'range': f'{dn_letter}{row_num}',
+                    'values': [[u["dn_union"]]]
+                })
+
+                tipo_letter = _col_idx_to_letter(tipo_union_col_idx)
+                batch_data.append({
+                    'range': f'{tipo_letter}{row_num}',
+                    'values': [[u["tipo_union"]]]
+                })
+                updated += 1
+
+            if batch_data:
+
+                @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+                def _execute_batch():
+                    worksheet = self._get_worksheet()
+                    worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
+
+                _execute_batch()
+                ColumnMapCache.invalidate(self._sheet_name)
+
+            self.logger.info(f"update_unions_batch: {updated} unions updated for {tag_spool}")
+            return updated
+
+        except Exception as e:
+            self.logger.error(f"Failed to update unions for {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to update unions: {e}")
+
+    def delete_unions_without_work(self, tag_spool: str, n_unions_to_delete: list[int]) -> int:
+        """
+        Delete union rows that have no work (ARM_WORKER and SOL_WORKER empty).
+
+        Deletes from bottom to top to avoid index shifting issues.
+
+        Args:
+            tag_spool: Spool TAG identifier
+            n_unions_to_delete: List of N_UNION values to delete
+
+        Returns:
+            int: Count of deleted unions
+        """
+        if not n_unions_to_delete:
+            return 0
+
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+            if not all_rows or len(all_rows) < 2:
+                return 0
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            tag_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            arm_worker_col_idx = column_map.get(_normalize("ARM_WORKER"))
+            sol_worker_col_idx = column_map.get(_normalize("SOL_WORKER"))
+
+            if any(idx is None for idx in [tag_col_idx, n_union_col_idx]):
+                raise ValueError("Required columns not found in Uniones sheet")
+
+            n_union_set = set(n_unions_to_delete)
+
+            # Collect rows to delete (store as list of row indices, 1-indexed)
+            rows_to_delete = []
+            for row_idx, row_data in enumerate(all_rows[1:], start=2):
+                if not row_data or len(row_data) <= max(tag_col_idx, n_union_col_idx):
+                    continue
+                if row_data[tag_col_idx] != tag_spool:
+                    continue
+                try:
+                    row_n = int(row_data[n_union_col_idx])
+                except (ValueError, TypeError):
+                    continue
+
+                if row_n not in n_union_set:
+                    continue
+
+                # Safety: only delete if no work done
+                def get_val(idx: Optional[int]) -> str:
+                    if idx is None or idx >= len(row_data):
+                        return ""
+                    return str(row_data[idx]).strip() if row_data[idx] else ""
+
+                arm_worker = get_val(arm_worker_col_idx)
+                sol_worker = get_val(sol_worker_col_idx)
+                if arm_worker or sol_worker:
+                    self.logger.warning(f"Skipping delete of {tag_spool}+{row_n} — has work")
+                    continue
+
+                rows_to_delete.append(row_idx)
+
+            # Delete from bottom to top
+            rows_to_delete.sort(reverse=True)
+
+            worksheet = self._get_worksheet()
+            deleted_count = 0
+            for row_num in rows_to_delete:
+                @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
+                def _delete_row(rn=row_num):
+                    worksheet.delete_rows(rn)
+
+                try:
+                    _delete_row()
+                    deleted_count += 1
+                except Exception as e:
+                    self.logger.error(
+                        f"delete_unions_without_work: failed at row {row_num} for {tag_spool} "
+                        f"after {deleted_count}/{len(rows_to_delete)} deletions: {e}"
+                    )
+                    raise SheetsConnectionError(
+                        f"Partial delete for {tag_spool}: {deleted_count}/{len(rows_to_delete)} "
+                        f"rows deleted before failure at row {row_num}: {e}"
+                    )
+
+            if deleted_count > 0:
+                ColumnMapCache.invalidate(self._sheet_name)
+
+            self.logger.info(f"delete_unions_without_work: {deleted_count} unions deleted for {tag_spool}")
+            return deleted_count
+
+        except Exception as e:
+            self.logger.error(f"Failed to delete unions for {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to delete unions: {e}")
+
+    def update_total_uniones(self, tag_spool: str, total: int) -> None:
+        """
+        Update Total_Uniones column in Operaciones sheet for the given spool.
+
+        Args:
+            tag_spool: Spool TAG identifier
+            total: New total union count
+        """
+        try:
+            self.sheets_repo.update_cell_by_column_name(
+                sheet_name="Operaciones",
+                row=self._find_spool_row(tag_spool),
+                column_name="Total_Uniones",
+                value=total
+            )
+            self.logger.info(f"update_total_uniones: {tag_spool} → {total}")
+        except Exception as e:
+            self.logger.error(f"Failed to update Total_Uniones for {tag_spool}: {e}", exc_info=True)
+            raise SheetsConnectionError(f"Failed to update Total_Uniones: {e}")
+
+    def _find_spool_row(self, tag_spool: str) -> int:
+        """
+        Find the row number of a spool in Operaciones sheet.
+
+        Args:
+            tag_spool: TAG_SPOOL to find
+
+        Returns:
+            int: 1-indexed row number
+
+        Raises:
+            ValueError: If spool not found
+        """
+        from backend.config import config
+        from backend.core.column_map_cache import ColumnMapCache
+
+        column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repo)
+
+        tag_col_idx = None
+        for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
+            normalized = _normalize(col_name)
+            if normalized in column_map:
+                tag_col_idx = column_map[normalized]
+                break
+
+        if tag_col_idx is None:
+            raise ValueError("TAG_SPOOL column not found in Operaciones sheet")
+
+        column_letter = _col_idx_to_letter(tag_col_idx)
+        row_num = self.sheets_repo.find_row_by_column_value(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            column_letter=column_letter,
+            value=tag_spool
+        )
+
+        if row_num is None:
+            raise ValueError(f"Spool {tag_spool} not found in Operaciones sheet")
+
+        return row_num

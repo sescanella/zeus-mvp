@@ -175,3 +175,42 @@ class FinalizarResponseV4(BaseModel):
         None,
         description="New state after metrología transition (if triggered)"
     )
+
+
+class CreateUnionInput(BaseModel):
+    """Single union data for creation/update."""
+    n_union: int = Field(..., ge=1, le=20)
+    dn_union: int = Field(..., ge=1, le=50)
+    tipo_union: Literal['BW', 'SO', 'FILL', 'BR']
+
+
+class SaveUnionsRequest(BaseModel):
+    """Request for POST/PUT unions — handles both create and update."""
+    tag_spool: str = Field(..., min_length=1)
+    unions: List[CreateUnionInput] = Field(..., min_length=1, max_length=20)
+
+
+class UnionEditable(BaseModel):
+    """Union with has_work flag for frontend editability."""
+    n_union: int
+    dn_union: float
+    tipo_union: str
+    has_work: bool  # True if ARM_WORKER or SOL_WORKER is set
+
+
+class GetAllUnionsResponse(BaseModel):
+    """Response for GET /todas endpoint."""
+    tag_spool: str
+    unions: List[UnionEditable]
+    total: int
+
+
+class SaveUnionsResponse(BaseModel):
+    """Response for create/update operations."""
+    success: bool
+    tag_spool: str
+    total_uniones: int
+    created: int = 0
+    updated: int = 0
+    deleted: int = 0
+    message: str

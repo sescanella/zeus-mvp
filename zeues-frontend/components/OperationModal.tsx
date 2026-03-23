@@ -50,14 +50,14 @@ export function OperationModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      ariaLabel="Seleccionar operacion"
+      ariaLabel="Seleccionar operación"
       isTopOfStack={isTopOfStack}
       className="bg-zeues-navy border-4 border-white rounded-none max-w-sm"
     >
       {/* Header */}
       <div className="mb-4">
         <h2 className="text-xl font-black text-white font-mono tracking-widest">
-          SELECCIONAR OPERACION
+          SELECCIONAR OPERACIÓN
         </h2>
         <p className="text-sm text-white/70 font-mono mt-1">
           {spool.tag_spool}

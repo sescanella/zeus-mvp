@@ -17,7 +17,11 @@ from backend.models.union_api import (
     MetricasResponse,
     UnionSummary,
     FinalizarRequestV4,
-    FinalizarResponseV4
+    FinalizarResponseV4,
+    GetAllUnionsResponse,
+    UnionEditable,
+    SaveUnionsRequest,
+    SaveUnionsResponse,
 )
 from backend.models.occupation import FinalizarRequest
 from backend.repositories.union_repository import UnionRepository
@@ -443,4 +447,176 @@ async def finalizar_v4(
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.get("/uniones/{tag}/todas", response_model=GetAllUnionsResponse)
+async def get_todas_uniones(
+    tag: str,
+    union_repo: UnionRepository = Depends(get_union_repository),
+):
+    """
+    Get all unions for a spool with has_work flag for editability.
+
+    Returns empty list (not 404) if no unions found.
+    """
+    try:
+        raw_unions = union_repo.get_all_by_tag(tag)
+
+        unions = [
+            UnionEditable(
+                n_union=u["n_union"],
+                dn_union=u["dn_union"],
+                tipo_union=u["tipo_union"],
+                has_work=u["has_work"],
+            )
+            for u in raw_unions
+        ]
+
+        return GetAllUnionsResponse(
+            tag_spool=tag,
+            unions=unions,
+            total=len(unions),
+        )
+
+    except SheetsConnectionError as e:
+        logger.error(f"Sheets connection error for {tag}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read union data: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in get_todas_uniones for {tag}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.post("/uniones/guardar", response_model=SaveUnionsResponse)
+async def guardar_uniones(
+    request: SaveUnionsRequest,
+    union_repo: UnionRepository = Depends(get_union_repository),
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+):
+    """
+    Create, update, or delete unions for a spool (smart upsert).
+
+    Compares incoming unions with existing ones:
+    - New n_union values → create
+    - Existing n_union values with changes → update
+    - Missing n_union values → delete (only if no work done)
+    """
+    tag = request.tag_spool
+
+    try:
+        # Step 1: Get spool to extract OT
+        spool = sheets_repo.get_spool_by_tag(tag)
+        if not spool:
+            raise HTTPException(status_code=404, detail=f"Spool {tag} no encontrado")
+
+        ot = spool.ot
+        if not ot:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Spool {tag} no tiene OT válido"
+            )
+
+        # Step 2: Get existing unions
+        existing = union_repo.get_all_by_tag(tag)
+        existing_by_n = {u["n_union"]: u for u in existing}
+
+        incoming_by_n = {u.n_union: u for u in request.unions}
+
+        # Step 3: Classify operations
+        to_create = []
+        to_update = []
+        to_delete_n_unions = []
+
+        # Incoming unions: create or update
+        for n, u in incoming_by_n.items():
+            if n not in existing_by_n:
+                to_create.append({"n_union": n, "dn_union": u.dn_union, "tipo_union": u.tipo_union})
+            else:
+                ex = existing_by_n[n]
+                # HIGH-3: Block dn_union/tipo_union changes on unions with work
+                if ex["has_work"] and (int(ex["dn_union"]) != u.dn_union or ex["tipo_union"] != u.tipo_union):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No se puede modificar unión {n} — tiene trabajo registrado"
+                    )
+                if int(ex["dn_union"]) != u.dn_union or ex["tipo_union"] != u.tipo_union:
+                    to_update.append({"n_union": n, "dn_union": u.dn_union, "tipo_union": u.tipo_union})
+
+        # Existing unions not in incoming: delete (if no work)
+        for n, ex in existing_by_n.items():
+            if n not in incoming_by_n:
+                if ex["has_work"]:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No se puede eliminar unión {n} — tiene trabajo registrado (ARM/SOLD)"
+                    )
+                to_delete_n_unions.append(n)
+
+        # Step 4: Execute operations — least-destructive first for safety
+        created = 0
+        updated = 0
+        deleted = 0
+        succeeded_steps = []
+
+        try:
+            # 4a: Updates (idempotent — safest)
+            if to_update:
+                updated = union_repo.update_unions_batch(tag, to_update)
+                succeeded_steps.append(f"updated={updated}")
+
+            # 4b: Creates (additive)
+            if to_create:
+                created = union_repo.create_unions_batch(ot, tag, to_create)
+                succeeded_steps.append(f"created={created}")
+
+            # 4c: Deletes (destructive — last)
+            if to_delete_n_unions:
+                deleted = union_repo.delete_unions_without_work(tag, to_delete_n_unions)
+                succeeded_steps.append(f"deleted={deleted}")
+
+            # Step 5: Calculate total from actual results, not request
+            total = len(existing) - deleted + created
+            union_repo.update_total_uniones(tag, total)
+            succeeded_steps.append(f"total={total}")
+
+        except Exception as write_err:
+            logger.error(
+                f"guardar_uniones: partial write for {tag} — "
+                f"succeeded: [{', '.join(succeeded_steps)}] — error: {write_err}",
+                exc_info=True
+            )
+            raise
+
+        message = f"Guardado: {created} creadas, {updated} actualizadas, {deleted} eliminadas"
+        logger.info(f"guardar_uniones: {tag} — {message}")
+
+        return SaveUnionsResponse(
+            success=True,
+            tag_spool=tag,
+            total_uniones=total,
+            created=created,
+            updated=updated,
+            deleted=deleted,
+            message=message,
+        )
+
+    except HTTPException:
+        raise
+    except SheetsConnectionError as e:
+        logger.error(f"Sheets connection error for {tag}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error de conexión con Google Sheets: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in guardar_uniones for {tag}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
         )

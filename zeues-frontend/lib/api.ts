@@ -12,6 +12,9 @@ import {
   IniciarResponse,
   FinalizarRequest,
   FinalizarResponse,
+  GetAllUnionsResponse,
+  SaveUnionsRequest,
+  SaveUnionsResponse,
 } from './types';
 
 // ============= CONSTANTS =============
@@ -908,6 +911,37 @@ export async function finalizarSpool(payload: FinalizarRequest): Promise<Finaliz
     return await handleResponse<FinalizarResponse>(res);
   } catch (error) {
     console.error('finalizarSpool error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// UNIONES CRUD API FUNCTIONS (UnionesModal)
+// ==========================================
+
+export async function getTodasUniones(tag: string): Promise<GetAllUnionsResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/v4/uniones/${tag}/todas`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await handleResponse<GetAllUnionsResponse>(res);
+  } catch (error) {
+    console.error('getTodasUniones error:', error);
+    throw error;
+  }
+}
+
+export async function guardarUniones(payload: SaveUnionsRequest): Promise<SaveUnionsResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/v4/uniones/guardar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<SaveUnionsResponse>(res);
+  } catch (error) {
+    console.error('guardarUniones error:', error);
     throw error;
   }
 }

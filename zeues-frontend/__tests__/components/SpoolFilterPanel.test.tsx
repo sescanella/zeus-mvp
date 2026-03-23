@@ -31,7 +31,7 @@ describe('SpoolFilterPanel — closed state (trigger bar)', () => {
 
   it('does not show search inputs', () => {
     render(<SpoolFilterPanel {...defaultProps} />);
-    expect(screen.queryByLabelText('Buscar por numero de nota de venta')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Buscar por número de nota de venta')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Buscar por TAG de spool')).not.toBeInTheDocument();
   });
 
@@ -67,7 +67,7 @@ describe('SpoolFilterPanel — open state (modal)', () => {
 
   it('shows search inputs', () => {
     render(<SpoolFilterPanel {...openProps} />);
-    expect(screen.getByLabelText('Buscar por numero de nota de venta')).toBeInTheDocument();
+    expect(screen.getByLabelText('Buscar por número de nota de venta')).toBeInTheDocument();
     expect(screen.getByLabelText('Buscar por TAG de spool')).toBeInTheDocument();
   });
 
@@ -112,7 +112,7 @@ describe('SpoolFilterPanel — open state (modal)', () => {
 
   it('calls onSearchNVChange when NV input changes', () => {
     render(<SpoolFilterPanel {...openProps} />);
-    fireEvent.change(screen.getByLabelText('Buscar por numero de nota de venta'), { target: { value: 'NV-2024' } });
+    fireEvent.change(screen.getByLabelText('Buscar por número de nota de venta'), { target: { value: 'NV-2024' } });
     expect(openProps.onSearchNVChange).toHaveBeenCalledWith('NV-2024');
   });
 

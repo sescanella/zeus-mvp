@@ -199,3 +199,35 @@ export interface FinalizarResponse {
   new_state: string | null;  // Backend field name (nullable)
 }
 
+// ==========================================
+// UNIONES CRUD TYPES (UnionesModal)
+// ==========================================
+
+export interface UnionEditable {
+  n_union: number;
+  dn_union: number;
+  tipo_union: string;
+  has_work: boolean;
+}
+
+export interface GetAllUnionsResponse {
+  tag_spool: string;
+  unions: UnionEditable[];
+  total: number;
+}
+
+export interface SaveUnionsRequest {
+  tag_spool: string;
+  unions: { n_union: number; dn_union: number; tipo_union: string }[];
+}
+
+export interface SaveUnionsResponse {
+  success: boolean;
+  tag_spool: string;
+  total_uniones: number;
+  created: number;
+  updated: number;
+  deleted: number;
+  message: string;
+}
+
