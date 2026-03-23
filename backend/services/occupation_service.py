@@ -1018,7 +1018,8 @@ class OccupationService:
                     worker_id=worker_id,
                     worker_nombre=worker_nombre,
                     operacion=operacion,
-                    spool=spool
+                    spool=spool,
+                    action_override=action_override,
                 )
 
             # Step 4a: Handle REPARACION workflow (spool-level only, no unions)
@@ -1650,7 +1651,8 @@ class OccupationService:
         worker_id: int,
         worker_nombre: str,
         operacion: str,
-        spool
+        spool,
+        action_override: str = None
     ) -> OccupationResponse:
         """
         Simplified FINALIZAR for v3.0 spools (no union tracking).
@@ -1675,6 +1677,11 @@ class OccupationService:
             OccupationResponse with success and COMPLETAR action
         """
         logger.info(f"[v3.0 FINALIZAR] Processing {tag_spool} for {operacion}")
+
+        # Respect action_override: PAUSAR delegates to _cancelar_spool
+        if action_override == "PAUSAR":
+            logger.info(f"[v3.0 FINALIZAR] action_override=PAUSAR, delegating to _cancelar_spool")
+            return await self._cancelar_spool(tag_spool, worker_id, worker_nombre, operacion, spool)
 
         try:
             # Step 1: Build updates dict (clear occupation + update fecha)

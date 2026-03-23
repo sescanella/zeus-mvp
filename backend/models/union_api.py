@@ -5,7 +5,7 @@ These models provide read-only views of union data optimized for frontend consum
 Separates API contract from internal Union domain model.
 """
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Literal, Optional
 from .enums import ActionType
 
 
@@ -131,6 +131,15 @@ class FinalizarRequestV4(BaseModel):
     selected_unions: List[str] = Field(
         default_factory=list,
         description="List of union IDs to complete (empty = cancellation)"
+    )
+    action_override: Optional[Literal['PAUSAR', 'COMPLETAR']] = Field(
+        None,
+        description=(
+            "Override auto-determination of action. "
+            "COMPLETAR: mark operation as complete (write Fecha_Armado/Soldadura). "
+            "PAUSAR: clear occupation without completing. "
+            "None: auto-determine based on selected_unions count."
+        )
     )
 
 

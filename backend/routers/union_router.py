@@ -337,7 +337,8 @@ async def finalizar_v4(
             worker_id=request.worker_id,
             worker_nombre=worker_nombre,
             operacion=request.operacion,
-            selected_unions=request.selected_unions
+            selected_unions=request.selected_unions,
+            action_override=request.action_override,
         )
 
         # Step 4: Call service layer (P5 confirmation workflow)
