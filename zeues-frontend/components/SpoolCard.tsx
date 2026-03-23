@@ -286,6 +286,22 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           )}
         </div>
 
+        {/* Completion history */}
+        {(spool.fecha_armado || spool.fecha_soldadura) && (
+          <div className="flex flex-col gap-0.5 mt-1">
+            {spool.fecha_armado && (
+              <span className="font-mono text-xs text-green-400">
+                ARM: {spool.armador_display ?? '—'} — {spool.fecha_armado}
+              </span>
+            )}
+            {spool.fecha_soldadura && (
+              <span className="font-mono text-xs text-green-400">
+                SOLD: {spool.soldador_display ?? '—'} — {spool.fecha_soldadura}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Worker + Timer on same row — only render if there's content */}
         {(() => {
           type WithDisplay = SpoolCardData & { ocupado_por_display?: string | null };

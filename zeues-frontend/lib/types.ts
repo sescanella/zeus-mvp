@@ -40,6 +40,10 @@ export interface SpoolCardData {
   uniones_sold_completadas: number | null;
   pulgadas_arm: number | null;
   pulgadas_sold: number | null;
+  fecha_armado: string | null;
+  armador_display: string | null;
+  fecha_soldadura: string | null;
+  soldador_display: string | null;
   operacion_actual: OperacionActual;
   estado_trabajo: EstadoTrabajo | null;
   ciclo_rep: number | null;

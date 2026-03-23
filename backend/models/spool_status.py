@@ -65,6 +65,20 @@ class SpoolStatus(BaseModel):
         None, description="Suma DN_UNION para SOLD completado", ge=0.0
     )
 
+    # Completion history (pass-through from Spool)
+    fecha_armado: Optional[str] = Field(
+        None, description="Fecha de completado ARM (DD-MM-YYYY or None)"
+    )
+    armador_display: Optional[str] = Field(
+        None, description="Nombre completo del armador (ej: 'Mauricio Rodriguez')"
+    )
+    fecha_soldadura: Optional[str] = Field(
+        None, description="Fecha de completado SOLD (DD-MM-YYYY or None)"
+    )
+    soldador_display: Optional[str] = Field(
+        None, description="Nombre completo del soldador (ej: 'Carlos Pimiento')"
+    )
+
     # Computed fields (derived from estado_detalle via parse_estado_detalle)
     operacion_actual: Optional[str] = Field(
         None,
@@ -114,6 +128,30 @@ class SpoolStatus(BaseModel):
         elif spool.ocupado_por:
             ocupado_por_display = spool.ocupado_por
 
+        # Resolve armador_display from workers dict
+        armador_display: str | None = None
+        if spool.armador and workers:
+            match_arm = re.search(r"\((\d+)\)$", spool.armador)
+            if match_arm:
+                arm_id = int(match_arm.group(1))
+                armador_display = workers.get(arm_id, spool.armador)
+            else:
+                armador_display = spool.armador
+        elif spool.armador:
+            armador_display = spool.armador
+
+        # Resolve soldador_display from workers dict
+        soldador_display: str | None = None
+        if spool.soldador and workers:
+            match_sol = re.search(r"\((\d+)\)$", spool.soldador)
+            if match_sol:
+                sol_id = int(match_sol.group(1))
+                soldador_display = workers.get(sol_id, spool.soldador)
+            else:
+                soldador_display = spool.soldador
+        elif spool.soldador:
+            soldador_display = spool.soldador
+
         return cls(
             tag_spool=spool.tag_spool,
             nv=spool.nv,
@@ -126,6 +164,10 @@ class SpoolStatus(BaseModel):
             uniones_sold_completadas=spool.uniones_sold_completadas,
             pulgadas_arm=spool.pulgadas_arm,
             pulgadas_sold=spool.pulgadas_sold,
+            fecha_armado=str(spool.fecha_armado) if spool.fecha_armado else None,
+            armador_display=armador_display,
+            fecha_soldadura=str(spool.fecha_soldadura) if spool.fecha_soldadura else None,
+            soldador_display=soldador_display,
             operacion_actual=parsed.get("operacion_actual"),
             estado_trabajo=parsed.get("estado_trabajo"),
             ciclo_rep=parsed.get("ciclo_rep"),
