@@ -34,6 +34,7 @@ const mockCompletarReparacion = completarReparacion as jest.MockedFunction<typeo
 
 const baseSpool: SpoolCardData = {
   tag_spool: 'OT-001',
+  nv: null,
   ocupado_por: null,
   ocupado_por_display: null,
   fecha_ocupacion: null,

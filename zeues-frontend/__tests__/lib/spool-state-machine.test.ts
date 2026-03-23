@@ -17,6 +17,7 @@ import type { SpoolCardData } from '../../lib/spool-state-machine';
 function makeSpool(overrides: Partial<SpoolCardData> = {}): SpoolCardData {
   return {
     tag_spool: 'OT-TEST-001',
+    nv: null,
     ocupado_por: null,
     ocupado_por_display: null,
     fecha_ocupacion: null,

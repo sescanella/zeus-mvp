@@ -8,6 +8,7 @@ import type { SpoolCardData } from '@/lib/types';
 
 const baseOccupied: SpoolCardData = {
   tag_spool: 'OT-001',
+  nv: null,
   ocupado_por: 'MR(93)',
   ocupado_por_display: null,
   fecha_ocupacion: '10-03-2026 14:30:00',
@@ -24,6 +25,7 @@ const baseOccupied: SpoolCardData = {
 
 const baseFree: SpoolCardData = {
   tag_spool: 'OT-002',
+  nv: null,
   ocupado_por: null,
   ocupado_por_display: null,
   fecha_ocupacion: null,

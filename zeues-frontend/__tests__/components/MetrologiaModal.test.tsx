@@ -19,6 +19,7 @@ const mockCompletarMetrologia = completarMetrologia as jest.MockedFunction<typeo
 
 const baseSpool: SpoolCardData = {
   tag_spool: 'OT-MET',
+  nv: null,
   ocupado_por: null,
   ocupado_por_display: null,
   fecha_ocupacion: null,

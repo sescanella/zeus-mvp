@@ -36,6 +36,9 @@ class SpoolStatus(BaseModel):
 
     # Pass-through identity / state fields
     tag_spool: str = Field(..., description="TAG unico del spool")
+    nv: Optional[str] = Field(
+        None, description="Numero de Nota de Venta"
+    )
     ocupado_por: Optional[str] = Field(
         None, description="Trabajador que ocupa el spool (formato 'MR(93)')"
     )
@@ -113,6 +116,7 @@ class SpoolStatus(BaseModel):
 
         return cls(
             tag_spool=spool.tag_spool,
+            nv=spool.nv,
             ocupado_por=spool.ocupado_por,
             ocupado_por_display=ocupado_por_display,
             fecha_ocupacion=spool.fecha_ocupacion,

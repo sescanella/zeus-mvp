@@ -30,6 +30,7 @@ export type OperacionActual = 'ARM' | 'SOLD' | 'REPARACION' | null;
  */
 export interface SpoolCardData {
   tag_spool: string;
+  nv: string | null;
   ocupado_por: string | null;
   ocupado_por_display: string | null;
   fecha_ocupacion: string | null;

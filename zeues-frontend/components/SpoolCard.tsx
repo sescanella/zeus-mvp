@@ -184,8 +184,15 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
     >
         {/* Tag + Remove button */}
         <div className="flex items-center justify-between">
-          <div className="text-lg font-black font-mono text-white">
-            {spool.tag_spool}
+          <div className="flex items-center gap-2">
+            {spool.nv && (
+              <span className="font-mono font-black text-sm px-2 py-0.5 border-2 border-white/30 text-white/70">
+                {spool.nv}
+              </span>
+            )}
+            <span className="text-lg font-black font-mono text-white">
+              {spool.tag_spool}
+            </span>
           </div>
           {onRemove && !confirmingRemove && (
             <button

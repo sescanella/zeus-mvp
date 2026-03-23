@@ -46,6 +46,7 @@ const mockSaveTags = saveTags as jest.MockedFunction<typeof saveTags>;
 function makeSpoolCard(tag: string): SpoolCardData {
   return {
     tag_spool: tag,
+    nv: null,
     ocupado_por: null,
     ocupado_por_display: null,
     fecha_ocupacion: null,

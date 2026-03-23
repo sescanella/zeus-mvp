@@ -28,6 +28,7 @@ const mockGetValidActions = getValidActions as jest.Mock;
 function makeSpool(overrides: Partial<SpoolCardData> = {}): SpoolCardData {
   return {
     tag_spool: 'TEST-01',
+    nv: null,
     ocupado_por: null,
     ocupado_por_display: null,
     fecha_ocupacion: null,
