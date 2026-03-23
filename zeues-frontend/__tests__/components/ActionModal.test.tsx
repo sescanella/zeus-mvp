@@ -50,7 +50,6 @@ const defaultProps = {
   spool: makeSpool(),
   operation: 'ARM' as const,
   onSelectAction: jest.fn(),
-  onCancel: jest.fn(),
   onClose: jest.fn(),
 };
 
@@ -58,20 +57,19 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-// ─── STATE-02: Valid actions per occupation state ─────────────────────────────
+// ─── Valid actions per occupation state ──────────────────────────────────────
 
-describe('ActionModal — STATE-02: valid actions', () => {
-  it('libre spool (ocupado_por=null) shows INICIAR + CANCELAR', () => {
-    mockGetValidActions.mockReturnValue(['INICIAR', 'CANCELAR']);
+describe('ActionModal — valid actions', () => {
+  it('libre spool shows INICIAR only', () => {
+    mockGetValidActions.mockReturnValue(['INICIAR']);
     render(<ActionModal {...defaultProps} spool={makeSpool({ ocupado_por: null })} />);
     expect(screen.getByRole('button', { name: /INICIAR/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /CANCELAR/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /FINALIZAR/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /PAUSAR/i })).not.toBeInTheDocument();
   });
 
-  it('occupied spool shows FINALIZAR + PAUSAR + CANCELAR', () => {
-    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR', 'CANCELAR']);
+  it('occupied spool shows FINALIZAR + PAUSAR', () => {
+    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR']);
     render(
       <ActionModal
         {...defaultProps}
@@ -80,33 +78,15 @@ describe('ActionModal — STATE-02: valid actions', () => {
     );
     expect(screen.getByRole('button', { name: /FINALIZAR/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /PAUSAR/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /CANCELAR/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /INICIAR/i })).not.toBeInTheDocument();
   });
 });
 
-// ─── Callbacks ─────────────────────────────────────────────────────────────────
+// ─── Callbacks ──────────────────────────────────────────────────────────────
 
 describe('ActionModal — callbacks', () => {
-  it('clicking CANCELAR calls onCancel directly (MODAL-04 — no worker needed)', () => {
-    mockGetValidActions.mockReturnValue(['INICIAR', 'CANCELAR']);
-    const onCancel = jest.fn();
-    const onSelectAction = jest.fn();
-    render(
-      <ActionModal
-        {...defaultProps}
-        onCancel={onCancel}
-        onSelectAction={onSelectAction}
-        spool={makeSpool({ ocupado_por: null })}
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: /CANCELAR/i }));
-    expect(onCancel).toHaveBeenCalled();
-    expect(onSelectAction).not.toHaveBeenCalled();
-  });
-
   it('clicking INICIAR calls onSelectAction("INICIAR")', () => {
-    mockGetValidActions.mockReturnValue(['INICIAR', 'CANCELAR']);
+    mockGetValidActions.mockReturnValue(['INICIAR']);
     const onSelectAction = jest.fn();
     render(
       <ActionModal
@@ -120,7 +100,7 @@ describe('ActionModal — callbacks', () => {
   });
 
   it('clicking FINALIZAR calls onSelectAction("FINALIZAR")', () => {
-    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR', 'CANCELAR']);
+    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR']);
     const onSelectAction = jest.fn();
     render(
       <ActionModal
@@ -134,7 +114,7 @@ describe('ActionModal — callbacks', () => {
   });
 
   it('clicking PAUSAR calls onSelectAction("PAUSAR")', () => {
-    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR', 'CANCELAR']);
+    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR']);
     const onSelectAction = jest.fn();
     render(
       <ActionModal
@@ -147,36 +127,19 @@ describe('ActionModal — callbacks', () => {
     expect(onSelectAction).toHaveBeenCalledWith('PAUSAR');
   });
 
-  it('CANCELAR in occupied spool still calls onCancel (MODAL-04)', () => {
-    mockGetValidActions.mockReturnValue(['FINALIZAR', 'PAUSAR', 'CANCELAR']);
-    const onCancel = jest.fn();
-    const onSelectAction = jest.fn();
-    render(
-      <ActionModal
-        {...defaultProps}
-        onCancel={onCancel}
-        onSelectAction={onSelectAction}
-        spool={makeSpool({ ocupado_por: 'MR(93)', estado_trabajo: 'EN_PROGRESO' })}
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: /CANCELAR/i }));
-    expect(onCancel).toHaveBeenCalled();
-    expect(onSelectAction).not.toHaveBeenCalled();
-  });
-
   it('does not render when isOpen=false', () => {
-    mockGetValidActions.mockReturnValue(['INICIAR', 'CANCELAR']);
+    mockGetValidActions.mockReturnValue(['INICIAR']);
     render(<ActionModal {...defaultProps} isOpen={false} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
-// ─── Accessibility ─────────────────────────────────────────────────────────────
+// ─── Accessibility ────────────────────────────────────────────────────────────
 
 describe('ActionModal — accessibility', () => {
   it('has no axe violations', async () => {
     jest.useRealTimers();
-    mockGetValidActions.mockReturnValue(['INICIAR', 'CANCELAR']);
+    mockGetValidActions.mockReturnValue(['INICIAR']);
     const { container } = render(<ActionModal {...defaultProps} />);
     const results = await axe(container);
     expect(results).toHaveNoViolations();

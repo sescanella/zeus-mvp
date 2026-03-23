@@ -235,60 +235,6 @@ function HomePage() {
     setSelectedAction(null);
   };
 
-  const handleCancel = async () => {
-    if (!selectedSpool) return;
-
-    const { tag_spool: tag, ocupado_por, operacion_actual } = selectedSpool;
-
-    // Libre spool — frontend-only removal (STATE-03)
-    if (!ocupado_por) {
-      removeSpool(tag);
-      modalStack.clear();
-      enqueue('Spool cancelado', 'success');
-      setSelectedSpool(null);
-      setSelectedOperation(null);
-      setSelectedAction(null);
-      return;
-    }
-
-    // Occupied spool — parse worker ID
-    const workerId = parseWorkerIdFromOcupadoPor(ocupado_por);
-    if (workerId === null) {
-      modalStack.clear();
-      enqueue('Error: formato de trabajador invalido', 'error');
-      setSelectedSpool(null);
-      setSelectedOperation(null);
-      setSelectedAction(null);
-      return;
-    }
-
-    try {
-      if (operacion_actual === 'REPARACION') {
-        await cancelarReparacion({ tag_spool: tag, worker_id: workerId });
-      } else {
-        const operacion = (operacion_actual ?? selectedOperation ?? 'ARM') as
-          | 'ARM'
-          | 'SOLD';
-        await finalizarSpool({
-          tag_spool: tag,
-          worker_id: workerId,
-          operacion,
-          selected_unions: [],
-        });
-      }
-      removeSpool(tag);
-      modalStack.clear();
-      enqueue('Spool cancelado', 'success');
-    } catch {
-      modalStack.clear();
-      enqueue('Error al cancelar spool', 'error');
-    }
-
-    setSelectedSpool(null);
-    setSelectedOperation(null);
-    setSelectedAction(null);
-  };
-
   const handleRemove = async (tag: string) => {
     const spool = spools.find(s => s.tag_spool === tag);
     if (!spool) {
@@ -395,7 +341,6 @@ function HomePage() {
               spool={selectedSpool}
               operation={selectedOperation}
               onSelectAction={handleSelectAction}
-              onCancel={handleCancel}
               onClose={handleModalClose}
               isTopOfStack={modalStack.isOpen('action')}
             />

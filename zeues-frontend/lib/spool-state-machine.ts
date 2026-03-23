@@ -23,21 +23,23 @@ export type Operation = 'ARM' | 'SOLD' | 'MET' | 'REP';
 export const ALL_OPERATIONS: Operation[] = ['ARM', 'SOLD', 'MET', 'REP'];
 
 /** Available action types for a spool */
-export type Action = 'INICIAR' | 'FINALIZAR' | 'PAUSAR' | 'CANCELAR';
+export type Action = 'INICIAR' | 'FINALIZAR' | 'PAUSAR';
 
 /**
  * Returns the list of valid actions for a spool based on its occupation status.
  *
  * Actions are determined ONLY by ocupado_por — not by estado_trabajo:
- *   - Occupied (non-null, non-empty ocupado_por): FINALIZAR, PAUSAR, CANCELAR
- *   - Free (null or empty ocupado_por): INICIAR, CANCELAR
+ *   - Occupied (non-null, non-empty ocupado_por): FINALIZAR, PAUSAR
+ *   - Free (null or empty ocupado_por): INICIAR
+ *
+ * CANCELAR removed — "Quitar" on SpoolCard handles spool removal + backend release.
  *
  * @param spool - SpoolCardData with ocupado_por
  * @returns Array of valid Action types
  */
 export function getValidActions(spool: SpoolCardData): Action[] {
   if (spool.ocupado_por !== null && spool.ocupado_por !== '') {
-    return ['FINALIZAR', 'PAUSAR', 'CANCELAR'];
+    return ['FINALIZAR', 'PAUSAR'];
   }
-  return ['INICIAR', 'CANCELAR'];
+  return ['INICIAR'];
 }
