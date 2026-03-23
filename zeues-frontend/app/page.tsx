@@ -32,6 +32,7 @@ import {
   completarReparacion,
 } from '@/lib/api';
 import type { SpoolCardData } from '@/lib/types';
+import { getValidActions } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -110,6 +111,16 @@ function HomePage() {
 
   const handleSelectOperation = (op: Operation) => {
     setSelectedOperation(op);
+
+    // Skip ActionModal when only one valid action
+    if (selectedSpool) {
+      const actions = getValidActions(selectedSpool);
+      if (actions.length === 1) {
+        handleSelectAction(actions[0]);
+        return;
+      }
+    }
+
     modalStack.push('action');
   };
 
