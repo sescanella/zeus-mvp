@@ -31,7 +31,7 @@ import {
   pausarReparacion,
   completarReparacion,
 } from '@/lib/api';
-import type { SpoolCardData } from '@/lib/types';
+import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
 import { getValidActions } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 
@@ -46,6 +46,38 @@ function parseWorkerIdFromOcupadoPor(ocupadoPor: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
+// ─── Filter constants ─────────────────────────────────────────────────────────
+
+const ESTADO_LABELS_PAGE: Record<EstadoTrabajo, string> = {
+  LIBRE: 'Libre',
+  EN_PROGRESO: 'En Progreso',
+  PAUSADO: 'Pausado',
+  COMPLETADO: 'Completado',
+  RECHAZADO: 'Rechazado',
+  PENDIENTE_METROLOGIA: 'Pend. Met.',
+  BLOQUEADO: 'Bloqueado',
+};
+
+const ESTADO_CHIP_COLORS: Record<EstadoTrabajo, string> = {
+  LIBRE: 'border-white text-white bg-white/10',
+  EN_PROGRESO: 'border-zeues-orange text-zeues-orange bg-zeues-orange/10',
+  PAUSADO: 'border-yellow-400 text-yellow-400 bg-yellow-400/10',
+  COMPLETADO: 'border-green-400 text-green-400 bg-green-400/10',
+  RECHAZADO: 'border-red-400 text-red-400 bg-red-400/10',
+  PENDIENTE_METROLOGIA: 'border-blue-300 text-blue-300 bg-blue-300/10',
+  BLOQUEADO: 'border-red-500 text-red-500 bg-red-500/10',
+};
+
+const ALL_ESTADOS: EstadoTrabajo[] = [
+  'LIBRE',
+  'EN_PROGRESO',
+  'PAUSADO',
+  'COMPLETADO',
+  'RECHAZADO',
+  'PENDIENTE_METROLOGIA',
+  'BLOQUEADO',
+];
+
 // ─── HomePage (inner component) ───────────────────────────────────────────────
 
 function HomePage() {
@@ -53,6 +85,10 @@ function HomePage() {
     useSpoolList();
   const modalStack = useModalStack();
   const { toasts, enqueue, dismiss } = useNotificationToast();
+
+  // Filter state
+  const [showFilter, setShowFilter] = useState(false);
+  const [estadoFilter, setEstadoFilter] = useState<EstadoTrabajo | null>(null);
 
   // Single spool selection for processing
   const [selectedSpool, setSelectedSpool] = useState<SpoolCardData | null>(null);
@@ -305,15 +341,56 @@ function HomePage() {
         <img src="/logos/logo-grisclaro-F8F9FA.svg" alt="KM" className="h-10 mx-auto" />
       </header>
 
-      {/* Add Spool button */}
+      {/* Add Spool button + Filter */}
       <div className="px-4 py-4">
-        <button
-          onClick={() => modalStack.push('add-spool')}
-          className="w-full h-16 bg-zeues-orange text-white font-bold font-mono rounded-none text-lg tracking-widest cursor-pointer"
-          aria-label="Anadir spool al listado"
-        >
-          + Anadir Spool
-        </button>
+        {/* Button row */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => modalStack.push('add-spool')}
+            className="flex-1 h-16 bg-zeues-orange text-white font-bold font-mono rounded-none text-lg tracking-widest cursor-pointer focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            aria-label="Anadir spool al listado"
+          >
+            + Anadir Spool
+          </button>
+          <button
+            onClick={() => setShowFilter(!showFilter)}
+            aria-expanded={showFilter}
+            aria-controls="estado-filter-panel"
+            aria-label={showFilter ? 'Ocultar filtros de estado' : 'Mostrar filtros de estado'}
+            className={`h-16 px-4 font-mono font-black text-sm tracking-widest border-4 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
+              estadoFilter
+                ? 'bg-white/10 border-white text-white'
+                : 'border-white/30 text-white/70 hover:border-white/50'
+            }`}
+          >
+            {estadoFilter ? ESTADO_LABELS_PAGE[estadoFilter] : 'FILTRAR'}
+          </button>
+        </div>
+
+        {/* Filter chip panel — stays open until toggled */}
+        {showFilter && (
+          <div
+            id="estado-filter-panel"
+            role="region"
+            aria-label="Filtrar por estado"
+            className="flex flex-wrap gap-2 mt-3"
+          >
+            {ALL_ESTADOS.map((estado) => (
+              <button
+                key={estado}
+                onClick={() => setEstadoFilter(estadoFilter === estado ? null : estado)}
+                aria-pressed={estadoFilter === estado}
+                className={`px-3 py-2 font-mono font-black text-xs border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
+                  estadoFilter === estado
+                    ? ESTADO_CHIP_COLORS[estado]
+                    : 'border-white/20 text-white/50 hover:border-white/40'
+                }`}
+              >
+                {ESTADO_LABELS_PAGE[estado]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Spool card list */}
@@ -322,6 +399,7 @@ function HomePage() {
           spools={spools}
           onCardClick={handleCardClick}
           onRemove={handleRemove}
+          estadoFilter={estadoFilter}
         />
       </div>
 

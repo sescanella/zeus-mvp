@@ -2,13 +2,14 @@
 
 import { PackageOpen } from 'lucide-react';
 import { SpoolCard } from '@/components/SpoolCard';
-import type { SpoolCardData } from '@/lib/types';
+import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
 import { useSpoolList } from '@/lib/SpoolListContext';
 
 interface SpoolCardListProps {
   spools: SpoolCardData[];
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
+  estadoFilter?: EstadoTrabajo | null;
 }
 
 /**
@@ -26,7 +27,7 @@ interface SpoolCardListProps {
  *
  * Plan: 02-01-PLAN.md Task 2
  */
-export function SpoolCardList({ spools, onCardClick, onRemove }: SpoolCardListProps) {
+export function SpoolCardList({ spools, onCardClick, onRemove, estadoFilter }: SpoolCardListProps) {
   const { priorities, setPriority } = useSpoolList();
 
   if (spools.length === 0) {
@@ -47,8 +48,22 @@ export function SpoolCardList({ spools, onCardClick, onRemove }: SpoolCardListPr
     );
   }
 
+  const filtered = estadoFilter
+    ? spools.filter((s) => s.estado_trabajo === estadoFilter)
+    : spools;
+
+  if (filtered.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <p className="text-white/50 font-mono font-black text-base">
+          Sin spools con ese estado
+        </p>
+      </div>
+    );
+  }
+
   // Sort: priority 1 > 2 > 3 > null (99), then by fecha_ocupacion newest first (nulls last)
-  const sorted = [...spools].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
     const pa = priorities.get(a.tag_spool) ?? 99;
     const pb = priorities.get(b.tag_spool) ?? 99;
     if (pa !== pb) return pa - pb;
