@@ -149,6 +149,7 @@ function formatElapsed(totalSeconds: number): string {
  */
 export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const elapsed = useElapsedSeconds(
     spool.ocupado_por,
@@ -186,15 +187,35 @@ export function SpoolCard({ spool, onCardClick, onRemove }: SpoolCardProps) {
           <div className="text-lg font-black font-mono text-white">
             {spool.tag_spool}
           </div>
-          {onRemove && (
+          {onRemove && !confirmingRemove && (
             <button
-              onClick={(e) => { e.stopPropagation(); onRemove(spool.tag_spool); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onRemove(spool.tag_spool); } }}
+              onClick={(e) => { e.stopPropagation(); setConfirmingRemove(true); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setConfirmingRemove(true); } }}
               aria-label={`Eliminar spool ${spool.tag_spool}`}
               className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
             >
               <X size={16} aria-hidden="true" />
             </button>
+          )}
+          {onRemove && confirmingRemove && (
+            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => { onRemove(spool.tag_spool); setConfirmingRemove(false); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onRemove(spool.tag_spool); setConfirmingRemove(false); } }}
+                aria-label={`Confirmar eliminar spool ${spool.tag_spool}`}
+                className="min-h-[44px] px-3 flex items-center justify-center text-red-400 font-mono font-black text-sm border-2 border-red-400 hover:bg-red-400/20 rounded focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+              >
+                Quitar
+              </button>
+              <button
+                onClick={() => setConfirmingRemove(false)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setConfirmingRemove(false); } }}
+                aria-label="Cancelar eliminacion"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
           )}
         </div>
 
