@@ -43,3 +43,28 @@ export function getValidActions(spool: SpoolCardData): Action[] {
   }
   return ['INICIAR'];
 }
+
+/**
+ * Derives the operation from the spool's current state.
+ *
+ * When a spool has an active operacion_actual (ARM, SOLD, REPARACION),
+ * the operation is already known — no need to ask the user.
+ *
+ * Returns null when the operation cannot be determined (e.g., LIBRE spool
+ * with no active operation), meaning the OperationModal should be shown.
+ *
+ * Maps backend OperacionActual → frontend Operation:
+ *   ARM → ARM, SOLD → SOLD, REPARACION → REP
+ */
+const OPERACION_TO_OPERATION: Record<string, Operation> = {
+  ARM: 'ARM',
+  SOLD: 'SOLD',
+  REPARACION: 'REP',
+};
+
+export function deriveOperation(spool: SpoolCardData): Operation | null {
+  if (spool.operacion_actual) {
+    return OPERACION_TO_OPERATION[spool.operacion_actual] ?? null;
+  }
+  return null;
+}

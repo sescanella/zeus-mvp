@@ -32,7 +32,7 @@ import {
   completarReparacion,
 } from '@/lib/api';
 import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
-import { getValidActions } from '@/lib/spool-state-machine';
+import { getValidActions, deriveOperation } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -139,9 +139,17 @@ function HomePage() {
 
   /**
    * Card click opens the modal chain for a single spool.
+   * Skips OperationModal when the spool already has an active operation.
    */
   const handleCardClick = (spool: SpoolCardData) => {
     setSelectedSpool(spool);
+
+    const knownOp = deriveOperation(spool);
+    if (knownOp) {
+      handleSelectOperation(knownOp);
+      return;
+    }
+
     modalStack.push('operation');
   };
 
