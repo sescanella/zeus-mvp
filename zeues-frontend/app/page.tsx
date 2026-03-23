@@ -289,6 +289,46 @@ function HomePage() {
     setSelectedAction(null);
   };
 
+  const handleRemove = async (tag: string) => {
+    const spool = spools.find(s => s.tag_spool === tag);
+    if (!spool) {
+      removeSpool(tag);
+      return;
+    }
+
+    // Libre spool — frontend-only removal
+    if (!spool.ocupado_por) {
+      removeSpool(tag);
+      enqueue('Spool quitado', 'success');
+      return;
+    }
+
+    // Occupied spool — call backend to release, then remove
+    const workerId = parseWorkerIdFromOcupadoPor(spool.ocupado_por);
+    if (workerId === null) {
+      enqueue('Error: formato de trabajador invalido', 'error');
+      return;
+    }
+
+    try {
+      if (spool.operacion_actual === 'REPARACION') {
+        await cancelarReparacion({ tag_spool: tag, worker_id: workerId });
+      } else {
+        const operacion = (spool.operacion_actual ?? 'ARM') as 'ARM' | 'SOLD';
+        await finalizarSpool({
+          tag_spool: tag,
+          worker_id: workerId,
+          operacion,
+          selected_unions: [],
+        });
+      }
+      removeSpool(tag);
+      enqueue('Spool quitado y liberado', 'success');
+    } catch {
+      enqueue('Error al liberar spool', 'error');
+    }
+  };
+
   const handleModalClose = () => {
     modalStack.pop();
     if (modalStack.stack.length <= 1) {
@@ -324,7 +364,7 @@ function HomePage() {
         <SpoolCardList
           spools={spools}
           onCardClick={handleCardClick}
-          onRemove={removeSpool}
+          onRemove={handleRemove}
         />
       </div>
 

@@ -1028,12 +1028,31 @@ class OccupationService:
             if len(selected_unions) == 0 and not action_override:
                 logger.info(f"Zero unions selected - handling as cancellation for {tag_spool}")
 
-                # Clear occupation fields (with version retry)
+                # Clear occupation fields + dirty columns from INICIAR (with version retry)
                 try:
                     updates_dict = {
                         "Ocupado_Por": "",
                         "Fecha_Ocupacion": ""
                     }
+
+                    # Clear Armador/Soldador ONLY if the operation's date is empty
+                    # (meaning it was never completed — the value was set by INICIAR)
+                    if operacion == "ARM" and not spool.fecha_armado:
+                        updates_dict["Armador"] = ""
+                    elif operacion == "SOLD" and not spool.fecha_soldadura:
+                        updates_dict["Soldador"] = ""
+
+                    # Rebuild Estado_Detalle to reflect post-cancellation state
+                    from backend.services.estado_detalle_builder import EstadoDetalleBuilder
+                    builder = EstadoDetalleBuilder()
+                    arm_state = "completado" if spool.fecha_armado else "pendiente"
+                    sold_state = "completado" if spool.fecha_soldadura else "pendiente"
+                    estado_detalle = builder.build(
+                        ocupado_por=None,
+                        arm_state=arm_state,
+                        sold_state=sold_state
+                    )
+                    updates_dict["Estado_Detalle"] = estado_detalle
 
                     await self.conflict_service.update_with_retry(
                         tag_spool=tag_spool,
