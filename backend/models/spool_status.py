@@ -1,16 +1,19 @@
 """
 SpoolStatus model and batch request/response models for v5.0 single-page frontend.
 
-SpoolStatus wraps a Spool object and adds three computed fields derived from
-the Estado_Detalle string: operacion_actual, estado_trabajo, ciclo_rep.
+SpoolStatus wraps a Spool object and adds three computed fields:
+operacion_actual, estado_trabajo, ciclo_rep.
+
+State derivation strategy (v5.1):
+  - estado_trabajo and operacion_actual are derived from FACTUAL columns
+    (ocupado_por, fecha_armado, fecha_soldadura, fecha_qc_metrologia)
+  - estado_detalle is passed through as-is for admin/debug display only
+  - estado_detalle is ONLY used for reparacion/bloqueado detection (cycle info)
+    since those states have no dedicated column — they embed in estado_detalle
 
 These models are consumed by:
   - GET /api/spool/{tag}/status
   - POST /api/spools/batch-status
-
-Reference:
-- Plan: 00-01-PLAN.md (API-01, API-02)
-- Research: 00-RESEARCH.md Pattern 2
 """
 from __future__ import annotations
 
@@ -19,10 +22,90 @@ from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel, Field
 
-from backend.services.estado_detalle_parser import parse_estado_detalle
-
 if TYPE_CHECKING:
     from backend.models.spool import Spool
+
+
+def _derive_estado(spool: "Spool") -> dict:
+    """
+    Derive estado_trabajo and operacion_actual from factual spool columns.
+
+    Priority order (first match wins):
+    1. BLOQUEADO — estado_detalle contains "BLOQUEADO"
+    2. RECHAZADO — estado_detalle contains "RECHAZADO"
+    3. EN_REPARACION — estado_detalle contains "EN_REPARACION" + occupied
+    4. PENDIENTE_METROLOGIA — estado_detalle contains "PENDIENTE_METROLOGIA"
+       or (ARM+SOLD done, metrologia not done, not occupied)
+    5. COMPLETADO — fecha_armado + fecha_soldadura + fecha_qc_metrologia all set
+    6. EN_PROGRESO — ocupado_por is set
+    7. LIBRE — default
+
+    For states 1-4, estado_detalle is the only source (no dedicated columns).
+    For states 5-7, factual columns are the sole authority.
+    """
+    ed = (spool.estado_detalle or "").strip()
+    is_occupied = bool(spool.ocupado_por)
+    arm_done = spool.fecha_armado is not None
+    sold_done = spool.fecha_soldadura is not None
+    met_done = spool.fecha_qc_metrologia is not None
+
+    result: dict = {
+        "operacion_actual": None,
+        "estado_trabajo": "LIBRE",
+        "ciclo_rep": None,
+    }
+
+    # 1. BLOQUEADO (only in estado_detalle)
+    if "BLOQUEADO" in ed:
+        result["estado_trabajo"] = "BLOQUEADO"
+        return result
+
+    # 2. RECHAZADO with cycle (only in estado_detalle)
+    m = re.search(r"RECHAZADO.*?Ciclo\s+(\d+)/3", ed)
+    if m:
+        result["estado_trabajo"] = "RECHAZADO"
+        result["ciclo_rep"] = int(m.group(1))
+        return result
+    if "RECHAZADO" in ed:
+        result["estado_trabajo"] = "RECHAZADO"
+        return result
+
+    # 3. EN_REPARACION (only in estado_detalle)
+    m = re.search(r"EN_REPARACION.*?Ciclo\s+(\d+)/3", ed)
+    if m:
+        result["operacion_actual"] = "REPARACION"
+        result["estado_trabajo"] = "EN_PROGRESO"
+        result["ciclo_rep"] = int(m.group(1))
+        return result
+
+    # 4. PENDIENTE_METROLOGIA (estado_detalle or factual)
+    if "PENDIENTE_METROLOGIA" in ed or "REPARACION completado" in ed:
+        result["estado_trabajo"] = "PENDIENTE_METROLOGIA"
+        return result
+    if arm_done and sold_done and not met_done and not is_occupied:
+        result["estado_trabajo"] = "PENDIENTE_METROLOGIA"
+        return result
+
+    # 5. COMPLETADO — all three phases done
+    if arm_done and sold_done and met_done:
+        result["estado_trabajo"] = "COMPLETADO"
+        return result
+
+    # 6. EN_PROGRESO — occupied by a worker
+    if is_occupied:
+        result["estado_trabajo"] = "EN_PROGRESO"
+        # Determine which operation from estado_detalle hint
+        m_op = re.search(r"trabajando\s+(ARM|SOLD)", ed)
+        if m_op:
+            result["operacion_actual"] = m_op.group(1)
+        elif not arm_done:
+            result["operacion_actual"] = "ARM"
+        elif not sold_done:
+            result["operacion_actual"] = "SOLD"
+        return result
+
+    # 7. LIBRE — default
+    return result
 
 
 class SpoolStatus(BaseModel):
@@ -31,7 +114,7 @@ class SpoolStatus(BaseModel):
 
     Pass-through fields come directly from the Spool object.
     Computed fields (operacion_actual, estado_trabajo, ciclo_rep) are
-    derived from the Estado_Detalle string via parse_estado_detalle().
+    derived from factual spool columns via _derive_estado().
     """
 
     # Pass-through identity / state fields
@@ -79,7 +162,7 @@ class SpoolStatus(BaseModel):
         None, description="Nombre completo del soldador (ej: 'Carlos Pimiento')"
     )
 
-    # Computed fields (derived from estado_detalle via parse_estado_detalle)
+    # Computed fields (derived from factual columns via _derive_estado)
     operacion_actual: Optional[str] = Field(
         None,
         description="Operacion en progreso: 'ARM' | 'SOLD' | 'REPARACION' | None"
@@ -103,8 +186,8 @@ class SpoolStatus(BaseModel):
         """
         Build a SpoolStatus from a Spool object.
 
-        Calls parse_estado_detalle() to derive computed fields from
-        the Estado_Detalle string. The source Spool is not mutated.
+        Calls _derive_estado() to derive computed fields from
+        factual spool columns. The source Spool is not mutated.
 
         Args:
             spool: A Spool object (frozen Pydantic model).
@@ -114,7 +197,7 @@ class SpoolStatus(BaseModel):
         Returns:
             SpoolStatus with all pass-through and computed fields populated.
         """
-        parsed = parse_estado_detalle(spool.estado_detalle)
+        parsed = _derive_estado(spool)
 
         # Resolve ocupado_por_display from workers dict
         ocupado_por_display: str | None = None
