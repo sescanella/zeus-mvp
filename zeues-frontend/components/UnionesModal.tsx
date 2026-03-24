@@ -220,35 +220,34 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
       onClose={onClose}
       ariaLabel={`Gestionar uniones del spool ${spool.tag_spool}`}
       isTopOfStack={isTopOfStack}
-      className="bg-zeues-navy border-4 border-white max-w-lg"
+      className="bg-zeues-navy border-4 border-white max-w-lg !p-0 flex flex-col max-h-[85vh]"
     >
-      {/* Header */}
-      <div className="mb-3">
-        <div className="flex items-center justify-between">
+      {/* ═══ FIXED TOP ZONE ═══ */}
+      <div className="shrink-0 p-4 pb-2">
+        {/* Title row */}
+        <div className="flex items-center justify-between mb-2">
           <div>
             <h2 className="font-mono font-black text-lg text-white">UNIONES</h2>
             <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
           </div>
           <span className="font-mono text-sm text-white/70">
-            {completedCount} de {rows.length} completas
+            {completedCount} de {rows.length}
           </span>
         </div>
 
-        {/* Quantity control — locked by default */}
-        <div className="flex items-center gap-3 mt-3">
-          <span className="font-mono font-black text-sm text-white/70">
-            CANTIDAD TOTAL
-          </span>
+        {/* Quantity + Fill — single row */}
+        <div className="flex items-center gap-2 mt-2">
+          {/* Quantity control */}
           {!countUnlocked ? (
             <button
               onClick={() => setCountUnlocked(true)}
               aria-label="Desbloquear cambio de cantidad"
-              className="h-10 px-4 border-2 border-white/30 text-white/50 font-mono font-black text-sm cursor-pointer hover:border-white/50 hover:text-white/70 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              className="h-10 px-3 border-2 border-white/30 text-white/50 font-mono font-black text-xs cursor-pointer hover:border-white/50 hover:text-white/70 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset shrink-0"
             >
-              {rows.length} — CAMBIAR
+              TOTAL {rows.length}
             </button>
           ) : (
-            <div className="flex items-center">
+            <div className="flex items-center shrink-0">
               <button
                 onClick={() => handleCountChange(rows.length - 1)}
                 disabled={rows.length <= 1}
@@ -268,7 +267,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                   if (!isNaN(val)) handleCountChange(val);
                 }}
                 aria-label="Cantidad total de uniones"
-                className="h-10 w-14 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-lg text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-10 w-12 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-base text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <button
                 onClick={() => handleCountChange(rows.length + 1)}
@@ -281,185 +280,178 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
               <button
                 onClick={() => setCountUnlocked(false)}
                 aria-label="Bloquear cantidad"
-                className="ml-2 h-10 px-3 border-2 border-white/30 text-white/50 font-mono text-xs cursor-pointer hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                className="ml-1 h-10 px-2 border-2 border-white/30 text-white/50 font-mono text-xs cursor-pointer hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
               >
                 OK
               </button>
             </div>
           )}
+
+          {/* Separator */}
+          <div className="w-px h-8 bg-white/20 shrink-0" />
+
+          {/* Fill dropdowns */}
+          {!loading && rows.length > 0 && (
+            <>
+              <select
+                value={defaultDn ?? ''}
+                onChange={(e) => handleDefaultDnChange(e.target.value)}
+                aria-label="DN por defecto para uniones vacias"
+                className="h-10 flex-1 min-w-0 bg-zeues-navy border border-white/40 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              >
+                <option value="">DN</option>
+                {DN_UNION_OPTIONS.map((dn) => (
+                  <option key={dn} value={dn}>{dn}</option>
+                ))}
+              </select>
+              <select
+                value={defaultTipo ?? ''}
+                onChange={(e) => handleDefaultTipoChange(e.target.value)}
+                aria-label="Tipo por defecto para uniones vacias"
+                className="h-10 flex-1 min-w-0 bg-zeues-navy border border-white/40 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              >
+                <option value="">TIPO</option>
+                {TIPO_UNION_OPTIONS.map((tipo) => (
+                  <option key={tipo} value={tipo}>{tipo}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
+
+        {/* Progress bar */}
+        {!loading && rows.length > 0 && (
+          <div className="mt-2">
+            <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-zeues-orange transition-all duration-300"
+                style={{ width: `${rows.length > 0 ? (completedCount / rows.length) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Column headers */}
+        {!loading && rows.length > 0 && (
+          <div className="flex items-center gap-2 px-1.5 pt-2 pb-1 border-b border-white/10">
+            <span className="font-mono font-black text-xs text-white/40 min-w-[2rem] text-center">#</span>
+            <span className="font-mono font-black text-xs text-white/40 flex-1">DN</span>
+            <span className="font-mono font-black text-xs text-white/40 flex-1">TIPO</span>
+            <span className="min-w-[44px]" />
+          </div>
+        )}
       </div>
 
-      {/* Fill empty — auto-apply defaults */}
-      {!loading && rows.length > 0 && (
-        <div className="flex items-center gap-2 mb-3">
-          <span className="font-mono font-black text-xs text-white/50 shrink-0">
-            RELLENAR
-          </span>
-          <select
-            value={defaultDn ?? ''}
-            onChange={(e) => handleDefaultDnChange(e.target.value)}
-            aria-label="DN por defecto para uniones vacias"
-            className="h-9 flex-1 bg-zeues-navy border-2 border-white/50 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
-          >
-            <option value="">DN</option>
-            {DN_UNION_OPTIONS.map((dn) => (
-              <option key={dn} value={dn}>{dn}</option>
-            ))}
-          </select>
-          <select
-            value={defaultTipo ?? ''}
-            onChange={(e) => handleDefaultTipoChange(e.target.value)}
-            aria-label="Tipo por defecto para uniones vacias"
-            className="h-9 flex-1 bg-zeues-navy border-2 border-white/50 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
-          >
-            <option value="">TIPO</option>
-            {TIPO_UNION_OPTIONS.map((tipo) => (
-              <option key={tipo} value={tipo}>{tipo}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Divider + progress bar */}
-      {!loading && rows.length > 0 && (
-        <div className="mb-2">
-          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-zeues-orange transition-all duration-300"
-              style={{ width: `${rows.length > 0 ? (completedCount / rows.length) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Loading state */}
+      {/* ═══ SCROLLABLE MIDDLE ZONE ═══ */}
       {loading && (
         <div className="flex items-center justify-center py-8">
           <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
         </div>
       )}
 
-      {/* Error message */}
       {error && (
-        <div role="alert" className="text-red-400 font-mono font-black text-sm mb-2 px-1">
+        <div role="alert" className="text-red-400 font-mono font-black text-sm px-4 py-2">
           {error}
         </div>
       )}
 
-      {/* Column headers + union cards */}
       {!loading && (
-        <div className="flex flex-col max-h-[55vh]">
-          {/* Column headers */}
-          {rows.length > 0 && (
-            <div className="flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-white/10">
-              <span className="font-mono font-black text-xs text-white/40 min-w-[2rem] text-center">#</span>
-              <span className="font-mono font-black text-xs text-white/40 flex-1">DN</span>
-              <span className="font-mono font-black text-xs text-white/40 flex-1">TIPO</span>
-              <span className="min-w-[44px]" />
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto px-4">
+          <div className="flex flex-col gap-1.5 pr-1">
+            {rows.map((row, index) => {
+              const complete = isRowComplete(row);
+              const isConfirmingThis = confirmDelete === row.n_union;
 
-          {/* Scrollable rows */}
-          <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
-          {rows.map((row, index) => {
-            const complete = isRowComplete(row);
-            const isConfirmingThis = confirmDelete === row.n_union;
+              const isFlashing = flashedRows.has(row.n_union);
+              const isEven = index % 2 === 0;
+              let borderClass = 'border-white/20';
+              let bgClass = isEven ? 'bg-white/[0.02]' : '';
+              if (isFlashing) {
+                borderClass = 'border-zeues-orange';
+                bgClass = 'bg-zeues-orange/10';
+              } else if (row.has_work) {
+                borderClass = 'border-white/10';
+                bgClass = 'bg-white/5';
+              } else if (!complete) {
+                borderClass = 'border-yellow-400/60';
+              }
 
-            const isFlashing = flashedRows.has(row.n_union);
-            const isEven = index % 2 === 0;
-            let borderClass = 'border-white/20';
-            let bgClass = isEven ? 'bg-white/[0.02]' : '';
-            if (isFlashing) {
-              borderClass = 'border-zeues-orange';
-              bgClass = 'bg-zeues-orange/10';
-            } else if (row.has_work) {
-              borderClass = 'border-white/10';
-              bgClass = 'bg-white/5';
-            } else if (!complete) {
-              borderClass = 'border-yellow-400/60';
-            }
-
-            return (
-              <div
-                key={row.n_union}
-                ref={(el) => setCardRef(row.n_union, el)}
-                className={`border p-1.5 flex items-center gap-2 transition-colors duration-300 ${borderClass} ${bgClass}`}
-              >
-                {/* N_UNION label */}
-                <span className="font-mono font-black text-sm text-white min-w-[2rem] h-7 flex items-center justify-center bg-white/10 rounded">
-                  {row.n_union}
-                </span>
-
-                {/* DN_UNION dropdown */}
-                <select
-                  value={row.dn_union ?? ''}
-                  onChange={(e) => handleDnChange(row.n_union, e.target.value)}
-                  disabled={row.has_work}
-                  aria-label={`DN union ${row.n_union}`}
-                  className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+              return (
+                <div
+                  key={row.n_union}
+                  ref={(el) => setCardRef(row.n_union, el)}
+                  className={`border p-1.5 flex items-center gap-2 transition-colors duration-300 ${borderClass} ${bgClass}`}
                 >
-                  <option value="">DN</option>
-                  {DN_UNION_OPTIONS.map((dn) => (
-                    <option key={dn} value={dn}>{dn}</option>
-                  ))}
-                </select>
+                  <span className="font-mono font-black text-sm text-white min-w-[2rem] h-7 flex items-center justify-center bg-white/10 rounded">
+                    {row.n_union}
+                  </span>
 
-                {/* TIPO_UNION dropdown */}
-                <select
-                  value={row.tipo_union ?? ''}
-                  onChange={(e) => handleTipoChange(row.n_union, e.target.value)}
-                  disabled={row.has_work}
-                  aria-label={`Tipo union ${row.n_union}`}
-                  className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <option value="">TIPO</option>
-                  {TIPO_UNION_OPTIONS.map((tipo) => (
-                    <option key={tipo} value={tipo}>{tipo}</option>
-                  ))}
-                </select>
-
-                {/* Delete button or confirmation */}
-                {!row.has_work && !isConfirmingThis && (
-                  <button
-                    onClick={() => handleDeleteRow(row.n_union)}
-                    aria-label={`Eliminar union ${row.n_union}`}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                  <select
+                    value={row.dn_union ?? ''}
+                    onChange={(e) => handleDnChange(row.n_union, e.target.value)}
+                    disabled={row.has_work}
+                    aria-label={`DN union ${row.n_union}`}
+                    className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    X
-                  </button>
-                )}
-                {!row.has_work && isConfirmingThis && (
-                  <div className="flex gap-1">
+                    <option value="">DN</option>
+                    {DN_UNION_OPTIONS.map((dn) => (
+                      <option key={dn} value={dn}>{dn}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={row.tipo_union ?? ''}
+                    onChange={(e) => handleTipoChange(row.n_union, e.target.value)}
+                    disabled={row.has_work}
+                    aria-label={`Tipo union ${row.n_union}`}
+                    className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <option value="">TIPO</option>
+                    {TIPO_UNION_OPTIONS.map((tipo) => (
+                      <option key={tipo} value={tipo}>{tipo}</option>
+                    ))}
+                  </select>
+
+                  {!row.has_work && !isConfirmingThis && (
                     <button
                       onClick={() => handleDeleteRow(row.n_union)}
-                      aria-label={`Confirmar eliminar union ${row.n_union}`}
-                      className="min-h-[36px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+                      aria-label={`Eliminar union ${row.n_union}`}
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                     >
-                      Sí
+                      X
                     </button>
-                    <button
-                      onClick={() => setConfirmDelete(null)}
-                      aria-label="Cancelar eliminacion"
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                    >
-                      No
-                    </button>
-                  </div>
-                )}
-                {row.has_work && (
-                  <span className="min-w-[44px] min-h-[44px]" />
-                )}
-              </div>
-            );
-          })}
+                  )}
+                  {!row.has_work && isConfirmingThis && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleDeleteRow(row.n_union)}
+                        aria-label={`Confirmar eliminar union ${row.n_union}`}
+                        className="min-h-[44px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+                      >
+                        Si
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        aria-label="Cancelar eliminacion"
+                        className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
+                  {row.has_work && (
+                    <span className="min-w-[44px] min-h-[44px]" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Footer buttons */}
+      {/* ═══ FIXED BOTTOM ZONE ═══ */}
       {!loading && (
-        <div className="flex flex-col gap-2 mt-3">
+        <div className="shrink-0 p-4 pt-3 border-t border-white/10 flex flex-col gap-2">
           <button
             onClick={handleGuardar}
             disabled={saving || rows.length === 0}
