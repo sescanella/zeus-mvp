@@ -236,14 +236,14 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
 
         {/* Quantity control — locked by default */}
         <div className="flex items-center gap-3 mt-3">
-          <label htmlFor="union-count" className="font-mono font-black text-sm text-white/70">
-            CANTIDAD
-          </label>
+          <span className="font-mono font-black text-sm text-white/70">
+            CANTIDAD TOTAL
+          </span>
           {!countUnlocked ? (
             <button
               onClick={() => setCountUnlocked(true)}
               aria-label="Desbloquear cambio de cantidad"
-              className="h-10 px-4 border-2 border-white/30 text-white/50 font-mono font-black text-sm hover:border-white/50 hover:text-white/70 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              className="h-10 px-4 border-2 border-white/30 text-white/50 font-mono font-black text-sm cursor-pointer hover:border-white/50 hover:text-white/70 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
             >
               {rows.length} — CAMBIAR
             </button>
@@ -258,7 +258,6 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                 -
               </button>
               <input
-                id="union-count"
                 type="number"
                 inputMode="numeric"
                 min={1}
@@ -282,7 +281,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
               <button
                 onClick={() => setCountUnlocked(false)}
                 aria-label="Bloquear cantidad"
-                className="ml-2 h-10 px-3 border-2 border-white/30 text-white/50 font-mono text-xs hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                className="ml-2 h-10 px-3 border-2 border-white/30 text-white/50 font-mono text-xs cursor-pointer hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
               >
                 OK
               </button>
@@ -397,7 +396,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                   <button
                     onClick={() => handleDeleteRow(row.n_union)}
                     aria-label={`Eliminar union ${row.n_union}`}
-                    className="min-w-[36px] min-h-[36px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                   >
                     X
                   </button>
@@ -409,19 +408,19 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                       aria-label={`Confirmar eliminar union ${row.n_union}`}
                       className="min-h-[36px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
                     >
-                      Si
+                      Sí
                     </button>
                     <button
                       onClick={() => setConfirmDelete(null)}
                       aria-label="Cancelar eliminacion"
-                      className="min-w-[36px] min-h-[36px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                     >
                       No
                     </button>
                   </div>
                 )}
                 {row.has_work && (
-                  <span className="min-w-[36px] min-h-[36px]" />
+                  <span className="min-w-[44px] min-h-[44px]" />
                 )}
               </div>
             );
