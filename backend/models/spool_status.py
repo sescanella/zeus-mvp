@@ -163,7 +163,7 @@ def _build_completion_history(
         )
         if not skip_arm:
             entries.append({
-                "operation": "ARM",
+                "operation": "ARM completado",
                 "worker": arm_worker or "—",
                 "date": _format_short_date(spool.fecha_armado) or "—",
             })
@@ -178,7 +178,7 @@ def _build_completion_history(
         )
         if not skip_sold:
             entries.append({
-                "operation": "SOLD",
+                "operation": "SOLD completado",
                 "worker": sold_worker or "—",
                 "date": _format_short_date(spool.fecha_soldadura) or "—",
             })
