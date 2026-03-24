@@ -108,6 +108,91 @@ def _derive_estado(spool: "Spool") -> dict:
     return result
 
 
+def _resolve_worker_name(raw: str | None, workers: dict[int, str] | None) -> str | None:
+    """Resolve 'MR(93)' to 'Mauricio Rodriguez' using workers dict."""
+    if not raw:
+        return None
+    if workers:
+        m = re.search(r"\((\d+)\)$", raw)
+        if m:
+            return workers.get(int(m.group(1)), raw)
+    return raw
+
+
+def _format_short_date(date_val) -> str | None:
+    """Format a date to 'DD/MM' (no year). Accepts date objects or strings."""
+    if date_val is None:
+        return None
+    s = str(date_val)  # handles both date objects and strings
+    # Try ISO format: YYYY-MM-DD
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        return f"{m.group(3)}/{m.group(2)}"
+    # Try DD-MM-YYYY
+    m = re.match(r"(\d{2})-(\d{2})-(\d{4})", s)
+    if m:
+        return f"{m.group(1)}/{m.group(2)}"
+    return s
+
+
+def _build_completion_history(
+    spool: "Spool",
+    parsed: dict,
+    workers: dict[int, str] | None,
+) -> list[dict]:
+    """
+    Build completion history entries, filtering out redundant info.
+
+    Rules:
+    - If ARM EN_PROGRESO and armador == ocupado_por → skip ARM entry (redundant)
+    - If SOLD EN_PROGRESO and soldador == ocupado_por → skip SOLD entry (redundant)
+    - Otherwise include completed operations with worker name + short date
+    """
+    entries: list[dict] = []
+    op_actual = parsed.get("operacion_actual")
+    is_occupied = bool(spool.ocupado_por)
+
+    # ARM history
+    if spool.fecha_armado:
+        arm_worker = _resolve_worker_name(spool.armador, workers)
+        # Skip if ARM is the active operation and same worker is working
+        skip_arm = (
+            is_occupied
+            and op_actual == "ARM"
+            and spool.armador == spool.ocupado_por
+        )
+        if not skip_arm:
+            entries.append({
+                "operation": "ARM",
+                "worker": arm_worker or "—",
+                "date": _format_short_date(spool.fecha_armado) or "—",
+            })
+
+    # SOLD history
+    if spool.fecha_soldadura:
+        sold_worker = _resolve_worker_name(spool.soldador, workers)
+        skip_sold = (
+            is_occupied
+            and op_actual == "SOLD"
+            and spool.soldador == spool.ocupado_por
+        )
+        if not skip_sold:
+            entries.append({
+                "operation": "SOLD",
+                "worker": sold_worker or "—",
+                "date": _format_short_date(spool.fecha_soldadura) or "—",
+            })
+
+    return entries
+
+
+class CompletionEntry(BaseModel):
+    """A single completion history entry for display on SpoolCard."""
+    operation: str = Field(..., description="ARM or SOLD")
+    worker: str = Field(..., description="Worker display name")
+    date: str = Field(..., description="Short date DD/MM")
+
+
 class SpoolStatus(BaseModel):
     """
     Computed view of a Spool for the v5.0 single-page frontend.
@@ -115,6 +200,7 @@ class SpoolStatus(BaseModel):
     Pass-through fields come directly from the Spool object.
     Computed fields (operacion_actual, estado_trabajo, ciclo_rep) are
     derived from factual spool columns via _derive_estado().
+    completion_history is computed to avoid redundant display logic in frontend.
     """
 
     # Pass-through identity / state fields
@@ -148,19 +234,17 @@ class SpoolStatus(BaseModel):
         None, description="Suma DN_UNION para SOLD completado", ge=0.0
     )
 
-    # Completion history (pass-through from Spool)
-    fecha_armado: Optional[str] = Field(
-        None, description="Fecha de completado ARM (DD-MM-YYYY or None)"
+    # Completion history — computed, filtered, formatted by backend
+    completion_history: list[CompletionEntry] = Field(
+        default_factory=list,
+        description="Completed operations to display (redundant entries filtered out)"
     )
-    armador_display: Optional[str] = Field(
-        None, description="Nombre completo del armador (ej: 'Mauricio Rodriguez')"
-    )
-    fecha_soldadura: Optional[str] = Field(
-        None, description="Fecha de completado SOLD (DD-MM-YYYY or None)"
-    )
-    soldador_display: Optional[str] = Field(
-        None, description="Nombre completo del soldador (ej: 'Carlos Pimiento')"
-    )
+
+    # Legacy pass-through (kept for backward compat, may be removed later)
+    fecha_armado: Optional[str] = Field(None)
+    armador_display: Optional[str] = Field(None)
+    fecha_soldadura: Optional[str] = Field(None)
+    soldador_display: Optional[str] = Field(None)
 
     # Computed fields (derived from factual columns via _derive_estado)
     operacion_actual: Optional[str] = Field(
@@ -199,41 +283,11 @@ class SpoolStatus(BaseModel):
         """
         parsed = _derive_estado(spool)
 
-        # Resolve ocupado_por_display from workers dict
-        ocupado_por_display: str | None = None
-        if spool.ocupado_por and workers:
-            match = re.search(r"\((\d+)\)$", spool.ocupado_por)
-            if match:
-                worker_id = int(match.group(1))
-                ocupado_por_display = workers.get(worker_id, spool.ocupado_por)
-            else:
-                ocupado_por_display = spool.ocupado_por
-        elif spool.ocupado_por:
-            ocupado_por_display = spool.ocupado_por
+        ocupado_por_display = _resolve_worker_name(spool.ocupado_por, workers)
+        armador_display = _resolve_worker_name(spool.armador, workers)
+        soldador_display = _resolve_worker_name(spool.soldador, workers)
 
-        # Resolve armador_display from workers dict
-        armador_display: str | None = None
-        if spool.armador and workers:
-            match_arm = re.search(r"\((\d+)\)$", spool.armador)
-            if match_arm:
-                arm_id = int(match_arm.group(1))
-                armador_display = workers.get(arm_id, spool.armador)
-            else:
-                armador_display = spool.armador
-        elif spool.armador:
-            armador_display = spool.armador
-
-        # Resolve soldador_display from workers dict
-        soldador_display: str | None = None
-        if spool.soldador and workers:
-            match_sol = re.search(r"\((\d+)\)$", spool.soldador)
-            if match_sol:
-                sol_id = int(match_sol.group(1))
-                soldador_display = workers.get(sol_id, spool.soldador)
-            else:
-                soldador_display = spool.soldador
-        elif spool.soldador:
-            soldador_display = spool.soldador
+        history = _build_completion_history(spool, parsed, workers)
 
         return cls(
             tag_spool=spool.tag_spool,
@@ -247,6 +301,7 @@ class SpoolStatus(BaseModel):
             uniones_sold_completadas=spool.uniones_sold_completadas,
             pulgadas_arm=spool.pulgadas_arm,
             pulgadas_sold=spool.pulgadas_sold,
+            completion_history=[CompletionEntry(**e) for e in history],
             fecha_armado=str(spool.fecha_armado) if spool.fecha_armado else None,
             armador_display=armador_display,
             fecha_soldadura=str(spool.fecha_soldadura) if spool.fecha_soldadura else None,

@@ -28,6 +28,12 @@ export type OperacionActual = 'ARM' | 'SOLD' | 'REPARACION' | null;
  * Mirrors backend SpoolStatus Pydantic model exactly (snake_case field names).
  * Used by SpoolCard component and batch polling refresh.
  */
+export interface CompletionEntry {
+  operation: string;
+  worker: string;
+  date: string;
+}
+
 export interface SpoolCardData {
   tag_spool: string;
   nv: string | null;
@@ -40,6 +46,7 @@ export interface SpoolCardData {
   uniones_sold_completadas: number | null;
   pulgadas_arm: number | null;
   pulgadas_sold: number | null;
+  completion_history: CompletionEntry[];
   fecha_armado: string | null;
   armador_display: string | null;
   fecha_soldadura: string | null;

@@ -289,19 +289,14 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           {/* Uniones badge removed — button is on right side of card */}
         </div>
 
-        {/* Completion history */}
-        {(spool.fecha_armado || spool.fecha_soldadura) && (
+        {/* Completion history — computed by backend, no logic here */}
+        {spool.completion_history?.length > 0 && (
           <div className="flex flex-col gap-0.5 mt-1">
-            {spool.fecha_armado && (
-              <span className="font-mono text-xs text-green-400">
-                ARM: {spool.armador_display ?? '—'} — {spool.fecha_armado}
+            {spool.completion_history.map((entry) => (
+              <span key={entry.operation} className="font-mono text-xs text-green-400">
+                {entry.operation} — {entry.worker} — {entry.date}
               </span>
-            )}
-            {spool.fecha_soldadura && (
-              <span className="font-mono text-xs text-green-400">
-                SOLD: {spool.soldador_display ?? '—'} — {spool.fecha_soldadura}
-              </span>
-            )}
+            ))}
           </div>
         )}
 
