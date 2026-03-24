@@ -242,9 +242,10 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
             <button
               onClick={() => setCountUnlocked(true)}
               aria-label="Desbloquear cambio de cantidad"
-              className="h-10 px-3 border-2 border-white/30 text-white/50 font-mono font-black text-xs cursor-pointer hover:border-white/50 hover:text-white/70 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset shrink-0"
+              className="h-12 px-4 bg-white/10 border-2 border-white text-white font-mono font-black cursor-pointer hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset shrink-0 flex items-center gap-2"
             >
-              TOTAL {rows.length}
+              <span className="text-xs text-white/70">TOTAL</span>
+              <span className="text-2xl">{rows.length}</span>
             </button>
           ) : (
             <div className="flex items-center shrink-0">
