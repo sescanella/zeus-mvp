@@ -230,7 +230,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
             <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
           </div>
           <span className="font-mono text-sm text-white/70">
-            {completedCount}/{rows.length}
+            {completedCount} de {rows.length} completas
           </span>
         </div>
 
@@ -321,6 +321,18 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         </div>
       )}
 
+      {/* Divider + progress bar */}
+      {!loading && rows.length > 0 && (
+        <div className="mb-2">
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-zeues-orange transition-all duration-300"
+              style={{ width: `${rows.length > 0 ? (completedCount / rows.length) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-8">
@@ -335,19 +347,35 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         </div>
       )}
 
-      {/* Union cards — compact, scrollable */}
+      {/* Column headers + union cards */}
       {!loading && (
-        <div className="flex flex-col gap-1.5 max-h-[55vh] overflow-y-auto pr-1">
-          {rows.map((row) => {
+        <div className="flex flex-col max-h-[55vh]">
+          {/* Column headers */}
+          {rows.length > 0 && (
+            <div className="flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-white/10">
+              <span className="font-mono font-black text-xs text-white/40 min-w-[2rem] text-center">#</span>
+              <span className="font-mono font-black text-xs text-white/40 flex-1">DN</span>
+              <span className="font-mono font-black text-xs text-white/40 flex-1">TIPO</span>
+              <span className="min-w-[44px]" />
+            </div>
+          )}
+
+          {/* Scrollable rows */}
+          <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
+          {rows.map((row, index) => {
             const complete = isRowComplete(row);
             const isConfirmingThis = confirmDelete === row.n_union;
 
             const isFlashing = flashedRows.has(row.n_union);
+            const isEven = index % 2 === 0;
             let borderClass = 'border-white/20';
+            let bgClass = isEven ? 'bg-white/[0.02]' : '';
             if (isFlashing) {
-              borderClass = 'border-zeues-orange bg-zeues-orange/10';
+              borderClass = 'border-zeues-orange';
+              bgClass = 'bg-zeues-orange/10';
             } else if (row.has_work) {
-              borderClass = 'border-white/10 bg-white/5';
+              borderClass = 'border-white/10';
+              bgClass = 'bg-white/5';
             } else if (!complete) {
               borderClass = 'border-yellow-400/60';
             }
@@ -356,10 +384,10 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
               <div
                 key={row.n_union}
                 ref={(el) => setCardRef(row.n_union, el)}
-                className={`border p-1.5 flex items-center gap-2 transition-colors duration-300 ${borderClass}`}
+                className={`border p-1.5 flex items-center gap-2 transition-colors duration-300 ${borderClass} ${bgClass}`}
               >
                 {/* N_UNION label */}
-                <span className="font-mono font-black text-sm text-white/70 min-w-[2rem] text-center">
+                <span className="font-mono font-black text-sm text-white min-w-[2rem] h-7 flex items-center justify-center bg-white/10 rounded">
                   {row.n_union}
                 </span>
 
@@ -425,6 +453,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
