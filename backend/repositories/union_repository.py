@@ -1340,7 +1340,7 @@ class UnionRepository:
             rows_to_append = []
             for u in unions:
                 row = [""] * max_col
-                union_id = f"{ot}+{u['n_union']}"
+                union_id = f"{tag_spool}+{u['n_union']}"
 
                 if "ID" in col_indices:
                     row[col_indices["ID"]] = union_id
@@ -1362,7 +1362,7 @@ class UnionRepository:
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_append():
                 worksheet = self._get_worksheet()
-                worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+                worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED', table_range='A1')
 
             _execute_append()
             ColumnMapCache.invalidate(self._sheet_name)
