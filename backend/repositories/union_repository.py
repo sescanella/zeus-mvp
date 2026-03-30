@@ -1594,17 +1594,29 @@ class UnionRepository:
         """
         Update Total_Uniones column in Operaciones sheet for the given spool.
 
+        Uses RAW value_input_option to prevent Google Sheets from interpreting
+        the integer as a date (USER_ENTERED would format 4 as 1900-01-03).
+
         Args:
             tag_spool: Spool TAG identifier
             total: New total union count
         """
         try:
-            self.sheets_repo.update_cell_by_column_name(
-                sheet_name="Operaciones",
-                row=self._find_spool_row(tag_spool),
-                column_name="Total_Uniones",
-                value=total
-            )
+            from backend.config import config
+            row_num = self._find_spool_row(tag_spool)
+
+            column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repo)
+            total_col_idx = column_map.get(_normalize("Total_Uniones"))
+            if total_col_idx is None:
+                raise ValueError("Total_Uniones column not found in Operaciones sheet")
+
+            col_letter = _col_idx_to_letter(total_col_idx)
+            cell_address = f"{col_letter}{row_num}"
+
+            worksheet = self.sheets_repo._get_spreadsheet().worksheet(config.HOJA_OPERACIONES_NOMBRE)
+            worksheet.update(cell_address, [[total]], value_input_option='RAW')
+
+            get_cache().invalidate(f"worksheet:{config.HOJA_OPERACIONES_NOMBRE}")
             self.logger.info(f"update_total_uniones: {tag_spool} → {total}")
         except Exception as e:
             self.logger.error(f"Failed to update Total_Uniones for {tag_spool}: {e}", exc_info=True)
