@@ -60,14 +60,10 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const prevRowCountRef = useRef(0);
 
+  const emptyRow: UnionRow = { n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false };
+
   const loadUnions = useCallback(async () => {
     if (!spool.tag_spool) return;
-
-    const hasExisting = spool.total_uniones !== null && spool.total_uniones > 0;
-    if (!hasExisting) {
-      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false }]);
-      return;
-    }
 
     setLoading(true);
     setError(null);
@@ -83,7 +79,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
         sol_worker: u.sol_worker ?? null,
         selected: false,
       }));
-      setRows(loaded.length > 0 ? loaded : [{ n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false }]);
+      setRows(loaded.length > 0 ? loaded : [emptyRow]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cargar uniones';
       setError(msg);
@@ -153,7 +149,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
     const row = rows.find((r) => r.n_union === n_union);
     if (!row || row.has_work) return;
 
-    const isExisting = spool.total_uniones !== null && spool.total_uniones > 0 && n_union <= spool.total_uniones;
+    const isExisting = row?.id !== null;
     if (isExisting && confirmDelete !== n_union) {
       setConfirmDelete(n_union);
       return;
