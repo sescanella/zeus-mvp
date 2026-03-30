@@ -289,6 +289,30 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           {/* Uniones badge removed — button is on right side of card */}
         </div>
 
+        {/* Union progress indicators (ARM/SOLD partial or complete) */}
+        {spool.total_uniones !== null && spool.total_uniones > 0 && (
+          <div className="flex flex-wrap gap-2 mt-1">
+            {spool.uniones_arm_completadas !== null && spool.uniones_arm_completadas > 0 && (
+              <span className={`font-mono text-xs px-1.5 py-0.5 border ${
+                spool.uniones_arm_completadas >= spool.total_uniones
+                  ? 'text-green-400 border-green-400/40'
+                  : 'text-yellow-400 border-yellow-400/40'
+              }`}>
+                ARM {spool.uniones_arm_completadas}/{spool.total_uniones}
+              </span>
+            )}
+            {spool.uniones_sold_completadas !== null && spool.uniones_sold_completadas > 0 && (
+              <span className={`font-mono text-xs px-1.5 py-0.5 border ${
+                spool.uniones_sold_completadas >= spool.total_uniones
+                  ? 'text-green-400 border-green-400/40'
+                  : 'text-yellow-400 border-yellow-400/40'
+              }`}>
+                SOLD {spool.uniones_sold_completadas}/{spool.total_uniones}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Completion history — computed by backend, no logic here */}
         {spool.completion_history?.length > 0 && (
           <div className="flex flex-col gap-0.5 mt-1">
