@@ -393,19 +393,21 @@ function HomePage() {
   };
 
   const handleUnionesComplete = async (selectedIds: string[]) => {
-    modalStack.pop();
     const action = pendingAction;
 
-    if (!action) {
-      // Safety fallback — should not happen
-      setUnionesSpool(null);
-      return;
-    }
+    // Clear ALL modals and state immediately to prevent flash of ActionModal/OperationModal
+    modalStack.clear();
+    setPendingAction(null);
+    setUnionesSpool(null);
+    setSelectedSpool(null);
+    setSelectedOperation(null);
+    setSelectedAction(null);
+
+    if (!action) return;
 
     const tag = action.spool.tag_spool;
 
     if (action.type === 'EDIT') {
-      // Card uniones button — just refresh and toast
       try {
         await refreshSingle(tag);
       } catch {
@@ -414,7 +416,6 @@ function HomePage() {
       enqueue('Uniones guardadas', 'success');
     } else if (action.type === 'FINALIZAR' || action.type === 'PAUSAR') {
       if (selectedIds.length > 0 && action.workerId !== null && action.operation !== null) {
-        // User selected unions — call finalizarSpool, backend auto-determines PAUSAR/COMPLETAR
         setApiLoading(true);
         try {
           await finalizarSpool({
@@ -423,11 +424,10 @@ function HomePage() {
             operacion: action.operation,
             selected_unions: selectedIds,
           });
-          modalStack.clear();
           try {
             await refreshSingle(tag);
           } catch {
-            // Spool may have changed — ignore refresh errors
+            // ignore
           }
           enqueue('Operacion completada', 'success');
         } catch (err: unknown) {
@@ -437,7 +437,6 @@ function HomePage() {
           setApiLoading(false);
         }
       } else if (selectedIds.length === 0 && action.type === 'PAUSAR' && action.workerId !== null && action.operation !== null) {
-        // PAUSAR without selecting unions — send action_override
         setApiLoading(true);
         try {
           await finalizarSpool({
@@ -447,11 +446,10 @@ function HomePage() {
             selected_unions: [],
             action_override: 'PAUSAR',
           });
-          modalStack.clear();
           try {
             await refreshSingle(tag);
           } catch {
-            // Spool may have changed — ignore refresh errors
+            // ignore
           }
           enqueue('Uniones guardadas y spool pausado', 'success');
         } catch (err: unknown) {
@@ -461,7 +459,6 @@ function HomePage() {
           setApiLoading(false);
         }
       } else {
-        // FINALIZAR with 0 selections — just saved definitions, no backend call
         try {
           await refreshSingle(tag);
         } catch {
@@ -470,12 +467,6 @@ function HomePage() {
         enqueue('Uniones guardadas', 'success');
       }
     }
-
-    setPendingAction(null);
-    setUnionesSpool(null);
-    setSelectedSpool(null);
-    setSelectedOperation(null);
-    setSelectedAction(null);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
