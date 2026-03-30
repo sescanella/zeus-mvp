@@ -607,7 +607,12 @@ class OccupationService:
             # Detect spool version (v2.1/v3.0 vs v4.0)
             # v3.0: total_uniones = None (no column) or 0 (CONTAR.SI formula with no unions)
             # v4.0: total_uniones >= 1 (has registered unions in Uniones sheet)
-            is_v21 = spool.total_uniones is None or spool.total_uniones == 0
+            # Detect v3.0/v4.0 from actual Uniones sheet (not Operaciones column
+            # which may be stale, null, or corrupted by USER_ENTERED date bug)
+            actual_union_count = 0
+            if self.union_repository and spool.ot:
+                actual_union_count = self.union_repository.get_total_uniones(spool.ot)
+            is_v21 = actual_union_count == 0
             version_str = "v3.0" if is_v21 else "v4.0"
             logger.info(f"Spool {tag_spool} detected as {version_str} (total_uniones={spool.total_uniones})")
 
@@ -633,12 +638,20 @@ class OccupationService:
                         )
                     logger.info(f"✅ ARM prerequisite passed for v3.0 spool {tag_spool} (Fecha_Armado: {spool.fecha_armado})")
 
-                else:  # v4.0 spool - use Uniones_ARM_Completadas column
-                    # Treat None as 0 explicitly (column not initialized yet)
-                    unions_completed = spool.uniones_arm_completadas or 0
-                    total = spool.total_uniones or 0
+                else:  # v4.0 spool - check actual ARM completion from Uniones sheet
+                    # Use real data from Uniones sheet, not Operaciones columns
+                    # (which may be stale or corrupted)
+                    unions_completed = self.union_repository.count_completed_arm(spool.ot) if self.union_repository else 0
+                    total = actual_union_count
 
-                    if unions_completed < 1:
+                    # Legacy fallback: if spool has fecha_armado but no union-level ARM,
+                    # ARM was done before the union system -- allow SOLD
+                    if unions_completed < 1 and spool.fecha_armado:
+                        logger.info(
+                            f"✅ ARM prerequisite passed for legacy spool {tag_spool} "
+                            f"(fecha_armado={spool.fecha_armado}, no union-level ARM tracking)"
+                        )
+                    elif unions_completed < 1:
                         logger.warning(
                             f"ARM prerequisite failed for v4.0 spool {tag_spool}: "
                             f"{unions_completed}/{total} unions with ARM completed (need >= 1)"
