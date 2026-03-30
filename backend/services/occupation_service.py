@@ -18,6 +18,7 @@ from typing import Optional
 from datetime import date, datetime
 
 from backend.utils.date_formatter import format_date_for_sheets, format_datetime_for_sheets, today_chile, now_chile
+from backend.utils.cache import get_cache
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -1414,6 +1415,50 @@ class OccupationService:
                     updates={"unions": selected_unions}
                 )
 
+            # Step 6.5: Update v4.0 metrics in Operaciones (counters + pulgadas)
+            # These columns may not have formulas, so we write them explicitly
+            try:
+                if self.union_repository and spool.ot:
+                    metrics = self.union_repository.calculate_metrics(spool.ot)
+                    metrics_updates = {
+                        "Uniones_ARM_Completadas": metrics.get("arm_completadas", 0),
+                        "Uniones_SOLD_Completadas": metrics.get("sold_completadas", 0),
+                        "Pulgadas_ARM": metrics.get("pulgadas_arm", 0.0),
+                        "Pulgadas_SOLD": metrics.get("pulgadas_sold", 0.0),
+                    }
+
+                    from backend.core.column_map_cache import ColumnMapCache
+                    from backend.config import config
+
+                    row_num = self.union_repository._find_spool_row(tag_spool)
+                    col_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
+                    worksheet = self.sheets_repository._get_spreadsheet().worksheet(config.HOJA_OPERACIONES_NOMBRE)
+
+                    def _idx_to_letter(idx: int) -> str:
+                        """Convert 0-based column index to Sheets letter (A, B, ..., Z, AA, ...)."""
+                        result = ""
+                        while idx >= 0:
+                            result = chr(ord('A') + idx % 26) + result
+                            idx = idx // 26 - 1
+                        return result
+
+                    batch_data = []
+                    for col_name, val in metrics_updates.items():
+                        normalized = col_name.lower().replace(" ", "").replace("_", "")
+                        col_idx = col_map.get(normalized)
+                        if col_idx is not None:
+                            col_letter = _idx_to_letter(col_idx)
+                            batch_data.append({'range': f'{col_letter}{row_num}', 'values': [[val]]})
+
+                    if batch_data:
+                        worksheet.batch_update(batch_data, value_input_option='RAW')
+                        get_cache().invalidate(f"worksheet:{config.HOJA_OPERACIONES_NOMBRE}")
+                        logger.info(f"✅ Metrics updated in Operaciones for {tag_spool}: {metrics_updates}")
+
+            except Exception as e:
+                logger.error(f"Failed to update metrics in Operaciones for {tag_spool}: {e}", exc_info=True)
+                # Don't block the operation on metrics update failure
+
             # Step 7: Clear occupation fields in Operaciones sheet
             # Build updates dict (varies by PAUSAR vs COMPLETAR)
             try:
@@ -1422,21 +1467,16 @@ class OccupationService:
                     "Fecha_Ocupacion": ""
                 }
 
-                # If COMPLETAR: add fecha_operacion + worker (NO v4.0 counters - managed by formulas)
                 if action_taken == "COMPLETAR":
                     if operacion == "ARM":
                         updates_dict.update({
                             "Fecha_Armado": format_date_for_sheets(today_chile()),
                             "Armador": worker_nombre
-                            # NOTE: Uniones_ARM_Completadas and Pulgadas_ARM are NOT written here
-                            # These columns contain Google Sheets formulas that auto-calculate from Uniones sheet
                         })
                     elif operacion == "SOLD":
                         updates_dict.update({
                             "Fecha_Soldadura": format_date_for_sheets(today_chile()),
                             "Soldador": worker_nombre
-                            # NOTE: Uniones_SOLD_Completadas and Pulgadas_SOLD are NOT written here
-                            # These columns contain Google Sheets formulas that auto-calculate from Uniones sheet
                         })
 
                     updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
