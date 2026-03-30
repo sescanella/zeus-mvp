@@ -8,7 +8,7 @@ import type { SpoolCardData } from '@/lib/types';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-const TIPO_UNION_OPTIONS = ['BW', 'SO', 'FILL', 'BR'] as const;
+const TIPO_UNION_OPTIONS = ['BW', 'SO', 'FILL', 'BR', 'MIT'] as const;
 const DN_UNION_OPTIONS = Array.from({ length: 50 }, (_, i) => i + 1);
 const MAX_UNIONS = 20;
 
