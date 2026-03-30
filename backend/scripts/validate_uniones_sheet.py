@@ -2,7 +2,7 @@
 """
 Validate Uniones sheet structure for ZEUES v4.0.
 
-Validates that the Uniones sheet exists and has the correct 18-column structure
+Validates that the Uniones sheet exists and has the correct 17-column structure
 as specified in v4.0 requirements. This sheet is pre-populated by Engineering
 external process and must be validated before v4.0 deployment.
 
@@ -29,31 +29,30 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from backend.repositories.sheets_repository import SheetsRepository
 
 
-# Expected Uniones sheet structure (18 columns)
+# Expected Uniones sheet structure (17 columns)
 EXPECTED_COLUMNS = [
-    # Core fields (1-5)
+    # Core fields (1-6)
     "ID",
-    "TAG_SPOOL",
+    "OT",
     "N_UNION",
+    "TAG_SPOOL",
     "DN_UNION",
     "TIPO_UNION",
-    # ARM timestamps (6-8)
+    # ARM operation (7-9)
     "ARM_FECHA_INICIO",
     "ARM_FECHA_FIN",
     "ARM_WORKER",
-    # SOLD timestamps (9-11)
+    # SOLD operation (10-12)
     "SOL_FECHA_INICIO",
     "SOL_FECHA_FIN",
     "SOL_WORKER",
-    # NDT fields (12-13)
+    # NDT inspection (13-16)
+    "NDT_UNION",
+    "R_NDT_UNION",
     "NDT_FECHA",
     "NDT_STATUS",
-    # Audit columns (14-18)
-    "version",
-    "Creado_Por",
-    "Fecha_Creacion",
-    "Modificado_Por",
-    "Fecha_Modificacion"
+    # Version control (17)
+    "version"
 ]
 
 

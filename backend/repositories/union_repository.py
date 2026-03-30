@@ -576,22 +576,44 @@ class UnionRepository:
 
     def get_total_uniones(self, ot: str) -> int:
         """
-        Get total count of all unions for a given work order.
+        Count ALL union rows for a given OT, regardless of DN/TIPO completeness.
+
+        Unlike get_by_ot which skips incomplete rows (null DN_UNION or TIPO_UNION),
+        this counts every row matching the OT. This ensures Total_Uniones reflects
+        the actual number of union rows, including partially-defined ones created
+        via the modal with empty DN/TIPO fields.
 
         v4.0: Supports Operaciones column 68 (Total_Uniones).
-        Counts ALL unions regardless of completion state - represents total work scope.
 
         Args:
             ot: Work order number (e.g., "001", "123")
 
         Returns:
-            int: Total number of unions for the OT, 0 if OT not found or has no unions
-
-        Raises:
-            SheetsConnectionError: If Google Sheets read fails
+            int: Total number of union rows for the OT, 0 if OT not found or error
         """
-        unions = self.get_by_ot(ot)
-        return len(unions)
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+            if not all_rows or len(all_rows) < 2:
+                return 0
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+            ot_col_key = _normalize("OT")
+            if ot_col_key not in column_map:
+                raise ValueError(f"OT column not found in {self._sheet_name} sheet")
+            ot_col_idx = column_map[ot_col_key]
+
+            count = 0
+            for row_data in all_rows[1:]:
+                if not row_data or len(row_data) <= ot_col_idx:
+                    continue
+                if str(row_data[ot_col_idx]).strip() == str(ot).strip():
+                    count += 1
+
+            return count
+
+        except Exception as e:
+            self.logger.error(f"Failed to count total uniones for OT {ot}: {e}", exc_info=True)
+            return 0
 
     def calculate_metrics(self, ot: str) -> dict:
         """
@@ -661,6 +683,7 @@ class UnionRepository:
         timestamp: datetime
     ) -> int:
         """
+        # DEPRECATED: Use batch_update_arm_full instead
         Batch update ARM completion for multiple unions in a single API call.
 
         Performance: Updates 10 unions in < 1 second using gspread.batch_update().
@@ -749,6 +772,7 @@ class UnionRepository:
 
             _execute_batch()
             ColumnMapCache.invalidate(self._sheet_name)
+            get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             updated_count = len(union_id_to_row)
             self.logger.info(f"✅ batch_update_arm: {updated_count} unions updated for TAG_SPOOL {tag_spool}")
@@ -766,6 +790,7 @@ class UnionRepository:
         timestamp: datetime
     ) -> int:
         """
+        # DEPRECATED: Use batch_update_sold_full instead
         Batch update SOLD completion for multiple unions in a single API call.
 
         CRITICAL: Validates ARM completion before allowing SOLD update.
@@ -861,6 +886,7 @@ class UnionRepository:
 
             _execute_batch()
             ColumnMapCache.invalidate(self._sheet_name)
+            get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             updated_count = len(union_id_to_row)
             self.logger.info(f"✅ batch_update_sold: {updated_count} unions updated for TAG_SPOOL {tag_spool}")
@@ -1352,7 +1378,7 @@ class UnionRepository:
             rows_to_append = []
             for u in unions:
                 row = [""] * max_col
-                union_id = f"{tag_spool}+{u['n_union']}"
+                union_id = f"{ot}+{u['n_union']}"
 
                 if "ID" in col_indices:
                     row[col_indices["ID"]] = union_id
@@ -1754,6 +1780,19 @@ class UnionRepository:
                             "arm_worker": arm_worker_raw or None,
                             "sol_worker": sol_worker_raw or None,
                         })
+                    elif fecha and not fecha_fin_val:
+                        # Unfinished work: include when date filter is active (active/in-progress work)
+                        results.append({
+                            "tag_spool": tag_spool,
+                            "n_union": n_union,
+                            "dn_union": dn_union,
+                            "tipo_union": tipo_union,
+                            "operacion": "ARM",
+                            "fecha_inicio": arm_inicio or None,
+                            "fecha_fin": None,
+                            "arm_worker": arm_worker_raw or None,
+                            "sol_worker": sol_worker_raw or None,
+                        })
 
                 if matched_sol:
                     fecha_fin_val = sol_fin
@@ -1782,6 +1821,19 @@ class UnionRepository:
                             "operacion": "SOLD",
                             "fecha_inicio": sol_inicio or None,
                             "fecha_fin": sol_fin or None,
+                            "arm_worker": arm_worker_raw or None,
+                            "sol_worker": sol_worker_raw or None,
+                        })
+                    elif fecha and not fecha_fin_val:
+                        # Unfinished work: include when date filter is active (active/in-progress work)
+                        results.append({
+                            "tag_spool": tag_spool,
+                            "n_union": n_union,
+                            "dn_union": dn_union,
+                            "tipo_union": tipo_union,
+                            "operacion": "SOLD",
+                            "fecha_inicio": sol_inicio or None,
+                            "fecha_fin": None,
                             "arm_worker": arm_worker_raw or None,
                             "sol_worker": sol_worker_raw or None,
                         })
