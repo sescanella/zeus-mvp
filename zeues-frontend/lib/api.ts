@@ -15,6 +15,7 @@ import {
   GetAllUnionsResponse,
   SaveUnionsRequest,
   SaveUnionsResponse,
+  RegistroResponse,
 } from './types';
 
 // ============= CONSTANTS =============
@@ -942,6 +943,32 @@ export async function guardarUniones(payload: SaveUnionsRequest): Promise<SaveUn
     return await handleResponse<SaveUnionsResponse>(res);
   } catch (error) {
     console.error('guardarUniones error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// MI REGISTRO API FUNCTIONS (Pieza 2)
+// ==========================================
+
+/**
+ * GET /api/registro/{workerId}?fecha=DD-MM-YYYY
+ * Obtiene el registro de trabajo de un trabajador para una fecha.
+ *
+ * @param workerId - ID numerico del trabajador
+ * @param fecha - Fecha en formato DD-MM-YYYY (opcional, default: hoy)
+ * @returns Promise<RegistroResponse> con resumen y spools trabajados
+ */
+export async function getRegistro(workerId: number, fecha?: string): Promise<RegistroResponse> {
+  try {
+    const params = fecha ? `?fecha=${fecha}` : '';
+    const res = await fetch(`${API_URL}/api/registro/${workerId}${params}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await handleResponse<RegistroResponse>(res);
+  } catch (error) {
+    console.error('getRegistro error:', error);
     throw error;
   }
 }

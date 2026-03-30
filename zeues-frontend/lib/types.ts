@@ -241,3 +241,38 @@ export interface SaveUnionsResponse {
   message: string;
 }
 
+// ==========================================
+// MI REGISTRO TYPES (Pieza 2)
+// ==========================================
+
+export interface WorkerUnionRecord {
+  n_union: number;
+  dn_union: number | null;
+  tipo_union: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+}
+
+export interface SpoolGroup {
+  tag_spool: string;
+  operacion: string;
+  uniones: WorkerUnionRecord[];
+  pd_total: number;
+  otro_trabajador: string | null;
+}
+
+export interface RegistroResumen {
+  fecha: string;
+  pd_total: number;
+  total_uniones: number;
+  total_spools: number;
+}
+
+export interface RegistroResponse {
+  worker_id: number;
+  worker_nombre: string;
+  fecha: string;
+  resumen: RegistroResumen;
+  spools: SpoolGroup[];
+}
+

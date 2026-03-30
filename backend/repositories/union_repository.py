@@ -4,6 +4,7 @@ Repositorio para operaciones en la hoja Uniones (union-level tracking).
 v4.0: Union-level CRUD operations with dynamic column mapping.
 """
 import logging
+import re
 import uuid
 from typing import Optional, Literal
 from datetime import datetime
@@ -1622,3 +1623,178 @@ class UnionRepository:
             raise ValueError(f"Spool {tag_spool} not found in Operaciones sheet")
 
         return row_num
+
+    def get_by_worker_id(self, worker_id: int, fecha: Optional[str] = None) -> list[dict]:
+        """
+        Get all union records where a worker participated (ARM or SOLD).
+
+        Matches on numeric ID extracted from ARM_WORKER/SOL_WORKER fields
+        using regex \\((\\d+)\\) to handle any name format (e.g. "MR(93)", "Rodriguez(93)").
+
+        A single row can match TWICE if the same worker did both ARM and SOLD.
+
+        Args:
+            worker_id: Numeric worker ID to match (e.g. 93)
+            fecha: Optional date filter (DD-MM-YYYY) applied to fecha_fin
+
+        Returns:
+            list[dict]: Each dict has tag_spool, n_union, dn_union, tipo_union,
+                        operacion, fecha_inicio, fecha_fin, arm_worker, sol_worker
+        """
+        _WORKER_ID_PATTERN = re.compile(r"\((\d+)\)")
+
+        def extract_worker_id(raw: str) -> Optional[int]:
+            """Extract numeric ID from worker string like 'MR(93)'."""
+            if not raw:
+                return None
+            match = _WORKER_ID_PATTERN.search(raw)
+            return int(match.group(1)) if match else None
+
+        def extract_date_part(datetime_str: str) -> Optional[str]:
+            """Extract DD-MM-YYYY from 'DD-MM-YYYY HH:MM:SS' or 'DD-MM-YYYY'."""
+            if not datetime_str:
+                return None
+            return datetime_str.strip().split(" ")[0]
+
+        try:
+            all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
+
+            if not all_rows or len(all_rows) < 2:
+                return []
+
+            column_map = ColumnMapCache.get_or_build(self._sheet_name, self.sheets_repo)
+
+            # Resolve all needed column indices dynamically
+            tag_col_idx = column_map.get(_normalize("TAG_SPOOL"))
+            n_union_col_idx = column_map.get(_normalize("N_UNION"))
+            dn_union_col_idx = column_map.get(_normalize("DN_UNION"))
+            tipo_union_col_idx = column_map.get(_normalize("TIPO_UNION"))
+            arm_worker_col_idx = column_map.get(_normalize("ARM_WORKER"))
+            sol_worker_col_idx = column_map.get(_normalize("SOL_WORKER"))
+            arm_inicio_col_idx = column_map.get(_normalize("ARM_FECHA_INICIO"))
+            arm_fin_col_idx = column_map.get(_normalize("ARM_FECHA_FIN"))
+            sol_inicio_col_idx = column_map.get(_normalize("SOL_FECHA_INICIO"))
+            sol_fin_col_idx = column_map.get(_normalize("SOL_FECHA_FIN"))
+
+            required = [tag_col_idx, n_union_col_idx, arm_worker_col_idx, sol_worker_col_idx]
+            if any(idx is None for idx in required):
+                raise ValueError(
+                    "Required columns (TAG_SPOOL, N_UNION, ARM_WORKER, SOL_WORKER) "
+                    "not found in Uniones sheet"
+                )
+
+            def get_val(row: list, idx: Optional[int]) -> str:
+                if idx is None or idx >= len(row):
+                    return ""
+                return str(row[idx]).strip() if row[idx] else ""
+
+            results = []
+
+            for row_data in all_rows[1:]:  # Skip header
+                if not row_data or len(row_data) <= tag_col_idx:
+                    continue
+
+                arm_worker_raw = get_val(row_data, arm_worker_col_idx)
+                sol_worker_raw = get_val(row_data, sol_worker_col_idx)
+
+                arm_id = extract_worker_id(arm_worker_raw)
+                sol_id = extract_worker_id(sol_worker_raw)
+
+                matched_arm = arm_id == worker_id
+                matched_sol = sol_id == worker_id
+
+                if not matched_arm and not matched_sol:
+                    continue
+
+                # Parse common fields
+                tag_spool = get_val(row_data, tag_col_idx)
+                try:
+                    n_union = int(get_val(row_data, n_union_col_idx))
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Failed to parse N_UNION for worker {worker_id}")
+                    continue
+
+                dn_raw = get_val(row_data, dn_union_col_idx)
+                dn_union = float(dn_raw) if dn_raw else None
+                tipo_union = get_val(row_data, tipo_union_col_idx) or None
+
+                arm_inicio = get_val(row_data, arm_inicio_col_idx)
+                arm_fin = get_val(row_data, arm_fin_col_idx)
+                sol_inicio = get_val(row_data, sol_inicio_col_idx)
+                sol_fin = get_val(row_data, sol_fin_col_idx)
+
+                # Emit one record per matching operation
+                if matched_arm:
+                    fecha_fin_val = arm_fin
+                    if fecha and fecha_fin_val:
+                        date_part = extract_date_part(fecha_fin_val)
+                        if date_part != fecha:
+                            pass  # Skip: date doesn't match
+                        else:
+                            results.append({
+                                "tag_spool": tag_spool,
+                                "n_union": n_union,
+                                "dn_union": dn_union,
+                                "tipo_union": tipo_union,
+                                "operacion": "ARM",
+                                "fecha_inicio": arm_inicio or None,
+                                "fecha_fin": arm_fin or None,
+                                "arm_worker": arm_worker_raw or None,
+                                "sol_worker": sol_worker_raw or None,
+                            })
+                    elif not fecha:
+                        results.append({
+                            "tag_spool": tag_spool,
+                            "n_union": n_union,
+                            "dn_union": dn_union,
+                            "tipo_union": tipo_union,
+                            "operacion": "ARM",
+                            "fecha_inicio": arm_inicio or None,
+                            "fecha_fin": arm_fin or None,
+                            "arm_worker": arm_worker_raw or None,
+                            "sol_worker": sol_worker_raw or None,
+                        })
+
+                if matched_sol:
+                    fecha_fin_val = sol_fin
+                    if fecha and fecha_fin_val:
+                        date_part = extract_date_part(fecha_fin_val)
+                        if date_part != fecha:
+                            pass  # Skip: date doesn't match
+                        else:
+                            results.append({
+                                "tag_spool": tag_spool,
+                                "n_union": n_union,
+                                "dn_union": dn_union,
+                                "tipo_union": tipo_union,
+                                "operacion": "SOLD",
+                                "fecha_inicio": sol_inicio or None,
+                                "fecha_fin": sol_fin or None,
+                                "arm_worker": arm_worker_raw or None,
+                                "sol_worker": sol_worker_raw or None,
+                            })
+                    elif not fecha:
+                        results.append({
+                            "tag_spool": tag_spool,
+                            "n_union": n_union,
+                            "dn_union": dn_union,
+                            "tipo_union": tipo_union,
+                            "operacion": "SOLD",
+                            "fecha_inicio": sol_inicio or None,
+                            "fecha_fin": sol_fin or None,
+                            "arm_worker": arm_worker_raw or None,
+                            "sol_worker": sol_worker_raw or None,
+                        })
+
+            self.logger.info(
+                f"get_by_worker_id: Found {len(results)} records for worker {worker_id}"
+                + (f" on {fecha}" if fecha else "")
+            )
+            return results
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to get_by_worker_id for worker {worker_id}: {e}",
+                exc_info=True
+            )
+            raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")

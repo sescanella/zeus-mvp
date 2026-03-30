@@ -54,6 +54,8 @@ from backend.routers import occupation_v4
 from backend.routers import union_router
 # v5.0 Phase 0: Router SPOOL_STATUS implementado (GET status + batch-status)
 from backend.routers import spool_status_router
+# Pieza 2: Router REGISTRO implementado (worker daily production log)
+from backend.routers import registro_router
 
 # ============================================================================
 # INICIALIZACIÓN FASTAPI
@@ -395,6 +397,9 @@ app.include_router(union_router.router, prefix="/api/v4", tags=["v4-unions"])
 
 # v5.0 Phase 0: Router SPOOL_STATUS registrado (individual + batch status)
 app.include_router(spool_status_router.router, prefix="/api", tags=["spool-status"])
+
+# Pieza 2: Router REGISTRO registrado (worker daily production log)
+app.include_router(registro_router.router, prefix="/api", tags=["Registro"])
 
 
 # ============================================================================
