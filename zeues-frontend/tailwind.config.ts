@@ -8,24 +8,20 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+      },
       screens: {
         // Narrow screens (small tablets/large phones like 601x962px)
         'narrow': {'max': '640px'},
       },
       colors: {
-        // Paleta ZEUES Soft Brutalism v2.0
         zeues: {
           // KM Brand Colors (Base)
           orange: '#FF5B00',        // Primary CTA (KM)
           'orange-dark': '#E64A19', // Hover primary
           blue: '#0A4C95',          // Secondary (KM)
           'blue-dark': '#083A75',   // Hover secondary
-
-          // Terrosos Desaturados (Soft Brutalism)
-          stone: '#D4D2CE',         // Cards/contenedores background
-          beige: '#F5F1E8',         // Page background
-          sage: '#9CAF88',          // Success state
-          taupe: '#8B7F73',         // Secondary text
 
           // States
           red: '#DC2626',           // Danger/Cancel
@@ -36,9 +32,6 @@ const config: Config = {
           'orange-border': '#E55D26',  // Selected state border
           'orange-pressed': '#CC5322', // Active/pressed state border
         },
-        // Alias para compatibilidad con código existente
-        'km-orange': '#FF5B00',
-        'km-blue': '#0A4C95',
       },
     },
   },

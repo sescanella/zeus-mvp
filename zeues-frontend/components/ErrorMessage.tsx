@@ -82,7 +82,7 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
   const IconComponent = errorConfig.icon;
 
   return (
-    <div role="alert" className={`${errorConfig.bgColor} border ${errorConfig.borderColor} rounded-lg p-4`}>
+    <div role="alert" className={`${errorConfig.bgColor} border ${errorConfig.borderColor} p-4`}>
       <div className="flex items-start gap-3">
         <IconComponent
           size={28}
@@ -90,10 +90,10 @@ export function ErrorMessage({ message, type = 'generic', onRetry }: ErrorMessag
           aria-label={errorConfig.title}
         />
         <div className="flex-1">
-          <h3 className={`${errorConfig.textColor} font-bold text-lg mb-1`}>
+          <h3 className={`${errorConfig.textColor} font-mono font-black text-base tracking-widest uppercase mb-1`}>
             {errorConfig.title}
           </h3>
-          <p className={`${errorConfig.textColor} font-medium`}>
+          <p className={`${errorConfig.textColor} font-mono text-sm`}>
             {message}
           </p>
           {shouldShowRetry && (

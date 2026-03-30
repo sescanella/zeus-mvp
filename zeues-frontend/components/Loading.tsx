@@ -6,7 +6,7 @@ export function Loading({ message = 'CARGANDO' }: LoadingProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16" role="status" aria-label="Cargando">
       {/* Border progresivo OPTIMIZADO - cuadrado que se dibuja */}
-      <div className="relative w-48 h-48 mb-8">
+      <div className="relative w-48 h-48 mb-8" aria-hidden="true">
         {/* Top border - izquierda a derecha */}
         <div className="border-top will-change-transform"></div>
 

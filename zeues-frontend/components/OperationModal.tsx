@@ -52,7 +52,7 @@ export function OperationModal({
       onClose={onClose}
       ariaLabel="Seleccionar operación"
       isTopOfStack={isTopOfStack}
-      className="bg-zeues-navy border-4 border-white rounded-none max-w-sm"
+      className="bg-zeues-navy border-4 border-white"
     >
       {/* Header */}
       <div className="mb-4">
@@ -76,6 +76,14 @@ export function OperationModal({
             {OPERATION_LABELS[op]}
           </button>
         ))}
+
+        <button
+          onClick={onClose}
+          className="w-full h-12 font-mono font-black text-white/70 border border-white/20 cursor-pointer hover:text-white hover:border-white/40 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm mt-1"
+          aria-label="Cancelar y cerrar"
+        >
+          CANCELAR
+        </button>
       </div>
     </Modal>
   );

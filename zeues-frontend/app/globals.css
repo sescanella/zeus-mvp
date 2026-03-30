@@ -14,7 +14,7 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   background-color: #001F3F; /* zeues-navy */
   color: #FFFFFF; /* white */
 }
@@ -240,6 +240,33 @@ button {
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* ========================================
+   LANDSCAPE ORIENTATION OPTIMIZATIONS
+   Target: 10" Android tablet (1280x800) and iPad (1024x768) in landscape.
+   Guard max-height: 820px excludes desktop (900p/1080p) while catching
+   tablet landscape heights (768px–800px). Orientation guard prevents
+   this firing on portrait phones with short heights.
+   ======================================== */
+@media (orientation: landscape) and (max-height: 820px) {
+
+  /* Modals: reclaim vertical space — 85vh → 90vh */
+  [role="dialog"] {
+    max-height: 90vh !important;
+  }
+
+  /* Modal fixed top zone: reduce padding to recover ~8px */
+  [role="dialog"] .shrink-0:first-child {
+    padding: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  /* Modal fixed bottom zone: reduce padding to recover ~8px */
+  [role="dialog"] .shrink-0:last-child {
+    padding: 0.75rem !important;
+    padding-top: 0.5rem !important;
+  }
 }
 
 /* Accessibility: respect user motion preferences */

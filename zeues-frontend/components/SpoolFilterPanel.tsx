@@ -95,15 +95,15 @@ export function SpoolFilterPanel({
         isOpen={isOpen}
         onClose={handleClose}
         ariaLabel="Filtros de búsqueda"
-        className="bg-zeues-navy border-4 border-white rounded-none max-w-lg"
+        className="bg-zeues-navy border-4 border-white max-w-2xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-black text-white/50 font-mono">FILTROS DE BÚSQUEDA</span>
+          <span className="text-xs font-black text-white/70 font-mono">FILTROS DE BÚSQUEDA</span>
           <button
             onClick={handleClose}
             aria-label="Cerrar filtros de búsqueda"
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
             <X size={24} strokeWidth={3} />
           </button>
@@ -112,11 +112,11 @@ export function SpoolFilterPanel({
         {/* Search inputs grid */}
         <div className="grid grid-cols-2 narrow:grid-cols-1 gap-4 tablet:gap-3 mb-4 tablet:mb-3">
           <div>
-            <label htmlFor="filter-nv" className="block text-xs font-black text-white/50 font-mono mb-2">
+            <label htmlFor="filter-nv" className="block text-xs font-black text-white/70 font-mono mb-2">
               BUSCAR NV
             </label>
             <div className="relative">
-              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" aria-hidden="true" />
+              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/70" aria-hidden="true" />
               <input
                 ref={nvInputRef}
                 id="filter-nv"
@@ -125,16 +125,16 @@ export function SpoolFilterPanel({
                 onChange={(e) => onSearchNVChange(e.target.value)}
                 placeholder="NV-2024-..."
                 aria-label="Buscar por número de nota de venta"
-                className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/40 focus:outline-none focus:border-zeues-orange"
               />
             </div>
           </div>
           <div>
-            <label htmlFor="filter-tag" className="block text-xs font-black text-white/50 font-mono mb-2">
+            <label htmlFor="filter-tag" className="block text-xs font-black text-white/70 font-mono mb-2">
               BUSCAR TAG
             </label>
             <div className="relative">
-              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" aria-hidden="true" />
+              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/70" aria-hidden="true" />
               <input
                 id="filter-tag"
                 type="text"
@@ -142,7 +142,7 @@ export function SpoolFilterPanel({
                 onChange={(e) => onSearchTagChange(e.target.value)}
                 placeholder="Buscar TAG..."
                 aria-label="Buscar por TAG de spool"
-                className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                className="w-full h-12 pl-12 narrow:pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono placeholder:text-white/40 focus:outline-none focus:border-zeues-orange"
               />
             </div>
           </div>

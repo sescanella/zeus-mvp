@@ -24,7 +24,7 @@ export function NotificationToast({ toasts, onDismiss }: NotificationToastProps)
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"
+      className="fixed bottom-4 left-4 right-4 z-[100] flex flex-col-reverse gap-2 pointer-events-none"
     >
       {toasts.map((toast) => {
         const isSuccess = toast.type === 'success';
@@ -36,7 +36,7 @@ export function NotificationToast({ toasts, onDismiss }: NotificationToastProps)
           <div
             key={toast.id}
             role="alert"
-            className={`pointer-events-auto bg-zeues-navy border-4 ${borderClass} rounded-none px-4 py-3 flex items-center gap-3 min-w-[280px] max-w-sm font-mono font-black text-sm text-white shadow-lg`}
+            className={`pointer-events-auto bg-zeues-navy border-4 ${borderClass} rounded-none px-4 py-3 flex items-center gap-3 w-full font-mono font-black text-sm text-white shadow-lg`}
           >
             <Icon className={`${iconClass} shrink-0`} size={20} aria-hidden="true" />
             <span className="flex-1">{toast.message}</span>

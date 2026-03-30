@@ -35,14 +35,14 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, e
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
         <PackageOpen
-          className="text-white/30"
+          className="text-white/40"
           size={48}
           aria-hidden="true"
         />
-        <p className="text-white/50 font-mono font-black text-base">
+        <p className="text-white/70 font-mono font-black text-base">
           No hay spools en tu lista
         </p>
-        <p className="text-white/30 font-mono text-sm">
+        <p className="text-white/40 font-mono text-sm">
           Usa el botón Añadir Spool para comenzar
         </p>
       </div>
@@ -56,7 +56,7 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, e
   if (filtered.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <p className="text-white/50 font-mono font-black text-base">
+        <p className="text-white/70 font-mono font-black text-base">
           Sin spools con ese estado
         </p>
       </div>

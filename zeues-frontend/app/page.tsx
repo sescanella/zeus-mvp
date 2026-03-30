@@ -32,9 +32,21 @@ import {
   pausarReparacion,
   completarReparacion,
 } from '@/lib/api';
+import { classifyApiError } from '@/lib/error-classifier';
 import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
 import { getValidActions, deriveOperation } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
+import { ESTADO_LABELS, ESTADO_CHIP_COLORS, ALL_ESTADOS } from '@/lib/constants';
+
+// ─── Blueprint grid overlay (matches BlueprintPageWrapper) ───────────────────
+
+const BLUEPRINT_GRID_STYLE: React.CSSProperties = {
+  backgroundImage: `
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+  `,
+  backgroundSize: '50px 50px',
+};
 
 // ─── Pending action type ─────────────────────────────────────────────────────
 
@@ -55,38 +67,6 @@ function parseWorkerIdFromOcupadoPor(ocupadoPor: string): number | null {
   const match = ocupadoPor.match(/\((\d+)\)$/);
   return match ? parseInt(match[1], 10) : null;
 }
-
-// ─── Filter constants ─────────────────────────────────────────────────────────
-
-const ESTADO_LABELS_PAGE: Record<EstadoTrabajo, string> = {
-  LIBRE: 'Libre',
-  EN_PROGRESO: 'En Progreso',
-  PAUSADO: 'Pausado',
-  COMPLETADO: 'Completado',
-  RECHAZADO: 'Rechazado',
-  PENDIENTE_METROLOGIA: 'Pend. Met.',
-  BLOQUEADO: 'Bloqueado',
-};
-
-const ESTADO_CHIP_COLORS: Record<EstadoTrabajo, string> = {
-  LIBRE: 'border-white text-white bg-white/10',
-  EN_PROGRESO: 'border-zeues-orange text-zeues-orange bg-zeues-orange/10',
-  PAUSADO: 'border-yellow-400 text-yellow-400 bg-yellow-400/10',
-  COMPLETADO: 'border-green-400 text-green-400 bg-green-400/10',
-  RECHAZADO: 'border-red-400 text-red-400 bg-red-400/10',
-  PENDIENTE_METROLOGIA: 'border-blue-300 text-blue-300 bg-blue-300/10',
-  BLOQUEADO: 'border-red-500 text-red-500 bg-red-500/10',
-};
-
-const ALL_ESTADOS: EstadoTrabajo[] = [
-  'LIBRE',
-  'EN_PROGRESO',
-  'PAUSADO',
-  'COMPLETADO',
-  'RECHAZADO',
-  'PENDIENTE_METROLOGIA',
-  'BLOQUEADO',
-];
 
 // ─── HomePage (inner component) ───────────────────────────────────────────────
 
@@ -289,9 +269,7 @@ function HomePage() {
 
         enqueue('Operacion completada', 'success');
       } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : 'Error al ejecutar la operacion';
-        enqueue(message, 'error');
+        enqueue(classifyApiError(err).userMessage, 'error');
       } finally {
         setApiLoading(false);
         setSelectedSpool(null);
@@ -377,9 +355,13 @@ function HomePage() {
   };
 
   const handleModalClose = () => {
+    // Capture length BEFORE pop — pop() schedules a setState and the stack ref
+    // remains stale until the next render. Reading after pop always sees the
+    // pre-pop value, making the condition unreliable.
+    const stackLengthBeforePop = modalStack.stack.length;
     modalStack.pop();
-    if (modalStack.stack.length <= 1) {
-      // After pop, stack will be empty — reset operation/action selection
+    if (stackLengthBeforePop <= 1) {
+      // Stack will be empty after this pop — reset operation/action selection
       setSelectedOperation(null);
       setSelectedAction(null);
       setSelectedSpool(null);
@@ -431,8 +413,7 @@ function HomePage() {
           }
           enqueue('Operacion completada', 'success');
         } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : 'Error al finalizar';
-          enqueue(message, 'error');
+          enqueue(classifyApiError(err).userMessage, 'error');
         } finally {
           setApiLoading(false);
         }
@@ -453,8 +434,7 @@ function HomePage() {
           }
           enqueue('Uniones guardadas y spool pausado', 'success');
         } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : 'Error al pausar';
-          enqueue(message, 'error');
+          enqueue(classifyApiError(err).userMessage, 'error');
         } finally {
           setApiLoading(false);
         }
@@ -472,7 +452,7 @@ function HomePage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-zeues-navy text-white">
+    <div className="min-h-screen bg-zeues-navy text-white" style={BLUEPRINT_GRID_STYLE}>
       {/* Header */}
       <header className="p-4 text-center border-b-4 border-white/30">
         <img src="/logos/logo-grisclaro-F8F9FA.svg" alt="KM" className="h-10 mx-auto" />
@@ -500,7 +480,7 @@ function HomePage() {
                 : 'border-white/30 text-white/70 hover:border-white/50'
             }`}
           >
-            {estadoFilter ? ESTADO_LABELS_PAGE[estadoFilter] : 'FILTRAR'}
+            {estadoFilter ? ESTADO_LABELS[estadoFilter] : 'FILTRAR'}
           </button>
         </div>
 
@@ -517,13 +497,13 @@ function HomePage() {
                 key={estado}
                 onClick={() => setEstadoFilter(estadoFilter === estado ? null : estado)}
                 aria-pressed={estadoFilter === estado}
-                className={`px-3 py-2 font-mono font-black text-xs border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
+                className={`inline-flex items-center justify-center min-h-[44px] px-3 py-2 font-mono font-black text-sm border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
                   estadoFilter === estado
                     ? ESTADO_CHIP_COLORS[estado]
-                    : 'border-white/20 text-white/50 hover:border-white/40'
+                    : 'border-white/20 text-white/70 hover:border-white/40'
                 }`}
               >
-                {ESTADO_LABELS_PAGE[estado]}
+                {ESTADO_LABELS[estado]}
               </button>
             ))}
           </div>
@@ -614,7 +594,7 @@ function HomePage() {
           aria-label="Procesando operacion"
         >
           <div className="flex flex-col items-center gap-3 bg-zeues-navy border-4 border-white p-8">
-            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
             <p className="text-white font-mono font-black text-sm tracking-widest">
               PROCESANDO...
             </p>

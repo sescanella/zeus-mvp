@@ -17,6 +17,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getWorkers, getRegistro } from '@/lib/api';
 import type { Worker, RegistroResponse, SpoolGroup } from '@/lib/types';
 
+// ─── Blueprint grid overlay (matches BlueprintPageWrapper) ───────────────────
+
+const BLUEPRINT_GRID_STYLE: React.CSSProperties = {
+  backgroundImage: `
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+  `,
+  backgroundSize: '50px 50px',
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LS_KEY = 'zeues_mi_registro_worker';
@@ -82,12 +92,12 @@ function WorkerSelection({
   });
 
   return (
-    <div className="min-h-screen bg-zeues-navy text-white font-mono">
+    <div className="min-h-screen bg-zeues-navy text-white font-mono" style={BLUEPRINT_GRID_STYLE}>
       <header className="p-4 text-center border-b-4 border-white/30">
         <h1 className="text-xl font-black tracking-widest uppercase">
           MI REGISTRO
         </h1>
-        <p className="text-white/60 text-sm mt-1">Selecciona tu nombre</p>
+        <p className="text-white/70 text-sm mt-1">Selecciona tu nombre</p>
       </header>
 
       <div className="max-w-md mx-auto px-4 py-4">
@@ -105,7 +115,7 @@ function WorkerSelection({
         <div className="flex flex-col gap-2 mt-4">
           {loading && (
             <div className="flex justify-center py-8" role="status" aria-label="Cargando trabajadores">
-              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
             </div>
           )}
 
@@ -128,7 +138,7 @@ function WorkerSelection({
           ))}
 
           {!loading && !error && filtered.length === 0 && (
-            <p className="text-white/60 text-sm text-center py-8">
+            <p className="text-white/70 text-sm text-center py-8">
               No se encontraron trabajadores
             </p>
           )}
@@ -181,7 +191,7 @@ function SpoolCard({ group }: { group: SpoolGroup }) {
       </p>
 
       {/* Other worker */}
-      <p className="text-white/50 text-xs mt-1">
+      <p className="text-white/40 text-xs mt-1">
         Otro: {group.otro_trabajador || 'Pendiente'}
       </p>
 
@@ -237,7 +247,7 @@ function TodayView({
   const isToday = dateIso === todayIso();
 
   return (
-    <div className="min-h-screen bg-zeues-navy text-white font-mono">
+    <div className="min-h-screen bg-zeues-navy text-white font-mono" style={BLUEPRINT_GRID_STYLE}>
       {/* Header */}
       <header className="p-4 border-b-4 border-white/30">
         <div className="max-w-md mx-auto flex items-center justify-between">
@@ -252,7 +262,7 @@ function TodayView({
           </div>
           <button
             onClick={onChangeWorker}
-            className="px-3 py-2 text-xs font-black text-white/60 border border-white/30 cursor-pointer hover:text-white hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset transition-colors"
+            className="px-3 py-2 text-xs font-black text-white/70 border border-white/30 cursor-pointer hover:text-white hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset transition-colors"
             aria-label="Cambiar trabajador"
           >
             CAMBIAR
@@ -267,7 +277,7 @@ function TodayView({
             <p className="text-5xl font-black text-zeues-orange leading-none">
               {data.resumen.pd_total}
             </p>
-            <p className="text-white/60 text-sm mt-1 tracking-widest uppercase">
+            <p className="text-white/70 text-sm mt-1 tracking-widest uppercase">
               PD {isToday ? 'HOY' : data.resumen.fecha}
             </p>
             <p className="text-white/40 text-xs mt-1">
@@ -303,7 +313,7 @@ function TodayView({
             role="status"
             aria-label="Cargando registro"
           >
-            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
           </div>
         )}
 
@@ -331,7 +341,7 @@ function TodayView({
 
         {/* Empty state */}
         {!loading && !error && data && data.spools.length === 0 && (
-          <p className="text-white/50 text-sm text-center py-12">
+          <p className="text-white/70 text-sm text-center py-12">
             No hay uniones registradas para esta fecha.
           </p>
         )}
@@ -383,8 +393,8 @@ export default function MiRegistroPage() {
   // Don't render until we've checked localStorage
   if (!initialized) {
     return (
-      <div className="min-h-screen bg-zeues-navy flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      <div className="min-h-screen bg-zeues-navy flex items-center justify-center" style={BLUEPRINT_GRID_STYLE} role="status" aria-label="Cargando">
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
       </div>
     );
   }

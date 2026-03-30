@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { Loading } from './Loading';
 import {
@@ -16,6 +16,8 @@ import {
   OPERATION_TITLES,
   type OperationType,
 } from '@/lib/operation-config';
+import { classifyApiError } from '@/lib/error-classifier';
+import { hapticTap } from '@/lib/haptic';
 import type { Worker, SpoolCardData } from '@/lib/types';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 
@@ -67,38 +69,38 @@ export function WorkerModal({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const lastWorkerRef = useRef<Worker | null>(null);
 
-  // Fetch workers when modal opens
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let cancelled = false;
+  function fetchWorkers() {
     setFetchLoading(true);
     setFetchError(null);
-    setApiError(null);
+
+    const operationType = toOperationType(operation);
+    const allowedRoles = OPERATION_TO_ROLES[operationType];
 
     getWorkers()
       .then((allWorkers) => {
-        if (cancelled) return;
-        const operationType = toOperationType(operation);
-        const allowedRoles = OPERATION_TO_ROLES[operationType];
         const filtered = allWorkers.filter(
           (w) => w.roles?.some((r) => allowedRoles.includes(r)) ?? false
         );
         setWorkers(filtered);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : 'Error al cargar trabajadores';
-        setFetchError(message);
+        setFetchError(classifyApiError(err).userMessage);
       })
       .finally(() => {
-        if (!cancelled) setFetchLoading(false);
+        setFetchLoading(false);
       });
+  }
 
-    return () => {
-      cancelled = true;
-    };
+  // Fetch workers when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setApiError(null);
+    lastWorkerRef.current = null;
+    fetchWorkers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, operation]);
 
   /**
@@ -142,6 +144,8 @@ export function WorkerModal({
 
   async function handleWorkerClick(worker: Worker) {
     if (apiLoading) return;
+    hapticTap();
+    lastWorkerRef.current = worker;
     setApiLoading(true);
     setApiError(null);
 
@@ -149,11 +153,15 @@ export function WorkerModal({
       await executeForSpool(worker.id);
       onComplete();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al ejecutar la operación';
-      setApiError(message);
+      setApiError(classifyApiError(err).userMessage);
     } finally {
       setApiLoading(false);
     }
+  }
+
+  async function handleRetry() {
+    if (!lastWorkerRef.current) return;
+    await handleWorkerClick(lastWorkerRef.current);
   }
 
   const operationType = toOperationType(operation);
@@ -165,7 +173,7 @@ export function WorkerModal({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabel={`Seleccionar trabajador para ${actionLabel} ${operation}`}
-      className="bg-zeues-navy border-4 border-white rounded-none max-w-sm"
+      className="bg-zeues-navy border-4 border-white"
       isTopOfStack={isTopOfStack}
     >
       <div className="flex flex-col gap-4">
@@ -174,7 +182,7 @@ export function WorkerModal({
           <h2 className="text-white font-mono font-black text-xl tracking-widest uppercase">
             {title}
           </h2>
-          <p className="text-white/60 font-mono text-sm mt-1">
+          <p className="text-white/70 font-mono text-sm mt-1">
             {spool.tag_spool} — {actionLabel}
           </p>
         </div>
@@ -183,9 +191,18 @@ export function WorkerModal({
         {fetchLoading ? (
           <Loading message="CARGANDO" />
         ) : fetchError ? (
-          <p role="alert" className="text-red-400 font-mono text-sm font-black mt-3">
-            {fetchError}
-          </p>
+          <div className="flex flex-col gap-3">
+            <p role="alert" className="text-red-400 font-mono text-sm font-black">
+              {fetchError}
+            </p>
+            <button
+              onClick={fetchWorkers}
+              className="w-full h-12 font-mono font-black text-white border-2 border-white rounded cursor-pointer hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+              aria-label="Reintentar cargar trabajadores"
+            >
+              REINTENTAR
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             {workers.map((worker) => (
@@ -201,7 +218,7 @@ export function WorkerModal({
             ))}
 
             {workers.length === 0 && (
-              <p className="text-white/60 font-mono text-sm text-center py-4">
+              <p className="text-white/70 font-mono text-sm text-center py-4">
                 No hay trabajadores disponibles
               </p>
             )}
@@ -211,22 +228,32 @@ export function WorkerModal({
         {/* Loading spinner during API call */}
         {apiLoading && (
           <div role="status" aria-label="Procesando..." className="flex justify-center py-2">
-            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
           </div>
         )}
 
-        {/* Inline error on API failure */}
+        {/* Inline error on API failure + retry */}
         {apiError && (
-          <p role="alert" className="text-red-400 font-mono text-sm font-black mt-3">
-            {apiError}
-          </p>
+          <div className="flex flex-col gap-3">
+            <p role="alert" className="text-red-400 font-mono text-sm font-black">
+              {apiError}
+            </p>
+            <button
+              onClick={handleRetry}
+              disabled={apiLoading}
+              className="w-full h-12 font-mono font-black text-white border-2 border-white rounded cursor-pointer hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+              aria-label="Reintentar la acción"
+            >
+              REINTENTAR
+            </button>
+          </div>
         )}
 
         {/* Close button */}
         <button
           onClick={onClose}
           disabled={apiLoading}
-          className="w-full h-12 font-mono font-black text-white/60 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+          className="w-full h-12 font-mono font-black text-white/70 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
           aria-label="Cancelar y cerrar"
         >
           CANCELAR

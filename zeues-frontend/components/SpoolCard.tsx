@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { hapticTap } from '@/lib/haptic';
 import type { SpoolCardData } from '@/lib/types';
+import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/constants';
 
 export type { SpoolCardData };
 
@@ -15,31 +17,10 @@ export interface SpoolCardProps {
   onUnionesClick?: (spool: SpoolCardData) => void;
 }
 
-// ─── Estado color map ──────────────────────────────────────────────────────────
-const ESTADO_COLORS: Record<NonNullable<SpoolCardData['estado_trabajo']>, string> = {
-  LIBRE: 'text-white border-white/30',
-  EN_PROGRESO: 'text-zeues-orange border-zeues-orange',
-  PAUSADO: 'text-yellow-400 border-yellow-400',
-  COMPLETADO: 'text-green-400 border-green-400',
-  RECHAZADO: 'text-red-400 border-red-400',
-  PENDIENTE_METROLOGIA: 'text-blue-300 border-blue-300',
-  BLOQUEADO: 'text-red-500 border-red-500 bg-red-600/20',
-};
-
 const OPERACION_LABELS: Record<string, string> = {
   ARM: 'Armado',
   SOLD: 'Soldadura',
   REPARACION: 'Reparación',
-};
-
-const ESTADO_LABELS: Record<string, string> = {
-  LIBRE: 'Libre',
-  EN_PROGRESO: 'En Progreso',
-  PAUSADO: 'Pausado',
-  COMPLETADO: 'Completado',
-  RECHAZADO: 'Rechazado',
-  PENDIENTE_METROLOGIA: 'Pend. Metrología',
-  BLOQUEADO: 'Bloqueado',
 };
 
 // ─── Priority color map ────────────────────────────────────────────────────────
@@ -48,7 +29,7 @@ const PRIORITY_COLORS: Record<number, string> = {
   2: 'bg-zeues-orange text-white border-zeues-orange',
   3: 'bg-white/20 text-white border-white/30',
 };
-const PRIORITY_DEFAULT = 'bg-white/5 text-white/50 border-white/10';
+const PRIORITY_DEFAULT = 'bg-white/5 text-white/70 border-white/10';
 
 // ─── Priority cycle ────────────────────────────────────────────────────────────
 function nextPriority(current: number | null): number | null {
@@ -199,19 +180,21 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
       <button
         onClick={(e) => {
           e.stopPropagation();
+          hapticTap();
           onPriorityChange?.(spool.tag_spool, nextPriority(priority));
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             e.stopPropagation();
+            hapticTap();
             onPriorityChange?.(spool.tag_spool, nextPriority(priority));
           }
         }}
         aria-label={`Prioridad spool ${spool.tag_spool}: ${priority ?? 'sin prioridad'}. Click para cambiar`}
         className={`flex flex-col items-center justify-center w-16 shrink-0 min-h-[5rem] border-r-4 border-white/20 cursor-pointer transition-colors duration-200 hover:opacity-80 active:opacity-60 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${priority !== null ? PRIORITY_COLORS[priority] : PRIORITY_DEFAULT}`}
       >
-        <span className="font-mono text-xs font-black tracking-widest uppercase">PRIO</span>
+        <span className="font-mono text-sm font-black tracking-widest uppercase">PRIO</span>
         <span className="font-mono text-2xl font-black">{priority ?? '-'}</span>
       </button>
 
@@ -240,7 +223,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
             <button
               onClick={(e) => { e.stopPropagation(); setConfirmingRemove(true); }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setConfirmingRemove(true); } }}
-              aria-label={`Eliminar spool ${spool.tag_spool}`}
+              aria-label={`Quitar spool ${spool.tag_spool} de la lista`}
               className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
             >
               <X size={16} aria-hidden="true" />
@@ -251,7 +234,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
               <button
                 onClick={() => { onRemove(spool.tag_spool); setConfirmingRemove(false); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onRemove(spool.tag_spool); setConfirmingRemove(false); } }}
-                aria-label={`Confirmar eliminar spool ${spool.tag_spool}`}
+                aria-label={`Confirmar quitar spool ${spool.tag_spool}`}
                 className="min-h-[44px] px-3 flex items-center justify-center text-red-400 font-mono font-black text-sm border-2 border-red-400 hover:bg-red-400/20 rounded focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
               >
                 Quitar
@@ -259,7 +242,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
               <button
                 onClick={() => setConfirmingRemove(false)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setConfirmingRemove(false); } }}
-                aria-label="Cancelar eliminación"
+                aria-label="Cancelar"
                 className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
               >
                 <X size={16} aria-hidden="true" />
@@ -293,7 +276,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
         {spool.total_uniones !== null && spool.total_uniones > 0 && (
           <div className="flex flex-wrap gap-2 mt-1">
             {spool.uniones_arm_completadas !== null && spool.uniones_arm_completadas > 0 && (
-              <span className={`font-mono text-xs px-1.5 py-0.5 border ${
+              <span className={`font-mono text-sm px-1.5 py-0.5 border ${
                 spool.uniones_arm_completadas >= spool.total_uniones
                   ? 'text-green-400 border-green-400/40'
                   : 'text-yellow-400 border-yellow-400/40'
@@ -302,7 +285,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
               </span>
             )}
             {spool.uniones_sold_completadas !== null && spool.uniones_sold_completadas > 0 && (
-              <span className={`font-mono text-xs px-1.5 py-0.5 border ${
+              <span className={`font-mono text-sm px-1.5 py-0.5 border ${
                 spool.uniones_sold_completadas >= spool.total_uniones
                   ? 'text-green-400 border-green-400/40'
                   : 'text-yellow-400 border-yellow-400/40'
@@ -317,7 +300,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
         {spool.completion_history?.length > 0 && (
           <div className="flex flex-col gap-0.5 mt-1">
             {spool.completion_history.map((entry) => (
-              <span key={entry.operation} className="font-mono text-xs text-green-400">
+              <span key={entry.operation} className="font-mono text-sm text-green-400">
                 {entry.operation} — {entry.worker} — {entry.date}
               </span>
             ))}
@@ -360,7 +343,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           aria-label={`Gestionar uniones spool ${spool.tag_spool}${spool.total_uniones ? `: ${spool.total_uniones} uniones` : ': sin uniones'}`}
           className="flex flex-col items-center justify-center w-20 shrink-0 min-h-[5rem] border-l-4 border-white/20 cursor-pointer transition-colors duration-200 hover:bg-white/5 active:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
         >
-          <span className="font-mono text-xs font-black tracking-widest text-white/70">Uniones</span>
+          <span className="font-mono text-sm font-black tracking-widest text-white/70">Uniones</span>
           <span className={`font-mono text-xl font-black ${
             spool.total_uniones === 0 || spool.total_uniones === null
               ? 'text-yellow-400'

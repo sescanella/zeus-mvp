@@ -122,13 +122,13 @@ export default function DashboardPage() {
       {/* Content */}
       <div className="px-8 narrow:px-5 py-6">
         {loading && (
-          <div className="text-center text-white font-mono text-xl">
-            Cargando...
+          <div className="text-center text-white font-mono text-xl" role="status" aria-label="Cargando">
+            <span aria-hidden="true">Cargando...</span>
           </div>
         )}
 
         {error && (
-          <div className="text-center text-red-500 font-mono text-xl">
+          <div className="text-center text-red-500 font-mono text-xl" role="alert">
             {error}
           </div>
         )}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Modal } from '@/components/Modal';
 import { getTodasUniones, guardarUniones } from '@/lib/api';
+import { classifyApiError } from '@/lib/error-classifier';
 import type { SpoolCardData } from '@/lib/types';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
@@ -83,8 +84,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
       }));
       setRows(loaded.length > 0 ? loaded : [emptyRow]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al cargar uniones';
-      setError(msg);
+      setError(classifyApiError(err).userMessage);
       setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false }]);
     } finally {
       setLoading(false);
@@ -238,8 +238,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
         .filter((id): id is string => id !== null);
       onComplete(selectedIds);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al guardar uniones';
-      setError(msg);
+      setError(classifyApiError(err).userMessage);
     } finally {
       setSaving(false);
     }
@@ -256,7 +255,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   const guardarLabel = saving
     ? 'GUARDANDO...'
     : operacion !== null && selectedRows.length > 0
-      ? 'GUARDAR Y CONFIRMAR'
+      ? `FINALIZAR ${selectedRows.length} ${selectedRows.length === 1 ? 'UNIÓN' : 'UNIONES'}`
       : 'GUARDAR';
 
   return (
@@ -265,7 +264,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
       onClose={onClose}
       ariaLabel={`Gestionar uniones del spool ${spool.tag_spool}`}
       isTopOfStack={isTopOfStack}
-      className="bg-zeues-navy border-4 border-white max-w-lg !p-0 flex flex-col max-h-[85vh]"
+      className="bg-zeues-navy border-4 border-white max-w-2xl !p-0 flex flex-col max-h-[85vh]"
     >
       {/* FIXED TOP ZONE */}
       <div className="shrink-0 p-4 pb-2">
@@ -298,7 +297,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                 onClick={() => handleCountChange(rows.length - 1)}
                 disabled={rows.length <= 1}
                 aria-label="Reducir cantidad de uniones"
-                className="h-10 w-10 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+                className="h-12 w-12 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
               >
                 -
               </button>
@@ -313,20 +312,20 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                   if (!isNaN(val)) handleCountChange(val);
                 }}
                 aria-label="Cantidad total de uniones"
-                className="h-10 w-12 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-base text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-12 w-12 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-base text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <button
                 onClick={() => handleCountChange(rows.length + 1)}
                 disabled={rows.length >= MAX_UNIONS}
                 aria-label="Aumentar cantidad de uniones"
-                className="h-10 w-10 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+                className="h-12 w-12 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
               >
                 +
               </button>
               <button
                 onClick={() => setCountUnlocked(false)}
                 aria-label="Bloquear cantidad"
-                className="ml-1 h-10 px-2 border-2 border-white/30 text-white/50 font-mono text-xs cursor-pointer hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                className="ml-1 h-12 px-3 border-2 border-white/30 text-white/70 font-mono text-xs cursor-pointer hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
               >
                 OK
               </button>
@@ -343,7 +342,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                 value={defaultDn ?? ''}
                 onChange={(e) => handleDefaultDnChange(e.target.value)}
                 aria-label="DN por defecto para uniones vacias"
-                className="h-10 flex-1 min-w-0 bg-zeues-navy border border-white/40 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+                className="h-12 flex-1 min-w-0 bg-zeues-navy border border-white/40 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
               >
                 <option value="">DN</option>
                 {DN_UNION_OPTIONS.map((dn) => (
@@ -354,7 +353,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                 value={defaultTipo ?? ''}
                 onChange={(e) => handleDefaultTipoChange(e.target.value)}
                 aria-label="Tipo por defecto para uniones vacias"
-                className="h-10 flex-1 min-w-0 bg-zeues-navy border border-white/40 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+                className="h-12 flex-1 min-w-0 bg-zeues-navy border border-white/40 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
               >
                 <option value="">TIPO</option>
                 {TIPO_UNION_OPTIONS.map((tipo) => (
@@ -391,8 +390,8 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
 
       {/* SCROLLABLE MIDDLE ZONE */}
       {loading && (
-        <div className="flex items-center justify-center py-8">
-          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        <div className="flex items-center justify-center py-8" role="status" aria-label="Cargando">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
         </div>
       )}
 
@@ -474,7 +473,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                     onChange={(e) => handleDnChange(row.n_union, e.target.value)}
                     disabled={row.has_work}
                     aria-label={`DN union ${row.n_union}`}
-                    className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="h-12 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <option value="">DN</option>
                     {DN_UNION_OPTIONS.map((dn) => (
@@ -488,7 +487,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                     onChange={(e) => handleTipoChange(row.n_union, e.target.value)}
                     disabled={row.has_work}
                     aria-label={`Tipo union ${row.n_union}`}
-                    className="h-10 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="h-12 flex-1 bg-zeues-navy border border-white/60 text-white font-mono text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <option value="">TIPO</option>
                     {TIPO_UNION_OPTIONS.map((tipo) => (
@@ -526,7 +525,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                       <button
                         onClick={() => handleDeleteRow(row.n_union)}
                         aria-label={`Eliminar union ${row.n_union}`}
-                        className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                        className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                       >
                         X
                       </button>
@@ -543,7 +542,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                         </button>
                         <button
                           onClick={() => setConfirmDelete(null)}
-                          aria-label="Cancelar eliminacion"
+                          aria-label="Cancelar eliminación"
                           className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                         >
                           No
@@ -578,7 +577,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
           <button
             onClick={onClose}
             aria-label="Cancelar y cerrar"
-            className="w-full h-10 border border-white/30 text-white/70 font-mono text-sm hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            className="w-full h-12 border border-white/30 text-white/70 font-mono text-sm hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
             CANCELAR
           </button>

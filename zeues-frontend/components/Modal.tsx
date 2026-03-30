@@ -148,8 +148,8 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
         aria-label={ariaLabel}
         tabIndex={-1}
         className={`
-          relative rounded-lg shadow-xl
-          max-w-md w-full p-6
+          relative rounded-none shadow-xl
+          w-[92vw] max-w-md md:max-w-xl p-6
           transition-all duration-200
           focus:outline-none
           ${className}

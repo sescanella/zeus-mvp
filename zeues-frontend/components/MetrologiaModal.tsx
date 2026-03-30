@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { getWorkers, completarMetrologia } from '@/lib/api';
 import { OPERATION_TO_ROLES } from '@/lib/operation-config';
+import { classifyApiError } from '@/lib/error-classifier';
+import { hapticTap } from '@/lib/haptic';
 import type { Worker, SpoolCardData } from '@/lib/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,6 +36,27 @@ export function MetrologiaModal({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const lastWorkerRef = useRef<Worker | null>(null);
+
+  function fetchWorkers() {
+    setFetchLoading(true);
+    setFetchError(null);
+
+    const allowedRoles = OPERATION_TO_ROLES['METROLOGIA'];
+    getWorkers()
+      .then((allWorkers) => {
+        const filtered = allWorkers.filter(
+          (w) => w.roles?.some((r) => allowedRoles.includes(r)) ?? false
+        );
+        setWorkers(filtered);
+      })
+      .catch((err: unknown) => {
+        setFetchError(classifyApiError(err).userMessage);
+      })
+      .finally(() => {
+        setFetchLoading(false);
+      });
+  }
 
   // Reset flow when modal opens/closes; fetch workers on open
   useEffect(() => {
@@ -41,40 +64,20 @@ export function MetrologiaModal({
       setStep('resultado');
       setResultado(null);
       setApiError(null);
+      lastWorkerRef.current = null;
       return;
     }
 
     // Prefetch workers when modal opens
-    let cancelled = false;
-    setFetchLoading(true);
-    setFetchError(null);
-
-    const allowedRoles = OPERATION_TO_ROLES['METROLOGIA'];
-    getWorkers()
-      .then((allWorkers) => {
-        if (cancelled) return;
-        const filtered = allWorkers.filter(
-          (w) => w.roles?.some((r) => allowedRoles.includes(r)) ?? false
-        );
-        setWorkers(filtered);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : 'Error al cargar inspectores';
-        setFetchError(message);
-      })
-      .finally(() => {
-        if (!cancelled) setFetchLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    fetchWorkers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   function handleResultadoSelect(chosen: 'APROBADO' | 'RECHAZADO') {
+    hapticTap();
     setResultado(chosen);
     setApiError(null);
+    lastWorkerRef.current = null;
     setStep('worker');
   }
 
@@ -82,10 +85,12 @@ export function MetrologiaModal({
     setStep('resultado');
     setResultado(null);
     setApiError(null);
+    lastWorkerRef.current = null;
   }
 
   async function handleWorkerClick(worker: Worker) {
     if (apiLoading || !resultado) return;
+    lastWorkerRef.current = worker;
     setApiLoading(true);
     setApiError(null);
 
@@ -93,11 +98,15 @@ export function MetrologiaModal({
       await completarMetrologia(spool.tag_spool, worker.id, resultado);
       onComplete(resultado);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al completar metrología';
-      setApiError(message);
+      setApiError(classifyApiError(err).userMessage);
     } finally {
       setApiLoading(false);
     }
+  }
+
+  async function handleRetry() {
+    if (!lastWorkerRef.current) return;
+    await handleWorkerClick(lastWorkerRef.current);
   }
 
   const title = step === 'resultado' ? 'RESULTADO METROLOGIA' : 'SELECCIONAR INSPECTOR';
@@ -107,7 +116,7 @@ export function MetrologiaModal({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabel="Completar inspección de metrología"
-      className="bg-zeues-navy border-4 border-white rounded-none max-w-sm"
+      className="bg-zeues-navy border-4 border-white"
       isTopOfStack={isTopOfStack}
     >
       <div className="flex flex-col gap-4">
@@ -116,7 +125,7 @@ export function MetrologiaModal({
           <h2 className="text-white font-mono font-black text-xl tracking-widest uppercase">
             {title}
           </h2>
-          <p className="text-white/60 font-mono text-sm mt-1">
+          <p className="text-white/70 font-mono text-sm mt-1">
             {spool.tag_spool}
             {step === 'worker' && resultado && (
               <span className={resultado === 'APROBADO' ? ' text-green-400' : ' text-red-400'}>
@@ -150,11 +159,20 @@ export function MetrologiaModal({
         {step === 'worker' && (
           <div className="flex flex-col gap-2">
             {fetchLoading ? (
-              <p className="text-white/60 font-mono text-sm text-center py-4">CARGANDO...</p>
+              <p className="text-white/70 font-mono text-sm text-center py-4" role="status" aria-label="Cargando"><span aria-hidden="true">CARGANDO...</span></p>
             ) : fetchError ? (
-              <p role="alert" className="text-red-400 font-mono text-sm font-black mt-3">
-                {fetchError}
-              </p>
+              <div className="flex flex-col gap-3">
+                <p role="alert" className="text-red-400 font-mono text-sm font-black">
+                  {fetchError}
+                </p>
+                <button
+                  onClick={fetchWorkers}
+                  className="w-full h-12 font-mono font-black text-white border-2 border-white rounded cursor-pointer hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+                  aria-label="Reintentar cargar inspectores"
+                >
+                  REINTENTAR
+                </button>
+              </div>
             ) : (
               workers.map((worker) => (
                 <button
@@ -170,7 +188,7 @@ export function MetrologiaModal({
             )}
 
             {!fetchLoading && !fetchError && workers.length === 0 && (
-              <p className="text-white/60 font-mono text-sm text-center py-4">
+              <p className="text-white/70 font-mono text-sm text-center py-4">
                 No hay inspectores disponibles
               </p>
             )}
@@ -178,22 +196,32 @@ export function MetrologiaModal({
             {/* Loading spinner during API call */}
             {apiLoading && (
               <div role="status" aria-label="Procesando..." className="flex justify-center py-2">
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
               </div>
             )}
 
-            {/* Inline error on API failure */}
+            {/* Inline error on API failure + retry */}
             {apiError && (
-              <p role="alert" className="text-red-400 font-mono text-sm font-black mt-3">
-                {apiError}
-              </p>
+              <div className="flex flex-col gap-3">
+                <p role="alert" className="text-red-400 font-mono text-sm font-black">
+                  {apiError}
+                </p>
+                <button
+                  onClick={handleRetry}
+                  disabled={apiLoading}
+                  className="w-full h-12 font-mono font-black text-white border-2 border-white rounded cursor-pointer hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+                  aria-label="Reintentar la inspección"
+                >
+                  REINTENTAR
+                </button>
+              </div>
             )}
 
             {/* Back button */}
             <button
               onClick={handleBack}
               disabled={apiLoading}
-              className="w-full h-12 font-mono font-black text-white/60 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm mt-1"
+              className="w-full h-12 font-mono font-black text-white/70 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm mt-1"
               aria-label="Volver a selección de resultado"
             >
               VOLVER
@@ -205,7 +233,7 @@ export function MetrologiaModal({
         <button
           onClick={onClose}
           disabled={apiLoading}
-          className="w-full h-12 font-mono font-black text-white/60 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+          className="w-full h-12 font-mono font-black text-white/70 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
           aria-label="Cancelar y cerrar"
         >
           CANCELAR

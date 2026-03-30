@@ -62,11 +62,11 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
                   {isBloqueado ? (
                     <Lock size={24} className="text-red-500" strokeWidth={3} />
                   ) : isDisabled ? (
-                    <Lock size={24} className="text-white/30" strokeWidth={3} />
+                    <Lock size={24} className="text-white/40" strokeWidth={3} />
                   ) : isSelected ? (
                     <CheckSquare size={24} className="text-zeues-orange" strokeWidth={3} />
                   ) : (
-                    <Square size={24} className="text-white/50" strokeWidth={3} />
+                    <Square size={24} className="text-white/70" strokeWidth={3} />
                   )}
                 </td>
                 <td className="p-3 border-r-2 border-white/30">

@@ -5,6 +5,7 @@ import { Search, X } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { SpoolTable } from '@/components/SpoolTable';
 import { getSpoolsParaIniciar } from '@/lib/api';
+import { classifyApiError } from '@/lib/error-classifier';
 import type { Spool } from '@/lib/types';
 
 interface AddSpoolModalProps {
@@ -75,8 +76,7 @@ export function AddSpoolModal({
       setSpools(data);
       setFetchState('success');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al cargar spools.';
-      setErrorMessage(msg);
+      setErrorMessage(classifyApiError(err).userMessage);
       setFetchState('error');
     }
   }, []);
@@ -96,7 +96,9 @@ export function AddSpoolModal({
     }
   }, [isOpen, fetchSpools]);
 
-  // Apply filters to spool list and sort by relevance (prefix > contains)
+  // Require at least 2 characters in either field before showing results.
+  // This prevents rendering 2,000+ rows on low-end tablets when the list is unfiltered.
+  const hasMinInput = searchTag.trim().length >= 2 || searchNV.trim().length >= 2;
   const hasFilter = searchTag || searchNV;
   const filteredSpools = spools
     .filter((s) => {
@@ -131,7 +133,7 @@ export function AddSpoolModal({
       onClose={onClose}
       ariaLabel="Añadir spool"
       isTopOfStack={isTopOfStack}
-      className="bg-zeues-navy border-4 border-white rounded-none max-w-lg !p-4"
+      className="bg-zeues-navy border-4 border-white max-w-2xl !p-4"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
@@ -139,15 +141,15 @@ export function AddSpoolModal({
         <button
           onClick={onClose}
           aria-label="Cerrar modal"
-          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/50 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
         >
           <X size={24} strokeWidth={3} />
         </button>
       </div>
 
       {fetchState === 'loading' && (
-        <div className="py-8 text-center">
-          <p className="text-white/70 font-mono font-black tracking-widest">CARGANDO...</p>
+        <div className="py-8 text-center" role="status" aria-label="Cargando">
+          <p className="text-white/70 font-mono font-black tracking-widest" aria-hidden="true">CARGANDO...</p>
         </div>
       )}
 
@@ -178,7 +180,7 @@ export function AddSpoolModal({
           {/* Inline search fields — always visible */}
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <label htmlFor="add-filter-nv" className="block text-xs font-black text-white/50 font-mono mb-1">
+              <label htmlFor="add-filter-nv" className="block text-xs font-black text-white/70 font-mono mb-1">
                 NV
               </label>
               <div className="relative">
@@ -192,12 +194,12 @@ export function AddSpoolModal({
                   onChange={(e) => setSearchNV(e.target.value)}
                   placeholder="Ej: 123"
                   aria-label="Buscar por número de nota de venta"
-                  className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                  className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/40 focus:outline-none focus:border-zeues-orange"
                 />
               </div>
             </div>
             <div>
-              <label htmlFor="add-filter-tag" className="block text-xs font-black text-white/50 font-mono mb-1">
+              <label htmlFor="add-filter-tag" className="block text-xs font-black text-white/70 font-mono mb-1">
                 TAG SPOOL
               </label>
               <div className="relative">
@@ -210,7 +212,7 @@ export function AddSpoolModal({
                   onChange={(e) => setSearchTag(e.target.value)}
                   placeholder="Ej: 1234"
                   aria-label="Buscar por TAG de spool"
-                  className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/30 focus:outline-none focus:border-zeues-orange"
+                  className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/40 focus:outline-none focus:border-zeues-orange"
                 />
               </div>
             </div>
@@ -218,8 +220,10 @@ export function AddSpoolModal({
 
           {/* Result count + clear filters */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-black text-white/50 font-mono">
-              {hasFilter ? `${filteredSpools.length} RESULTADO${filteredSpools.length !== 1 ? 'S' : ''}` : `${spools.length} SPOOLS`}
+            <span className="text-xs font-black text-white/70 font-mono">
+              {hasMinInput
+                ? `${filteredSpools.length} RESULTADO${filteredSpools.length !== 1 ? 'S' : ''}`
+                : `${spools.length} SPOOLS DISPONIBLES`}
             </span>
             {hasFilter && (
               <button
@@ -232,8 +236,14 @@ export function AddSpoolModal({
             )}
           </div>
 
-          {/* Spool table — taller to show more results */}
-          {filteredSpools.length > 0 ? (
+          {/* Spool table — only rendered once the worker has typed 2+ characters */}
+          {!hasMinInput ? (
+            <div className="border-4 border-white/30 py-8 text-center" role="status" aria-live="polite">
+              <p className="text-white/70 font-mono font-black text-sm">
+                INGRESA NV O TAG PARA BUSCAR
+              </p>
+            </div>
+          ) : filteredSpools.length > 0 ? (
             <SpoolTable
               spools={filteredSpools}
               selectedSpools={[]}
@@ -244,8 +254,8 @@ export function AddSpoolModal({
             />
           ) : (
             <div className="border-4 border-white/30 py-8 text-center">
-              <p className="text-white/50 font-mono font-black text-sm">
-                {hasFilter ? 'SIN RESULTADOS' : 'NO HAY SPOOLS DISPONIBLES'}
+              <p className="text-white/70 font-mono font-black text-sm">
+                SIN RESULTADOS
               </p>
             </div>
           )}
