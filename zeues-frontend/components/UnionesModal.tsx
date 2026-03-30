@@ -35,19 +35,21 @@ interface UnionesModalProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
-function isRowSelectable(row: UnionRow, operacion: 'ARM' | 'SOLD' | null): boolean {
+function isRowSelectable(row: UnionRow, operacion: 'ARM' | 'SOLD' | null, spoolArmDone?: boolean): boolean {
   if (operacion === null) return false;
   if (row.dn_union === null || row.tipo_union === null) return false;
   if (operacion === 'ARM') {
     return row.arm_worker === null;
   }
-  // SOLD: must have ARM done and no SOLD yet
-  return row.sol_worker === null && row.arm_worker !== null;
+  // SOLD: no SOLD yet + ARM done (either at union level or spool level for legacy spools)
+  if (row.sol_worker !== null) return false;
+  return row.arm_worker !== null || spoolArmDone === true;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, isTopOfStack = true }: UnionesModalProps) {
+  const spoolArmDone = Boolean(spool.fecha_armado);
   const [rows, setRows] = useState<UnionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -204,7 +206,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   const handleToggleSelect = (n_union: number) => {
     setRows(prev => prev.map(r => {
       if (r.n_union !== n_union) return r;
-      if (!isRowSelectable(r, operacion)) return r;
+      if (!isRowSelectable(r, operacion, spoolArmDone)) return r;
       return { ...r, selected: !r.selected };
     }));
   };
@@ -406,8 +408,8 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
             {rows.map((row, index) => {
               const complete = isRowComplete(row);
               const isConfirmingThis = confirmDelete === row.n_union;
-              const selectable = isRowSelectable(row, operacion);
-              const needsArm = operacion === 'SOLD' && row.arm_worker === null;
+              const selectable = isRowSelectable(row, operacion, spoolArmDone);
+              const needsArm = operacion === 'SOLD' && row.arm_worker === null && !spoolArmDone;
 
               const isFlashing = flashedRows.has(row.n_union);
               const isEven = index % 2 === 0;
