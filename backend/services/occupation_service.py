@@ -1117,6 +1117,18 @@ class OccupationService:
             elif operacion == "SOLD":
                 # Get all ARM-completed unions
                 all_disponibles = self.union_repository.get_disponibles_sold_by_ot(spool.ot)
+
+                # Legacy fallback: if spool has fecha_armado (ARM done at spool level)
+                # but no unions have arm_fecha_fin (ARM not tracked at union level),
+                # treat all unions without SOLD as disponibles
+                if len(all_disponibles) == 0 and spool.fecha_armado:
+                    all_unions = self.union_repository.get_by_ot(spool.ot)
+                    all_disponibles = [u for u in all_unions if u.sol_fecha_fin is None]
+                    logger.info(
+                        f"Legacy SOLD fallback for {tag_spool}: fecha_armado set but no "
+                        f"arm_fecha_fin on unions. Using {len(all_disponibles)} unions without SOLD."
+                    )
+
                 # Filter to only SOLD-required types (exclude FW which is ARM-only)
                 disponibles = [
                     u for u in all_disponibles
