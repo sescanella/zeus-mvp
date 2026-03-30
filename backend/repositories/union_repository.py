@@ -1142,7 +1142,8 @@ class UnionRepository:
         union_ids: list[str],
         worker: str,
         timestamp_inicio: datetime,
-        timestamp_fin: datetime
+        timestamp_fin: datetime,
+        skip_arm_check: bool = False
     ) -> int:
         """
         Batch update SOLD with INICIO + FIN + WORKER for P5 FINALIZAR workflow.
@@ -1152,7 +1153,8 @@ class UnionRepository:
         - SOL_FECHA_INICIO: When spool was taken (from Fecha_Ocupacion)
         - SOL_FECHA_FIN: When FINALIZAR was confirmed
 
-        CRITICAL: Validates ARM completion before allowing SOLD update.
+        CRITICAL: Validates ARM completion before allowing SOLD update
+        (unless skip_arm_check=True for legacy spools where ARM was done at spool level).
 
         Args:
             tag_spool: TAG_SPOOL value to filter unions
@@ -1209,10 +1211,12 @@ class UnionRepository:
                 synthesized_union_id = f"{row_ot}+{row_n_union}"
 
                 if synthesized_union_id in union_ids:
-                    # CRITICAL: Validate ARM completion before SOLD
+                    # Validate ARM completion before SOLD (skip for legacy spools
+                    # where ARM was done at spool level without union-level tracking)
                     arm_fecha_fin = row_data[arm_fecha_fin_col_idx] if arm_fecha_fin_col_idx < len(row_data) else None
                     if not arm_fecha_fin or not str(arm_fecha_fin).strip():
-                        raise ValueError(f"Union {synthesized_union_id} ARM not completed - cannot update SOLD")
+                        if not skip_arm_check:
+                            raise ValueError(f"Union {synthesized_union_id} ARM not completed - cannot update SOLD")
 
                     sol_fecha_fin = row_data[sol_fecha_fin_col_idx] if sol_fecha_fin_col_idx < len(row_data) else None
                     if sol_fecha_fin and str(sol_fecha_fin).strip():

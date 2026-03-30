@@ -1126,6 +1126,7 @@ class OccupationService:
                 raise ValueError("UnionRepository not configured for v4.0 operations")
 
             # Get available unions for this operation
+            legacy_sold_mode = False
             if operacion == "ARM":
                 disponibles = self.union_repository.get_disponibles_arm_by_ot(spool.ot)
             elif operacion == "SOLD":
@@ -1135,9 +1136,11 @@ class OccupationService:
                 # Legacy fallback: if spool has fecha_armado (ARM done at spool level)
                 # but no unions have arm_fecha_fin (ARM not tracked at union level),
                 # treat all unions without SOLD as disponibles
+                legacy_sold_mode = False
                 if len(all_disponibles) == 0 and spool.fecha_armado:
                     all_unions = self.union_repository.get_by_ot(spool.ot)
                     all_disponibles = [u for u in all_unions if u.sol_fecha_fin is None]
+                    legacy_sold_mode = True
                     logger.info(
                         f"Legacy SOLD fallback for {tag_spool}: fecha_armado set but no "
                         f"arm_fecha_fin on unions. Using {len(all_disponibles)} unions without SOLD."
@@ -1302,23 +1305,39 @@ class OccupationService:
             pulgadas = 0.0  # Initialize for metadata logging
 
             try:
-                if self.union_service:
-                    # Parse Fecha_Ocupacion to get timestamp_inicio
-                    if not spool.fecha_ocupacion:
-                        logger.warning(f"Spool {tag_spool} missing Fecha_Ocupacion, using now() as fallback")
+                # Parse Fecha_Ocupacion to get timestamp_inicio
+                if not spool.fecha_ocupacion:
+                    logger.warning(f"Spool {tag_spool} missing Fecha_Ocupacion, using now() as fallback")
+                    timestamp_inicio = now_chile()
+                else:
+                    from datetime import datetime as dt
+                    try:
+                        timestamp_inicio = dt.strptime(spool.fecha_ocupacion, "%d-%m-%Y %H:%M:%S")
+                        logger.info(f"Parsed Fecha_Ocupacion: {spool.fecha_ocupacion} → {timestamp_inicio}")
+                    except ValueError as e:
+                        logger.warning(f"Failed to parse Fecha_Ocupacion '{spool.fecha_ocupacion}': {e}, using now()")
                         timestamp_inicio = now_chile()
-                    else:
-                        # Parse formato: "DD-MM-YYYY HH:MM:SS"
-                        from datetime import datetime as dt
-                        try:
-                            timestamp_inicio = dt.strptime(spool.fecha_ocupacion, "%d-%m-%Y %H:%M:%S")
-                            logger.info(f"Parsed Fecha_Ocupacion: {spool.fecha_ocupacion} → {timestamp_inicio}")
-                        except ValueError as e:
-                            logger.warning(f"Failed to parse Fecha_Ocupacion '{spool.fecha_ocupacion}': {e}, using now()")
-                            timestamp_inicio = now_chile()
 
-                    timestamp_fin = now_chile()
+                timestamp_fin = now_chile()
 
+                # Legacy SOLD mode: bypass UnionService (which re-validates ARM at union level)
+                # and call repository directly with skip_arm_check=True
+                if legacy_sold_mode and operacion == "SOLD":
+                    logger.info(f"Legacy SOLD: bypassing UnionService, calling batch_update_sold_full directly with skip_arm_check=True")
+                    updated_count = self.union_repository.batch_update_sold_full(
+                        tag_spool=tag_spool,
+                        union_ids=selected_unions,
+                        worker=worker_nombre,
+                        timestamp_inicio=timestamp_inicio,
+                        timestamp_fin=timestamp_fin,
+                        skip_arm_check=True
+                    )
+                    processed_unions = self.union_repository.get_by_ids(selected_unions)
+                    pulgadas = sum([u.dn_union for u in processed_unions if u.dn_union])
+                    logger.info(f"✅ Legacy SOLD batch update: {updated_count} unions, {pulgadas} pulgadas")
+                    skip_metadata_logging = False
+
+                elif self.union_service:
                     # Use UnionService for batch update + metadata logging
                     result = self.union_service.process_selection(
                         tag_spool=tag_spool,
