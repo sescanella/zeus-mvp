@@ -464,18 +464,16 @@ function HomePage() {
   return (
     <div className="min-h-screen bg-zeues-navy text-white" style={BLUEPRINT_GRID_STYLE}>
       {/* Header */}
-      <header className="p-4 text-center border-b-4 border-white/30">
-        <img src="/logos/logo-grisclaro-F8F9FA.svg" alt="KM" className="h-10 mx-auto" />
-      </header>
-
-      {/* Spool count */}
-      {spools.length > 0 && (
-        <div className="px-4 pt-3 pb-0">
+      <header className="flex items-center justify-between px-4 py-3 border-b-4 border-white/30">
+        {spools.length > 0 ? (
           <span className="font-mono text-sm text-white/50 tracking-widest">
             {spools.length} {spools.length === 1 ? 'SPOOL' : 'SPOOLS'}
           </span>
-        </div>
-      )}
+        ) : (
+          <span />
+        )}
+        <img src="/logos/logo-grisclaro-F8F9FA.svg" alt="KM" className="h-10" />
+      </header>
 
       {/* Add Spool button + Filter */}
       <div className="px-4 py-4">
