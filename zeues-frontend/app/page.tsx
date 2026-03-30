@@ -14,7 +14,7 @@
  * Plan: 04-02-PLAN.md Task 1
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SpoolListProvider, useSpoolList } from '@/lib/SpoolListContext';
 import { useModalStack } from '@/hooks/useModalStack';
 import { useNotificationToast } from '@/hooks/useNotificationToast';
@@ -79,6 +79,16 @@ function HomePage() {
   // Filter state
   const [showFilter, setShowFilter] = useState(false);
   const [estadoFilter, setEstadoFilter] = useState<EstadoTrabajo | null>(null);
+
+  // Count spools per estado for filter badges
+  const estadoCounts = useMemo(() => {
+    const counts: Partial<Record<EstadoTrabajo, number>> = {};
+    for (const estado of ALL_ESTADOS) {
+      const count = spools.filter(s => s.estado_trabajo === estado).length;
+      if (count > 0) counts[estado] = count;
+    }
+    return counts;
+  }, [spools]);
 
   // Single spool selection for processing
   const [selectedSpool, setSelectedSpool] = useState<SpoolCardData | null>(null);
@@ -458,6 +468,15 @@ function HomePage() {
         <img src="/logos/logo-grisclaro-F8F9FA.svg" alt="KM" className="h-10 mx-auto" />
       </header>
 
+      {/* Spool count */}
+      {spools.length > 0 && (
+        <div className="px-4 pt-3 pb-0">
+          <span className="font-mono text-sm text-white/50 tracking-widest">
+            {spools.length} {spools.length === 1 ? 'SPOOL' : 'SPOOLS'}
+          </span>
+        </div>
+      )}
+
       {/* Add Spool button + Filter */}
       <div className="px-4 py-4">
         {/* Button row */}
@@ -480,7 +499,9 @@ function HomePage() {
                 : 'border-white/30 text-white/70 hover:border-white/50'
             }`}
           >
-            {estadoFilter ? ESTADO_LABELS[estadoFilter] : 'FILTRAR'}
+            {estadoFilter
+              ? <><span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded bg-white/20 text-xs font-black">{estadoCounts[estadoFilter] ?? 0}</span>{ESTADO_LABELS[estadoFilter]}</>
+              : 'FILTRAR'}
           </button>
         </div>
 
@@ -503,6 +524,11 @@ function HomePage() {
                     : 'border-white/20 text-white/70 hover:border-white/40'
                 }`}
               >
+                {estadoCounts[estado] != null && (
+                  <span className={`inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded text-xs font-black ${
+                    estadoFilter === estado ? 'bg-white/20' : 'bg-white/10'
+                  }`}>{estadoCounts[estado]}</span>
+                )}
                 {ESTADO_LABELS[estado]}
               </button>
             ))}
