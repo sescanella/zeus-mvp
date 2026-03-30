@@ -992,12 +992,13 @@ class OccupationService:
 
             # Step 3: Detect v3.0 spools and use simplified COMPLETAR path
             #
-            # v3.0 detection: total_uniones = None (no column) or 0 (CONTAR.SI formula)
-            # v4.0 detection: total_uniones >= 1 (has registered unions)
-            #
-            # IMPORTANT: v3.0 spools may have total_uniones=0 due to the formula
-            # =CONTAR.SI(Uniones!$D:$D,Gx) counting 0 when no unions are registered.
-            is_v30 = spool.total_uniones is None or spool.total_uniones == 0
+            # v4.0 detection: check actual unions in Uniones sheet (not Operaciones column
+            # which may be stale, null, or formatted as date due to USER_ENTERED bug).
+            # Only fall back to v3.0 if there are truly zero unions in the sheet.
+            actual_union_count = 0
+            if self.union_repository and spool.ot:
+                actual_union_count = self.union_repository.get_total_uniones(spool.ot)
+            is_v30 = actual_union_count == 0
 
             if is_v30:
                 logger.info(
