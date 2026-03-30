@@ -192,10 +192,13 @@ class SaveUnionsRequest(BaseModel):
 
 class UnionEditable(BaseModel):
     """Union with has_work flag for frontend editability."""
+    id: Optional[str] = None  # Composite ID: OT+N_UNION (e.g., "001+5")
     n_union: int
     dn_union: Optional[float] = None
     tipo_union: Optional[str] = None
     has_work: bool  # True if ARM_WORKER or SOL_WORKER is set
+    arm_worker: Optional[str] = None  # Worker who did ARM (e.g., "MR(93)")
+    sol_worker: Optional[str] = None  # Worker who did SOLD (e.g., "JP(45)")
 
 
 class GetAllUnionsResponse(BaseModel):

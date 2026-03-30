@@ -211,10 +211,13 @@ export interface FinalizarResponse {
 // ==========================================
 
 export interface UnionEditable {
+  id?: string;                    // Composite ID: OT+N_UNION (e.g., "001+5")
   n_union: number;
   dn_union: number | null;
   tipo_union: string | null;
   has_work: boolean;
+  arm_worker?: string | null;     // Worker who did ARM (e.g., "MR(93)")
+  sol_worker?: string | null;     // Worker who did SOLD (e.g., "JP(45)")
 }
 
 export interface GetAllUnionsResponse {

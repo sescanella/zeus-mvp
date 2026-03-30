@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Modal } from '@/components/Modal';
 import { getTodasUniones, guardarUniones } from '@/lib/api';
 import type { SpoolCardData } from '@/lib/types';
@@ -18,19 +18,36 @@ interface UnionRow {
   dn_union: number | null;
   tipo_union: string | null;
   has_work: boolean;
+  id: string | null;
+  arm_worker: string | null;
+  sol_worker: string | null;
+  selected: boolean;
 }
 
 interface UnionesModalProps {
   isOpen: boolean;
   spool: SpoolCardData;
-  onComplete: () => void;
+  operacion: 'ARM' | 'SOLD' | null;
+  onComplete: (selectedUnionIds: string[]) => void;
   onClose: () => void;
   isTopOfStack?: boolean;
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
+function isRowSelectable(row: UnionRow, operacion: 'ARM' | 'SOLD' | null): boolean {
+  if (operacion === null) return false;
+  if (row.dn_union === null || row.tipo_union === null) return false;
+  if (operacion === 'ARM') {
+    return row.arm_worker === null;
+  }
+  // SOLD: must have ARM done and no SOLD yet
+  return row.sol_worker === null && row.arm_worker !== null;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack = true }: UnionesModalProps) {
+export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, isTopOfStack = true }: UnionesModalProps) {
   const [rows, setRows] = useState<UnionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -48,7 +65,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
 
     const hasExisting = spool.total_uniones !== null && spool.total_uniones > 0;
     if (!hasExisting) {
-      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false }]);
+      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false }]);
       return;
     }
 
@@ -61,12 +78,16 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         dn_union: u.dn_union,
         tipo_union: u.tipo_union,
         has_work: u.has_work,
+        id: u.id ?? null,
+        arm_worker: u.arm_worker ?? null,
+        sol_worker: u.sol_worker ?? null,
+        selected: false,
       }));
-      setRows(loaded.length > 0 ? loaded : [{ n_union: 1, dn_union: null, tipo_union: null, has_work: false }]);
+      setRows(loaded.length > 0 ? loaded : [{ n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cargar uniones';
       setError(msg);
-      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false }]);
+      setRows([{ n_union: 1, dn_union: null, tipo_union: null, has_work: false, id: null, arm_worker: null, sol_worker: null, selected: false }]);
     } finally {
       setLoading(false);
     }
@@ -95,28 +116,34 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
     prevRowCountRef.current = rows.length;
   }, [rows.length]);
 
-  const renumber = (currentRows: UnionRow[]): UnionRow[] =>
-    currentRows.map((r, i) => ({ ...r, n_union: i + 1 }));
-
   const handleCountChange = (newCount: number) => {
     if (!countUnlocked) return;
     if (newCount < 1 || newCount > MAX_UNIONS) return;
     setRows(prev => {
       if (newCount > prev.length) {
+        const maxExisting = prev.reduce((max, r) => Math.max(max, r.n_union), 0);
         const toAdd = Array.from({ length: newCount - prev.length }, (_, i) => ({
-          n_union: prev.length + i + 1,
+          n_union: maxExisting + i + 1,
           dn_union: null as number | null,
           tipo_union: null as string | null,
           has_work: false,
+          id: null as string | null,
+          arm_worker: null as string | null,
+          sol_worker: null as string | null,
+          selected: false,
         }));
         return [...prev, ...toAdd];
       }
       if (newCount < prev.length) {
-        const minProtected = prev.reduce(
-          (max, r) => (r.has_work && r.n_union > max ? r.n_union : max), 0
-        );
-        if (newCount < minProtected) return prev;
-        return renumber(prev.slice(0, newCount));
+        const workCount = prev.filter(r => r.has_work).length;
+        if (newCount < workCount) return prev;
+        const toRemove = prev.length - newCount;
+        // Remove highest-numbered empty (no work) rows first
+        const emptyRows = prev
+          .filter(r => !r.has_work)
+          .sort((a, b) => b.n_union - a.n_union);
+        const removeSet = new Set(emptyRows.slice(0, toRemove).map(r => r.n_union));
+        return prev.filter(r => !removeSet.has(r.n_union));
       }
       return prev;
     });
@@ -134,7 +161,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
 
     setConfirmDelete(null);
     const filtered = rows.filter((r) => r.n_union !== n_union);
-    setRows(renumber(filtered));
+    setRows(filtered);
   };
 
   const handleDnChange = (n_union: number, value: string) => {
@@ -178,10 +205,21 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
     if (val !== null) applyDefaultToEmpty('tipo_union', val);
   };
 
+  const handleToggleSelect = (n_union: number) => {
+    setRows(prev => prev.map(r => {
+      if (r.n_union !== n_union) return r;
+      if (!isRowSelectable(r, operacion)) return r;
+      return { ...r, selected: !r.selected };
+    }));
+  };
+
   const isRowComplete = (row: UnionRow): boolean =>
     row.dn_union !== null && row.tipo_union !== null;
 
   const completedCount = rows.filter(isRowComplete).length;
+
+  const selectedRows = useMemo(() => rows.filter(r => r.selected), [rows]);
+  const selectedPD = useMemo(() => selectedRows.reduce((sum, r) => sum + (r.dn_union ?? 0), 0), [selectedRows]);
 
   const handleGuardar = async () => {
     setError(null);
@@ -197,7 +235,10 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
           tipo_union: r.tipo_union,
         })),
       });
-      onComplete();
+      const selectedIds = selectedRows
+        .map(r => r.id)
+        .filter((id): id is string => id !== null);
+      onComplete(selectedIds);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al guardar uniones';
       setError(msg);
@@ -214,6 +255,12 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
     }
   }, []);
 
+  const guardarLabel = saving
+    ? 'GUARDANDO...'
+    : operacion !== null && selectedRows.length > 0
+      ? 'GUARDAR Y CONFIRMAR'
+      : 'GUARDAR';
+
   return (
     <Modal
       isOpen={isOpen}
@@ -222,7 +269,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
       isTopOfStack={isTopOfStack}
       className="bg-zeues-navy border-4 border-white max-w-lg !p-0 flex flex-col max-h-[85vh]"
     >
-      {/* ═══ FIXED TOP ZONE ═══ */}
+      {/* FIXED TOP ZONE */}
       <div className="shrink-0 p-4 pb-2">
         {/* Title row */}
         <div className="flex items-center justify-between mb-2">
@@ -235,7 +282,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
           </span>
         </div>
 
-        {/* Quantity + Fill — single row */}
+        {/* Quantity + Fill -- single row */}
         <div className="flex items-center gap-2 mt-2">
           {/* Quantity control */}
           {!countUnlocked ? (
@@ -335,6 +382,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         {/* Column headers */}
         {!loading && rows.length > 0 && (
           <div className="flex items-center gap-2 px-1.5 pt-2 pb-1 border-b border-white/10">
+            {operacion !== null && <span className="min-w-[44px]" />}
             <span className="font-mono font-black text-xs text-white/40 min-w-[2rem] text-center">#</span>
             <span className="font-mono font-black text-xs text-white/40 flex-1">DN</span>
             <span className="font-mono font-black text-xs text-white/40 flex-1">TIPO</span>
@@ -343,7 +391,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         )}
       </div>
 
-      {/* ═══ SCROLLABLE MIDDLE ZONE ═══ */}
+      {/* SCROLLABLE MIDDLE ZONE */}
       {loading && (
         <div className="flex items-center justify-center py-8">
           <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -362,6 +410,8 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
             {rows.map((row, index) => {
               const complete = isRowComplete(row);
               const isConfirmingThis = confirmDelete === row.n_union;
+              const selectable = isRowSelectable(row, operacion);
+              const needsArm = operacion === 'SOLD' && row.arm_worker === null;
 
               const isFlashing = flashedRows.has(row.n_union);
               const isEven = index % 2 === 0;
@@ -369,6 +419,9 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
               let bgClass = isEven ? 'bg-white/[0.02]' : '';
               if (isFlashing) {
                 borderClass = 'border-zeues-orange';
+                bgClass = 'bg-zeues-orange/10';
+              } else if (row.selected) {
+                borderClass = 'border-zeues-orange/60';
                 bgClass = 'bg-zeues-orange/10';
               } else if (row.has_work) {
                 borderClass = 'border-white/10';
@@ -383,10 +436,41 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                   ref={(el) => setCardRef(row.n_union, el)}
                   className={`border p-1.5 flex items-center gap-2 transition-colors duration-300 ${borderClass} ${bgClass}`}
                 >
+                  {/* Checkbox (selection modes only) */}
+                  {operacion !== null && (
+                    <button
+                      onClick={() => handleToggleSelect(row.n_union)}
+                      disabled={!selectable}
+                      aria-label={
+                        !selectable
+                          ? `Union ${row.n_union} no seleccionable`
+                          : row.selected
+                            ? `Deseleccionar union ${row.n_union}`
+                            : `Seleccionar union ${row.n_union}`
+                      }
+                      aria-pressed={row.selected}
+                      className={`min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 border-2 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
+                        row.selected
+                          ? 'bg-zeues-orange border-zeues-orange'
+                          : selectable
+                            ? 'border-white/40 hover:border-white/60'
+                            : 'border-white/10 opacity-30 cursor-not-allowed'
+                      }`}
+                    >
+                      {row.selected && (
+                        <svg className="w-5 h-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Union number */}
                   <span className="font-mono font-black text-sm text-white min-w-[2rem] h-7 flex items-center justify-center bg-white/10 rounded">
                     {row.n_union}
                   </span>
 
+                  {/* DN dropdown */}
                   <select
                     value={row.dn_union ?? ''}
                     onChange={(e) => handleDnChange(row.n_union, e.target.value)}
@@ -400,6 +484,7 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                     ))}
                   </select>
 
+                  {/* TIPO dropdown */}
                   <select
                     value={row.tipo_union ?? ''}
                     onChange={(e) => handleTipoChange(row.n_union, e.target.value)}
@@ -413,36 +498,61 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
                     ))}
                   </select>
 
-                  {!row.has_work && !isConfirmingThis && (
-                    <button
-                      onClick={() => handleDeleteRow(row.n_union)}
-                      aria-label={`Eliminar union ${row.n_union}`}
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                    >
-                      X
-                    </button>
-                  )}
-                  {!row.has_work && isConfirmingThis && (
-                    <div className="flex gap-1">
+                  {/* Right zone: badges / delete / "Falta ARM" */}
+                  <div className="min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-0.5 shrink-0">
+                    {/* Worker badges */}
+                    {row.arm_worker && (operacion === null || operacion === 'ARM' || operacion === 'SOLD') && (
+                      <span
+                        className={`bg-white/10 text-white/70 font-mono px-2 py-0.5 whitespace-nowrap ${
+                          operacion === 'SOLD' ? 'text-[10px]' : 'text-xs'
+                        }`}
+                        title={`Armador: ${row.arm_worker}`}
+                      >
+                        {row.arm_worker}
+                      </span>
+                    )}
+                    {row.sol_worker && (operacion === null || operacion === 'SOLD') && (
+                      <span
+                        className="bg-white/10 text-white/70 font-mono text-xs px-2 py-0.5 whitespace-nowrap"
+                        title={`Soldador: ${row.sol_worker}`}
+                      >
+                        {row.sol_worker}
+                      </span>
+                    )}
+                    {/* "Falta ARM" label for SOLD mode */}
+                    {needsArm && !row.has_work && (
+                      <span className="text-yellow-400/60 font-mono text-xs whitespace-nowrap">Falta ARM</span>
+                    )}
+                    {/* Delete button (no work, not confirming) */}
+                    {!row.has_work && !isConfirmingThis && !row.arm_worker && !row.sol_worker && (
                       <button
                         onClick={() => handleDeleteRow(row.n_union)}
-                        aria-label={`Confirmar eliminar union ${row.n_union}`}
-                        className="min-h-[44px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+                        aria-label={`Eliminar union ${row.n_union}`}
+                        className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-white/10 font-mono font-black text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                       >
-                        Si
+                        X
                       </button>
-                      <button
-                        onClick={() => setConfirmDelete(null)}
-                        aria-label="Cancelar eliminacion"
-                        className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                      >
-                        No
-                      </button>
-                    </div>
-                  )}
-                  {row.has_work && (
-                    <span className="min-w-[44px] min-h-[44px]" />
-                  )}
+                    )}
+                    {/* Delete confirmation */}
+                    {!row.has_work && isConfirmingThis && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleDeleteRow(row.n_union)}
+                          aria-label={`Confirmar eliminar union ${row.n_union}`}
+                          className="min-h-[44px] px-2 flex items-center justify-center text-red-400 font-mono font-black text-xs border border-red-400 hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-inset"
+                        >
+                          Si
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(null)}
+                          aria-label="Cancelar eliminacion"
+                          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 font-mono font-black text-xs focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                        >
+                          No
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -450,16 +560,22 @@ export function UnionesModal({ isOpen, spool, onComplete, onClose, isTopOfStack 
         </div>
       )}
 
-      {/* ═══ FIXED BOTTOM ZONE ═══ */}
+      {/* FIXED BOTTOM ZONE */}
       {!loading && (
         <div className="shrink-0 p-4 pt-3 border-t border-white/10 flex flex-col gap-2">
+          {/* Selection summary (only in selection modes with selections) */}
+          {operacion !== null && selectedRows.length > 0 && (
+            <div className="font-mono text-sm text-white/80 text-center py-1">
+              Seleccionaste {selectedRows.length} {selectedRows.length === 1 ? 'union' : 'uniones'} = {selectedPD} PD
+            </div>
+          )}
           <button
             onClick={handleGuardar}
             disabled={saving || rows.length === 0}
-            aria-label="Guardar uniones"
+            aria-label={guardarLabel}
             className="w-full h-14 bg-zeues-orange text-white font-mono font-black text-lg disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
-            {saving ? 'GUARDANDO...' : 'GUARDAR'}
+            {guardarLabel}
           </button>
           <button
             onClick={onClose}

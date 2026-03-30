@@ -11,6 +11,7 @@ from datetime import datetime
 from backend.models.union import Union
 from backend.repositories.sheets_repository import SheetsRepository, retry_on_sheets_error
 from backend.core.column_map_cache import ColumnMapCache
+from backend.utils.cache import get_cache
 from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
 from backend.exceptions import SheetsConnectionError
 
@@ -1098,6 +1099,7 @@ class UnionRepository:
 
             _execute_batch()
             ColumnMapCache.invalidate(self._sheet_name)
+            get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             updated_count = len(union_id_to_row)
             self.logger.info(f"✅ batch_update_arm_full: {updated_count} unions updated for TAG_SPOOL {tag_spool} (INICIO={formatted_timestamp_inicio}, FIN={formatted_timestamp_fin})")
@@ -1226,6 +1228,7 @@ class UnionRepository:
 
             _execute_batch()
             ColumnMapCache.invalidate(self._sheet_name)
+            get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             updated_count = len(union_id_to_row)
             self.logger.info(f"✅ batch_update_sold_full: {updated_count} unions updated for TAG_SPOOL {tag_spool} (INICIO={formatted_timestamp_inicio}, FIN={formatted_timestamp_fin})")
@@ -1259,6 +1262,7 @@ class UnionRepository:
             tipo_union_col_idx = column_map.get(_normalize("TIPO_UNION"))
             arm_worker_col_idx = column_map.get(_normalize("ARM_WORKER"))
             sol_worker_col_idx = column_map.get(_normalize("SOL_WORKER"))
+            ot_col_idx = column_map.get(_normalize("OT"))
 
             if any(idx is None for idx in [tag_col_idx, n_union_col_idx, dn_union_col_idx, tipo_union_col_idx]):
                 raise ValueError("Required columns not found in Uniones sheet")
@@ -1290,11 +1294,18 @@ class UnionRepository:
                 dn_union = float(dn_raw) if dn_raw else None
                 tipo_union = get_val(tipo_union_col_idx) or None
 
+                # Build composite ID: OT+N_UNION (e.g., "001+5")
+                ot_val = get_val(ot_col_idx)
+                union_id = f"{ot_val}+{n_union}" if ot_val else None
+
                 results.append({
                     "n_union": n_union,
                     "dn_union": dn_union,
                     "tipo_union": tipo_union,
                     "has_work": has_work,
+                    "id": union_id,
+                    "arm_worker": arm_worker or None,
+                    "sol_worker": sol_worker or None,
                 })
 
             self.logger.debug(f"get_all_by_tag: Found {len(results)} unions for {tag_spool}")
@@ -1366,6 +1377,7 @@ class UnionRepository:
 
             _execute_append()
             ColumnMapCache.invalidate(self._sheet_name)
+            get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             self.logger.info(f"create_unions_batch: {len(rows_to_append)} unions created for {tag_spool}")
             return len(rows_to_append)
@@ -1446,6 +1458,7 @@ class UnionRepository:
 
                 _execute_batch()
                 ColumnMapCache.invalidate(self._sheet_name)
+                get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             self.logger.info(f"update_unions_batch: {updated} unions updated for {tag_spool}")
             return updated
@@ -1541,6 +1554,7 @@ class UnionRepository:
 
             if deleted_count > 0:
                 ColumnMapCache.invalidate(self._sheet_name)
+                get_cache().invalidate(f"worksheet:{self._sheet_name}")
 
             self.logger.info(f"delete_unions_without_work: {deleted_count} unions deleted for {tag_spool}")
             return deleted_count

@@ -332,8 +332,8 @@ async def finalizar_v4(
                 detail=f"Worker {request.worker_id} not found"
             )
 
-        # Format worker_nombre as APELLIDO(ID)
-        worker_nombre = f"{worker.apellido}({request.worker_id})"
+        # Format worker_nombre as INICIALES(ID) — e.g. "MR(93)"
+        worker_nombre = worker.nombre_completo
 
         # Step 3: Build P5 FinalizarRequest
         finalizar_request = FinalizarRequest(
@@ -465,10 +465,13 @@ async def get_todas_uniones(
 
         unions = [
             UnionEditable(
+                id=u.get("id"),
                 n_union=u["n_union"],
                 dn_union=u["dn_union"],
                 tipo_union=u["tipo_union"],
                 has_work=u["has_work"],
+                arm_worker=u.get("arm_worker"),
+                sol_worker=u.get("sol_worker"),
             )
             for u in raw_unions
         ]

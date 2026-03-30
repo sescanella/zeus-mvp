@@ -36,6 +36,15 @@ import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
 import { getValidActions, deriveOperation } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 
+// ─── Pending action type ─────────────────────────────────────────────────────
+
+type PendingAction = {
+  type: 'FINALIZAR' | 'PAUSAR' | 'EDIT';
+  spool: SpoolCardData;
+  operation: 'ARM' | 'SOLD' | null;
+  workerId: number | null;
+};
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 /**
@@ -98,6 +107,7 @@ function HomePage() {
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [unionesSpool, setUnionesSpool] = useState<SpoolCardData | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   // Stable ref for refreshAll — safe for use in setInterval without stale closure
   const refreshAllRef = useRef(refreshAll);
@@ -217,20 +227,37 @@ function HomePage() {
       return;
     }
 
-    // Intercept PAUSAR when spool has no unions — open UnionesModal first
+    // FINALIZAR / PAUSAR for ARM/SOLD: open UnionesModal with selection mode
     if (
-      action === 'PAUSAR' &&
+      (action === 'FINALIZAR' || action === 'PAUSAR') &&
       effectiveSpool &&
       effectiveOp &&
-      (effectiveOp === 'ARM' || effectiveOp === 'SOLD') &&
-      (effectiveSpool.total_uniones === null || effectiveSpool.total_uniones === 0)
+      (effectiveOp === 'ARM' || effectiveOp === 'SOLD')
     ) {
+      const ocupadoPor = effectiveSpool.ocupado_por;
+      if (!ocupadoPor) {
+        enqueue('Error: spool no tiene trabajador asignado', 'error');
+        return;
+      }
+
+      const workerId = parseWorkerIdFromOcupadoPor(ocupadoPor);
+      if (workerId === null) {
+        enqueue('Error: formato de trabajador invalido', 'error');
+        return;
+      }
+
+      setPendingAction({
+        type: action as 'FINALIZAR' | 'PAUSAR',
+        spool: effectiveSpool,
+        operation: effectiveOp as 'ARM' | 'SOLD',
+        workerId,
+      });
       setUnionesSpool(effectiveSpool);
       modalStack.push('uniones');
       return;
     }
 
-    // FINALIZAR / PAUSAR: use the worker already assigned in ocupado_por
+    // FINALIZAR / PAUSAR for REP: use direct action (no UnionesModal)
     if (
       (action === 'FINALIZAR' || action === 'PAUSAR') &&
       effectiveSpool &&
@@ -360,24 +387,69 @@ function HomePage() {
   };
 
   const handleUnionesClick = (spool: SpoolCardData) => {
+    setPendingAction({ type: 'EDIT', spool, operation: null, workerId: null });
     setUnionesSpool(spool);
     modalStack.push('uniones');
   };
 
-  const handleUnionesComplete = async () => {
+  const handleUnionesComplete = async (selectedIds: string[]) => {
     modalStack.pop();
+    const action = pendingAction;
 
-    // If triggered by PAUSAR intercept, execute the pending PAUSAR
-    if (unionesSpool && selectedAction === 'PAUSAR' && selectedOperation &&
-        (selectedOperation === 'ARM' || selectedOperation === 'SOLD')) {
-      const ocupadoPor = unionesSpool.ocupado_por;
-      const workerId = ocupadoPor ? parseWorkerIdFromOcupadoPor(ocupadoPor) : null;
-      if (workerId !== null) {
+    if (!action) {
+      // Safety fallback — should not happen
+      setUnionesSpool(null);
+      return;
+    }
+
+    const tag = action.spool.tag_spool;
+
+    if (action.type === 'EDIT') {
+      // Card uniones button — just refresh and toast
+      try {
+        await refreshSingle(tag);
+      } catch {
+        // ignore
+      }
+      enqueue('Uniones guardadas', 'success');
+    } else if (action.type === 'FINALIZAR' || action.type === 'PAUSAR') {
+      if (selectedIds.length > 0 && action.workerId !== null && action.operation !== null) {
+        // User selected unions — call finalizarSpool, backend auto-determines PAUSAR/COMPLETAR
         setApiLoading(true);
         try {
-          await executeDirectAction('PAUSAR', unionesSpool, selectedOperation, workerId);
+          await finalizarSpool({
+            tag_spool: tag,
+            worker_id: action.workerId,
+            operacion: action.operation,
+            selected_unions: selectedIds,
+          });
+          modalStack.clear();
           try {
-            await refreshSingle(unionesSpool.tag_spool);
+            await refreshSingle(tag);
+          } catch {
+            // Spool may have changed — ignore refresh errors
+          }
+          enqueue('Operacion completada', 'success');
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Error al finalizar';
+          enqueue(message, 'error');
+        } finally {
+          setApiLoading(false);
+        }
+      } else if (selectedIds.length === 0 && action.type === 'PAUSAR' && action.workerId !== null && action.operation !== null) {
+        // PAUSAR without selecting unions — send action_override
+        setApiLoading(true);
+        try {
+          await finalizarSpool({
+            tag_spool: tag,
+            worker_id: action.workerId,
+            operacion: action.operation,
+            selected_unions: [],
+            action_override: 'PAUSAR',
+          });
+          modalStack.clear();
+          try {
+            await refreshSingle(tag);
           } catch {
             // Spool may have changed — ignore refresh errors
           }
@@ -388,17 +460,18 @@ function HomePage() {
         } finally {
           setApiLoading(false);
         }
+      } else {
+        // FINALIZAR with 0 selections — just saved definitions, no backend call
+        try {
+          await refreshSingle(tag);
+        } catch {
+          // ignore
+        }
+        enqueue('Uniones guardadas', 'success');
       }
-    } else if (unionesSpool) {
-      // Direct union edit (not from PAUSAR intercept)
-      try {
-        await refreshSingle(unionesSpool.tag_spool);
-      } catch {
-        // ignore
-      }
-      enqueue('Uniones guardadas', 'success');
     }
 
+    setPendingAction(null);
     setUnionesSpool(null);
     setSelectedSpool(null);
     setSelectedOperation(null);
@@ -535,8 +608,9 @@ function HomePage() {
         <UnionesModal
           isOpen={modalStack.isOpen('uniones')}
           spool={unionesSpool}
+          operacion={pendingAction?.operation ?? null}
           onComplete={handleUnionesComplete}
-          onClose={() => { modalStack.pop(); setUnionesSpool(null); }}
+          onClose={() => { modalStack.pop(); setPendingAction(null); setUnionesSpool(null); }}
           isTopOfStack={modalStack.isOpen('uniones')}
         />
       )}
