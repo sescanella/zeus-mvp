@@ -201,7 +201,8 @@ async def iniciar_v4(
             detail={
                 "error": "SPOOL_OCCUPIED",
                 "message": e.message,
-                "occupied_by": e.data.get("occupied_by")
+                "occupied_by": e.data.get("owner_name"),
+                "owner_id": e.data.get("owner_id")
             }
         )
 

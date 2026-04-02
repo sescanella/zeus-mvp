@@ -2,22 +2,18 @@
 Unit tests for OccupationService v4.0 operations (INICIAR/FINALIZAR).
 
 Tests validate:
-- INICIAR acquires persistent lock without touching Uniones
+- INICIAR writes occupation fields to Sheets (no Redis locks)
 - FINALIZAR auto-determines PAUSAR vs COMPLETAR
-- Zero-union cancellation releases lock without updates
+- Zero-union cancellation clears occupation without updates
 - Race condition handling (union becomes unavailable)
-- UnionRepository integration for batch updates
+- Ownership validation via Ocupado_Por column (single-user mode)
 
 Reference:
 - Service: backend/services/occupation_service.py
-- Plan: 10-02-PLAN.md
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
-
-# Skip decorator for Redis-dependent tests (deprecated in single-user mode)
-skip_redis = pytest.mark.skip(reason="Test requires Redis locks/SSE (deprecated in single-user mode)")
 
 from backend.services.occupation_service import OccupationService
 from backend.models.occupation import (
@@ -32,11 +28,9 @@ from backend.exceptions import (
     SpoolOccupiedError,
     DependenciasNoSatisfechasError,
     NoAutorizadoError,
-    LockExpiredError
+    LockExpiredError,
+    RaceConditionError
 )
-
-
-# Redis fixtures removed - single-user mode doesn't need distributed locks
 
 
 @pytest.fixture
@@ -51,12 +45,28 @@ def mock_sheets_repository():
     mock_spool.total_uniones = 10  # v4.0 spool (has unions)
     mock_spool.fecha_materiales = "2026-01-20"
     mock_spool.fecha_ocupacion = "04-02-2026 10:00:00"  # When spool was taken
+    mock_spool.ocupado_por = None  # Not occupied by default
     mock_spool.armador = None
     mock_spool.soldador = None
     mock_spool.fecha_armado = None
     mock_spool.fecha_soldadura = None
 
     repo.get_spool_by_tag = MagicMock(return_value=mock_spool)
+
+    # Mock methods needed by iniciar_spool's Sheets write path
+    repo.batch_update_by_column_name = MagicMock()
+    repo._index_to_column_letter = MagicMock(return_value="G")
+    repo.find_row_by_column_value = MagicMock(return_value=5)
+
+    # Mock read_worksheet to return headers (needed for ColumnMapCache)
+    mock_headers = [
+        "TAG_SPOOL", "OT", "NV", "Fecha_Materiales", "Fecha_Armado", "Armador",
+        "Fecha_Soldadura", "Soldador", "Ocupado_Por", "Fecha_Ocupacion",
+        "version", "Estado_Detalle", "Total_Uniones", "Uniones_ARM_Completadas",
+        "Pulgadas_ARM", "Uniones_SOLD_Completadas", "Pulgadas_SOLD"
+    ]
+    repo.read_worksheet = MagicMock(return_value=[mock_headers])
+
     return repo
 
 
@@ -75,9 +85,6 @@ def mock_conflict_service():
     service.generate_version_token = MagicMock(return_value="version-uuid")
     service.update_with_retry = AsyncMock(return_value="new-version-uuid")
     return service
-
-
-# Redis event service removed - SSE not needed in single-user mode
 
 
 @pytest.fixture
@@ -104,8 +111,6 @@ def mock_union_repository():
             ndt_fecha=None,
             ndt_status=None,
             version="version-uuid",
-            creado_por="SYSTEM(0)",
-            fecha_creacion=datetime(2026, 1, 1)
         )
 
     # Default: 10 unions available for ARM
@@ -120,6 +125,27 @@ def mock_union_repository():
 
     repo.batch_update_arm = MagicMock(return_value=3)  # 3 unions updated
     repo.batch_update_sold = MagicMock(return_value=2)  # 2 unions updated
+
+    # P5 batch methods (full timestamp support)
+    repo.batch_update_arm_full = MagicMock(return_value=3)
+    repo.batch_update_sold_full = MagicMock(return_value=2)
+
+    # For pulgadas calculation
+    repo.get_by_ids = MagicMock(return_value=[
+        create_union(1), create_union(2), create_union(3)
+    ])
+
+    # v4.0 detection: return 10 unions (v4.0 spool)
+    repo.get_total_uniones = MagicMock(return_value=10)
+
+    # Metrics for v4.0 counters
+    repo.calculate_metrics = MagicMock(return_value={
+        "arm_completadas": 3,
+        "sold_completadas": 0,
+        "pulgadas_arm": 7.5,
+        "pulgadas_sold": 0.0,
+    })
+    repo._find_spool_row = MagicMock(return_value=5)
 
     return repo
 
@@ -144,10 +170,9 @@ def occupation_service_v4(
 # INICIAR Tests
 # ============================================================================
 
-@skip_redis
 @pytest.mark.asyncio
-async def test_iniciar_spool_success(occupation_service_v4, mock_conflict_service):
-    """Test INICIAR successfully occupies spool without touching Uniones."""
+async def test_iniciar_spool_success(occupation_service_v4, mock_sheets_repository):
+    """Test INICIAR successfully occupies spool via Sheets write (no Redis)."""
     request = IniciarRequest(
         tag_spool="OT-123",
         worker_id=93,
@@ -155,25 +180,19 @@ async def test_iniciar_spool_success(occupation_service_v4, mock_conflict_servic
         operacion=ActionType.ARM
     )
 
-    response = await occupation_service_v4.iniciar_spool(request)
+    with patch('backend.services.estado_detalle_builder.EstadoDetalleBuilder') as mock_builder_class:
+        mock_builder = MagicMock()
+        mock_builder.build.return_value = "MR(93) trabajando ARM"
+        mock_builder_class.return_value = mock_builder
+
+        response = await occupation_service_v4.iniciar_spool(request)
 
     assert response.success is True
     assert response.tag_spool == "OT-123"
-    assert "iniciado por MR(93)" in response.message
+    assert "iniciado" in response.message.lower()
 
-    # Verify Redis lock acquired
-    mock_redis_lock_service.acquire_lock.assert_called_once_with(
-        tag_spool="OT-123",
-        worker_id=93,
-        worker_nombre="MR(93)"
-    )
-
-    # Verify Sheets updated with occupation
-    mock_conflict_service.update_with_retry.assert_called_once()
-    call_args = mock_conflict_service.update_with_retry.call_args
-    assert call_args.kwargs["tag_spool"] == "OT-123"
-    assert call_args.kwargs["updates"]["Ocupado_Por"] == "MR(93)"
-    assert "Fecha_Ocupacion" in call_args.kwargs["updates"]
+    # Verify Sheets updated with occupation via batch_update_by_column_name
+    mock_sheets_repository.batch_update_by_column_name.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -203,15 +222,17 @@ async def test_iniciar_spool_missing_prerequisite(occupation_service_v4, mock_sh
     assert "Fecha_Materiales" in str(exc_info.value)
 
 
-@skip_redis
 @pytest.mark.asyncio
-async def test_iniciar_spool_already_occupied(occupation_service_v4):
-    """Test INICIAR fails if spool already occupied."""
-    mock_redis_lock_service.acquire_lock.side_effect = SpoolOccupiedError(
-        tag_spool="OT-123",
-        owner_id=94,
-        owner_name="JP(94)"
-    )
+async def test_iniciar_spool_already_occupied(occupation_service_v4, mock_sheets_repository):
+    """
+    Test INICIAR on already-occupied spool succeeds (LWW in single-user mode).
+
+    In P5 Confirmation workflow, INICIAR does NOT validate if already occupied.
+    It trusts P4 filters and accepts last-write-wins for any race condition.
+    """
+    # Mock spool already occupied by another worker
+    mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+    mock_spool.ocupado_por = "JP(94)"
 
     request = IniciarRequest(
         tag_spool="OT-123",
@@ -220,17 +241,25 @@ async def test_iniciar_spool_already_occupied(occupation_service_v4):
         operacion=ActionType.ARM
     )
 
-    with pytest.raises(SpoolOccupiedError):
-        await occupation_service_v4.iniciar_spool(request)
+    with patch('backend.services.estado_detalle_builder.EstadoDetalleBuilder') as mock_builder_class:
+        mock_builder = MagicMock()
+        mock_builder.build.return_value = "MR(93) trabajando ARM"
+        mock_builder_class.return_value = mock_builder
+
+        # In single-user/LWW mode, INICIAR succeeds even if spool is occupied
+        response = await occupation_service_v4.iniciar_spool(request)
+
+    assert response.success is True
+    # Sheets write overwrites previous occupation (LWW)
+    mock_sheets_repository.batch_update_by_column_name.assert_called_once()
 
 
 # ============================================================================
 # FINALIZAR Tests - PAUSAR outcome
 # ============================================================================
 
-@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_repository):
+async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_repository, mock_conflict_service):
     """Test FINALIZAR with partial selection results in PAUSAR."""
     # Select 3 out of 10 available unions
     request = FinalizarRequest(
@@ -245,7 +274,7 @@ async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_reposito
     mock_union_repository.get_disponibles_arm_by_ot.return_value = [
         MagicMock() for _ in range(10)
     ]
-    mock_union_repository.batch_update_arm.return_value = 3
+    mock_union_repository.batch_update_arm_full.return_value = 3
 
     response = await occupation_service_v4.finalizar_spool(request)
 
@@ -255,19 +284,15 @@ async def test_finalizar_spool_pausar(occupation_service_v4, mock_union_reposito
     assert "pausado" in response.message.lower()
 
     # Verify batch update called
-    mock_union_repository.batch_update_arm.assert_called_once()
-
-    # Verify lock released
-    mock_redis_lock_service.release_lock.assert_called_once()
+    mock_union_repository.batch_update_arm_full.assert_called_once()
 
 
 # ============================================================================
 # FINALIZAR Tests - COMPLETAR outcome
 # ============================================================================
 
-@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repository):
+async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repository, mock_conflict_service):
     """Test FINALIZAR with full selection results in COMPLETAR."""
     # Select all 10 available unions
     request = FinalizarRequest(
@@ -282,7 +307,7 @@ async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repos
     mock_union_repository.get_disponibles_arm_by_ot.return_value = [
         MagicMock() for _ in range(10)
     ]
-    mock_union_repository.batch_update_arm.return_value = 10
+    mock_union_repository.batch_update_arm_full.return_value = 10
 
     response = await occupation_service_v4.finalizar_spool(request)
 
@@ -292,8 +317,8 @@ async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repos
     assert "completada" in response.message.lower()
 
     # Verify batch update called with all unions
-    mock_union_repository.batch_update_arm.assert_called_once()
-    call_args = mock_union_repository.batch_update_arm.call_args
+    mock_union_repository.batch_update_arm_full.assert_called_once()
+    call_args = mock_union_repository.batch_update_arm_full.call_args
     assert len(call_args.kwargs["union_ids"]) == 10
 
 
@@ -301,11 +326,9 @@ async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repos
 # FINALIZAR Tests - Zero-union cancellation
 # ============================================================================
 
-@skip_redis
 @pytest.mark.asyncio
 async def test_finalizar_spool_zero_union_cancellation(
     occupation_service_v4,
-    mock_redis_lock_service,
     mock_conflict_service,
     mock_union_repository
 ):
@@ -325,16 +348,13 @@ async def test_finalizar_spool_zero_union_cancellation(
     assert response.unions_processed == 0
     assert "cancelado" in response.message.lower()
 
-    # Verify lock released
-    mock_redis_lock_service.release_lock.assert_called_once()
-
-    # Verify occupation cleared
+    # Verify occupation cleared via conflict_service.update_with_retry
     mock_conflict_service.update_with_retry.assert_called_once()
     call_args = mock_conflict_service.update_with_retry.call_args
     assert call_args.kwargs["updates"]["Ocupado_Por"] == ""
 
     # Verify NO batch update to Uniones
-    mock_union_repository.batch_update_arm.assert_not_called()
+    mock_union_repository.batch_update_arm_full.assert_not_called()
 
 
 # ============================================================================
@@ -358,22 +378,25 @@ async def test_finalizar_spool_race_condition(occupation_service_v4, mock_union_
         MagicMock() for _ in range(10)
     ]
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(RaceConditionError):
         await occupation_service_v4.finalizar_spool(request)
-
-    assert "Race condition" in str(exc_info.value)
 
 
 # ============================================================================
 # FINALIZAR Tests - Ownership validation
 # ============================================================================
 
-@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_not_owner(occupation_service_v4):
-    """Test FINALIZAR fails if worker doesn't own the lock."""
-    # Mock different owner
-    mock_redis_lock_service.get_lock_owner.return_value = (94, "other-token")
+async def test_finalizar_spool_not_owner(occupation_service_v4, mock_sheets_repository):
+    """
+    Test FINALIZAR succeeds even with different owner (trust P4 filters).
+
+    In P5 Confirmation workflow, FINALIZAR does NOT verify lock ownership.
+    It trusts that P4 filters already ensured only the owner can reach P5.
+    """
+    # Mock spool occupied by a different worker
+    mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+    mock_spool.ocupado_por = "JP(94)"
 
     request = FinalizarRequest(
         tag_spool="OT-123",
@@ -383,16 +406,24 @@ async def test_finalizar_spool_not_owner(occupation_service_v4):
         selected_unions=["OT-123+1"]
     )
 
-    with pytest.raises(NoAutorizadoError):
-        await occupation_service_v4.finalizar_spool(request)
+    # In single-user mode with P5 workflow, ownership is NOT validated
+    # The service trusts P4 filters (only spools owned by the worker appear)
+    response = await occupation_service_v4.finalizar_spool(request)
+    assert response.success is True
 
 
-@skip_redis
 @pytest.mark.asyncio
-async def test_finalizar_spool_lock_expired(occupation_service_v4):
-    """Test FINALIZAR fails if lock no longer exists."""
-    # Override default mock to return None (lock expired)
-    mock_redis_lock_service.get_lock_owner = AsyncMock(return_value=None)
+async def test_finalizar_spool_no_occupation(occupation_service_v4, mock_sheets_repository):
+    """
+    Test FINALIZAR succeeds even when spool has no occupation (trust P4 filters).
+
+    In P5 Confirmation workflow, FINALIZAR does NOT check if occupation exists.
+    The spool appearing in P4 list is sufficient proof of occupation.
+    """
+    # Mock spool with no occupation
+    mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+    mock_spool.ocupado_por = None
+    mock_spool.fecha_ocupacion = None
 
     request = FinalizarRequest(
         tag_spool="OT-123",
@@ -402,8 +433,9 @@ async def test_finalizar_spool_lock_expired(occupation_service_v4):
         selected_unions=["OT-123+1"]
     )
 
-    with pytest.raises(LockExpiredError):
-        await occupation_service_v4.finalizar_spool(request)
+    # In single-user mode, service trusts P4 filters and proceeds
+    response = await occupation_service_v4.finalizar_spool(request)
+    assert response.success is True
 
 
 # ============================================================================
@@ -431,14 +463,13 @@ def test_determine_action_completar(occupation_service_v4):
 
 
 def test_determine_action_race_condition(occupation_service_v4):
-    """Test _determine_action raises ValueError for race condition."""
-    with pytest.raises(ValueError) as exc_info:
+    """Test _determine_action raises RaceConditionError for race condition."""
+    with pytest.raises(RaceConditionError):
         occupation_service_v4._determine_action(
             selected_count=15,
             total_available=10,
             operacion="ARM"
         )
-    assert "Race condition" in str(exc_info.value)
 
 
 # ============================================================================

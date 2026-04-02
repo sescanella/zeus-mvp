@@ -6,12 +6,13 @@ worked on each spool and for how long.
 """
 
 import logging
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Annotated
 
 from backend.services.history_service import HistoryService
 from backend.models.history import HistoryResponse
 from backend.core.dependency import get_history_service
+from backend.exceptions import SpoolNoEncontradoError
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,19 @@ async def get_occupation_history(
     """
     logger.info(f"[HISTORY] GET /api/history/{tag_spool}")
 
-    history = await history_service.get_occupation_history(tag_spool)
+    try:
+        history = await history_service.get_occupation_history(tag_spool)
+    except SpoolNoEncontradoError:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "SPOOL_NO_ENCONTRADO", "message": f"Spool '{tag_spool}' no encontrado"}
+        )
+    except Exception as e:
+        logger.error(f"[HISTORY] Error fetching history for {tag_spool}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener historial. Intenta nuevamente."}
+        )
 
     logger.info(f"[HISTORY] Retrieved {len(history.sessions)} sessions for {tag_spool}")
 

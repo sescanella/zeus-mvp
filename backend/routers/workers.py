@@ -8,7 +8,7 @@ Endpoints:
 - GET /api/workers - Lista trabajadores activos
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.core.dependency import get_worker_service
 from backend.services.worker_service import WorkerService
@@ -87,7 +87,14 @@ async def get_workers(
     logger.info("GET /api/workers - Listing active workers")
 
     # Obtener trabajadores activos del servicio
-    workers = worker_service.get_all_active_workers()
+    try:
+        workers = worker_service.get_all_active_workers()
+    except Exception as e:
+        logger.error(f"Error loading workers: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar trabajadores. Verifica conexión."}
+        )
 
     logger.info(f"Found {len(workers)} active workers")
 
