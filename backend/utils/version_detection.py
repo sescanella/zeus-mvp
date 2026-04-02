@@ -8,7 +8,6 @@ Reference:
 - Plan: 11-01-PLAN.md
 - Full service: backend/services/version_detection_service.py (Phase 9)
 """
-from typing import Dict, Any
 
 
 def is_v4_spool(spool_data: dict) -> bool:
@@ -66,26 +65,3 @@ def get_spool_version(spool_data: dict) -> str:
     return "v4.0" if is_v4_spool(spool_data) else "v3.0"
 
 
-def format_version_badge(spool_data: dict) -> Dict[str, Any]:
-    """
-    Format version information for UI display.
-
-    Returns a dict with version string and badge color.
-
-    Args:
-        spool_data: Dictionary with spool data (must include Total_Uniones key)
-
-    Returns:
-        dict: {"version": "v4.0", "color": "green"} or {"version": "v3.0", "color": "gray"}
-
-    Example:
-        >>> format_version_badge({"TAG_SPOOL": "OT-123", "Total_Uniones": "5"})
-        {'version': 'v4.0', 'color': 'green'}
-        >>> format_version_badge({"TAG_SPOOL": "TEST-02", "Total_Uniones": "0"})
-        {'version': 'v3.0', 'color': 'gray'}
-    """
-    version = get_spool_version(spool_data)
-    return {
-        "version": version,
-        "color": "green" if version == "v4.0" else "gray"
-    }

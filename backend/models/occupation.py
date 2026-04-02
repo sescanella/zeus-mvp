@@ -337,25 +337,6 @@ class OccupationStatus(BaseModel):
     )
 
 
-class OccupationEvent(BaseModel):
-    """Evento de ocupación para logging en Metadata."""
-    tag_spool: str = Field(..., description="TAG del spool")
-    worker_id: int = Field(..., description="ID del trabajador")
-    worker_nombre: str = Field(..., description="Nombre del trabajador")
-    operacion: str = Field(..., description="Operación (ARM/SOLD/METROLOGIA)")
-    accion: str = Field(..., description="Acción (TOMAR/PAUSAR/COMPLETAR)")
-    lock_token: Optional[str] = Field(None, description="Token del lock (legacy, not used in single-user mode)")
-    metadata_json: Optional[str] = Field(None, description="Metadata adicional en JSON")
-
-
-class LockToken(BaseModel):
-    """Token de lock para tracking interno."""
-    tag_spool: str = Field(..., description="TAG del spool")
-    worker_id: int = Field(..., description="ID del trabajador owner")
-    token: str = Field(..., description="UUID token único")
-    expires_at: Optional[datetime] = Field(None, description="Timestamp de expiración")
-
-
 class IniciarRequest(BaseModel):
     """
     Request body para iniciar trabajo en un spool (v4.0 INICIAR operation).
