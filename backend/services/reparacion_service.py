@@ -141,9 +141,12 @@ class ReparacionService:
                 })
                 .build()
             )
-            self.metadata_repo.append_event(event)
+            self.metadata_repo.log_event(**event)
         except Exception as e:
-            logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
+            logger.error(
+                f"CRITICAL: Metadata audit trail logging failed for {tag_spool}: {e}",
+                exc_info=True
+            )
 
         # Step 6: Build estado_detalle for SSE event
         estado_detalle = self.cycle_counter.build_reparacion_estado(
@@ -234,9 +237,12 @@ class ReparacionService:
                 })
                 .build()
             )
-            self.metadata_repo.append_event(event)
+            self.metadata_repo.log_event(**event)
         except Exception as e:
-            logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
+            logger.error(
+                f"CRITICAL: Metadata audit trail logging failed for {tag_spool}: {e}",
+                exc_info=True
+            )
 
         # Step 5: Build estado_detalle for SSE event
         estado_detalle = self.cycle_counter.build_reparacion_estado(
@@ -331,9 +337,12 @@ class ReparacionService:
                 })
                 .build()
             )
-            self.metadata_repo.append_event(event)
+            self.metadata_repo.log_event(**event)
         except Exception as e:
-            logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
+            logger.error(
+                f"CRITICAL: Metadata audit trail logging failed for {tag_spool}: {e}",
+                exc_info=True
+            )
 
         # Step 5: Build estado_detalle for SSE event
         estado_detalle = "PENDIENTE_METROLOGIA"
@@ -417,9 +426,12 @@ class ReparacionService:
                 })
                 .build()
             )
-            self.metadata_repo.append_event(event)
+            self.metadata_repo.log_event(**event)
         except Exception as e:
-            logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
+            logger.error(
+                f"CRITICAL: Metadata audit trail logging failed for {tag_spool}: {e}",
+                exc_info=True
+            )
 
         # Step 5: Build estado_detalle for SSE event
         estado_detalle = self.cycle_counter.build_rechazado_estado(current_cycle)

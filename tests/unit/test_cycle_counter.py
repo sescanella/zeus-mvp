@@ -44,7 +44,7 @@ def test_extract_returns_zero_for_no_cycle(cycle_counter):
     """Should return 0 when no cycle info found."""
     test_cases = [
         "PENDIENTE_METROLOGIA",
-        "METROLOGIA_APROBADO ✓",
+        "METROLOGIA APROBADO ✓",
         "Disponible - ARM completado, SOLD pendiente",
         "",
         None
@@ -162,7 +162,7 @@ def test_build_reparacion_handles_unknown_state(cycle_counter):
 def test_reset_cycle_removes_info(cycle_counter):
     """Should reset cycle and return APROBADO estado."""
     estado = cycle_counter.reset_cycle()
-    assert estado == "METROLOGIA_APROBADO ✓"
+    assert estado == "METROLOGIA APROBADO ✓"
     assert "Ciclo" not in estado
 
 

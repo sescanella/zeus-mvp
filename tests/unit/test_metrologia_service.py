@@ -31,7 +31,7 @@ def mock_sheets_repo():
 def mock_metadata_repo():
     """Mock MetadataRepository."""
     repo = Mock()
-    repo.append_event = Mock()
+    repo.log_event = Mock(return_value="mock-event-id")
     return repo
 
 
@@ -209,20 +209,20 @@ async def test_completar_logs_metadata_event(metrologia_service, mock_sheets_rep
         resultado="APROBADO"
     )
 
-    # Verify metadata was logged
-    mock_metadata_repo.append_event.assert_called_once()
-    event = mock_metadata_repo.append_event.call_args[0][0]
-    assert event["tag_spool"] == "TEST-001"
-    assert event["worker_id"] == 95
-    assert event["operacion"] == "METROLOGIA"
-    assert "APROBADO" in event["metadata_json"]
+    # Verify metadata was logged via log_event(**event)
+    mock_metadata_repo.log_event.assert_called_once()
+    call_kwargs = mock_metadata_repo.log_event.call_args[1]
+    assert call_kwargs["tag_spool"] == "TEST-001"
+    assert call_kwargs["worker_id"] == 95
+    assert call_kwargs["operacion"] == "METROLOGIA"
+    assert "APROBADO" in call_kwargs["metadata_json"]
 
 
 @pytest.mark.asyncio
 async def test_completar_continues_on_metadata_failure(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
     """Test that operation continues even if metadata logging fails (best-effort)."""
     mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
-    mock_metadata_repo.append_event = Mock(side_effect=Exception("Metadata API error"))
+    mock_metadata_repo.log_event = Mock(side_effect=Exception("Metadata API error"))
 
     # Should still succeed despite metadata failure
     result = await metrologia_service.completar(

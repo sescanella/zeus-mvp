@@ -24,15 +24,11 @@ Created: 2026-02-06
 Refactoring: Metadata Event Builder (Refactoring 2/4)
 """
 
-import uuid
 import json
-from datetime import datetime
 from typing import Dict, Optional, Any
 
 from backend.utils.date_formatter import (
-    format_datetime_for_sheets,
     format_date_for_sheets,
-    now_chile,
     today_chile
 )
 
@@ -60,8 +56,6 @@ class MetadataEventBuilder:
 
     def __init__(self):
         """Initialize builder with defaults."""
-        self._event_id = str(uuid.uuid4())
-        self._timestamp = format_datetime_for_sheets(now_chile())
         self._fecha_operacion = format_date_for_sheets(today_chile())
         self._evento_tipo: Optional[str] = None
         self._tag_spool: Optional[str] = None
@@ -423,8 +417,6 @@ class MetadataEventBuilder:
         metadata_json = json.dumps(self._metadata, ensure_ascii=False)
 
         return {
-            "id": self._event_id,
-            "timestamp": self._timestamp,
             "evento_tipo": self._evento_tipo,
             "tag_spool": self._tag_spool,
             "worker_id": self._worker_id,

@@ -11,12 +11,10 @@ Phase 6 feature:
 """
 
 import logging
-import uuid
 import json
-from datetime import datetime
 from typing import Optional
 
-from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile, today_chile
+from backend.utils.date_formatter import format_datetime_for_sheets, now_chile, today_chile
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.enums import EventoTipo
@@ -117,7 +115,6 @@ class EstadoDetalleService:
 
             # Step 4: Log SUPERVISOR_OVERRIDE event
             try:
-                event_id = str(uuid.uuid4())
                 metadata_json = json.dumps({
                     "previous_estado": last_estado,
                     "new_estado": current_estado,
@@ -125,20 +122,16 @@ class EstadoDetalleService:
                     "override_type": "BLOQUEADO_TO_RECHAZADO"
                 })
 
-                metadata_event = {
-                    "id": event_id,
-                    "timestamp": format_datetime_for_sheets(now_chile()),
-                    "evento_tipo": "SUPERVISOR_OVERRIDE",  # New event type
-                    "tag_spool": tag_spool,
-                    "worker_id": 0,  # System event
-                    "worker_nombre": "SYSTEM",
-                    "operacion": "REPARACION",
-                    "accion": "OVERRIDE",
-                    "fecha_operacion": format_date_for_sheets(today_chile()),
-                    "metadata_json": metadata_json
-                }
-
-                self.metadata_repo.append_event(metadata_event)
+                event_id = self.metadata_repo.log_event(
+                    evento_tipo="SUPERVISOR_OVERRIDE",
+                    tag_spool=tag_spool,
+                    worker_id=0,
+                    worker_nombre="SYSTEM",
+                    operacion="REPARACION",
+                    accion="OVERRIDE",
+                    fecha_operacion=today_chile(),
+                    metadata_json=metadata_json
+                )
                 logger.info(f"✅ Supervisor override logged: {tag_spool} (event: {event_id})")
 
                 return {
@@ -150,7 +143,10 @@ class EstadoDetalleService:
                 }
 
             except Exception as e:
-                logger.error(f"Failed to log supervisor override for {tag_spool}: {e}")
+                logger.error(
+                    f"CRITICAL: Metadata audit trail logging failed for {tag_spool}: {e}",
+                    exc_info=True
+                )
                 # Return detection result even if logging fails
                 return {
                     "detected": True,

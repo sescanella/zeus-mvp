@@ -131,19 +131,12 @@ class MetrologiaService:
                 })
                 .build()
             )
-            self.metadata_repo.append_event(event)
+            self.metadata_repo.log_event(**event)
         except Exception as e:
-            logger.warning(f"Failed to log metadata for {tag_spool}: {e}")
-
-        # Step 5: Build estado_detalle for SSE event
-        from backend.services.estado_detalle_builder import EstadoDetalleBuilder
-        builder = EstadoDetalleBuilder()
-        estado_detalle = builder.build(
-            ocupado_por=spool.ocupado_por,
-            arm_state="completado",  # ARM always complete for metrología
-            sold_state="completado",  # SOLD always complete for metrología
-            metrologia_state=metrologia_machine.get_state_id()
-        )
+            logger.error(
+                f"CRITICAL: Metadata audit trail logging failed for {tag_spool}: {e}",
+                exc_info=True
+            )
 
         logger.info(f"✅ MetrologiaService.completar: {tag_spool} -> {resultado}")
         return {

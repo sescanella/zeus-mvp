@@ -174,6 +174,6 @@ class CycleCounterService:
         Examples:
             >>> counter = CycleCounterService()
             >>> counter.reset_cycle()
-            'METROLOGIA_APROBADO ✓'
+            'METROLOGIA APROBADO ✓'
         """
-        return "METROLOGIA_APROBADO ✓"
+        return "METROLOGIA APROBADO ✓"

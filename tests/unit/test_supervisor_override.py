@@ -33,7 +33,7 @@ def mock_metadata_repo():
     """Mock MetadataRepository."""
     repo = Mock(spec=MetadataRepository)
     repo.get_events_by_spool.return_value = []
-    repo.append_event.return_value = None
+    repo.log_event.return_value = "mock-event-id"
     return repo
 
 
@@ -174,13 +174,13 @@ def test_logs_supervisor_override_event(estado_detalle_service, mock_sheets_repo
     # Detect and log override
     result = estado_detalle_service.detect_supervisor_override(tag_spool)
 
-    # Verify SUPERVISOR_OVERRIDE event logged
-    assert mock_metadata_repo.append_event.called
-    event_dict = mock_metadata_repo.append_event.call_args[0][0]
-    assert event_dict["evento_tipo"] == "SUPERVISOR_OVERRIDE"
-    assert event_dict["tag_spool"] == tag_spool
-    assert event_dict["operacion"] == "REPARACION"
-    assert event_dict["accion"] == "OVERRIDE"
+    # Verify SUPERVISOR_OVERRIDE event logged via log_event()
+    assert mock_metadata_repo.log_event.called
+    call_kwargs = mock_metadata_repo.log_event.call_args[1]
+    assert call_kwargs["evento_tipo"] == "SUPERVISOR_OVERRIDE"
+    assert call_kwargs["tag_spool"] == tag_spool
+    assert call_kwargs["operacion"] == "REPARACION"
+    assert call_kwargs["accion"] == "OVERRIDE"
 
 
 def test_override_event_includes_metadata(estado_detalle_service, mock_sheets_repo, mock_metadata_repo):
@@ -219,8 +219,8 @@ def test_override_event_includes_metadata(estado_detalle_service, mock_sheets_re
     result = estado_detalle_service.detect_supervisor_override(tag_spool)
 
     # Verify metadata_json contains override details
-    event_dict = mock_metadata_repo.append_event.call_args[0][0]
-    metadata = json.loads(event_dict["metadata_json"])
+    call_kwargs = mock_metadata_repo.log_event.call_args[1]
+    metadata = json.loads(call_kwargs["metadata_json"])
     assert "previous_estado" in metadata
     assert "new_estado" in metadata
     assert "BLOQUEADO" in metadata["previous_estado"]
@@ -264,9 +264,9 @@ def test_system_worker_id_zero(estado_detalle_service, mock_sheets_repo, mock_me
     result = estado_detalle_service.detect_supervisor_override(tag_spool)
 
     # Verify worker_id=0 and worker_nombre=SYSTEM
-    event_dict = mock_metadata_repo.append_event.call_args[0][0]
-    assert event_dict["worker_id"] == 0
-    assert event_dict["worker_nombre"] == "SYSTEM"
+    call_kwargs = mock_metadata_repo.log_event.call_args[1]
+    assert call_kwargs["worker_id"] == 0
+    assert call_kwargs["worker_nombre"] == "SYSTEM"
 
 
 # ============================================================================
@@ -299,7 +299,7 @@ def test_no_previous_event(estado_detalle_service, mock_sheets_repo, mock_metada
     result = estado_detalle_service.detect_supervisor_override(tag_spool)
 
     assert result is None
-    assert not mock_metadata_repo.append_event.called
+    assert not mock_metadata_repo.log_event.called
 
 
 def test_spool_not_found(estado_detalle_service, mock_sheets_repo, mock_metadata_repo):
@@ -311,7 +311,7 @@ def test_spool_not_found(estado_detalle_service, mock_sheets_repo, mock_metadata
     result = estado_detalle_service.detect_supervisor_override(tag_spool)
 
     assert result is None
-    assert not mock_metadata_repo.append_event.called
+    assert not mock_metadata_repo.log_event.called
 
 
 def test_multiple_overrides(estado_detalle_service, mock_sheets_repo, mock_metadata_repo):
@@ -373,7 +373,7 @@ def test_multiple_overrides(estado_detalle_service, mock_sheets_repo, mock_metad
     assert result2["detected"] is True
 
     # Verify both overrides logged
-    assert mock_metadata_repo.append_event.call_count == 2
+    assert mock_metadata_repo.log_event.call_count == 2
 
 
 def test_logging_failure_returns_error(estado_detalle_service, mock_sheets_repo, mock_metadata_repo):
@@ -409,8 +409,8 @@ def test_logging_failure_returns_error(estado_detalle_service, mock_sheets_repo,
     )
     mock_metadata_repo.get_events_by_spool.return_value = [last_event]
 
-    # Mock append_event to fail
-    mock_metadata_repo.append_event.side_effect = Exception("Sheets API error")
+    # Mock log_event to fail
+    mock_metadata_repo.log_event.side_effect = Exception("Sheets API error")
 
     result = estado_detalle_service.detect_supervisor_override(tag_spool)
 

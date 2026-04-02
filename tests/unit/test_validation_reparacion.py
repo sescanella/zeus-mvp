@@ -92,7 +92,7 @@ def test_can_tomar_rechazado_without_cycle_info(validation_service, mock_spool):
 
 def test_cannot_repair_aprobado_spool(validation_service, mock_spool):
     """Should raise OperacionNoDisponibleError when spool is APROBADO."""
-    mock_spool.estado_detalle = "METROLOGIA_APROBADO ✓"
+    mock_spool.estado_detalle = "METROLOGIA APROBADO ✓"
 
     with pytest.raises(OperacionNoDisponibleError) as exc_info:
         validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93)
@@ -204,7 +204,7 @@ def test_cannot_cancelar_bloqueado(validation_service, mock_spool):
 
 def test_cannot_cancelar_aprobado(validation_service, mock_spool):
     """Should raise OperacionNoIniciadaError when trying to CANCELAR APROBADO spool."""
-    mock_spool.estado_detalle = "METROLOGIA_APROBADO ✓"
+    mock_spool.estado_detalle = "METROLOGIA APROBADO ✓"
 
     with pytest.raises(OperacionNoIniciadaError):
         validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93)

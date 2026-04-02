@@ -81,7 +81,7 @@ class MetrologiaStateMachine(BaseOperationStateMachine):
                 fecha_str = fecha.strftime("%d-%m-%Y") if hasattr(fecha, 'strftime') else str(fecha)
 
                 # Phase 6: Reset cycle counter on approval
-                estado_detalle = "METROLOGIA_APROBADO ✓"
+                estado_detalle = "METROLOGIA APROBADO ✓"
                 if self.cycle_counter:
                     estado_detalle = self.cycle_counter.reset_cycle()
 

@@ -55,7 +55,7 @@ def mock_sheets_repo():
 def mock_metadata_repo():
     """Mock MetadataRepository."""
     repo = Mock(spec=MetadataRepository)
-    repo.append_event.return_value = None
+    repo.log_event.return_value = "mock-event-id"
     return repo
 
 
@@ -259,10 +259,10 @@ async def test_metadata_includes_cycle_info(reparacion_service, mock_sheets_repo
 
         result = await reparacion_service.tomar_reparacion(tag_spool, worker_id, worker_nome)
 
-    # Verify metadata logged with cycle info
-    mock_metadata_repo.append_event.assert_called_once()
-    event = mock_metadata_repo.append_event.call_args[0][0]
-    metadata = json.loads(event["metadata_json"])
+    # Verify metadata logged with cycle info via log_event(**event)
+    mock_metadata_repo.log_event.assert_called_once()
+    call_kwargs = mock_metadata_repo.log_event.call_args[1]
+    metadata = json.loads(call_kwargs["metadata_json"])
     assert "cycle" in metadata
     assert metadata["cycle"] == 1
     assert metadata["max_cycles"] == 3
@@ -276,7 +276,7 @@ async def test_metadata_logging_failure_does_not_block(reparacion_service, mock_
     worker_nombre = "CP(95)"
 
     mock_sheets_repo.get_spool_by_tag.return_value = rechazado_spool
-    mock_metadata_repo.append_event.side_effect = Exception("Sheets API error")
+    mock_metadata_repo.log_event.side_effect = Exception("Sheets API error")
 
     with patch("backend.services.reparacion_service.REPARACIONStateMachine") as MockStateMachine:
         mock_machine = AsyncMock()
