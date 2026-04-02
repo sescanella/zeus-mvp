@@ -16,6 +16,7 @@ from backend.models.metadata import MetadataEvent, EventoTipo, Accion
 from backend.exceptions import SheetsConnectionError, SheetsUpdateError
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.core.column_map_cache import ColumnMapCache
+from backend.utils.sanitize import sanitize_row_for_sheets
 
 
 def retry_on_sheets_error(max_retries: int = 3, backoff_seconds: float = 1.0):
@@ -138,7 +139,7 @@ class MetadataRepository:
         """
         try:
             worksheet = self._get_worksheet()
-            row_data = event.to_sheets_row()
+            row_data = sanitize_row_for_sheets(event.to_sheets_row())
 
             self.logger.info(
                 f"Escribiendo evento: {event.evento_tipo} - Spool: {event.tag_spool} - Worker: {event.worker_nombre}"
@@ -460,8 +461,8 @@ class MetadataRepository:
         try:
             worksheet = self._get_worksheet()
 
-            # Convert all events to sheet rows
-            rows = [event.to_sheets_row() for event in events]
+            # Convert all events to sheet rows (sanitized against formula injection)
+            rows = [sanitize_row_for_sheets(event.to_sheets_row()) for event in events]
 
             # Split into chunks of 900 rows
             chunks = [rows[i:i+self.CHUNK_SIZE] for i in range(0, len(rows), self.CHUNK_SIZE)]

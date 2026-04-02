@@ -380,9 +380,9 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
         {!loading && rows.length > 0 && (
           <div className="flex items-center gap-2 px-1.5 pt-2 pb-1 border-b border-white/10">
             {operacion !== null && <span className="min-w-[44px]" />}
-            <span className="font-mono font-black text-xs text-white/40 min-w-[2rem] text-center">#</span>
-            <span className="font-mono font-black text-xs text-white/40 flex-1">DN</span>
-            <span className="font-mono font-black text-xs text-white/40 flex-1">TIPO</span>
+            <span className="font-mono font-black text-xs text-white/60 min-w-[2rem] text-center">#</span>
+            <span className="font-mono font-black text-xs text-white/60 flex-1">DN</span>
+            <span className="font-mono font-black text-xs text-white/60 flex-1">TIPO</span>
             <span className="min-w-[44px]" />
           </div>
         )}

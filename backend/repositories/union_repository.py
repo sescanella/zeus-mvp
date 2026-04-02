@@ -14,6 +14,7 @@ from backend.repositories.sheets_repository import SheetsRepository, retry_on_sh
 from backend.core.column_map_cache import ColumnMapCache
 from backend.utils.cache import get_cache
 from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
+from backend.utils.sanitize import sanitize_for_sheets, sanitize_row_for_sheets
 from backend.exceptions import SheetsConnectionError
 
 
@@ -752,6 +753,7 @@ class UnionRepository:
                 return 0
             formatted_timestamp = format_datetime_for_sheets(timestamp)
 
+            safe_worker = sanitize_for_sheets(worker)
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
                 arm_fecha_fin_letter = _col_idx_to_letter(arm_fecha_fin_col_idx)
@@ -762,7 +764,7 @@ class UnionRepository:
                 arm_worker_letter = _col_idx_to_letter(arm_worker_col_idx)
                 batch_data.append({
                     'range': f'{arm_worker_letter}{row_num}',
-                    'values': [[worker]]
+                    'values': [[safe_worker]]
                 })
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
@@ -865,6 +867,7 @@ class UnionRepository:
                 self.logger.warning(f"No valid unions found for TAG_SPOOL {tag_spool}")
                 return 0
             formatted_timestamp = format_datetime_for_sheets(timestamp)
+            safe_worker = sanitize_for_sheets(worker)
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
@@ -876,7 +879,7 @@ class UnionRepository:
                 sol_worker_letter = _col_idx_to_letter(sol_worker_col_idx)
                 batch_data.append({
                     'range': f'{sol_worker_letter}{row_num}',
-                    'values': [[worker]]
+                    'values': [[safe_worker]]
                 })
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
@@ -1097,6 +1100,7 @@ class UnionRepository:
                 return 0
             formatted_timestamp_inicio = format_datetime_for_sheets(timestamp_inicio)
             formatted_timestamp_fin = format_datetime_for_sheets(timestamp_fin)
+            safe_worker = sanitize_for_sheets(worker)
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
@@ -1104,7 +1108,7 @@ class UnionRepository:
                 arm_worker_letter = _col_idx_to_letter(arm_worker_col_idx)
                 batch_data.append({
                     'range': f'{arm_worker_letter}{row_num}',
-                    'values': [[worker]]
+                    'values': [[safe_worker]]
                 })
                 # Write ARM_FECHA_INICIO
                 arm_fecha_inicio_letter = _col_idx_to_letter(arm_fecha_inicio_col_idx)
@@ -1230,6 +1234,7 @@ class UnionRepository:
                 return 0
             formatted_timestamp_inicio = format_datetime_for_sheets(timestamp_inicio)
             formatted_timestamp_fin = format_datetime_for_sheets(timestamp_fin)
+            safe_worker = sanitize_for_sheets(worker)
 
             batch_data = []
             for union_id, row_num in union_id_to_row.items():
@@ -1237,7 +1242,7 @@ class UnionRepository:
                 sol_worker_letter = _col_idx_to_letter(sol_worker_col_idx)
                 batch_data.append({
                     'range': f'{sol_worker_letter}{row_num}',
-                    'values': [[worker]]
+                    'values': [[safe_worker]]
                 })
                 # Write SOL_FECHA_INICIO
                 sol_fecha_inicio_letter = _col_idx_to_letter(sol_fecha_inicio_col_idx)
@@ -1399,7 +1404,7 @@ class UnionRepository:
                 if "version" in col_indices:
                     row[col_indices["version"]] = str(uuid.uuid4())
 
-                rows_to_append.append(row)
+                rows_to_append.append(sanitize_row_for_sheets(row))
 
             @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
             def _execute_append():
@@ -1470,13 +1475,13 @@ class UnionRepository:
                 dn_letter = _col_idx_to_letter(dn_union_col_idx)
                 batch_data.append({
                     'range': f'{dn_letter}{row_num}',
-                    'values': [[u["dn_union"] if u["dn_union"] is not None else ""]]
+                    'values': [[sanitize_for_sheets(u["dn_union"]) if u["dn_union"] is not None else ""]]
                 })
 
                 tipo_letter = _col_idx_to_letter(tipo_union_col_idx)
                 batch_data.append({
                     'range': f'{tipo_letter}{row_num}',
-                    'values': [[u["tipo_union"] if u["tipo_union"] is not None else ""]]
+                    'values': [[sanitize_for_sheets(u["tipo_union"]) if u["tipo_union"] is not None else ""]]
                 })
                 updated += 1
 

@@ -145,11 +145,11 @@ async def get_registro(
 
     except HTTPException:
         raise
-    except SheetsConnectionError as e:
-        logger.error(f"Sheets connection error for worker {worker_id}: {e}", exc_info=True)
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error for worker {worker_id}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to read data: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar registro. Intenta nuevamente."}
         )
     except Exception as e:
         logger.error(
@@ -157,6 +157,6 @@ async def get_registro(
             exc_info=True,
         )
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar registro. Intenta nuevamente."}
         )

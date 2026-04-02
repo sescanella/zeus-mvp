@@ -35,7 +35,6 @@ from backend.core.dependency import (
     get_worker_service
 )
 from backend.exceptions import SheetsConnectionError, SpoolNoEncontradoError, NoAutorizadoError, ArmPrerequisiteError, SheetsUpdateError, DependenciasNoSatisfechasError, RaceConditionError
-# is_v4_spool import removed - now supporting both v3.0 and v4.0 spools
 
 
 logger = logging.getLogger(__name__)
@@ -116,17 +115,17 @@ async def get_disponibles(
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
-    except SheetsConnectionError as e:
-        logger.error(f"Sheets connection error for {tag}: {e}", exc_info=True)
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error for {tag}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to read union data: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener uniones disponibles. Intenta nuevamente."}
         )
     except Exception as e:
         logger.error(f"Unexpected error in get_disponibles for {tag}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener uniones disponibles. Intenta nuevamente."}
         )
 
 
@@ -201,17 +200,17 @@ async def get_metricas(
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
-    except SheetsConnectionError as e:
-        logger.error(f"Sheets connection error for {tag}: {e}", exc_info=True)
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error for {tag}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to read union data: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener métricas del spool. Intenta nuevamente."}
         )
     except Exception as e:
         logger.error(f"Unexpected error in get_metricas for {tag}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener métricas del spool. Intenta nuevamente."}
         )
 
 
@@ -473,8 +472,8 @@ async def finalizar_v4(
         # Unexpected error
         logger.error(f"Unexpected error in finalizar_v4 for {tag_spool}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al finalizar operación. Intenta nuevamente."}
         )
 
 
@@ -510,17 +509,17 @@ async def get_todas_uniones(
             total=len(unions),
         )
 
-    except SheetsConnectionError as e:
-        logger.error(f"Sheets connection error for {tag}: {e}", exc_info=True)
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error for {tag}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to read union data: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener uniones. Intenta nuevamente."}
         )
     except Exception as e:
         logger.error(f"Unexpected error in get_todas_uniones for {tag}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener uniones. Intenta nuevamente."}
         )
 
 
@@ -642,15 +641,15 @@ async def guardar_uniones(
 
     except HTTPException:
         raise
-    except SheetsConnectionError as e:
-        logger.error(f"Sheets connection error for {tag}: {e}", exc_info=True)
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error for {tag}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Error de conexión con Google Sheets: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al guardar uniones. Intenta nuevamente."}
         )
     except Exception as e:
         logger.error(f"Unexpected error in guardar_uniones for {tag}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al guardar uniones. Intenta nuevamente."}
         )

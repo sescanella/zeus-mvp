@@ -46,7 +46,6 @@ from backend.models.occupation import (
     FinalizarRequest,
     OccupationResponse
 )
-# is_v4_spool import removed - no longer rejecting v3.0 spools
 from backend.exceptions import (
     SpoolNoEncontradoError,
     ArmPrerequisiteError,

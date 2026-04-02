@@ -251,9 +251,9 @@ button {
    ======================================== */
 @media (orientation: landscape) and (max-height: 820px) {
 
-  /* Modals: reclaim vertical space — 85vh → 90vh */
+  /* Modals: reclaim vertical space — 85vh → 95vh in landscape tablets */
   [role="dialog"] {
-    max-height: 90vh !important;
+    max-height: 95vh !important;
   }
 
   /* Modal fixed top zone: reduce padding to recover ~8px */

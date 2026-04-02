@@ -26,6 +26,7 @@ from backend.models.spool_status import (
     BatchStatusRequest,
     BatchStatusResponse,
 )
+from backend.exceptions import SheetsConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -62,16 +63,35 @@ async def get_spool_status(
     Raises:
         HTTPException(404): If no spool with the given tag exists.
     """
-    spool = sheets_repo.get_spool_by_tag(tag)
-    if spool is None:
-        logger.info(f"Spool not found for status request: tag={tag!r}")
-        raise HTTPException(status_code=404, detail=f"Spool {tag} not found")
+    try:
+        spool = sheets_repo.get_spool_by_tag(tag)
+        if spool is None:
+            logger.info(f"Spool not found for status request: tag={tag!r}")
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "SPOOL_NO_ENCONTRADO", "message": f"Spool '{tag}' no encontrado"},
+            )
 
-    # Build workers lookup: {id: "Nombre Apellido"}
-    all_workers = worker_service.get_all_active_workers()
-    workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
+        # Build workers lookup: {id: "Nombre Apellido"}
+        all_workers = worker_service.get_all_active_workers()
+        workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
 
-    return SpoolStatus.from_spool(spool, workers=workers_map)
+        return SpoolStatus.from_spool(spool, workers=workers_map)
+
+    except HTTPException:
+        raise
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error fetching spool status: tag={tag!r}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener estado del spool. Intenta nuevamente."},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in get_spool_status for {tag!r}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener estado del spool. Intenta nuevamente."},
+        )
 
 
 @router.post(
@@ -101,17 +121,31 @@ async def batch_spool_status(
     Returns:
         BatchStatusResponse with found spools and total count.
     """
-    # Build workers lookup once for all spools: {id: "Nombre Apellido"}
-    all_workers = worker_service.get_all_active_workers()
-    workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
+    try:
+        # Build workers lookup once for all spools: {id: "Nombre Apellido"}
+        all_workers = worker_service.get_all_active_workers()
+        workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
 
-    results: list[SpoolStatus] = []
-    for tag in request.tags:
-        spool = sheets_repo.get_spool_by_tag(tag)
-        if spool is not None:
-            results.append(SpoolStatus.from_spool(spool, workers=workers_map))
+        results: list[SpoolStatus] = []
+        for tag in request.tags:
+            spool = sheets_repo.get_spool_by_tag(tag)
+            if spool is not None:
+                results.append(SpoolStatus.from_spool(spool, workers=workers_map))
 
-    logger.debug(
-        f"batch-status: requested={len(request.tags)} found={len(results)}"
-    )
-    return BatchStatusResponse(spools=results, total=len(results))
+        logger.debug(
+            f"batch-status: requested={len(request.tags)} found={len(results)}"
+        )
+        return BatchStatusResponse(spools=results, total=len(results))
+
+    except SheetsConnectionError:
+        logger.error("Sheets connection error in batch_spool_status", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener estado de spools. Intenta nuevamente."},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in batch_spool_status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al obtener estado de spools. Intenta nuevamente."},
+        )

@@ -116,15 +116,8 @@ function HomePage() {
       }
     }, 30_000);
 
-    // Also pause polling when tab becomes hidden
-    const handleVisibilityChange = () => {
-      // Nothing needed here — the interval check handles it
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [modalStack.stack.length]);
 
@@ -472,7 +465,7 @@ function HomePage() {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b-4 border-white/30">
         {spools.length > 0 ? (
-          <span className="font-mono text-sm text-white/50 tracking-widest">
+          <span className="font-mono text-sm text-white/70 tracking-widest">
             {spools.length} {spools.length === 1 ? 'SPOOL' : 'SPOOLS'}
           </span>
         ) : (

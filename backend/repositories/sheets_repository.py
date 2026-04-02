@@ -15,6 +15,7 @@ import time
 from backend.config import config
 from backend.exceptions import SheetsConnectionError, SheetsUpdateError
 from backend.utils.cache import get_cache
+from backend.utils.sanitize import sanitize_for_sheets
 
 
 def retry_on_sheets_error(max_retries: int = 3, backoff_seconds: float = 1.0):
@@ -278,13 +279,14 @@ class SheetsRepository:
             # Usar worksheet.update() con value_input_option='USER_ENTERED'
             # en lugar de update_cell() para permitir interpretación de fechas
             cell_address = f"{column_letter}{row}"
+            safe_value = sanitize_for_sheets(value)
             worksheet.update(
                 cell_address,
-                [[value]],
+                [[safe_value]],
                 value_input_option='USER_ENTERED'
             )
 
-            self.logger.info(f"✅ Actualizada celda {column_letter}{row} = {value} en '{sheet_name}'")
+            self.logger.info(f"✅ Actualizada celda {column_letter}{row} = {safe_value} en '{sheet_name}'")
 
         except Exception as e:
             raise SheetsUpdateError(
@@ -324,7 +326,7 @@ class SheetsRepository:
             for update in updates:
                 row = update["row"]
                 column = update["column"]
-                value = update["value"]
+                value = sanitize_for_sheets(update["value"])
 
                 # Formato A1 notation: "V25", "BC10", etc.
                 cell_address = f"{column}{row}"
@@ -407,15 +409,18 @@ class SheetsRepository:
             column_letter = self._index_to_column_letter(column_index)
             cell_address = f"{column_letter}{row}"
 
+            # Sanitize value to prevent formula injection
+            safe_value = sanitize_for_sheets(value)
+
             # Actualizar celda con value_input_option='USER_ENTERED'
             worksheet.update(
                 cell_address,
-                [[value]],
+                [[safe_value]],
                 value_input_option='USER_ENTERED'
             )
 
             self.logger.info(
-                f"✅ Actualizada celda '{column_name}' (idx={column_index}) fila {row} = {value} en '{sheet_name}'"
+                f"✅ Actualizada celda '{column_name}' (idx={column_index}) fila {row} = {safe_value} en '{sheet_name}'"
             )
 
             # Invalidate cache to ensure fresh data on next read
@@ -478,7 +483,7 @@ class SheetsRepository:
             for update in updates:
                 row = update["row"]
                 column_name = update["column_name"]
-                value = update["value"]
+                value = sanitize_for_sheets(update["value"])
 
                 # Buscar índice de columna
                 normalized_name = normalize(column_name)

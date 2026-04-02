@@ -133,7 +133,7 @@ function WorkerSelection({
               aria-label={`Seleccionar ${worker.nombre} ${worker.apellido || ''}`}
             >
               <span className="text-base">{worker.nombre} {worker.apellido || ''}</span>
-              <span className="text-white/40 text-sm ml-2">{worker.nombre_completo}</span>
+              <span className="text-white/60 text-sm ml-2">{worker.nombre_completo}</span>
             </button>
           ))}
 
@@ -191,13 +191,13 @@ function SpoolCard({ group }: { group: SpoolGroup }) {
       </p>
 
       {/* Other worker */}
-      <p className="text-white/40 text-xs mt-1">
+      <p className="text-white/60 text-xs mt-1">
         Otro: {group.otro_trabajador || 'Pendiente'}
       </p>
 
       {/* Date range */}
       {(fechaInicio || fechaFin) && (
-        <p className="text-white/40 text-xs mt-1">
+        <p className="text-white/60 text-xs mt-1">
           {fechaInicio ?? '—'} → {fechaFin ?? '—'}
         </p>
       )}
@@ -257,7 +257,7 @@ function TodayView({
             </h1>
             <p className="text-white/70 text-sm mt-0.5">
               {worker.nombre} {worker.apellido || ''}{' '}
-              <span className="text-white/40">{worker.nombre_completo}</span>
+              <span className="text-white/60">{worker.nombre_completo}</span>
             </p>
           </div>
           <button
@@ -280,7 +280,7 @@ function TodayView({
             <p className="text-white/70 text-sm mt-1 tracking-widest uppercase">
               PD {isToday ? 'HOY' : data.resumen.fecha}
             </p>
-            <p className="text-white/40 text-xs mt-1">
+            <p className="text-white/60 text-xs mt-1">
               {data.resumen.total_uniones} uniones en{' '}
               {data.resumen.total_spools} spools
             </p>

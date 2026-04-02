@@ -18,6 +18,7 @@ from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.models.spool import SpoolListResponse
 from backend.models.enums import ActionType
+from backend.exceptions import SheetsConnectionError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -104,22 +105,36 @@ async def get_spools_para_iniciar(
         )
 
     # Obtener spools elegibles para iniciar usando V2
-    if action_type == ActionType.ARM:
-        spools = spool_service_v2.get_spools_disponibles_para_iniciar_arm()
-        filtro = "ARM - Fecha_Materiales llena Y Armador vacío"
-    elif action_type == ActionType.SOLD:
-        spools = spool_service_v2.get_spools_disponibles_para_iniciar_sold()
-        filtro = "SOLD - Fecha_Armado llena Y Soldador vacío"
-    elif action_type == ActionType.METROLOGIA:
-        spools = spool_service_v2.get_spools_disponibles_para_iniciar_metrologia()
-        # METROLOGIA ahora usa lógica híbrida v3.0/v4.0 (FilterRegistry)
-        filtro = (
-            "METROLOGIA - v3.0 (Total_Uniones=0): Fecha_Soldadura con dato | "
-            "v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas=Total_Uniones"
+    try:
+        if action_type == ActionType.ARM:
+            spools = spool_service_v2.get_spools_disponibles_para_iniciar_arm()
+            filtro = "ARM - Fecha_Materiales llena Y Armador vacío"
+        elif action_type == ActionType.SOLD:
+            spools = spool_service_v2.get_spools_disponibles_para_iniciar_sold()
+            filtro = "SOLD - Fecha_Armado llena Y Soldador vacío"
+        elif action_type == ActionType.METROLOGIA:
+            spools = spool_service_v2.get_spools_disponibles_para_iniciar_metrologia()
+            # METROLOGIA ahora usa lógica híbrida v3.0/v4.0 (FilterRegistry)
+            filtro = (
+                "METROLOGIA - v3.0 (Total_Uniones=0): Fecha_Soldadura con dato | "
+                "v4.0 (Total_Uniones>=1): Uniones_SOLD_Completadas=Total_Uniones"
+            )
+        else:  # ActionType.REPARACION
+            spools = spool_service_v2.get_spools_disponibles_para_iniciar_reparacion()
+            filtro = "REPARACION - Estado_Detalle contiene 'RECHAZADO' Y Ocupado_Por vacío"
+
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error fetching spools for {operacion}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools. Intenta nuevamente."},
         )
-    else:  # ActionType.REPARACION
-        spools = spool_service_v2.get_spools_disponibles_para_iniciar_reparacion()
-        filtro = "REPARACION - Estado_Detalle contiene 'RECHAZADO' Y Ocupado_Por vacío"
+    except Exception as e:
+        logger.error(f"Unexpected error fetching spools for {operacion}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools. Intenta nuevamente."},
+        )
 
     logger.info(f"Found {len(spools)} spools eligible to start {operacion}")
 
@@ -198,7 +213,21 @@ async def get_spools_ocupados(
         )
 
     # Obtener spools ocupados por el trabajador (método unificado)
-    spools = spool_service_v2.get_spools_ocupados_por_worker(worker_id, operacion_upper)
+    try:
+        spools = spool_service_v2.get_spools_ocupados_por_worker(worker_id, operacion_upper)
+    except SheetsConnectionError:
+        logger.error(f"Sheets connection error fetching occupied spools for worker {worker_id}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools ocupados. Intenta nuevamente."},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error fetching occupied spools for worker {worker_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools ocupados. Intenta nuevamente."},
+        )
+
     filtro = f"Ocupado_Por contiene ({worker_id}) - operacion={operacion_upper}"
 
     logger.info(f"Found {len(spools)} occupied spools for {operacion_upper} by worker_id={worker_id}")
@@ -263,8 +292,21 @@ async def get_spools_reparacion(
     """
     logger.info("GET /api/spools/reparacion")
 
-    # Fetch all spools
-    all_spools = sheets_repo.get_all_spools()
+    try:
+        # Fetch all spools
+        all_spools = sheets_repo.get_all_spools()
+    except SheetsConnectionError:
+        logger.error("Sheets connection error fetching reparacion spools", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools de reparación. Intenta nuevamente."},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error fetching reparacion spools: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools de reparación. Intenta nuevamente."},
+        )
 
     # Filter: RECHAZADO or BLOQUEADO, not occupied
     reparacion_spools = []
