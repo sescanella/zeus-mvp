@@ -1,12 +1,12 @@
 'use client';
 
 import { CheckSquare, Square, Lock } from 'lucide-react';
-import type { Spool } from '@/lib/types';
+import type { Spool, ReparacionSpool } from '@/lib/types';
 
 type TipoParam = 'tomar' | 'pausar' | 'completar' | 'cancelar' | 'metrologia' | 'reparacion' | null;
 
 interface SpoolTableProps {
-  spools: Spool[];
+  spools: (Spool | ReparacionSpool)[];
   selectedSpools: string[];
   onToggleSelect: (tag: string) => void;
   tipo: TipoParam;
@@ -28,10 +28,10 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
         <tbody>
           {spools.map((spool, index) => {
             const isSelected = selectedSpools.includes(spool.tag_spool);
-            const isBloqueado = tipo === 'reparacion' && (spool as unknown as { bloqueado?: boolean }).bloqueado;
+            const isBloqueado = tipo === 'reparacion' && 'bloqueado' in spool && spool.bloqueado;
             const isDisabled = disabledSpools.includes(spool.tag_spool);
             const isInert = isDisabled || isBloqueado;
-            const cycle = tipo === 'reparacion' ? (spool as unknown as { cycle?: number }).cycle : null;
+            const cycle = tipo === 'reparacion' && 'cycle' in spool ? spool.cycle : null;
 
             return (
               <tr
@@ -83,7 +83,7 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
                       )}
                     </div>
                   ) : (
-                    <span className="text-sm font-black text-white/70 font-mono">{spool.nv}</span>
+                    <span className="text-sm font-black text-white/70 font-mono">{'nv' in spool ? spool.nv : ''}</span>
                   )}
                 </td>
                 <td className="p-3">

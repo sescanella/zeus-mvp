@@ -345,6 +345,12 @@ function HomePage() {
       return;
     }
 
+    // Confirm before releasing occupied spool
+    const confirmed = window.confirm(
+      `¿Quitar spool ${tag} ocupado por ${spool.ocupado_por}? Se liberará el spool.`
+    );
+    if (!confirmed) return;
+
     try {
       if (spool.operacion_actual === 'REPARACION') {
         await cancelarReparacion({ tag_spool: tag, worker_id: workerId });

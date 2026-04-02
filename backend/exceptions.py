@@ -394,6 +394,17 @@ class InvalidStateTransitionError(ZEUSException):
         )
 
 
+class RaceConditionError(ZEUSException):
+    """Selected unions no longer available (completed by another worker)."""
+
+    def __init__(self, tag_spool: str, message: str = ""):
+        super().__init__(
+            message=message or f"Race condition: some unions no longer available for '{tag_spool}'",
+            error_code="RACE_CONDITION",
+            data={"tag_spool": tag_spool}
+        )
+
+
 class ArmPrerequisiteError(ZEUSException):
     """
     Raised when SOLD operation is attempted without ARM completion (v4.0 validation).

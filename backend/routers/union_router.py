@@ -34,7 +34,7 @@ from backend.core.dependency import (
     get_occupation_service_v4,
     get_worker_service
 )
-from backend.exceptions import SheetsConnectionError, SpoolNoEncontradoError, NoAutorizadoError
+from backend.exceptions import SheetsConnectionError, SpoolNoEncontradoError, NoAutorizadoError, ArmPrerequisiteError, SheetsUpdateError, DependenciasNoSatisfechasError, RaceConditionError
 # is_v4_spool import removed - now supporting both v3.0 and v4.0 spools
 
 
@@ -400,19 +400,17 @@ async def finalizar_v4(
             new_state=result.new_state
         )
 
+    except RaceConditionError as e:
+        logger.warning(f"Race condition detected for {tag_spool}: {e.message}")
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "RACE_CONDITION",
+                "message": e.message
+            }
+        )
+
     except ValueError as e:
-        # Race condition: selected > disponibles
-        if "more unions than available" in str(e):
-            logger.warning(f"Race condition detected for {tag_spool}: {e}")
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": "RACE_CONDITION",
-                    "message": "Some unions no longer available (completed by another worker)",
-                    "detail": str(e)
-                }
-            )
-        # Re-raise other ValueErrors
         raise HTTPException(
             status_code=400,
             detail=str(e)
@@ -435,6 +433,36 @@ async def finalizar_v4(
         raise HTTPException(
             status_code=404,
             detail=f"Spool {tag_spool} not found"
+        )
+
+    except ArmPrerequisiteError as e:
+        logger.warning(f"ARM prerequisite not met for {tag_spool}: {e.message}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ARM_PREREQUISITE_REQUIRED",
+                "message": e.message
+            }
+        )
+
+    except (SheetsUpdateError, SheetsConnectionError) as e:
+        logger.error(f"Sheets error in finalizar_v4 for {tag_spool}: {e.message}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": e.error_code,
+                "message": "Error de conexión con Google Sheets. Intenta nuevamente."
+            }
+        )
+
+    except DependenciasNoSatisfechasError as e:
+        logger.warning(f"Dependencies not met for {tag_spool}: {e.message}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "DEPENDENCIAS_NO_SATISFECHAS",
+                "message": e.message
+            }
         )
 
     except HTTPException:

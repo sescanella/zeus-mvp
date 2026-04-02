@@ -463,7 +463,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                   )}
 
                   {/* Union number */}
-                  <span className="font-mono font-black text-sm text-white min-w-[2rem] h-7 flex items-center justify-center bg-white/10 rounded">
+                  <span className="font-mono font-black text-sm text-white min-w-[2.5rem] h-10 flex items-center justify-center bg-white/10 rounded">
                     {row.n_union}
                   </span>
 
@@ -569,10 +569,10 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
           <button
             onClick={handleGuardar}
             disabled={saving || rows.length === 0}
-            aria-label={guardarLabel}
+            aria-label={saving ? 'Guardando...' : guardarLabel}
             className="w-full h-14 bg-zeues-orange text-white font-mono font-black text-lg disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
           >
-            {guardarLabel}
+            {saving ? 'GUARDANDO...' : guardarLabel}
           </button>
           <button
             onClick={onClose}

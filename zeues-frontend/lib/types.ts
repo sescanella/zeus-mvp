@@ -84,6 +84,15 @@ export interface Spool {
   version?: 'v3.0' | 'v4.0';  // v4.0: Derived from total_uniones (>0 = v4.0, 0 = v3.0)
 }
 
+/** Spool with reparación-specific fields returned by /api/spools/iniciar?operacion=REPARACION */
+export interface ReparacionSpool {
+  tag_spool: string;
+  estado_detalle: string;
+  fecha_rechazo: string;
+  cycle: number;
+  bloqueado: boolean;
+}
+
 // ==========================================
 // REPARACION OPERATIONS (Phase 6)
 // ==========================================

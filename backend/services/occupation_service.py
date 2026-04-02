@@ -15,7 +15,7 @@ Orchestrates:
 import logging
 import json
 from typing import Optional
-from datetime import date, datetime
+from datetime import datetime
 
 from backend.utils.date_formatter import format_date_for_sheets, format_datetime_for_sheets, today_chile, now_chile
 from backend.utils.cache import get_cache
@@ -42,7 +42,7 @@ from backend.models.occupation import (
     IniciarRequest,
     FinalizarRequest
 )
-from backend.models.enums import ActionType, EventoTipo
+from backend.models.enums import EventoTipo
 from backend.services.metadata_event_builder import MetadataEventBuilder, build_metadata_event
 
 # SOLD_REQUIRED_TYPES: Union types that require SOLD operation (imported from union_service)
@@ -55,8 +55,10 @@ from backend.exceptions import (
     NoAutorizadoError,
     LockExpiredError,
     SheetsUpdateError,
-    ArmPrerequisiteError
+    ArmPrerequisiteError,
+    RaceConditionError
 )
+from backend.utils.sanitize import sanitize_for_sheets
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +166,7 @@ class OccupationService:
 
                 # Use ConflictService for version-aware update with automatic retry
                 updates_dict = {
-                    "Ocupado_Por": worker_nombre,
+                    "Ocupado_Por": sanitize_for_sheets(worker_nombre),
                     "Fecha_Ocupacion": fecha_ocupacion_str
                 }
 
@@ -700,17 +702,18 @@ class OccupationService:
                 fecha_ocupacion_str = format_datetime_for_sheets(now_chile())
 
                 # Build updates dict
+                sanitized_worker = sanitize_for_sheets(worker_nombre)
                 updates_dict = {
-                    "Ocupado_Por": worker_nombre,          # Column 64
+                    "Ocupado_Por": sanitized_worker,          # Column 64
                     "Fecha_Ocupacion": fecha_ocupacion_str,  # Column 65
                     "Estado_Detalle": estado_detalle       # Column 67
                 }
 
                 # Write worker name to Armador/Soldador column
                 if operacion == "ARM":
-                    updates_dict["Armador"] = worker_nombre
+                    updates_dict["Armador"] = sanitized_worker
                 elif operacion == "SOLD":
-                    updates_dict["Soldador"] = worker_nombre
+                    updates_dict["Soldador"] = sanitized_worker
 
                 # Get spool row number for batch update
                 from backend.core.column_map_cache import ColumnMapCache
@@ -771,6 +774,7 @@ class OccupationService:
                 )
 
             # Step 6: Log to Metadata (minimal fields only)
+            metadata_failed = False
             try:
                 event = (
                     MetadataEventBuilder()
@@ -792,11 +796,11 @@ class OccupationService:
                     f"❌ CRITICAL: Metadata logging failed for {tag_spool}: {e}",
                     exc_info=True
                 )
-                # Continue operation - metadata write failures should be investigated
-                # but don't block user workflow
+                # Flag for response — audit trail gap needs investigation
+                metadata_failed = True
 
             # Step 7: Return success
-            message = f"Spool {tag_spool} iniciado por {worker_nombre}"
+            message = f"Spool {tag_spool} iniciado por {worker_nombre}" + (" ⚠️ metadata pendiente" if metadata_failed else "")
             logger.info(f"✅ [P5 INICIAR] Completed successfully: {message}")
 
             return OccupationResponse(
@@ -842,9 +846,12 @@ class OccupationService:
             ValueError: If selected_count > total_available (race condition)
         """
         if selected_count > total_available:
-            raise ValueError(
-                f"Race condition detected: {selected_count} unions selected but only "
-                f"{total_available} available for {operacion}"
+            raise RaceConditionError(
+                tag_spool=operacion,
+                message=(
+                    f"Race condition detected: {selected_count} unions selected but only "
+                    f"{total_available} available for {operacion}"
+                )
             )
 
         if selected_count == total_available:
@@ -1468,15 +1475,16 @@ class OccupationService:
                 }
 
                 if action_taken == "COMPLETAR":
+                    sanitized_worker = sanitize_for_sheets(worker_nombre)
                     if operacion == "ARM":
                         updates_dict.update({
                             "Fecha_Armado": format_date_for_sheets(today_chile()),
-                            "Armador": worker_nombre
+                            "Armador": sanitized_worker
                         })
                     elif operacion == "SOLD":
                         updates_dict.update({
                             "Fecha_Soldadura": format_date_for_sheets(today_chile()),
-                            "Soldador": worker_nombre
+                            "Soldador": sanitized_worker
                         })
 
                     updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
@@ -1777,15 +1785,16 @@ class OccupationService:
 
             # Add fecha column update based on operacion
             fecha_str = format_date_for_sheets(today_chile())
+            sanitized_worker = sanitize_for_sheets(worker_nombre)
             if operacion == "ARM":
                 updates_dict.update({
                     "Fecha_Armado": fecha_str,
-                    "Armador": worker_nombre
+                    "Armador": sanitized_worker
                 })
             elif operacion == "SOLD":
                 updates_dict.update({
                     "Fecha_Soldadura": fecha_str,
-                    "Soldador": worker_nombre
+                    "Soldador": sanitized_worker
                 })
             else:
                 # Other operations (METROLOGIA, REPARACION, etc.)

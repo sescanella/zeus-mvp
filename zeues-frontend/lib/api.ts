@@ -4,6 +4,7 @@
 import {
   Worker,
   Spool,
+  ReparacionSpool,
   SpoolCardData,
   ReparacionResponse,
   DisponiblesResponse,
@@ -123,13 +124,13 @@ export async function getSpoolsParaIniciar(operacion: 'ARM' | 'SOLD'): Promise<S
  */
 export async function getSpoolsDisponible(
   operacion: 'ARM' | 'SOLD' | 'REPARACION'
-): Promise<Spool[]> {
+): Promise<(Spool | ReparacionSpool)[]> {
   try {
     // For ARM/SOLD, use existing /iniciar endpoint (same logic as disponible)
     // For REPARACION, use dedicated endpoint
     if (operacion === 'REPARACION') {
       const reparacionResponse = await getSpoolsReparacion();
-      return reparacionResponse.spools as unknown as Spool[];
+      return reparacionResponse.spools as ReparacionSpool[];
     }
 
     // ARM/SOLD use /iniciar endpoint (shows spools available to start)

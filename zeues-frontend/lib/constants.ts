@@ -20,12 +20,12 @@ export const ESTADO_LABELS: Record<EstadoTrabajo, string> = {
  * Text + border only (no background fill) — sits on the dark card surface.
  */
 export const ESTADO_COLORS: Record<EstadoTrabajo, string> = {
-  LIBRE: 'text-white border-white/30',
+  LIBRE: 'text-white border-white/50',
   EN_PROGRESO: 'text-zeues-orange border-zeues-orange',
   PAUSADO: 'text-yellow-400 border-yellow-400',
   COMPLETADO: 'text-green-400 border-green-400',
   RECHAZADO: 'text-red-400 border-red-400',
-  PENDIENTE_METROLOGIA: 'text-blue-300 border-blue-300',
+  PENDIENTE_METROLOGIA: 'text-blue-300 border-blue-400',
   BLOQUEADO: 'text-red-500 border-red-500 bg-red-600/20',
 };
 
