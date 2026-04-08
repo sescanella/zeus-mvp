@@ -49,6 +49,7 @@ from backend.models.occupation import (
 from backend.exceptions import (
     SpoolNoEncontradoError,
     ArmPrerequisiteError,
+    DependenciasNoSatisfechasError,
     NoAutorizadoError,
     SpoolOccupiedError
 )
@@ -202,6 +203,17 @@ async def iniciar_v4(
                 "message": e.message,
                 "occupied_by": e.data.get("owner_name"),
                 "owner_id": e.data.get("owner_id")
+            }
+        )
+
+    except DependenciasNoSatisfechasError as e:
+        # Prerequisites not met (e.g., Fecha_Materiales missing) - return 400
+        logger.warning(f"Prerequisites not met for {tag_spool}: {e.message}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "DEPENDENCIAS_NO_SATISFECHAS",
+                "message": e.message
             }
         )
 
