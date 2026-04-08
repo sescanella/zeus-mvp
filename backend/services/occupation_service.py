@@ -620,14 +620,10 @@ class OccupationService:
             version_str = "v3.0" if is_v21 else "v4.0"
             logger.info(f"Spool {tag_spool} detected as {version_str} (total_uniones={spool.total_uniones})")
 
-            # Check Fecha_Materiales prerequisite
-            if not spool.fecha_materiales:
-                raise DependenciasNoSatisfechasError(
-                    tag_spool=tag_spool,
-                    operacion=operacion,
-                    dependencia_faltante="Fecha_Materiales",
-                    detalle="El spool debe tener materiales registrados antes de ocuparlo"
-                )
+            # Fecha_Materiales prerequisite: trusted from P4 filters (not validated here).
+            # P5 architecture: "NO backend validation before write — trust P4 filters".
+            # Duplicate rows in Sheets can cause get_spool_by_tag to find a different
+            # row than the one P4 validated, so re-checking here is unreliable.
 
             # Step 2: Validate ARM prerequisite for SOLD operations (simple version-aware logic)
             if operacion == "SOLD":
