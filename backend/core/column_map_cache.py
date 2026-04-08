@@ -11,7 +11,6 @@ v2.1 Feature: Dynamic Column Mapping
 - Multi-sheet support (Operaciones, Trabajadores, Roles)
 """
 import logging
-import unicodedata
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -220,11 +219,7 @@ class ColumnMapCache:
 
         column_map = cls._cache[sheet_name]
 
-        # Normalizar nombres requeridos para búsqueda (strip accents + lowercase)
-        def normalize(name: str) -> str:
-            nfkd = unicodedata.normalize("NFKD", name)
-            ascii_name = "".join(c for c in nfkd if not unicodedata.combining(c))
-            return ascii_name.lower().replace(" ", "").replace("_", "")
+        from backend.utils.normalize import normalize_column_name as normalize
 
         missing_columns = []
         for col_name in required_columns:

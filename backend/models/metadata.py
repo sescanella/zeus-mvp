@@ -155,7 +155,8 @@ class MetadataEvent(BaseModel):
             """Resolve column index from column_map or fallback to hardcoded index."""
             if column_map is None:
                 return fallback
-            normalized = name.lower().replace(" ", "").replace("_", "")
+            from backend.utils.normalize import normalize_column_name
+            normalized = normalize_column_name(name)
             return column_map.get(normalized, fallback)
 
         idx_id = get_idx("ID", 0)

@@ -11,7 +11,6 @@ Responsabilidades:
 from typing import Optional
 from datetime import datetime, date
 import logging
-import unicodedata
 
 from backend.models.worker import Worker
 from backend.models.spool import Spool
@@ -73,12 +72,7 @@ class SheetsService:
         """
         column_map = {}
 
-        # Normalizar nombres: lowercase, sin espacios, sin underscores, sin acentos
-        def normalize(name: str) -> str:
-            # Strip accents: "Metrología" → "Metrologia"
-            nfkd = unicodedata.normalize("NFKD", name)
-            ascii_name = "".join(c for c in nfkd if not unicodedata.combining(c))
-            return ascii_name.lower().replace(" ", "").replace("_", "")
+        from backend.utils.normalize import normalize_column_name as normalize
 
         for idx, col_name in enumerate(header_row):
             if not col_name:
@@ -115,9 +109,8 @@ class SheetsService:
         Raises:
             ValueError: Si la columna no se encuentra y no hay fallback
         """
-        nfkd = unicodedata.normalize("NFKD", column_name)
-        ascii_name = "".join(c for c in nfkd if not unicodedata.combining(c))
-        normalized = ascii_name.lower().replace(" ", "").replace("_", "")
+        from backend.utils.normalize import normalize_column_name
+        normalized = normalize_column_name(column_name)
 
         if normalized in self._column_map:
             return self._column_map[normalized]

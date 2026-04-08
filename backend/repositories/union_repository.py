@@ -14,16 +14,12 @@ from backend.repositories.sheets_repository import SheetsRepository, retry_on_sh
 from backend.core.column_map_cache import ColumnMapCache
 from backend.utils.cache import get_cache
 from backend.utils.date_formatter import now_chile, format_datetime_for_sheets
+from backend.utils.normalize import normalize_column_name as _normalize
 from backend.utils.sanitize import sanitize_for_sheets, sanitize_row_for_sheets
 from backend.exceptions import SheetsConnectionError
 
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize(name: str) -> str:
-    """Normalize column name for lookup (lowercase, no spaces/underscores/slashes)."""
-    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
 
 
 def _col_idx_to_letter(idx: int) -> str:

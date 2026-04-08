@@ -15,6 +15,7 @@ import time
 from backend.config import config
 from backend.exceptions import SheetsConnectionError, SheetsUpdateError
 from backend.utils.cache import get_cache
+from backend.utils.normalize import normalize_column_name
 from backend.utils.sanitize import sanitize_for_sheets
 
 
@@ -176,7 +177,7 @@ class SheetsRepository:
         cache_key = f"worksheet:{sheet_name}"
         cached_data = self._cache.get(cache_key)
 
-        if cached_data is not None:
+        if cached_data is not None and len(cached_data) > 0:
             self.logger.info(f"✅ Cache hit: '{sheet_name}' ({len(cached_data)} filas)")
             return cached_data
 
@@ -187,6 +188,13 @@ class SheetsRepository:
 
             # Leer todos los valores (batch read)
             all_values = worksheet.get_all_values()
+
+            # Never cache empty results — they indicate a transient API issue
+            if not all_values or len(all_values) == 0:
+                self.logger.warning(
+                    f"Google Sheets returned empty data for '{sheet_name}' — not caching"
+                )
+                return all_values
 
             # Cachear con TTL según tipo de hoja
             # Trabajadores cambian poco → TTL largo (300s)
@@ -386,9 +394,7 @@ class SheetsRepository:
             from backend.core.column_map_cache import ColumnMapCache
             column_map = ColumnMapCache.get_or_build(sheet_name, self)
 
-            # Normalizar nombre de columna
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "")
+            normalize = normalize_column_name
 
             normalized_name = normalize(column_name)
 
@@ -471,9 +477,7 @@ class SheetsRepository:
             from backend.core.column_map_cache import ColumnMapCache
             column_map = ColumnMapCache.get_or_build(sheet_name, self)
 
-            # Normalizar nombre de columna
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "")
+            normalize = normalize_column_name
 
             spreadsheet = self._get_spreadsheet()
             worksheet = spreadsheet.worksheet(sheet_name)
@@ -568,8 +572,7 @@ class SheetsRepository:
         try:
             column_map = ColumnMapCache.get_or_build(sheet_name, self)
 
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+            normalize = normalize_column_name
 
             for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
                 normalized = normalize(col_name)
@@ -637,8 +640,7 @@ class SheetsRepository:
         from backend.core.column_map_cache import ColumnMapCache
         column_map = ColumnMapCache.get_or_build(sheet_name, self)
 
-        def normalize(name: str) -> str:
-            return name.lower().replace(" ", "").replace("_", "")
+        normalize = normalize_column_name
 
         idx = column_map.get(normalize("Ocupado_Por"))
         if idx is None or idx >= len(all_rows[row]):
@@ -668,8 +670,7 @@ class SheetsRepository:
         from backend.core.column_map_cache import ColumnMapCache
         column_map = ColumnMapCache.get_or_build(sheet_name, self)
 
-        def normalize(name: str) -> str:
-            return name.lower().replace(" ", "").replace("_", "")
+        normalize = normalize_column_name
 
         idx = column_map.get(normalize("Fecha_Ocupacion"))
         if idx is None or idx >= len(all_rows[row]):
@@ -878,8 +879,7 @@ class SheetsRepository:
         column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
 
         # Normalize column name helper
-        def normalize(name: str) -> str:
-            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+        normalize = normalize_column_name
 
         # Try to find TAG_SPOOL column (could be named "TAG_SPOOL" or "SPLIT" in the sheet)
         tag_column_index = None
@@ -922,9 +922,7 @@ class SheetsRepository:
         from backend.core.column_map_cache import ColumnMapCache
         column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
 
-        def normalize(name: str) -> str:
-            """Normalize column name to match ColumnMapCache format."""
-            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+        normalize = normalize_column_name
 
         def get_col_value(col_name: str) -> Optional[str]:
             """Helper to safely get column value by name."""
@@ -1078,9 +1076,7 @@ class SheetsRepository:
         from backend.core.column_map_cache import ColumnMapCache
         column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
 
-        def normalize(name: str) -> str:
-            """Normalize column name to match ColumnMapCache format."""
-            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+        normalize = normalize_column_name
 
         def get_col_value(row_data: list, col_name: str) -> Optional[str]:
             """Helper to safely get column value by name."""
@@ -1183,9 +1179,7 @@ class SheetsRepository:
         from backend.core.column_map_cache import ColumnMapCache
         column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self)
 
-        def normalize(name: str) -> str:
-            """Normalize column name to match ColumnMapCache format."""
-            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+        normalize = normalize_column_name
 
         def get_col_value(row_data: list, col_name: str) -> Optional[str]:
             """Helper to safely get column value by name."""

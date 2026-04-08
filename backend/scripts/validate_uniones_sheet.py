@@ -66,23 +66,7 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-def normalize_column_name(name: str) -> str:
-    """
-    Normalize column name for comparison (lowercase, no spaces/underscores).
-
-    Args:
-        name: Column name to normalize
-
-    Returns:
-        Normalized column name
-
-    Examples:
-        >>> normalize_column_name("ARM_FECHA_INICIO")
-        'armfechainicio'
-        >>> normalize_column_name("Creado Por")
-        'creadopor'
-    """
-    return name.lower().replace(" ", "").replace("_", "")
+from backend.utils.normalize import normalize_column_name  # noqa: E302
 
 
 def validate_sheet_structure(repo: SheetsRepository, sheet_name: str = "Uniones") -> tuple[bool, dict]:

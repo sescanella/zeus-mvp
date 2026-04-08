@@ -58,6 +58,7 @@ from backend.exceptions import (
     ArmPrerequisiteError,
     RaceConditionError
 )
+from backend.utils.normalize import normalize_column_name
 from backend.utils.sanitize import sanitize_for_sheets
 
 logger = logging.getLogger(__name__)
@@ -721,8 +722,7 @@ class OccupationService:
 
                 column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
 
-                def normalize(name: str) -> str:
-                    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+                normalize = normalize_column_name
 
                 # Find TAG_SPOOL column
                 tag_column_index = None
@@ -1066,8 +1066,7 @@ class OccupationService:
 
                 column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
 
-                def normalize(name: str) -> str:
-                    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+                normalize = normalize_column_name
 
                 # Find TAG_SPOOL column
                 tag_column_index = None
@@ -1212,8 +1211,7 @@ class OccupationService:
                             config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository
                         )
 
-                        def normalize(name: str) -> str:
-                            return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+                        normalize = normalize_column_name
 
                         tag_column_index = None
                         for col_name in ["TAG_SPOOL", "SPLIT", "tag_spool"]:
@@ -1451,7 +1449,7 @@ class OccupationService:
 
                     batch_data = []
                     for col_name, val in metrics_updates.items():
-                        normalized = col_name.lower().replace(" ", "").replace("_", "")
+                        normalized = normalize_column_name(col_name)
                         col_idx = col_map.get(normalized)
                         if col_idx is not None:
                             col_letter = _idx_to_letter(col_idx)
@@ -1497,8 +1495,7 @@ class OccupationService:
 
                 column_map = ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, self.sheets_repository)
 
-                def normalize(name: str) -> str:
-                    return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+                normalize = normalize_column_name
 
                 # Find TAG_SPOOL column
                 tag_column_index = None
@@ -1812,8 +1809,7 @@ class OccupationService:
                 self.sheets_repository
             )
 
-            def normalize(name: str) -> str:
-                return name.lower().replace(" ", "").replace("_", "").replace("/", "")
+            normalize = normalize_column_name
 
             # Find TAG_SPOOL column
             tag_column_index = None
