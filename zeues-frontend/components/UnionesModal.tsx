@@ -9,7 +9,10 @@ import type { SpoolCardData } from '@/lib/types';
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const TIPO_UNION_OPTIONS = ['BW', 'SO', 'FILL', 'BR', 'MIT'] as const;
-const DN_UNION_OPTIONS = Array.from({ length: 50 }, (_, i) => i + 1);
+const DN_UNION_OPTIONS = [
+  1, 2, 3, 4, 5,
+  ...Array.from({ length: 22 }, (_, i) => (i + 3) * 2), // 6, 8, 10, ..., 48
+];
 const MAX_UNIONS = 20;
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -225,7 +228,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
 
     setSaving(true);
     try {
-      await guardarUniones({
+      const result = await guardarUniones({
         tag_spool: spool.tag_spool,
         unions: rows.map((r) => ({
           n_union: r.n_union,
@@ -233,10 +236,25 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
           tipo_union: r.tipo_union,
         })),
       });
-      const selectedIds = selectedRows
-        .map(r => r.id)
-        .filter((id): id is string => id !== null);
-      onComplete(selectedIds);
+
+      if (selectedRows.length > 0) {
+        // New unions get IDs from backend response, existing unions keep local IDs
+        const createdIdMap = new Map(
+          (result.created_ids ?? []).map(c => [c.n_union, c.id])
+        );
+        const selectedIds = selectedRows
+          .map(r => createdIdMap.get(r.n_union) ?? r.id)
+          .filter((id): id is string => id !== null);
+
+        if (selectedIds.length !== selectedRows.length) {
+          setError('Uniones guardadas, pero no se pudo identificar algunas. Cierra y vuelve a abrir para continuar.');
+          return;
+        }
+
+        onComplete(selectedIds);
+      } else {
+        onComplete([]);
+      }
     } catch (err: unknown) {
       setError(classifyApiError(err).userMessage);
     } finally {

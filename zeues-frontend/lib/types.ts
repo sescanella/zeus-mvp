@@ -247,6 +247,7 @@ export interface SaveUnionsResponse {
   created: number;
   updated: number;
   deleted: number;
+  created_ids: Array<{ n_union: number; id: string }>;
   message: string;
 }
 

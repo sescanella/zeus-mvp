@@ -606,6 +606,8 @@ async def guardar_uniones(
             # 4b: Creates (additive)
             if to_create:
                 created = union_repo.create_unions_batch(ot, tag, to_create)
+                # Reconstruct IDs (format must match union_repository.create_unions_batch)
+                created_id_list = [{"n_union": u["n_union"], "id": f"{ot}+{u['n_union']}"} for u in to_create]
                 succeeded_steps.append(f"created={created}")
 
             # 4c: Deletes (destructive — last)
@@ -636,6 +638,7 @@ async def guardar_uniones(
             created=created,
             updated=updated,
             deleted=deleted,
+            created_ids=created_id_list if to_create else [],
             message=message,
         )
 

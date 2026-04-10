@@ -447,6 +447,8 @@ function HomePage() {
         } finally {
           setApiLoading(false);
         }
+      } else if (action.type === 'FINALIZAR') {
+        enqueue('Error: no se pudieron identificar las uniones seleccionadas', 'error');
       } else {
         try {
           await refreshSingle(tag);

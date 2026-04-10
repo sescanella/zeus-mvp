@@ -181,7 +181,7 @@ class CreateUnionInput(BaseModel):
     """Single union data for creation/update. Fields nullable for partial saves."""
     n_union: int = Field(..., ge=1, le=20)
     dn_union: Optional[int] = Field(None, ge=1, le=50)
-    tipo_union: Optional[Literal['BW', 'SO', 'FILL', 'BR']] = None
+    tipo_union: Optional[Literal['BW', 'SO', 'FILL', 'BR', 'MIT']] = None
 
 
 class SaveUnionsRequest(BaseModel):
@@ -208,6 +208,12 @@ class GetAllUnionsResponse(BaseModel):
     total: int
 
 
+class CreatedUnionId(BaseModel):
+    """ID assigned to a newly created union."""
+    n_union: int
+    id: str
+
+
 class SaveUnionsResponse(BaseModel):
     """Response for create/update operations."""
     success: bool
@@ -216,4 +222,5 @@ class SaveUnionsResponse(BaseModel):
     created: int = 0
     updated: int = 0
     deleted: int = 0
+    created_ids: List[CreatedUnionId] = []
     message: str
