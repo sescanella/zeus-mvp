@@ -296,11 +296,17 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           </div>
         )}
 
-        {/* Completion history — computed by backend, no logic here */}
+        {/* Completion history — computed by backend, no logic here.
+            T-021: partial entries (kind='partial') render yellow; complete entries green. */}
         {spool.completion_history?.length > 0 && (
           <div className="flex flex-col gap-0.5 mt-1">
             {spool.completion_history.map((entry) => (
-              <span key={entry.operation} className="font-mono text-sm text-green-400">
+              <span
+                key={entry.operation}
+                className={`font-mono text-sm ${
+                  entry.kind === 'partial' ? 'text-yellow-400' : 'text-green-400'
+                }`}
+              >
                 {entry.operation} — {entry.worker} — {entry.date}
               </span>
             ))}

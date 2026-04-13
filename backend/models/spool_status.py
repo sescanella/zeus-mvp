@@ -141,46 +141,78 @@ def _build_completion_history(
     workers: dict[int, str] | None,
 ) -> list[dict]:
     """
-    Build completion history entries, filtering out redundant info.
+    Build completion history entries for the home cards.
+
+    **T-021 (2026-04-13):** v4.0 spools now show partial progress (e.g.
+    "ARM parcial 3/7") in addition to "completado". Partial entries carry
+    kind='partial' so the frontend renders them yellow instead of green.
 
     Rules:
     - If ARM EN_PROGRESO and armador == ocupado_por → skip ARM entry (redundant)
     - If SOLD EN_PROGRESO and soldador == ocupado_por → skip SOLD entry (redundant)
-    - Otherwise include completed operations with worker name + short date
+    - v4.0 (total_uniones >= 1): show partial X/Y when counters < total
+    - v3.0 (total_uniones is None or 0): fall back to fecha_armado/fecha_soldadura
     """
     entries: list[dict] = []
     op_actual = parsed.get("operacion_actual")
     is_occupied = bool(spool.ocupado_por)
 
+    total = spool.total_uniones or 0
+    arm_done = spool.uniones_arm_completadas or 0
+    sold_done = spool.uniones_sold_completadas or 0
+
     # ARM history
-    if spool.fecha_armado:
-        arm_worker = _resolve_worker_name(spool.armador, workers)
-        # Skip if ARM is the active operation and same worker is working
-        skip_arm = (
-            is_occupied
-            and op_actual == "ARM"
-            and spool.armador == spool.ocupado_por
-        )
-        if not skip_arm:
+    skip_arm = (
+        is_occupied
+        and op_actual == "ARM"
+        and spool.armador == spool.ocupado_por
+    )
+
+    if not skip_arm:
+        if total > 0 and arm_done > 0 and arm_done < total:
+            # v4.0 partial
+            arm_worker = _resolve_worker_name(spool.armador, workers)
+            entries.append({
+                "operation": f"ARM parcial {arm_done}/{total}",
+                "worker": arm_worker or "—",
+                "date": _format_short_date(spool.fecha_armado) if spool.fecha_armado else "—",
+                "kind": "partial",
+            })
+        elif spool.fecha_armado:
+            # Completed (v3.0 legacy OR v4.0 with arm_done == total)
+            arm_worker = _resolve_worker_name(spool.armador, workers)
             entries.append({
                 "operation": "ARM completado",
                 "worker": arm_worker or "—",
                 "date": _format_short_date(spool.fecha_armado) or "—",
+                "kind": "complete",
             })
 
     # SOLD history
-    if spool.fecha_soldadura:
-        sold_worker = _resolve_worker_name(spool.soldador, workers)
-        skip_sold = (
-            is_occupied
-            and op_actual == "SOLD"
-            and spool.soldador == spool.ocupado_por
-        )
-        if not skip_sold:
+    skip_sold = (
+        is_occupied
+        and op_actual == "SOLD"
+        and spool.soldador == spool.ocupado_por
+    )
+
+    if not skip_sold:
+        if total > 0 and sold_done > 0 and sold_done < total:
+            # v4.0 partial
+            sold_worker = _resolve_worker_name(spool.soldador, workers)
+            entries.append({
+                "operation": f"SOLD parcial {sold_done}/{total}",
+                "worker": sold_worker or "—",
+                "date": _format_short_date(spool.fecha_soldadura) if spool.fecha_soldadura else "—",
+                "kind": "partial",
+            })
+        elif spool.fecha_soldadura:
+            # Completed
+            sold_worker = _resolve_worker_name(spool.soldador, workers)
             entries.append({
                 "operation": "SOLD completado",
                 "worker": sold_worker or "—",
                 "date": _format_short_date(spool.fecha_soldadura) or "—",
+                "kind": "complete",
             })
 
     return entries
@@ -188,9 +220,13 @@ def _build_completion_history(
 
 class CompletionEntry(BaseModel):
     """A single completion history entry for display on SpoolCard."""
-    operation: str = Field(..., description="ARM or SOLD")
+    operation: str = Field(..., description="ARM completado | SOLD completado | ARM parcial X/Y | SOLD parcial X/Y")
     worker: str = Field(..., description="Worker display name")
     date: str = Field(..., description="Short date DD/MM")
+    kind: str = Field(
+        default="complete",
+        description="'complete' (green) or 'partial' (yellow) — drives card color",
+    )
 
 
 class SpoolStatus(BaseModel):

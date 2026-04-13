@@ -32,6 +32,8 @@ export interface CompletionEntry {
   operation: string;
   worker: string;
   date: string;
+  /** T-021: 'partial' renders yellow, 'complete' renders green. Defaults to 'complete' if absent. */
+  kind?: 'complete' | 'partial';
 }
 
 export interface SpoolCardData {
