@@ -9,9 +9,24 @@ import type { SpoolCardData } from '@/lib/types';
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const TIPO_UNION_OPTIONS = ['BW', 'SO', 'FILL', 'BR', 'MIT'] as const;
-const DN_UNION_OPTIONS = [
-  1, 2, 3, 4, 5,
-  ...Array.from({ length: 22 }, (_, i) => (i + 3) * 2), // 6, 8, 10, ..., 48
+
+type DnOption = { value: number; label: string; ariaLabel?: string };
+const DN_UNION_OPTIONS: ReadonlyArray<DnOption> = [
+  { value: 0.5,  label: '½',  ariaLabel: 'media pulgada' },
+  { value: 0.75, label: '¾',  ariaLabel: 'tres cuartos de pulgada' },
+  { value: 1,    label: '1' },
+  { value: 1.5,  label: '1½', ariaLabel: 'una y media pulgadas' },
+  { value: 1.75, label: '1¾', ariaLabel: 'una y tres cuartos pulgadas' },
+  { value: 2,    label: '2' },
+  { value: 2.5,  label: '2½', ariaLabel: 'dos y media pulgadas' },
+  { value: 3,    label: '3' },
+  { value: 3.5,  label: '3½', ariaLabel: 'tres y media pulgadas' },
+  { value: 4,    label: '4' },
+  { value: 5,    label: '5' },
+  ...Array.from({ length: 22 }, (_, i) => {
+    const v = (i + 3) * 2;
+    return { value: v, label: String(v) } as DnOption;
+  }), // 6, 8, 10, ..., 48
 ];
 const MAX_UNIONS = 20;
 
@@ -167,7 +182,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
 
   const handleDnChange = (n_union: number, value: string) => {
     setRows(rows.map((r) =>
-      r.n_union === n_union ? { ...r, dn_union: value === '' ? null : parseInt(value, 10) } : r
+      r.n_union === n_union ? { ...r, dn_union: value === '' ? null : parseFloat(value) } : r
     ));
   };
 
@@ -195,7 +210,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   };
 
   const handleDefaultDnChange = (value: string) => {
-    const parsed = value === '' ? null : parseInt(value, 10);
+    const parsed = value === '' ? null : parseFloat(value);
     setDefaultDn(parsed);
     if (parsed !== null) applyDefaultToEmpty('dn_union', parsed);
   };
@@ -364,7 +379,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
               >
                 <option value="">DN</option>
                 {DN_UNION_OPTIONS.map((dn) => (
-                  <option key={dn} value={dn}>{dn}</option>
+                  <option key={dn.value} value={dn.value} aria-label={dn.ariaLabel}>{dn.label}</option>
                 ))}
               </select>
               <select
@@ -495,7 +510,7 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
                   >
                     <option value="">DN</option>
                     {DN_UNION_OPTIONS.map((dn) => (
-                      <option key={dn} value={dn}>{dn}</option>
+                      <option key={dn.value} value={dn.value} aria-label={dn.ariaLabel}>{dn.label}</option>
                     ))}
                   </select>
 

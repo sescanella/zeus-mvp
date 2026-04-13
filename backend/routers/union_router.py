@@ -569,7 +569,7 @@ async def guardar_uniones(
                 to_create.append({"n_union": n, "dn_union": u.dn_union, "tipo_union": u.tipo_union})
             else:
                 ex = existing_by_n[n]
-                ex_dn = int(ex["dn_union"]) if ex["dn_union"] is not None else None
+                ex_dn = float(ex["dn_union"]) if ex["dn_union"] is not None else None
                 ex_tipo = ex["tipo_union"]
                 changed = ex_dn != u.dn_union or ex_tipo != u.tipo_union
                 # HIGH-3: Block dn_union/tipo_union changes on unions with work

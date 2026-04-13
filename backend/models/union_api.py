@@ -180,7 +180,7 @@ class FinalizarResponseV4(BaseModel):
 class CreateUnionInput(BaseModel):
     """Single union data for creation/update. Fields nullable for partial saves."""
     n_union: int = Field(..., ge=1, le=20)
-    dn_union: Optional[int] = Field(None, ge=1, le=50)
+    dn_union: Optional[float] = Field(None, gt=0, le=50)
     tipo_union: Optional[Literal['BW', 'SO', 'FILL', 'BR', 'MIT']] = None
 
 
