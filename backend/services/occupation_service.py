@@ -816,30 +816,48 @@ class OccupationService:
         self,
         selected_count: int,
         total_available: int,
-        operacion: str
+        operacion: str,
+        total_uniones_spool: int = 0,
+        ya_completadas: int = 0,
     ) -> str:
         """
-        Determine if action should be PAUSAR or COMPLETAR based on selected vs total.
+        Determine if action should be PAUSAR or COMPLETAR.
 
-        Auto-determination logic:
-        - If selected_count == total_available → COMPLETAR (all work done)
-        - If selected_count < total_available → PAUSAR (partial work)
-        - If selected_count > total_available → 409 Conflict (race condition)
+        **T-021 fix (2026-04-13):** COMPLETAR is now decided against
+        `total_uniones_spool` (the spool's real Total_Uniones), not against
+        `total_available` (the filtered batch workable right now). Prior bug:
+        when an operator finished the available batch, action was COMPLETAR
+        even with unions pending — writing Fecha_Soldadura and leaking the
+        spool into METROLOGIA.
 
-        For SOLD: total_available counts only SOLD_REQUIRED_TYPES unions (BW/BR/SO/FILL/LET).
-        FW unions are ARM-only and excluded from SOLD completion logic.
+        New rule (v4.0 spool, total_uniones_spool >= 1):
+            COMPLETAR iff  ya_completadas + selected_count == total_uniones_spool
+            PAUSAR otherwise
+
+        Legacy rule (total_uniones_spool == 0, v3.0 spool without Uniones rows):
+            COMPLETAR iff selected_count == total_available
+            PAUSAR otherwise
+
+        For SOLD: total_uniones_spool should be the count of SOLD-required
+        unions in the spool (excluding FW). Callers compute this.
 
         Args:
-            selected_count: Number of unions selected by worker
-            total_available: Total available unions for this operation
-                            (for SOLD: filtered to SOLD_REQUIRED_TYPES only)
-            operacion: Operation type ("ARM" or "SOLD")
+            selected_count: Number of unions selected by worker in this batch
+            total_available: Unions workable RIGHT NOW for this operation
+                             (post-filtered by type + ARM prereq for SOLD)
+            operacion: "ARM" or "SOLD"
+            total_uniones_spool: Real total of relevant unions in the spool
+                                 (0 = legacy v3.0 fallback)
+            ya_completadas: Unions already completed for this operation in
+                            prior sessions (from Uniones_{ARM,SOLD}_Completadas)
 
         Returns:
-            str: "PAUSAR" or "COMPLETAR"
+            "PAUSAR" or "COMPLETAR"
 
         Raises:
-            ValueError: If selected_count > total_available (race condition)
+            RaceConditionError: If selected_count > total_available, or if
+                ya_completadas + selected_count > total_uniones_spool (data
+                out of sync).
         """
         if selected_count > total_available:
             raise RaceConditionError(
@@ -850,10 +868,26 @@ class OccupationService:
                 )
             )
 
+        # T-021 defensive guard: contradictory counters
+        if total_uniones_spool > 0 and (ya_completadas + selected_count) > total_uniones_spool:
+            raise RaceConditionError(
+                tag_spool=operacion,
+                message=(
+                    f"Counter inconsistency for {operacion}: ya_completadas={ya_completadas} + "
+                    f"selected={selected_count} > total_uniones_spool={total_uniones_spool}"
+                )
+            )
+
+        if total_uniones_spool > 0:
+            # v4.0 strict rule: all unions of the spool must be accounted for
+            if ya_completadas + selected_count == total_uniones_spool:
+                return "COMPLETAR"
+            return "PAUSAR"
+
+        # Legacy v3.0 fallback — Total_Uniones=0, no unions tracked
         if selected_count == total_available:
             return "COMPLETAR"
-        else:
-            return "PAUSAR"
+        return "PAUSAR"
 
     def should_trigger_metrologia(self, tag_spool: str) -> bool:
         """
@@ -1276,9 +1310,46 @@ class OccupationService:
                     )
             else:
                 # Step 5: Auto-determine action (PAUSAR vs COMPLETAR)
+                # T-021: compute total_uniones_spool and ya_completadas so that
+                # COMPLETAR requires ALL unions of the spool to be done — not
+                # just the batch available in this session.
                 try:
-                    action_taken = self._determine_action(selected_count, total_available, operacion)
-                    logger.info(f"Auto-determined action: {action_taken}")
+                    total_uniones_spool = 0
+                    ya_completadas = 0
+                    if spool.total_uniones and spool.total_uniones > 0:
+                        if operacion == "ARM":
+                            # All unions need ARM regardless of type
+                            total_uniones_spool = spool.total_uniones
+                            ya_completadas = spool.uniones_arm_completadas or 0
+                        elif operacion == "SOLD":
+                            # Only SOLD_REQUIRED_TYPES count toward SOLD completion
+                            all_unions = self.union_repository.get_by_spool(tag_spool)
+                            sold_required = [
+                                u for u in all_unions
+                                if u.tipo_union in SOLD_REQUIRED_TYPES
+                            ]
+                            total_uniones_spool = len(sold_required)
+                            ya_completadas = sum(
+                                1 for u in sold_required if u.sol_fecha_fin is not None
+                            )
+                            logger.debug(
+                                f"T-021 SOLD completion math for {tag_spool}: "
+                                f"total_sold_required={total_uniones_spool}, "
+                                f"ya_completadas={ya_completadas}, selected={selected_count}"
+                            )
+
+                    action_taken = self._determine_action(
+                        selected_count,
+                        total_available,
+                        operacion,
+                        total_uniones_spool=total_uniones_spool,
+                        ya_completadas=ya_completadas,
+                    )
+                    logger.info(
+                        f"Auto-determined action for {tag_spool}: {action_taken} "
+                        f"(selected={selected_count}, available={total_available}, "
+                        f"total_spool={total_uniones_spool}, ya_completadas={ya_completadas})"
+                    )
                 except ValueError as e:
                     # Race condition - union became unavailable
                     logger.error(f"Race condition detected: {e}")
@@ -1468,6 +1539,35 @@ class OccupationService:
                     "Fecha_Ocupacion": ""
                 }
 
+                # T-021 defensive guard: verify COMPLETAR matches real completion
+                # before writing Fecha_Armado/Fecha_Soldadura. Even if action_taken
+                # was decided as COMPLETAR upstream (including via action_override
+                # from frontend), re-check here against fresh metrics. If mismatch,
+                # force PAUSAR to prevent corrupt data.
+                if action_taken == "COMPLETAR" and spool.total_uniones and spool.total_uniones > 0:
+                    fresh_metrics = self.union_repository.calculate_metrics(spool.ot) if self.union_repository else {}
+                    if operacion == "ARM":
+                        real_done = fresh_metrics.get("arm_completadas", 0)
+                    else:  # SOLD
+                        real_done = fresh_metrics.get("sold_completadas", 0)
+
+                    # For SOLD, compare against SOLD-required count, not total_uniones raw
+                    if operacion == "SOLD":
+                        all_unions = self.union_repository.get_by_spool(tag_spool) if self.union_repository else []
+                        expected = sum(
+                            1 for u in all_unions if u.tipo_union in SOLD_REQUIRED_TYPES
+                        )
+                    else:
+                        expected = spool.total_uniones
+
+                    if expected > 0 and real_done < expected:
+                        logger.error(
+                            f"T-021 guard: action_taken=COMPLETAR for {operacion} but "
+                            f"only {real_done}/{expected} unions done. Forcing PAUSAR "
+                            f"to prevent writing Fecha_{operacion} prematurely."
+                        )
+                        action_taken = "PAUSAR"
+
                 if action_taken == "COMPLETAR":
                     sanitized_worker = sanitize_for_sheets(worker_nombre)
                     if operacion == "ARM":
@@ -1483,7 +1583,24 @@ class OccupationService:
 
                     updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
                 else:  # PAUSAR
-                    updates_dict["Estado_Detalle"] = f"{operacion} parcial (pausado)"
+                    # T-021: include X/Y progress in Estado_Detalle for better visibility
+                    try:
+                        progress_metrics = self.union_repository.calculate_metrics(spool.ot) if self.union_repository else {}
+                        if operacion == "ARM":
+                            done = progress_metrics.get("arm_completadas", 0)
+                            total = spool.total_uniones or 0
+                        else:
+                            done = progress_metrics.get("sold_completadas", 0)
+                            all_unions = self.union_repository.get_by_spool(tag_spool) if self.union_repository else []
+                            total = sum(1 for u in all_unions if u.tipo_union in SOLD_REQUIRED_TYPES)
+
+                        if total > 0:
+                            updates_dict["Estado_Detalle"] = f"{operacion} parcial {done}/{total} (pausado)"
+                        else:
+                            updates_dict["Estado_Detalle"] = f"{operacion} parcial (pausado)"
+                    except Exception as e:
+                        logger.warning(f"T-021: failed to compute progress for Estado_Detalle: {e}")
+                        updates_dict["Estado_Detalle"] = f"{operacion} parcial (pausado)"
 
                 # Use batch_update_by_column_name with automatic retry
                 from backend.core.column_map_cache import ColumnMapCache

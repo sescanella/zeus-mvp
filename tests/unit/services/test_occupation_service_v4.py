@@ -50,6 +50,9 @@ def mock_sheets_repository():
     mock_spool.soldador = None
     mock_spool.fecha_armado = None
     mock_spool.fecha_soldadura = None
+    # T-021: v4.0 counters used by _determine_action fix
+    mock_spool.uniones_arm_completadas = 0
+    mock_spool.uniones_sold_completadas = 0
 
     repo.get_spool_by_tag = MagicMock(return_value=mock_spool)
 
@@ -308,6 +311,13 @@ async def test_finalizar_spool_completar(occupation_service_v4, mock_union_repos
         MagicMock() for _ in range(10)
     ]
     mock_union_repository.batch_update_arm_full.return_value = 10
+    # T-021: defensive guard re-reads metrics; after this batch all 10 ARM done.
+    mock_union_repository.calculate_metrics.return_value = {
+        "arm_completadas": 10,
+        "sold_completadas": 0,
+        "pulgadas_arm": 25.0,
+        "pulgadas_sold": 0.0,
+    }
 
     response = await occupation_service_v4.finalizar_spool(request)
 
@@ -443,21 +453,25 @@ async def test_finalizar_spool_no_occupation(occupation_service_v4, mock_sheets_
 # ============================================================================
 
 def test_determine_action_pausar(occupation_service_v4):
-    """Test _determine_action returns PAUSAR for partial work."""
+    """Test _determine_action returns PAUSAR for partial work (T-021 signature)."""
     result = occupation_service_v4._determine_action(
         selected_count=3,
         total_available=10,
-        operacion="ARM"
+        operacion="ARM",
+        total_uniones_spool=10,
+        ya_completadas=0,
     )
     assert result == "PAUSAR"
 
 
 def test_determine_action_completar(occupation_service_v4):
-    """Test _determine_action returns COMPLETAR for full work."""
+    """Test _determine_action returns COMPLETAR for full work (T-021 signature)."""
     result = occupation_service_v4._determine_action(
         selected_count=10,
         total_available=10,
-        operacion="ARM"
+        operacion="ARM",
+        total_uniones_spool=10,
+        ya_completadas=0,
     )
     assert result == "COMPLETAR"
 
@@ -468,7 +482,9 @@ def test_determine_action_race_condition(occupation_service_v4):
         occupation_service_v4._determine_action(
             selected_count=15,
             total_available=10,
-            operacion="ARM"
+            operacion="ARM",
+            total_uniones_spool=10,
+            ya_completadas=0,
         )
 
 
