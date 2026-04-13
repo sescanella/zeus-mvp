@@ -117,6 +117,8 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
   // Don't render anything if not open or not mounted (SSR)
   if (!isOpen || !mounted) return null;
 
+  const hasCustomMaxH = className.includes('max-h-');
+
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // Only handle clicks on the backdrop itself, not content
     if (e.target === e.currentTarget) {
@@ -149,7 +151,7 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
         tabIndex={-1}
         className={`
           relative rounded-none shadow-xl
-          w-[92vw] max-w-md md:max-w-xl p-6
+          w-[92vw] max-w-md md:max-w-xl ${hasCustomMaxH ? '' : 'max-h-[90vh]'} overflow-y-auto p-6
           transition-all duration-200
           focus:outline-none
           ${className}
