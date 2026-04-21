@@ -443,3 +443,192 @@ class TestIniciarSoldValidation:
 
         # Verify validation was NOT called (ARM doesn't need it)
         mocked_services["validation_service"].validate_arm_prerequisite.assert_not_called()
+
+
+# =============================================================================
+# H2 hardening — T-096 second line of defense on metrología entry
+# =============================================================================
+#
+# Narrow scope (locked 2026-04-21 via empirical production audit):
+#   Only partial SOLD blocks entry. ARM-level completeness is NOT checked,
+#   because production contains legitimate legacy spools whose ARM was never
+#   tracked at union level (MK-1343-MO-26627-016 is the observed case).
+#   Blocking those would be a regression with no counterpart in the T-096
+#   incident.
+#
+# See backend/scripts/diagnose_H2_guard_impact.py for the analysis that
+# produced the REGRESSION_RISK count supporting this design.
+
+
+class TestMetrologiaPreEntryUnionsGuard:
+    """Ensure metrología entry validates Uniones state, not just dates."""
+
+    @pytest.fixture
+    def union_repository(self):
+        return Mock()
+
+    @pytest.fixture
+    def validation_service(self, union_repository):
+        return ValidationService(
+            role_service=None, union_repository=union_repository
+        )
+
+    @staticmethod
+    def _make_spool(
+        tag="T-96-TEST", fecha_armado=True, fecha_soldadura=True, ocupado_por=None
+    ):
+        spool = Mock()
+        spool.tag_spool = tag
+        spool.fecha_armado = datetime(2026, 4, 1) if fecha_armado else None
+        spool.fecha_soldadura = datetime(2026, 4, 2) if fecha_soldadura else None
+        spool.fecha_qc_metrologia = None
+        spool.estado_detalle = ""
+        spool.ocupado_por = ocupado_por
+        return spool
+
+    def test_blocks_metrologia_when_sold_unions_pending(
+        self, validation_service, union_repository
+    ):
+        """Reproduces the MK-1923-TW-17422-004 incident at validation time."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=None,
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=None,
+            ),
+        ]
+
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+        assert "SOLD" in exc_info.value.data["dependencia_faltante"]
+
+    def test_allows_legacy_spool_whose_arm_was_not_tracked_at_union_level(
+        self, validation_service, union_repository
+    ):
+        """Observed in production: MK-1343-MO-26627-016.
+        Every SOLD-required union is soldered, but ARM was done at spool level
+        (Fecha_Armado on the Operaciones row) and arm_fecha_fin was never set
+        on any union. This spool must NOT be blocked from metrología."""
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=None,  # ARM never tracked per-union
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=None,  # ARM never tracked per-union
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="FW",  # ARM-only type, legitimately SOLD-less
+                arm_fecha_fin=None,
+                sol_fecha_fin=None,
+            ),
+        ]
+
+        # Must not raise: SOLD-required unions are complete, and no union is
+        # ARM-tracked, so the conditional ARM check skips.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+    def test_blocks_metrologia_when_arm_partially_tracked_and_some_pending(
+        self, validation_service, union_repository
+    ):
+        """Manual-edit scenario (round-2 auditor flag): a reviewer edited
+        Fecha_Soldadura on Operaciones for a spool that IS tracked at union
+        level (some unions already have arm_fecha_fin set) but not all unions
+        finished ARM. Under the narrow SOLD-only guard this would have slipped
+        through. The conditional ARM check catches it: "at least one union
+        ARM-tracked" flips the guard on."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),  # ARM tracked and done
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=None,  # ARM tracked (by spool convention) but pending
+                sol_fecha_fin=datetime(2026, 4, 2),  # SOLD somehow set
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+        ]
+
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+        assert "ARM" in exc_info.value.data["dependencia_faltante"]
+
+    def test_allows_metrologia_when_all_unions_complete(
+        self, validation_service, union_repository
+    ):
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+        ]
+
+        # Should not raise.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+    def test_allows_legacy_spool_without_union_rows(
+        self, validation_service, union_repository
+    ):
+        """Spools in Operaciones without any matching Uniones rows (legacy v2.1
+        pre-migration) must pass through. get_by_spool returns an empty list."""
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = []
+
+        # Must not raise — empty list bypasses the cross-check.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+    def test_fallback_noop_when_union_repository_raises(
+        self, validation_service, union_repository
+    ):
+        """If get_by_spool errors (Sheets down, timeout, etc.) the guard
+        skips with a [H2_GUARD_FAILED] log rather than blocking. This is
+        defence-in-depth — primary protection is the write-side fix in
+        occupation_service."""
+        spool = self._make_spool()
+        union_repository.get_by_spool.side_effect = RuntimeError("sheets unavailable")
+
+        # Must not raise — gracefully degrades to legacy behaviour.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+    def test_fallback_noop_when_union_repository_is_none(self):
+        """ValidationService must remain backward-compatible with no UnionRepository."""
+        service = ValidationService(role_service=None, union_repository=None)
+        spool = self._make_spool()
+        # Should not raise.
+        service.validar_puede_completar_metrologia(spool, worker_id=99)
+

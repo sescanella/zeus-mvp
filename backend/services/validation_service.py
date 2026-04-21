@@ -229,6 +229,102 @@ class ValidationService:
                 detalle="Soldadura debe finalizar antes de metrología"
             )
 
+        # 2b. T-096 H2 hardening (second line of defense against partial SOLD
+        # sneaking into metrología).
+        #
+        # Scope of this guard (validated empirically against production Sheet
+        # on 2026-04-21 via backend/scripts/diagnose_H2_guard_impact.py):
+        #
+        #   - SOLD always hard-checked: if any SOLD-required union has
+        #     sol_fecha_fin=None, metrología is blocked. Mirrors Matías's
+        #     business rule "SOLD TERM = all unions soldered"
+        #     (v5.1-scope.md § Máquina de estados).
+        #   - ARM conditionally checked: only when at least one union of the
+        #     spool has arm_fecha_fin set. If every arm_fecha_fin is None the
+        #     spool was armed at the spool level (v2.1/v3.0 legacy style),
+        #     and a per-unit ARM check would be a regression. Observed in
+        #     production: MK-1343-MO-26627-016. The conditional check still
+        #     catches the manual-edit scenario: someone who edited
+        #     Fecha_Soldadura on a row whose ARM is tracked but not all
+        #     unions have arm_fecha_fin — that is exactly the pattern the
+        #     conditional check blocks.
+        #   - If union_repository is unavailable or errors, the guard SKIPS
+        #     rather than blocks. The guard is defense-in-depth; the primary
+        #     protection is the write-side fix in occupation_service. A
+        #     distinctive log prefix ([H2_GUARD_FAILED]) is used so failures
+        #     can be grepped from Railway logs for post-facto audit.
+        #
+        # Import locally to avoid circular imports with occupation_service.
+        if self.union_repository is not None:
+            tag_unions = None
+            try:
+                from backend.services.occupation_service import SOLD_REQUIRED_TYPES
+                tag_unions = self.union_repository.get_by_spool(spool.tag_spool)
+            except Exception as e:
+                logger.warning(
+                    f"[H2_GUARD_FAILED] get_by_spool({spool.tag_spool}) raised "
+                    f"{type(e).__name__}: {e}. Allowing metrología entry based "
+                    f"on the primary Fecha_Soldadura check. Review Railway logs "
+                    f"with grep '[H2_GUARD_FAILED]' if partial-SOLD corruption "
+                    f"reappears."
+                )
+            else:
+                if not isinstance(tag_unions, list):
+                    logger.warning(
+                        f"[H2_GUARD_FAILED] get_by_spool({spool.tag_spool}) "
+                        f"returned non-list {type(tag_unions).__name__}. "
+                        f"Allowing metrología entry; see Railway logs for audit."
+                    )
+                    tag_unions = None
+
+            if isinstance(tag_unions, list) and len(tag_unions) > 0:
+                sold_required = [
+                    u for u in tag_unions if u.tipo_union in SOLD_REQUIRED_TYPES
+                ]
+                sold_pending = [u for u in sold_required if u.sol_fecha_fin is None]
+
+                if sold_pending:
+                    logger.warning(
+                        f"[H2_GUARD_TRIGGERED] Blocking METROLOGIA for "
+                        f"{spool.tag_spool}: Fecha_Soldadura is set but "
+                        f"{len(sold_pending)} of {len(sold_required)} "
+                        f"SOLD-required unions are pending."
+                    )
+                    raise DependenciasNoSatisfechasError(
+                        tag_spool=spool.tag_spool,
+                        operacion="METROLOGIA",
+                        dependencia_faltante="SOLD completado en todas las uniones",
+                        detalle=(
+                            f"Quedan {len(sold_pending)} uniones sin soldar "
+                            f"(de {len(sold_required)} requeridas)"
+                        ),
+                    )
+
+                # ARM check is conditional to avoid the MK-1343 regression:
+                # only enforce it when at least one union is ARM-tracked (has
+                # arm_fecha_fin set). If every union has arm_fecha_fin=None
+                # the spool was armed at the spool level (v2.1/v3.0 legacy
+                # style), and per-unit ARM completeness is not meaningful.
+                any_arm_tracked = any(u.arm_fecha_fin is not None for u in tag_unions)
+                if any_arm_tracked:
+                    arm_pending = [u for u in tag_unions if u.arm_fecha_fin is None]
+                    if arm_pending:
+                        logger.warning(
+                            f"[H2_GUARD_TRIGGERED] Blocking METROLOGIA for "
+                            f"{spool.tag_spool}: spool is ARM-tracked at union "
+                            f"level but {len(arm_pending)} unions are pending "
+                            f"ARM. This indicates a manually edited or partially "
+                            f"completed spool."
+                        )
+                        raise DependenciasNoSatisfechasError(
+                            tag_spool=spool.tag_spool,
+                            operacion="METROLOGIA",
+                            dependencia_faltante="ARM completado en todas las uniones",
+                            detalle=(
+                                f"Quedan {len(arm_pending)} uniones sin armar"
+                            ),
+                        )
+
         # 3. Check NOT already completed (APROBADO)
         if spool.fecha_qc_metrologia is not None:
             raise OperacionYaCompletadaError(
