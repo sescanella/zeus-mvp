@@ -322,13 +322,23 @@ function HomePage() {
     // selection, and its onComplete fires handleWorkerComplete which already
     // refreshes + clears state.
     modalStack.clear();
+    let refreshFailed = false;
     try {
       await refreshSingle(tag);
     } catch {
-      // Refresh failure is non-fatal — WorkerModal operates on tag_spool, not
-      // on a stale spool snapshot, and tomarReparacion does not read card state.
+      // Refresh failure is non-fatal for the REP flow — WorkerModal operates
+      // on tag_spool, not on a stale spool snapshot, and tomarReparacion does
+      // not read card state. But the card in the list won't reflect the new
+      // RECHAZADO state until the next poll, so warn the operator.
+      refreshFailed = true;
     }
     enqueue(`Metrologia rechazada — ${tag}. Selecciona reparador.`, 'success');
+    if (refreshFailed) {
+      enqueue(
+        `Aviso: la card puede seguir mostrando el estado anterior hasta el proximo refresco.`,
+        'error',
+      );
+    }
     setSelectedOperation('REP');
     setSelectedAction('INICIAR');
     modalStack.push('worker');
