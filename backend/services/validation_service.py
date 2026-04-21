@@ -230,36 +230,61 @@ class ValidationService:
             )
 
         # 2b. T-096 H2 hardening (second line of defense against partial SOLD
-        # sneaking into metrología). After T-096 the backend no longer writes
-        # Fecha_Soldadura prematurely through any automated path, but a manual
-        # edit of the Sheet or a legacy corrupt row could still leave a spool
-        # with Fecha_Soldadura set while its unions are not all soldered. The
-        # v4.0 branch-guard catches writes at the source; this one catches
-        # *reads* before the spool enters metrología. Import locally to avoid
-        # circular imports with occupation_service.
+        # sneaking into metrología).
+        #
+        # Scope of this guard (validated empirically against production Sheet
+        # on 2026-04-21 via backend/scripts/diagnose_H2_guard_impact.py):
+        #
+        #   - Only SOLD-required unions with sol_fecha_fin=None block entry.
+        #     This mirrors the business rule Matías operates by: "SOLD TERM =
+        #     all unions soldered; only then does the spool progress to
+        #     metrología". See v5.1-scope.md § Máquina de estados.
+        #   - ARM-level completeness is NOT checked here. Production holds
+        #     legitimate spools (observed: MK-1343-MO-26627-016) whose SOLD
+        #     is complete but whose ARM was never tracked at union level.
+        #     Blocking those would be a regression with no counterpart in the
+        #     T-096 incident (which was about premature Fecha_Soldadura).
+        #   - If union_repository is unavailable or errors, the guard SKIPS
+        #     rather than blocks. The guard is defense-in-depth; the primary
+        #     protection is the write-side fix in occupation_service. A
+        #     distinctive log prefix ([H2_GUARD_FAILED]) is used so failures
+        #     can be grepped from Railway logs for post-facto audit.
+        #
+        # Import locally to avoid circular imports with occupation_service.
         if self.union_repository is not None:
+            tag_unions = None
             try:
                 from backend.services.occupation_service import SOLD_REQUIRED_TYPES
                 tag_unions = self.union_repository.get_by_spool(spool.tag_spool)
             except Exception as e:
                 logger.warning(
-                    f"[H2 guard] get_by_spool({spool.tag_spool}) failed: {e}. "
-                    f"Allowing metrología entry based on legacy Fecha_Soldadura check."
+                    f"[H2_GUARD_FAILED] get_by_spool({spool.tag_spool}) raised "
+                    f"{type(e).__name__}: {e}. Allowing metrología entry based "
+                    f"on the primary Fecha_Soldadura check. Review Railway logs "
+                    f"with grep '[H2_GUARD_FAILED]' if partial-SOLD corruption "
+                    f"reappears."
                 )
-                tag_unions = None
+            else:
+                if not isinstance(tag_unions, list):
+                    logger.warning(
+                        f"[H2_GUARD_FAILED] get_by_spool({spool.tag_spool}) "
+                        f"returned non-list {type(tag_unions).__name__}. "
+                        f"Allowing metrología entry; see Railway logs for audit."
+                    )
+                    tag_unions = None
 
             if isinstance(tag_unions, list) and len(tag_unions) > 0:
                 sold_required = [
                     u for u in tag_unions if u.tipo_union in SOLD_REQUIRED_TYPES
                 ]
                 sold_pending = [u for u in sold_required if u.sol_fecha_fin is None]
-                arm_pending = [u for u in tag_unions if u.arm_fecha_fin is None]
 
                 if sold_pending:
                     logger.warning(
-                        f"[H2 guard] Blocking METROLOGIA for {spool.tag_spool}: "
-                        f"Fecha_Soldadura is set but {len(sold_pending)} of "
-                        f"{len(sold_required)} SOLD-required unions are pending."
+                        f"[H2_GUARD_TRIGGERED] Blocking METROLOGIA for "
+                        f"{spool.tag_spool}: Fecha_Soldadura is set but "
+                        f"{len(sold_pending)} of {len(sold_required)} "
+                        f"SOLD-required unions are pending."
                     )
                     raise DependenciasNoSatisfechasError(
                         tag_spool=spool.tag_spool,
@@ -268,20 +293,6 @@ class ValidationService:
                         detalle=(
                             f"Quedan {len(sold_pending)} uniones sin soldar "
                             f"(de {len(sold_required)} requeridas)"
-                        ),
-                    )
-                if arm_pending:
-                    logger.warning(
-                        f"[H2 guard] Blocking METROLOGIA for {spool.tag_spool}: "
-                        f"Fecha_Armado is set but {len(arm_pending)} unions are "
-                        f"pending ARM."
-                    )
-                    raise DependenciasNoSatisfechasError(
-                        tag_spool=spool.tag_spool,
-                        operacion="METROLOGIA",
-                        dependencia_faltante="ARM completado en todas las uniones",
-                        detalle=(
-                            f"Quedan {len(arm_pending)} uniones sin armar"
                         ),
                     )
 

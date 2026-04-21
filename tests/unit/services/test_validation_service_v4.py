@@ -449,10 +449,15 @@ class TestIniciarSoldValidation:
 # H2 hardening — T-096 second line of defense on metrología entry
 # =============================================================================
 #
-# If Fecha_Soldadura or Fecha_Armado is set on a spool whose unions are not
-# all complete (e.g. due to manual Sheet editing, or a legacy row the T-021
-# remediation missed), the metrología endpoint must refuse to process it
-# rather than trusting the stale completion date.
+# Narrow scope (locked 2026-04-21 via empirical production audit):
+#   Only partial SOLD blocks entry. ARM-level completeness is NOT checked,
+#   because production contains legitimate legacy spools whose ARM was never
+#   tracked at union level (MK-1343-MO-26627-016 is the observed case).
+#   Blocking those would be a regression with no counterpart in the T-096
+#   incident.
+#
+# See backend/scripts/diagnose_H2_guard_impact.py for the analysis that
+# produced the REGRESSION_RISK count supporting this design.
 
 
 class TestMetrologiaPreEntryUnionsGuard:
@@ -484,6 +489,7 @@ class TestMetrologiaPreEntryUnionsGuard:
     def test_blocks_metrologia_when_sold_unions_pending(
         self, validation_service, union_repository
     ):
+        """Reproduces the MK-1923-TW-17422-004 incident at validation time."""
         from backend.exceptions import DependenciasNoSatisfechasError
 
         spool = self._make_spool()
@@ -510,30 +516,35 @@ class TestMetrologiaPreEntryUnionsGuard:
 
         assert "SOLD" in exc_info.value.data["dependencia_faltante"]
 
-    def test_blocks_metrologia_when_arm_unions_pending_but_sold_dates_set(
+    def test_allows_legacy_spool_whose_arm_was_not_tracked_at_union_level(
         self, validation_service, union_repository
     ):
-        from backend.exceptions import DependenciasNoSatisfechasError
-
+        """Observed in production: MK-1343-MO-26627-016.
+        Every SOLD-required union is soldered, but ARM was done at spool level
+        (Fecha_Armado on the Operaciones row) and arm_fecha_fin was never set
+        on any union. This spool must NOT be blocked from metrología."""
         spool = self._make_spool()
-        # SOLD-required types all soldered, but ARM still pending on a FW union.
         union_repository.get_by_spool.return_value = [
             Mock(
                 tipo_union="BW",
-                arm_fecha_fin=datetime(2026, 4, 1),
+                arm_fecha_fin=None,  # ARM never tracked per-union
                 sol_fecha_fin=datetime(2026, 4, 2),
             ),
             Mock(
-                tipo_union="FW",  # not SOLD-required
-                arm_fecha_fin=None,  # ARM pending
+                tipo_union="BW",
+                arm_fecha_fin=None,  # ARM never tracked per-union
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="FW",  # ARM-only type, legitimately SOLD-less
+                arm_fecha_fin=None,
                 sol_fecha_fin=None,
             ),
         ]
 
-        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
-            validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
-
-        assert "ARM" in exc_info.value.data["dependencia_faltante"]
+        # Must not raise: SOLD-required unions are complete, ARM at union
+        # level is not a T-096 concern.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
 
     def test_allows_metrologia_when_all_unions_complete(
         self, validation_service, union_repository
@@ -555,16 +566,28 @@ class TestMetrologiaPreEntryUnionsGuard:
         # Should not raise.
         validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
 
-    def test_fallback_noop_when_union_repository_returns_none(
+    def test_allows_legacy_spool_without_union_rows(
         self, validation_service, union_repository
     ):
-        """If get_by_spool raises or returns non-list, do not block metrología.
-        The H2 guard is a second line of defense, not a hard gate — primary
-        validation is the Fecha_Soldadura/Fecha_Armado check."""
+        """Spools in Operaciones without any matching Uniones rows (legacy v2.1
+        pre-migration) must pass through. get_by_spool returns an empty list."""
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = []
+
+        # Must not raise — empty list bypasses the cross-check.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+    def test_fallback_noop_when_union_repository_raises(
+        self, validation_service, union_repository
+    ):
+        """If get_by_spool errors (Sheets down, timeout, etc.) the guard
+        skips with a [H2_GUARD_FAILED] log rather than blocking. This is
+        defence-in-depth — primary protection is the write-side fix in
+        occupation_service."""
         spool = self._make_spool()
         union_repository.get_by_spool.side_effect = RuntimeError("sheets unavailable")
 
-        # Should not raise — gracefully degrades to legacy behaviour.
+        # Must not raise — gracefully degrades to legacy behaviour.
         validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
 
     def test_fallback_noop_when_union_repository_is_none(self):
