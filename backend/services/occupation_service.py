@@ -1045,11 +1045,40 @@ class OccupationService:
             #
             # v4.0 detection: check actual unions in Uniones sheet (not Operaciones column
             # which may be stale, null, or formatted as date due to USER_ENTERED bug).
-            # Only fall back to v3.0 if there are truly zero unions in the sheet.
+            # Only fall back to v3.0 if there are truly zero unions for the TAG_SPOOL.
+            #
+            # T-096: key the detection on TAG_SPOOL (get_by_spool), not on OT
+            # (get_total_uniones). Unions carry TAG_SPOOL reliably; their OT column
+            # is sometimes blank or mismatched, and counting by OT caused real
+            # v4.0 spools to be routed through _finalizar_v30_spool, which writes
+            # Fecha_Soldadura unconditionally and corrupted MK-1923-TW-17422-004
+            # and MK-1923-TK-34058-001 in production.
             actual_union_count = 0
-            if self.union_repository and spool.ot:
-                actual_union_count = self.union_repository.get_total_uniones(spool.ot)
-            is_v30 = actual_union_count == 0
+            detection_failed = False
+            if self.union_repository:
+                try:
+                    tag_unions = self.union_repository.get_by_spool(tag_spool)
+                    if isinstance(tag_unions, list):
+                        actual_union_count = len(tag_unions)
+                    else:
+                        detection_failed = True
+                        logger.error(
+                            f"T-096: get_by_spool({tag_spool}) returned non-list "
+                            f"{type(tag_unions).__name__}. Refusing to fall back "
+                            f"to v3.0 to avoid writing Fecha_{operacion} "
+                            f"without union validation."
+                        )
+                except Exception as e:
+                    detection_failed = True
+                    logger.error(
+                        f"T-096: get_by_spool({tag_spool}) failed while detecting "
+                        f"v3.0 branch: {e}. Refusing to fall back to v3.0 to avoid "
+                        f"writing Fecha_{operacion} without union validation."
+                    )
+            # is_v30 is true only when we CONFIRMED zero unions for the TAG_SPOOL.
+            # Fail-safe: if detection could not run, stay on the v4.0 path, which
+            # carries the T-021 guard.
+            is_v30 = (not detection_failed) and actual_union_count == 0
 
             if is_v30:
                 logger.info(
@@ -1885,6 +1914,48 @@ class OccupationService:
         if action_override == "PAUSAR":
             logger.info(f"[v3.0 FINALIZAR] action_override=PAUSAR, delegating to _cancelar_spool")
             return await self._cancelar_spool(tag_spool, worker_id, worker_nombre, operacion, spool)
+
+        # T-096 guard (defence in depth): even though callers gate this method
+        # with a v3.0 detection, if unions DO exist for the TAG_SPOOL with
+        # pending work for the requested operation, do NOT stamp
+        # Fecha_Armado/Fecha_Soldadura. A spool that has real unions is not
+        # truly legacy v3.0, and writing its completion dates without checking
+        # them is the corruption that T-021 patched on the v4.0 branch.
+        # Here we replicate the same protection for the v3.0 branch.
+        if self.union_repository and operacion in ("ARM", "SOLD"):
+            tag_unions = None
+            try:
+                result = self.union_repository.get_by_spool(tag_spool)
+                if isinstance(result, list):
+                    tag_unions = result
+            except Exception as e:
+                logger.error(
+                    f"[v3.0 FINALIZAR] T-096 guard: get_by_spool({tag_spool}) "
+                    f"failed: {e}. Allowing v3.0 path — upstream detector is "
+                    f"responsible for correctness when the repository is unavailable."
+                )
+
+            if tag_unions:
+                if operacion == "SOLD":
+                    pending = [
+                        u for u in tag_unions
+                        if u.tipo_union in SOLD_REQUIRED_TYPES
+                        and u.sol_fecha_fin is None
+                    ]
+                else:  # ARM
+                    pending = [u for u in tag_unions if u.arm_fecha_fin is None]
+
+                if pending:
+                    logger.warning(
+                        f"[v3.0 FINALIZAR] T-096 guard TRIGGERED for {tag_spool}: "
+                        f"{len(tag_unions)} unions bound to TAG_SPOOL with "
+                        f"{len(pending)} pending for {operacion}. Refusing v3.0 "
+                        f"COMPLETAR; delegating to _cancelar_spool (occupation "
+                        f"cleared without stamping Fecha_{operacion})."
+                    )
+                    return await self._cancelar_spool(
+                        tag_spool, worker_id, worker_nombre, operacion, spool
+                    )
 
         try:
             # Step 1: Build updates dict (clear occupation + update fecha)
