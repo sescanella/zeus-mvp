@@ -302,19 +302,36 @@ function HomePage() {
   const handleMetComplete = async (resultado: 'APROBADO' | 'RECHAZADO') => {
     if (!selectedSpool) return;
     const tag = selectedSpool.tag_spool;
-    modalStack.clear();
 
     if (resultado === 'APROBADO') {
+      modalStack.clear();
       removeSpool(tag);
       enqueue(`Metrologia aprobada — ${tag}`, 'success');
-    } else {
-      await refreshSingle(tag);
-      enqueue(`Metrologia rechazada — ${tag}`, 'success');
+      setSelectedSpool(null);
+      setSelectedOperation(null);
+      setSelectedAction(null);
+      return;
     }
 
-    setSelectedSpool(null);
-    setSelectedOperation(null);
-    setSelectedAction(null);
+    // T-095: RECHAZADO chains into reparación. The backend has already marked
+    // the spool as RECHAZADO with Ocupado_Por=null (MetrologiaModal called
+    // completarMetrologia). The operator now needs to pick the repairman.
+    // Clear the whole modal stack so the OperationModal underneath doesn't
+    // flash, refresh the card, switch selection to REP/INICIAR and open the
+    // WorkerModal. WorkerModal will POST /api/tomar-reparacion on worker
+    // selection, and its onComplete fires handleWorkerComplete which already
+    // refreshes + clears state.
+    modalStack.clear();
+    try {
+      await refreshSingle(tag);
+    } catch {
+      // Refresh failure is non-fatal — WorkerModal operates on tag_spool, not
+      // on a stale spool snapshot, and tomarReparacion does not read card state.
+    }
+    enqueue(`Metrologia rechazada — ${tag}. Selecciona reparador.`, 'success');
+    setSelectedOperation('REP');
+    setSelectedAction('INICIAR');
+    modalStack.push('worker');
   };
 
   const handleRemove = async (tag: string) => {
