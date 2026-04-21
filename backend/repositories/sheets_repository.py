@@ -690,6 +690,51 @@ class SheetsRepository:
         """
         return 0
 
+    def get_cell_value(
+        self,
+        sheet_name: str,
+        row: int,
+        column_name: str,
+    ) -> Optional[str]:
+        """
+        Generic single-cell read: returns the value at (sheet_name, row, column_name).
+
+        Used by state machines (ReparacionStateMachine, MetrologiaStateMachine) that
+        need to inspect Estado_Detalle (or similar) without instantiating a full
+        Spool model.
+
+        Row convention: 1-indexed in Sheets terms (row 1 = header, row 2 = first data
+        row). Matches what find_row_by_column_value returns and what
+        batch_update_by_column_name expects.
+
+        Args:
+            sheet_name: Name of the worksheet.
+            row: 1-indexed Sheets row number.
+            column_name: Header name of the column to read.
+
+        Returns:
+            Stripped string value, or None if the row/column is missing or the cell
+            is empty.
+        """
+        all_rows = self.read_worksheet(sheet_name)
+        # Translate Sheets 1-indexed row to Python 0-indexed list access.
+        py_idx = row - 1
+        if py_idx < 0 or py_idx >= len(all_rows):
+            return None
+
+        from backend.core.column_map_cache import ColumnMapCache
+        column_map = ColumnMapCache.get_or_build(sheet_name, self)
+
+        col_idx = column_map.get(normalize_column_name(column_name))
+        if col_idx is None or col_idx >= len(all_rows[py_idx]):
+            return None
+
+        value = all_rows[py_idx][col_idx]
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped if stripped else None
+
     def set_ocupado_por(
         self,
         sheet_name: str,
