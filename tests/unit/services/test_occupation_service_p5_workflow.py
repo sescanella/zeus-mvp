@@ -1248,3 +1248,128 @@ async def test_determine_action_sold_uses_per_spool_counters_not_ot_aggregate():
         ya_completadas=4,
     )
     assert action == "COMPLETAR"
+
+
+@pytest.mark.asyncio
+async def test_finalizar_sold_full_completion_stamps_fecha_soldadura(
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_validation_service,
+    mock_conflict_service,
+):
+    """
+    T-096 Criterio B literal de Matías (bugs-pendientes.md § Bug 6):
+      "Solo al completar el armado + soldado de las 4 uniones, el spool
+       pasa a MET PEND."
+
+    The complementary happy-path to the partial-SOLD regression test:
+    when the worker finishes the last pending SOLD-required unions,
+    action_taken must be COMPLETAR and Fecha_Soldadura + Soldador must
+    be stamped on the Operaciones row. Without this, we'd have a fix
+    that only proves "no premature stamping" — not "stamp when it
+    corresponds".
+    """
+    tag = "MK-TEST-FULL-SOLD"
+    ot = "OT-FULL-SOLD"
+    prior_ts = datetime(2026, 4, 1, 10, 0, 0)
+
+    spool = MagicMock(spec=Spool)
+    spool.tag_spool = tag
+    spool.ot = ot
+    spool.total_uniones = 4
+    spool.uniones_arm_completadas = 4
+    spool.uniones_sold_completadas = 2
+    spool.pulgadas_arm = 10.0
+    spool.pulgadas_sold = 5.0
+    spool.ocupado_por = "SR(42)"
+    spool.fecha_ocupacion = "21-04-2026 08:00:00"
+    spool.version = "uuid-full"
+    spool.estado_detalle = "SOLD parcial 2/4 (pausado)"
+    spool.fecha_materiales = date(2026, 1, 20)
+    spool.armador = "JP(45)"
+    spool.soldador = None
+    spool.fecha_armado = date(2026, 4, 18)
+    spool.fecha_soldadura = None
+
+    mock_sheets_repository.get_spool_by_tag = MagicMock(return_value=spool)
+    mock_sheets_repository.batch_update_by_column_name = MagicMock()
+    mock_sheets_repository.read_worksheet = MagicMock(return_value=_standard_headers())
+
+    # 4 SOLD-required unions, 2 already soldered, 2 pending. This session
+    # covers the final 2 — spool reaches COMPLETE.
+    already_soldered = [
+        _make_union(tag, ot, n, sol_fecha_fin=prior_ts, arm_fecha_fin=prior_ts)
+        for n in range(1, 3)
+    ]
+    pending_to_solder = [
+        _make_union(tag, ot, n, arm_fecha_fin=prior_ts)
+        for n in range(3, 5)
+    ]
+    all_unions = already_soldered + pending_to_solder
+    final_ids = [u.id for u in pending_to_solder]
+
+    union_repo = MagicMock()
+    union_repo.get_total_uniones = MagicMock(return_value=4)
+    union_repo.get_by_ot = MagicMock(return_value=all_unions)
+
+    def get_by_spool(tag_spool: str):
+        return [u for u in all_unions if u.tag_spool == tag_spool]
+
+    union_repo.get_by_spool = MagicMock(side_effect=get_by_spool)
+    union_repo.get_disponibles_sold_by_ot = MagicMock(return_value=pending_to_solder)
+    union_repo.get_disponibles_arm_by_ot = MagicMock(return_value=[])
+    # calculate_metrics for the T-021 defensive guard — return POST-write state
+    # (all 4 SOLD unions done) because the guard re-reads after the batch write.
+    union_repo.calculate_metrics = MagicMock(return_value={
+        "total_uniones": 4,
+        "arm_completadas": 4,
+        "sold_completadas": 4,
+        "pulgadas_arm": 10.0,
+        "pulgadas_sold": 10.0,
+    })
+    union_repo.batch_update_sold_full = MagicMock(return_value=2)
+    union_repo.batch_update_arm_full = MagicMock(return_value=0)
+    union_repo.get_by_ids = MagicMock(return_value=pending_to_solder)
+
+    service = OccupationService(
+        sheets_repository=mock_sheets_repository,
+        metadata_repository=mock_metadata_repository,
+        union_repository=union_repo,
+        conflict_service=mock_conflict_service,
+    )
+    service.validation_service = mock_validation_service
+
+    request = FinalizarRequest(
+        tag_spool=tag,
+        worker_id=42,
+        worker_nombre="SR(42)",
+        operacion=ActionType.SOLD,
+        selected_unions=final_ids,
+    )
+
+    with patch("backend.services.occupation_service.now_chile"), \
+         patch("backend.services.occupation_service.today_chile") as mock_today:
+        mock_today.return_value = date(2026, 4, 21)
+        response = await service.finalizar_spool(request)
+
+    # Criterio B, primer condición: action es COMPLETAR.
+    assert response.action_taken == "COMPLETAR", (
+        f"Expected COMPLETAR when the final SOLD-required unions of a "
+        f"4-union spool are soldered. Got action_taken={response.action_taken!r}."
+    )
+
+    # Criterio B, segunda condición: Fecha_Soldadura + Soldador se escriben.
+    all_written_cols: dict[str, str] = {}
+    for call_args in mock_sheets_repository.batch_update_by_column_name.call_args_list:
+        for u in call_args.kwargs.get("updates", []):
+            all_written_cols[u["column_name"]] = u["value"]
+
+    assert "Fecha_Soldadura" in all_written_cols, (
+        f"COMPLETAR SOLD must stamp Fecha_Soldadura. "
+        f"Written columns: {sorted(all_written_cols.keys())}"
+    )
+    assert all_written_cols["Fecha_Soldadura"] == "21-04-2026"
+    assert all_written_cols.get("Soldador") == "SR(42)"
+    # And occupation must be cleared.
+    assert all_written_cols.get("Ocupado_Por") == ""
+    assert all_written_cols.get("Fecha_Ocupacion") == ""
