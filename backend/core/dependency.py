@@ -186,20 +186,27 @@ def get_union_repository(
     return UnionRepository(sheets_repo=sheets_repo)
 
 
-def get_validation_service() -> ValidationService:
+def get_validation_service(
+    union_repository: UnionRepository = Depends(get_union_repository),
+) -> ValidationService:
     """
     Factory para ValidationService (nueva instancia por request).
 
     v2.1 Direct Read: ValidationService lee estados directamente desde
     columnas de Operaciones, NO necesita MetadataRepository.
 
+    H2 hardening (T-096 second line of defense): UnionRepository is
+    injected so validar_puede_completar_metrologia can cross-check
+    Uniones per-spool before allowing metrología entry — prevents a
+    manually-edited Sheet from sneaking a corrupt spool into MET PEND.
+
     Returns:
-        Nueva instancia de ValidationService (sin dependencias).
+        Nueva instancia de ValidationService con UnionRepository inyectado.
 
     Usage:
         validation_service: ValidationService = Depends(get_validation_service)
     """
-    return ValidationService()
+    return ValidationService(union_repository=union_repository)
 
 
 def get_worker_service(
