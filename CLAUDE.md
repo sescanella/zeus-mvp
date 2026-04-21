@@ -2,6 +2,61 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## External Orchestrator — ASISTENTE
+
+This repository is the codebase. Strategic coordination, task tracking, and cross-project context live in a separate orchestrator at:
+
+```
+/Users/sescanella/Documents/Obsidian Vault/Proyectos/ASISTENTE
+```
+
+Relevant subtree for Zeus:
+
+```
+ASISTENTE/planning/proyectos/zeus-by-km/
+├── pointer.md                       Map of this repo (paths, layers, shortcuts per task)
+├── bugs-pendientes.md               Active bugs reported in production by Matías
+├── v5.1-scope.md                    UX/feature backlog for next milestone
+├── auditoria-YYYY-MM-DD-*.md        Technical audits done from ASISTENTE
+├── HANDOFF-TO-ZEUS.md               Handoff note for starting a Zeus session
+└── notas.md                         Tech debt, decisions
+
+ASISTENTE/planning/tareas.md         All open tasks (IDs like T-095, T-096...)
+ASISTENTE/planning/clientes/kronos/  Client-level context (Matías, Pablo, etc.)
+```
+
+### When to read ASISTENTE files
+
+Read the orchestrator **at session start** if the operator mentions any of these signals:
+
+- A task ID with prefix `T-NNN` (e.g., "trabajemos T-096", "arreglemos T-095").
+- A bug ID with prefix `B-N` (e.g., "Bug 6", "B6 de Zeus").
+- Phrases like "la auditoría", "el handoff", "lo que venimos trabajando".
+- The operator opened this chat right after a session in ASISTENTE ("vengo del ASISTENTE", "ya hicimos el diagnóstico").
+
+**What to read** (in this order):
+
+1. `ASISTENTE/planning/proyectos/zeus-by-km/HANDOFF-TO-ZEUS.md` — the handoff note is the single entry point. It tells you which tasks are hot, what was audited, and what to do first.
+2. The specific audit file referenced in the handoff.
+3. `bugs-pendientes.md` or `v5.1-scope.md` as the handoff directs.
+
+If there is no signal from the operator, do not proactively read the orchestrator — work from the repo context as usual.
+
+### What to write back to ASISTENTE
+
+**By default, do not write to ASISTENTE from this chat.** The orchestrator is owned by another chat context. Leave feedback via:
+
+- Git commit messages that reference the task ID: `fix(T-096): metrologia auto-trigger respects total_uniones`.
+- Branch names that carry the ID: `fix/T-096-metrologia-partial-sold`.
+
+The operator will return to the ASISTENTE chat and close the task there, using commit history as evidence.
+
+**Exception**: if the operator explicitly asks to update the orchestrator from here ("actualiza la auditoría con lo que encontramos", "deja nota en el pointer"), then read + edit under `ASISTENTE/planning/proyectos/zeus-by-km/` only. Never touch `ASISTENTE/planning/tareas.md` or client dashboards from this chat — those are orchestrator-owned.
+
+### Language
+
+ASISTENTE documents are in Spanish. This repo's docs and CLAUDE.md are in English. Keep that separation — do not translate one side into the other.
+
 ## Project Overview
 
 **ZEUES v4.0-single-user** - Simplified Location Tracking System for Pipe Spools
