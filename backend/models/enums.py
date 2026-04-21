@@ -85,6 +85,12 @@ class EventoTipo(str, Enum):
     # Phase 10 Events (v4.0 Metrología auto-transition)
     METROLOGIA_AUTO_TRIGGERED = "METROLOGIA_AUTO_TRIGGERED"  # All work complete, auto-transition to metrología queue
 
+    # System-level events (admin scripts, data remediation)
+    # Used by backend/scripts/remediate_T021_corrupt_spools.py and any future
+    # operator-initiated data fix. Logged with worker_id=0, worker_nombre="SYSTEM_*"
+    # so audit queries can distinguish manual admin actions from worker actions.
+    SYSTEM_REMEDIATION = "SYSTEM_REMEDIATION"
+
 
 class EstadoOcupacion(str, Enum):
     """

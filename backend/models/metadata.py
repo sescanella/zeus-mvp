@@ -26,6 +26,9 @@ class Accion(str, Enum):
     TOMAR = "TOMAR"    # Worker takes/occupies spool
     PAUSAR = "PAUSAR"  # Worker pauses/releases spool
 
+    # System-level actions (admin scripts, not worker-initiated)
+    REMEDIAR = "REMEDIAR"  # Data remediation applied by an admin script
+
 
 class MetadataEvent(BaseModel):
     """
@@ -57,9 +60,14 @@ class MetadataEvent(BaseModel):
     )
     worker_id: int = Field(
         ...,
-        description="ID del trabajador que realiza la acción",
-        gt=0,
-        examples=[93, 94, 95]
+        description=(
+            "ID del trabajador que realiza la acción. Permite worker_id=0 "
+            "para eventos generados por scripts administrativos (identificar "
+            "junto con worker_nombre='SYSTEM_*'); cualquier otro valor debe "
+            "ser un ID positivo de la hoja Trabajadores."
+        ),
+        ge=0,
+        examples=[93, 94, 95, 0]
     )
     worker_nombre: str = Field(
         ...,

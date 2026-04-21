@@ -179,22 +179,31 @@ def apply_remediation(
     )
     logger.info(f"✅ Sheet updated for {tag}")
 
-    # Audit event
+    log_remediation_event(metadata_repo, remediation)
+
+
+def log_remediation_event(metadata_repo: MetadataRepository, remediation: dict) -> None:
+    """Append a SYSTEM_REMEDIATION audit event for a remediated spool.
+    Extracted so it can be called both during --apply and separately for
+    retroactively logging past remediations (see --log-missing-events)."""
+    tag = remediation["tag_spool"]
     try:
+        import json
         metadata_repo.log_event(
-            tipo_evento="T021_REMEDIATION",
+            evento_tipo="SYSTEM_REMEDIATION",
             tag_spool=tag,
             worker_id=0,
             worker_nombre="SYSTEM_T021",
-            accion="REMEDIATE_PARTIAL_SOLD_CORRUPTION",
             operacion="SOLD",
-            timestamp=format_datetime_for_sheets(now_chile()),
-            metadata={
+            accion="REMEDIAR",
+            metadata_json=json.dumps({
                 "previous": remediation["previous"],
                 "new": remediation["new"],
                 "counters": remediation["counters"],
                 "ticket": "T-021",
-            },
+                "reason": "partial_sold_corruption",
+                "remediated_at": format_datetime_for_sheets(now_chile()),
+            }),
         )
         logger.info(f"✅ Metadata event logged for {tag}")
     except Exception as e:
@@ -217,7 +226,7 @@ def main() -> int:
         logger.info(f"  • {t}")
 
     sheets_repo = SheetsRepository()
-    metadata_repo = MetadataRepository(sheets_repository=sheets_repo) if args.apply else None
+    metadata_repo = MetadataRepository(sheets_repo=sheets_repo) if args.apply else None
 
     # Prime column map cache
     ColumnMapCache.get_or_build(config.HOJA_OPERACIONES_NOMBRE, sheets_repo)
