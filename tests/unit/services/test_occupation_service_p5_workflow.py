@@ -897,3 +897,479 @@ async def test_finalizar_p5_spool_not_found(occupation_service_p5, mock_sheets_r
 
     with pytest.raises(SpoolNoEncontradoError):
         await occupation_service_p5.finalizar_spool(request)
+
+
+# ============================================================================
+# T-096 — B6 regression: partial SOLD must never write Fecha_Soldadura
+# ============================================================================
+#
+# Production evidence (2026-04-21, Sheet scan of Operaciones/Uniones):
+#   MK-1923-TW-17422-004  OT=SP-10115-NV0642  7 SOLD-required, 2 done, Fecha_Soldadura=21/4
+#   MK-1923-TK-34058-001  OT=SP-10119-NV0642  7 SOLD-required, 3 done, Fecha_Soldadura=9/4
+#
+# Root cause identified by the Sheet-diagnostic script
+# (backend/scripts/diagnose_T096_partial_sold.py):
+#
+#   - The 7 unions of each spool exist in the Uniones sheet, correctly
+#     referenced by TAG_SPOOL. Their OT column, however, is empty (or mismatched
+#     against the OT stored in Operaciones).
+#   - UnionRepository.get_total_uniones(ot) filters by OT column equality
+#     (union_repository.py:574-613), so it returns 0 for these spools.
+#   - finalizar_spool() at occupation_service.py:1049-1052 uses get_total_uniones(ot)
+#     as the v3.0-vs-v4.0 branch selector. 0 unions-for-OT => is_v30=True.
+#   - _finalizar_v30_spool() writes Fecha_Soldadura + Soldador unconditionally
+#     (occupation_service.py:1904-1908), no guard whatsoever.
+#
+# Contract the tests pin down:
+#   (A) finalizar_spool must detect "has unions" via TAG_SPOOL, not via OT, so
+#       the T-021-guarded v4.0 branch is taken when unions exist for the spool.
+#   (B) _finalizar_v30_spool — the true-legacy branch — must itself refuse to
+#       stamp Fecha_Soldadura/Fecha_Armado if unions exist for the TAG_SPOOL and
+#       are still pending for the current operation. Defence in depth.
+
+
+def _make_union(
+    tag_spool: str,
+    ot: str,
+    n_union: int,
+    tipo_union: str = "BW",
+    dn: float = 2.5,
+    sol_fecha_fin=None,
+    arm_fecha_fin=None,
+):
+    """Build a Union with minimal valid fields, overrides for SOLD/ARM completion."""
+    return Union(
+        id=f"{tag_spool}+{n_union}",
+        ot=ot,
+        tag_spool=tag_spool,
+        n_union=n_union,
+        dn_union=dn,
+        tipo_union=tipo_union,
+        arm_fecha_inicio=None,
+        arm_fecha_fin=arm_fecha_fin,
+        arm_worker=None,
+        sol_fecha_inicio=None,
+        sol_fecha_fin=sol_fecha_fin,
+        sol_worker=None,
+        ndt_fecha=None,
+        ndt_status=None,
+        version="uuid-union",
+        creado_por="SYSTEM(0)",
+        fecha_creacion=datetime(2026, 1, 1),
+    )
+
+
+def _build_spool_like_mk_1923(tag: str, ot: str) -> MagicMock:
+    """Mirror the exact shape of the corrupt production spool before the bad write."""
+    spool = MagicMock(spec=Spool)
+    spool.tag_spool = tag
+    spool.ot = ot
+    spool.total_uniones = 7
+    spool.uniones_arm_completadas = 2
+    spool.uniones_sold_completadas = 2
+    spool.pulgadas_arm = 5.0
+    spool.pulgadas_sold = 5.0
+    spool.ocupado_por = "MR(93)"
+    spool.fecha_ocupacion = "20-04-2026 10:00:00"
+    spool.version = "uuid-target"
+    spool.estado_detalle = "SOLD parcial 2/7 (pausado)"
+    spool.fecha_materiales = date(2026, 1, 20)
+    spool.armador = "JP(45)"
+    spool.soldador = None
+    spool.fecha_armado = date(2026, 4, 18)
+    spool.fecha_soldadura = None
+    return spool
+
+
+def _standard_headers() -> list[list[str]]:
+    return [[
+        "TAG_SPOOL", "OT", "NV", "Fecha_Materiales", "Fecha_Armado", "Armador",
+        "Fecha_Soldadura", "Soldador", "Ocupado_Por", "Fecha_Ocupacion",
+        "version", "Estado_Detalle", "Total_Uniones", "Uniones_ARM_Completadas",
+        "Pulgadas_ARM", "Uniones_SOLD_Completadas", "Pulgadas_SOLD",
+    ]]
+
+
+@pytest.mark.asyncio
+async def test_finalizar_sold_partial_does_not_write_fecha_soldadura_when_union_OT_is_empty(
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_validation_service,
+    mock_conflict_service,
+):
+    """
+    T-096 regression reproducing the 21-abr production incident for
+    MK-1923-TW-17422-004 (OT SP-10115-NV0642).
+
+    Preconditions replicating the real corrupted row:
+      - Operaciones row carries Total_Uniones=7 and Fecha_Armado set.
+      - 7 rows exist in Uniones filtered by TAG_SPOOL, only 2 have sol_fecha_fin.
+      - Those same rows have OT BLANK (data-entry quirk), so
+        UnionRepository.get_total_uniones(spool.ot) returns 0.
+
+    With the current code, finalizar_spool() picks the v3.0 branch because
+    get_total_uniones(ot)==0, and _finalizar_v30_spool writes Fecha_Soldadura
+    unconditionally. That is the incident. After the fix it MUST not happen.
+
+    Expectations enforced here:
+      - Whichever branch is picked, Fecha_Soldadura must NOT appear in the
+        Sheets write.
+      - Soldador must NOT appear either.
+      - action_taken on the response must NOT be COMPLETAR.
+    """
+    tag = "MK-1923-TW-17422-004"
+    ot = "SP-10115-NV0642"
+    completed_ts = datetime(2026, 4, 20, 10, 0, 0)
+
+    spool = _build_spool_like_mk_1923(tag, ot)
+    mock_sheets_repository.get_spool_by_tag = MagicMock(return_value=spool)
+    mock_sheets_repository.batch_update_by_column_name = MagicMock()
+    mock_sheets_repository.read_worksheet = MagicMock(
+        return_value=_standard_headers()
+    )
+
+    # 7 unions bound to the TAG_SPOOL. Their OT value does not match spool.ot
+    # (in production the quirk was empty OT; here we use a mismatched marker,
+    # what matters for this test is that get_total_uniones(spool.ot) returns 0
+    # — which is what the Operaciones→Uniones lookup does in the field).
+    other_ot = "ORPHAN-OT"
+    union_rows = (
+        [_make_union(tag, other_ot, n, sol_fecha_fin=completed_ts, arm_fecha_fin=completed_ts)
+         for n in range(1, 3)]
+        + [_make_union(tag, other_ot, n, arm_fecha_fin=completed_ts)
+           for n in range(3, 8)]
+    )
+
+    union_repo = MagicMock()
+    # get_total_uniones (by OT) returns 0 in production for these spools — this
+    # is the data-quirk that used to route them through _finalizar_v30_spool.
+    # After Fix A, detection uses get_by_spool (by TAG_SPOOL), so even with
+    # get_total_uniones==0 we must stay on the v4.0 branch.
+    union_repo.get_total_uniones = MagicMock(return_value=0)
+    union_repo.get_by_ot = MagicMock(return_value=[])
+
+    pending_sold = [u for u in union_rows if u.sol_fecha_fin is None]
+
+    def get_by_spool(tag_spool: str):
+        return [u for u in union_rows if u.tag_spool == tag_spool]
+
+    union_repo.get_by_spool = MagicMock(side_effect=get_by_spool)
+    # The v4.0 branch relies on get_disponibles_sold_by_ot to surface pending
+    # SOLD unions. It queries by OT too, but in production it returned results
+    # for these spools (the stale OT column is only the get_total_uniones issue).
+    # We return the pending unions directly so the flow can decide PAUSAR.
+    union_repo.get_disponibles_sold_by_ot = MagicMock(return_value=pending_sold)
+    union_repo.get_disponibles_arm_by_ot = MagicMock(return_value=[])
+
+    union_repo.calculate_metrics = MagicMock(return_value={
+        "total_uniones": 7,
+        "arm_completadas": 2,
+        "sold_completadas": 3,  # 2 previous + 1 written this session
+        "pulgadas_arm": 5.0,
+        "pulgadas_sold": 7.5,
+    })
+    union_repo.batch_update_sold_full = MagicMock(return_value=1)
+    union_repo.batch_update_arm_full = MagicMock(return_value=0)
+    union_repo.get_by_ids = MagicMock(return_value=[pending_sold[0]])
+
+    service = OccupationService(
+        sheets_repository=mock_sheets_repository,
+        metadata_repository=mock_metadata_repository,
+        union_repository=union_repo,
+        conflict_service=mock_conflict_service,
+    )
+    service.validation_service = mock_validation_service
+
+    # Worker selects at least one union so finalizar_spool enters the v3.0
+    # detector (selected_unions=[] would short-circuit into _cancelar_spool and
+    # miss the real bug path).
+    request = FinalizarRequest(
+        tag_spool=tag,
+        worker_id=93,
+        worker_nombre="MR(93)",
+        operacion=ActionType.SOLD,
+        selected_unions=[f"{tag}+3"],
+    )
+
+    with patch("backend.services.occupation_service.now_chile"), \
+         patch("backend.services.occupation_service.today_chile") as mock_today:
+        mock_today.return_value = date(2026, 4, 21)
+        response = await service.finalizar_spool(request)
+
+    # Response must not claim COMPLETAR when unions remain pending for the spool.
+    assert response.action_taken != "COMPLETAR", (
+        "FINALIZAR must not report COMPLETAR while 5 of 7 SOLD-required unions "
+        "of the spool are still pending. Response action_taken="
+        f"{response.action_taken!r}."
+    )
+
+    # Most important: the Sheets write must NOT contain Fecha_Soldadura/Soldador.
+    assert mock_sheets_repository.batch_update_by_column_name.called, \
+        "FINALIZAR must still flush occupation clearing to Sheets"
+
+    all_written_cols: set[str] = set()
+    for call_args in mock_sheets_repository.batch_update_by_column_name.call_args_list:
+        updates = call_args.kwargs.get("updates", [])
+        for u in updates:
+            all_written_cols.add(u["column_name"])
+
+    assert "Fecha_Soldadura" not in all_written_cols, (
+        f"Fecha_Soldadura must NOT be written when SOLD is partial. "
+        f"Actually written columns: {sorted(all_written_cols)}"
+    )
+    assert "Soldador" not in all_written_cols, (
+        f"Soldador must NOT be written when SOLD is partial. "
+        f"Actually written columns: {sorted(all_written_cols)}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_finalizar_v30_spool_guard_refuses_to_stamp_fecha_when_unions_pending(
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_validation_service,
+    mock_conflict_service,
+):
+    """
+    T-096 defence-in-depth: _finalizar_v30_spool, when invoked on a spool that
+    actually has unions bound to its TAG_SPOOL and pending SOLD work, MUST NOT
+    write Fecha_Soldadura/Soldador. It must delegate to _cancelar_spool
+    (occupation cleared, dates untouched).
+
+    This test bypasses the upstream v3.0 detection (Fix A) and hits the legacy
+    method directly, to prove that even if some future call path reaches it
+    for a non-truly-v3.0 spool, the data will not be corrupted.
+    """
+    tag = "MK-1923-TW-17422-004"
+    ot = "SP-10115-NV0642"
+    completed_ts = datetime(2026, 4, 20, 10, 0, 0)
+
+    spool = _build_spool_like_mk_1923(tag, ot)
+    mock_sheets_repository.get_spool_by_tag = MagicMock(return_value=spool)
+    mock_sheets_repository.batch_update_by_column_name = MagicMock()
+    mock_sheets_repository.read_worksheet = MagicMock(
+        return_value=_standard_headers()
+    )
+
+    other_ot = "ORPHAN-OT"
+    union_rows = (
+        [_make_union(tag, other_ot, n, sol_fecha_fin=completed_ts, arm_fecha_fin=completed_ts)
+         for n in range(1, 3)]
+        + [_make_union(tag, other_ot, n, arm_fecha_fin=completed_ts)
+           for n in range(3, 8)]
+    )
+
+    union_repo = MagicMock()
+
+    def get_by_spool(tag_spool: str):
+        return [u for u in union_rows if u.tag_spool == tag_spool]
+
+    union_repo.get_by_spool = MagicMock(side_effect=get_by_spool)
+
+    service = OccupationService(
+        sheets_repository=mock_sheets_repository,
+        metadata_repository=mock_metadata_repository,
+        union_repository=union_repo,
+        conflict_service=mock_conflict_service,
+    )
+    service.validation_service = mock_validation_service
+
+    with patch("backend.services.occupation_service.now_chile"), \
+         patch("backend.services.occupation_service.today_chile") as mock_today:
+        mock_today.return_value = date(2026, 4, 21)
+        response = await service._finalizar_v30_spool(
+            tag_spool=tag,
+            worker_id=93,
+            worker_nombre="MR(93)",
+            operacion="SOLD",
+            spool=spool,
+            action_override=None,
+        )
+
+    # The guard must short-circuit before any Sheets write that stamps dates.
+    # _cancelar_spool performs its own sheet write (clear occupation only),
+    # which is acceptable. What matters: no Fecha_Soldadura, no Soldador.
+    all_written_cols: set[str] = set()
+    for call_args in mock_sheets_repository.batch_update_by_column_name.call_args_list:
+        updates = call_args.kwargs.get("updates", [])
+        for u in updates:
+            all_written_cols.add(u["column_name"])
+
+    assert "Fecha_Soldadura" not in all_written_cols, (
+        f"v3.0 guard must not stamp Fecha_Soldadura with 5/7 unions pending. "
+        f"Written columns: {sorted(all_written_cols)}"
+    )
+    assert "Soldador" not in all_written_cols, (
+        f"v3.0 guard must not stamp Soldador with 5/7 unions pending. "
+        f"Written columns: {sorted(all_written_cols)}"
+    )
+    # Guard delegates to _cancelar_spool which returns action_taken='CANCELAR'.
+    assert response.action_taken != "COMPLETAR"
+
+
+@pytest.mark.asyncio
+async def test_determine_action_sold_uses_per_spool_counters_not_ot_aggregate():
+    """
+    T-096 upstream check: _determine_action for SOLD must compare against the
+    SOLD-required count of the TAG_SPOOL, not of the whole OT.
+
+    Failure mode this test guards: if _determine_action ever uses ya_completadas
+    from an OT-wide aggregate (e.g., spool.uniones_sold_completadas populated
+    from calculate_metrics(ot) upstream), the function would decide COMPLETAR
+    for a session that covers the per-spool batch but leaves sibling unions
+    untouched in the same OT. This test pins the desired contract.
+
+    This is a pure-function test, no mocks needed beyond constructing the service.
+    """
+    service = OccupationService(
+        sheets_repository=MagicMock(),
+        metadata_repository=MagicMock(),
+        union_repository=MagicMock(),
+        conflict_service=MagicMock(),
+    )
+
+    # Spool has 7 SOLD-required unions. Worker already completed 2 in a prior
+    # session and now selects 2 more. 3 remain pending → must PAUSAR.
+    action = service._determine_action(
+        selected_count=2,
+        total_available=5,
+        operacion="SOLD",
+        total_uniones_spool=7,
+        ya_completadas=2,
+    )
+    assert action == "PAUSAR"
+
+    # Opposite case: worker completes the last 3. COMPLETAR.
+    action = service._determine_action(
+        selected_count=3,
+        total_available=3,
+        operacion="SOLD",
+        total_uniones_spool=7,
+        ya_completadas=4,
+    )
+    assert action == "COMPLETAR"
+
+
+@pytest.mark.asyncio
+async def test_finalizar_sold_full_completion_stamps_fecha_soldadura(
+    mock_sheets_repository,
+    mock_metadata_repository,
+    mock_validation_service,
+    mock_conflict_service,
+):
+    """
+    T-096 Criterio B literal de Matías (bugs-pendientes.md § Bug 6):
+      "Solo al completar el armado + soldado de las 4 uniones, el spool
+       pasa a MET PEND."
+
+    The complementary happy-path to the partial-SOLD regression test:
+    when the worker finishes the last pending SOLD-required unions,
+    action_taken must be COMPLETAR and Fecha_Soldadura + Soldador must
+    be stamped on the Operaciones row. Without this, we'd have a fix
+    that only proves "no premature stamping" — not "stamp when it
+    corresponds".
+    """
+    tag = "MK-TEST-FULL-SOLD"
+    ot = "OT-FULL-SOLD"
+    prior_ts = datetime(2026, 4, 1, 10, 0, 0)
+
+    spool = MagicMock(spec=Spool)
+    spool.tag_spool = tag
+    spool.ot = ot
+    spool.total_uniones = 4
+    spool.uniones_arm_completadas = 4
+    spool.uniones_sold_completadas = 2
+    spool.pulgadas_arm = 10.0
+    spool.pulgadas_sold = 5.0
+    spool.ocupado_por = "SR(42)"
+    spool.fecha_ocupacion = "21-04-2026 08:00:00"
+    spool.version = "uuid-full"
+    spool.estado_detalle = "SOLD parcial 2/4 (pausado)"
+    spool.fecha_materiales = date(2026, 1, 20)
+    spool.armador = "JP(45)"
+    spool.soldador = None
+    spool.fecha_armado = date(2026, 4, 18)
+    spool.fecha_soldadura = None
+
+    mock_sheets_repository.get_spool_by_tag = MagicMock(return_value=spool)
+    mock_sheets_repository.batch_update_by_column_name = MagicMock()
+    mock_sheets_repository.read_worksheet = MagicMock(return_value=_standard_headers())
+
+    # 4 SOLD-required unions, 2 already soldered, 2 pending. This session
+    # covers the final 2 — spool reaches COMPLETE.
+    already_soldered = [
+        _make_union(tag, ot, n, sol_fecha_fin=prior_ts, arm_fecha_fin=prior_ts)
+        for n in range(1, 3)
+    ]
+    pending_to_solder = [
+        _make_union(tag, ot, n, arm_fecha_fin=prior_ts)
+        for n in range(3, 5)
+    ]
+    all_unions = already_soldered + pending_to_solder
+    final_ids = [u.id for u in pending_to_solder]
+
+    union_repo = MagicMock()
+    union_repo.get_total_uniones = MagicMock(return_value=4)
+    union_repo.get_by_ot = MagicMock(return_value=all_unions)
+
+    def get_by_spool(tag_spool: str):
+        return [u for u in all_unions if u.tag_spool == tag_spool]
+
+    union_repo.get_by_spool = MagicMock(side_effect=get_by_spool)
+    union_repo.get_disponibles_sold_by_ot = MagicMock(return_value=pending_to_solder)
+    union_repo.get_disponibles_arm_by_ot = MagicMock(return_value=[])
+    # calculate_metrics for the T-021 defensive guard — return POST-write state
+    # (all 4 SOLD unions done) because the guard re-reads after the batch write.
+    union_repo.calculate_metrics = MagicMock(return_value={
+        "total_uniones": 4,
+        "arm_completadas": 4,
+        "sold_completadas": 4,
+        "pulgadas_arm": 10.0,
+        "pulgadas_sold": 10.0,
+    })
+    union_repo.batch_update_sold_full = MagicMock(return_value=2)
+    union_repo.batch_update_arm_full = MagicMock(return_value=0)
+    union_repo.get_by_ids = MagicMock(return_value=pending_to_solder)
+
+    service = OccupationService(
+        sheets_repository=mock_sheets_repository,
+        metadata_repository=mock_metadata_repository,
+        union_repository=union_repo,
+        conflict_service=mock_conflict_service,
+    )
+    service.validation_service = mock_validation_service
+
+    request = FinalizarRequest(
+        tag_spool=tag,
+        worker_id=42,
+        worker_nombre="SR(42)",
+        operacion=ActionType.SOLD,
+        selected_unions=final_ids,
+    )
+
+    with patch("backend.services.occupation_service.now_chile"), \
+         patch("backend.services.occupation_service.today_chile") as mock_today:
+        mock_today.return_value = date(2026, 4, 21)
+        response = await service.finalizar_spool(request)
+
+    # Criterio B, primer condición: action es COMPLETAR.
+    assert response.action_taken == "COMPLETAR", (
+        f"Expected COMPLETAR when the final SOLD-required unions of a "
+        f"4-union spool are soldered. Got action_taken={response.action_taken!r}."
+    )
+
+    # Criterio B, segunda condición: Fecha_Soldadura + Soldador se escriben.
+    all_written_cols: dict[str, str] = {}
+    for call_args in mock_sheets_repository.batch_update_by_column_name.call_args_list:
+        for u in call_args.kwargs.get("updates", []):
+            all_written_cols[u["column_name"]] = u["value"]
+
+    assert "Fecha_Soldadura" in all_written_cols, (
+        f"COMPLETAR SOLD must stamp Fecha_Soldadura. "
+        f"Written columns: {sorted(all_written_cols.keys())}"
+    )
+    assert all_written_cols["Fecha_Soldadura"] == "21-04-2026"
+    assert all_written_cols.get("Soldador") == "SR(42)"
+    # And occupation must be cleared.
+    assert all_written_cols.get("Ocupado_Por") == ""
+    assert all_written_cols.get("Fecha_Ocupacion") == ""
