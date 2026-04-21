@@ -62,6 +62,45 @@ class ActionRequest(BaseModel):
     )
 
 
+class ReparacionRequest(BaseModel):
+    """
+    Request body para los endpoints de reparación (v3.0 Phase 6).
+
+    Utilizado por:
+    - POST /api/tomar-reparacion
+    - POST /api/pausar-reparacion
+    - POST /api/completar-reparacion
+    - POST /api/cancelar-reparacion
+
+    La operación (REPARACION) está implícita en el endpoint, por eso no se
+    exige en el payload. Separarlo de ActionRequest (que sí pide `operacion`
+    obligatoria porque aplica a ARM/SOLD/METROLOGIA) elimina el 422 que bloqueaba
+    el flujo rechazo → reparador desde la UI (frontend manda {worker_id,
+    tag_spool} sin campo `operacion`, que es justo lo que quieren los 4
+    endpoints de reparación).
+    """
+    worker_id: int = Field(
+        ...,
+        description="ID del trabajador (> 0)",
+        gt=0,
+        examples=[93, 94, 95]
+    )
+    tag_spool: str = Field(
+        ...,
+        description="TAG único del spool",
+        min_length=1,
+        examples=["MK-1335-CW-25238-011"]
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"worker_id": 93, "tag_spool": "MK-1335-CW-25238-011"}
+            ]
+        }
+    )
+
+
 class ActionMetadata(BaseModel):
     """Metadata de la acción realizada (para response)."""
     armador: Optional[str] = Field(None, description="Armador asignado (si aplica)")

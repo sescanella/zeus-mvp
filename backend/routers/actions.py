@@ -9,7 +9,7 @@ v4.0 uses /api/v4/occupation/iniciar and /api/v4/occupation/finalizar instead.
 from fastapi import APIRouter, Depends, status
 from backend.core.dependency import get_reparacion_service
 from backend.services.reparacion_service import ReparacionService
-from backend.models.action import ActionRequest
+from backend.models.action import ActionRequest, ReparacionRequest
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ router = APIRouter()
 
 @router.post("/tomar-reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def tomar_reparacion(
-    request: ActionRequest,
+    request: ReparacionRequest,
     reparacion_service: ReparacionService = Depends(get_reparacion_service)
 ):
     """
@@ -39,7 +39,7 @@ async def tomar_reparacion(
     - Estado_Detalle = "EN_REPARACION (Ciclo X/3) - Ocupado: {worker}"
 
     Args:
-        request: ActionRequest (worker_id, tag_spool)
+        request: ReparacionRequest (worker_id, tag_spool)
         reparacion_service: ReparacionService (injected)
 
     Returns:
@@ -87,7 +87,7 @@ async def tomar_reparacion(
 
 @router.post("/pausar-reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def pausar_reparacion(
-    request: ActionRequest,
+    request: ReparacionRequest,
     reparacion_service: ReparacionService = Depends(get_reparacion_service)
 ):
     """
@@ -103,7 +103,7 @@ async def pausar_reparacion(
     - Estado_Detalle = "REPARACION_PAUSADA (Ciclo X/3)"
 
     Args:
-        request: ActionRequest (worker_id, tag_spool)
+        request: ReparacionRequest (worker_id, tag_spool)
         reparacion_service: ReparacionService (injected)
 
     Returns:
@@ -137,7 +137,7 @@ async def pausar_reparacion(
 
 @router.post("/completar-reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def completar_reparacion(
-    request: ActionRequest,
+    request: ReparacionRequest,
     reparacion_service: ReparacionService = Depends(get_reparacion_service)
 ):
     """
@@ -153,7 +153,7 @@ async def completar_reparacion(
     - Estado_Detalle = "PENDIENTE_METROLOGIA"
 
     Args:
-        request: ActionRequest (worker_id, tag_spool)
+        request: ReparacionRequest (worker_id, tag_spool)
         reparacion_service: ReparacionService (injected)
 
     Returns:
@@ -189,7 +189,7 @@ async def completar_reparacion(
 
 @router.post("/cancelar-reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def cancelar_reparacion(
-    request: ActionRequest,
+    request: ReparacionRequest,
     reparacion_service: ReparacionService = Depends(get_reparacion_service)
 ):
     """
@@ -204,7 +204,7 @@ async def cancelar_reparacion(
     - Estado_Detalle = "RECHAZADO (Ciclo X/3) - Pendiente reparacion"
 
     Args:
-        request: ActionRequest (worker_id, tag_spool)
+        request: ReparacionRequest (worker_id, tag_spool)
         reparacion_service: ReparacionService (injected)
 
     Returns:
