@@ -542,9 +542,44 @@ class TestMetrologiaPreEntryUnionsGuard:
             ),
         ]
 
-        # Must not raise: SOLD-required unions are complete, ARM at union
-        # level is not a T-096 concern.
+        # Must not raise: SOLD-required unions are complete, and no union is
+        # ARM-tracked, so the conditional ARM check skips.
         validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+    def test_blocks_metrologia_when_arm_partially_tracked_and_some_pending(
+        self, validation_service, union_repository
+    ):
+        """Manual-edit scenario (round-2 auditor flag): a reviewer edited
+        Fecha_Soldadura on Operaciones for a spool that IS tracked at union
+        level (some unions already have arm_fecha_fin set) but not all unions
+        finished ARM. Under the narrow SOLD-only guard this would have slipped
+        through. The conditional ARM check catches it: "at least one union
+        ARM-tracked" flips the guard on."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        spool = self._make_spool()
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),  # ARM tracked and done
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=None,  # ARM tracked (by spool convention) but pending
+                sol_fecha_fin=datetime(2026, 4, 2),  # SOLD somehow set
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 4, 1),
+                sol_fecha_fin=datetime(2026, 4, 2),
+            ),
+        ]
+
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            validation_service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+        assert "ARM" in exc_info.value.data["dependencia_faltante"]
 
     def test_allows_metrologia_when_all_unions_complete(
         self, validation_service, union_repository

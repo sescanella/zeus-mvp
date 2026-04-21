@@ -235,15 +235,19 @@ class ValidationService:
         # Scope of this guard (validated empirically against production Sheet
         # on 2026-04-21 via backend/scripts/diagnose_H2_guard_impact.py):
         #
-        #   - Only SOLD-required unions with sol_fecha_fin=None block entry.
-        #     This mirrors the business rule Matías operates by: "SOLD TERM =
-        #     all unions soldered; only then does the spool progress to
-        #     metrología". See v5.1-scope.md § Máquina de estados.
-        #   - ARM-level completeness is NOT checked here. Production holds
-        #     legitimate spools (observed: MK-1343-MO-26627-016) whose SOLD
-        #     is complete but whose ARM was never tracked at union level.
-        #     Blocking those would be a regression with no counterpart in the
-        #     T-096 incident (which was about premature Fecha_Soldadura).
+        #   - SOLD always hard-checked: if any SOLD-required union has
+        #     sol_fecha_fin=None, metrología is blocked. Mirrors Matías's
+        #     business rule "SOLD TERM = all unions soldered"
+        #     (v5.1-scope.md § Máquina de estados).
+        #   - ARM conditionally checked: only when at least one union of the
+        #     spool has arm_fecha_fin set. If every arm_fecha_fin is None the
+        #     spool was armed at the spool level (v2.1/v3.0 legacy style),
+        #     and a per-unit ARM check would be a regression. Observed in
+        #     production: MK-1343-MO-26627-016. The conditional check still
+        #     catches the manual-edit scenario: someone who edited
+        #     Fecha_Soldadura on a row whose ARM is tracked but not all
+        #     unions have arm_fecha_fin — that is exactly the pattern the
+        #     conditional check blocks.
         #   - If union_repository is unavailable or errors, the guard SKIPS
         #     rather than blocks. The guard is defense-in-depth; the primary
         #     protection is the write-side fix in occupation_service. A
@@ -295,6 +299,31 @@ class ValidationService:
                             f"(de {len(sold_required)} requeridas)"
                         ),
                     )
+
+                # ARM check is conditional to avoid the MK-1343 regression:
+                # only enforce it when at least one union is ARM-tracked (has
+                # arm_fecha_fin set). If every union has arm_fecha_fin=None
+                # the spool was armed at the spool level (v2.1/v3.0 legacy
+                # style), and per-unit ARM completeness is not meaningful.
+                any_arm_tracked = any(u.arm_fecha_fin is not None for u in tag_unions)
+                if any_arm_tracked:
+                    arm_pending = [u for u in tag_unions if u.arm_fecha_fin is None]
+                    if arm_pending:
+                        logger.warning(
+                            f"[H2_GUARD_TRIGGERED] Blocking METROLOGIA for "
+                            f"{spool.tag_spool}: spool is ARM-tracked at union "
+                            f"level but {len(arm_pending)} unions are pending "
+                            f"ARM. This indicates a manually edited or partially "
+                            f"completed spool."
+                        )
+                        raise DependenciasNoSatisfechasError(
+                            tag_spool=spool.tag_spool,
+                            operacion="METROLOGIA",
+                            dependencia_faltante="ARM completado en todas las uniones",
+                            detalle=(
+                                f"Quedan {len(arm_pending)} uniones sin armar"
+                            ),
+                        )
 
         # 3. Check NOT already completed (APROBADO)
         if spool.fecha_qc_metrologia is not None:

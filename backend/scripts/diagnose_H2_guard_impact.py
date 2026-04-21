@@ -192,11 +192,18 @@ def main() -> int:
         })
 
         # Reproduce the PR #4 guard decision exactly.
+        # As of round 2: SOLD-pending always triggers; ARM-pending triggers
+        # only if at least one union has arm_fecha_fin set (per-unit tracked).
+        # Legacy spools whose arm_fecha_fin is uniformly empty are exempt
+        # from the ARM check.
         guard_triggers = False
         if unions["n_rows"] > 0:
             if unions["sold_required_pending"] > 0:
                 guard_triggers = True
-            if unions["arm_pending"] > 0:
+            any_arm_tracked = (
+                unions["arm_pending"] < unions["n_rows"]
+            )  # at least one union has arm_fecha_fin set
+            if any_arm_tracked and unions["arm_pending"] > 0:
                 guard_triggers = True
 
         if not guard_triggers:
