@@ -63,11 +63,11 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, o
 
   if (filtered.length === 0) {
     const rawSearch = searchText?.trim();
-    // Compose the message by describing each active filter. Listing the filters
-    // avoids the user thinking only the text search excluded everything when in
-    // reality estado and/or worker filters also narrowed the list.
+    // Compose the message by describing each active filter in natural Spanish.
+    // Listing every active filter avoids the user thinking only the text search
+    // excluded everything when estado/worker filters also narrowed the list.
     const parts: string[] = [];
-    if (estadoFilter) parts.push(`"${ESTADO_LABELS[estadoFilter]}"`);
+    if (estadoFilter) parts.push(`en estado "${ESTADO_LABELS[estadoFilter]}"`);
     if (workerFilter) parts.push(`de ${workerFilter}`);
     if (trimmedSearch) parts.push(`que coincidan con "${rawSearch}"`);
     const message =

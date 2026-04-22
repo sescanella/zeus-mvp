@@ -605,15 +605,21 @@ function HomePage() {
             {(() => {
               const activeCount = (estadoFilter ? 1 : 0) + (workerFilter ? 1 : 0);
               if (activeCount === 0) return 'FILTRAR';
-              // Prefer the most specific label when only one filter is active.
-              if (activeCount === 1) {
-                const label = estadoFilter ? ESTADO_LABELS[estadoFilter] : workerFilter;
+              // Single estado filter: keep the historical "{count} {ESTADO}" badge
+              // where count is the number of spools in that estado (pre-v5.1 behavior).
+              if (activeCount === 1 && estadoFilter) {
                 return (
                   <>
-                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded bg-white/20 text-xs font-black">1</span>
-                    {label}
+                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded bg-white/20 text-xs font-black">{estadoCounts[estadoFilter] ?? 0}</span>
+                    {ESTADO_LABELS[estadoFilter]}
                   </>
                 );
+              }
+              // Single worker filter: show the worker's ocupado_por string directly.
+              // The label already encodes identity; the spool count lives in the
+              // dropdown option text.
+              if (activeCount === 1 && workerFilter) {
+                return workerFilter;
               }
               return (
                 <>
@@ -659,14 +665,13 @@ function HomePage() {
             {activeWorkers.length > 0 && (
               <div>
                 <label htmlFor="worker-filter" className="sr-only">
-                  Filtrar por trabajador
+                  Filtrar spools por trabajador ocupante
                 </label>
                 <div className="relative">
                   <select
                     id="worker-filter"
                     value={workerFilter ?? ''}
                     onChange={(e) => setWorkerFilter(e.target.value || null)}
-                    aria-label="Filtrar spools por trabajador ocupante"
                     className={`w-full h-16 pl-4 pr-12 appearance-none font-mono font-black text-sm tracking-widest border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
                       workerFilter
                         ? 'bg-white/10 border-white text-white'
