@@ -77,6 +77,12 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   const [defaultDn, setDefaultDn] = useState<number | null>(null);
   const [defaultTipo, setDefaultTipo] = useState<string | null>(null);
   const [flashedRows, setFlashedRows] = useState<Set<number>>(new Set());
+  // Local string value for the TOTAL input. Decoupled from rows.length so the
+  // user can clear the field (e.g. delete the leading "1" to type "5") without
+  // React snapping the "1" right back due to the controlled value. We reconcile
+  // on blur: if the user leaves the input empty or invalid, fall back to
+  // rows.length.
+  const [countInput, setCountInput] = useState('1');
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const prevRowCountRef = useRef(0);
 
@@ -128,6 +134,16 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
       }
     }
     prevRowCountRef.current = rows.length;
+  }, [rows.length]);
+
+  // Keep the local input string in sync with rows.length when the source of
+  // truth changes from outside the input — e.g. modal opens, unions load from
+  // backend, or user removes a row from the list. Skip the update while the
+  // input is focused so we don't clobber what the user is actively typing.
+  useEffect(() => {
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    if (active && (active as HTMLElement).id === 'uniones-count') return;
+    setCountInput(String(rows.length || 1));
   }, [rows.length]);
 
   const handleCountChange = (newCount: number) => {
@@ -353,11 +369,37 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
               inputMode="numeric"
               min={1}
               max={MAX_UNIONS}
-              value={rows.length}
+              value={countInput}
               onFocus={(e) => e.target.select()}
               onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                if (!isNaN(val)) handleCountChange(val);
+                // Accept the raw string into local state so the user can clear
+                // the field momentarily. Only commit to rows when the value
+                // is a valid integer in range; leave rows untouched otherwise.
+                const raw = e.target.value;
+                setCountInput(raw);
+                if (raw === '') return; // user is mid-edit
+                const val = parseInt(raw, 10);
+                if (!isNaN(val) && val >= 1 && val <= MAX_UNIONS) {
+                  handleCountChange(val);
+                }
+              }}
+              onBlur={() => {
+                // Reconcile: if the user left the input empty or out of range,
+                // snap back to the current rows.length so the UI never shows
+                // an inconsistent number vs the rendered union cards.
+                const val = parseInt(countInput, 10);
+                if (isNaN(val) || val < 1) {
+                  setCountInput(String(rows.length || 1));
+                } else if (val > MAX_UNIONS) {
+                  // Clamp to max; the previous onChange wouldn't have
+                  // committed, so we fix both input and rows.
+                  setCountInput(String(MAX_UNIONS));
+                  handleCountChange(MAX_UNIONS);
+                } else {
+                  // Canonicalize (e.g. trim leading zeros) to whatever rows.length
+                  // ended up being after handleCountChange committed.
+                  setCountInput(String(rows.length));
+                }
               }}
               aria-label="Cantidad total de uniones"
               className="h-12 w-16 bg-zeues-navy border-2 border-white text-white font-mono font-black text-lg text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
