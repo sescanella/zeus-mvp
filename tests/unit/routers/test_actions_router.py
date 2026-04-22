@@ -170,3 +170,45 @@ def test_tomar_uses_worker_nombre_completo_when_worker_exists(client):
         assert "W(" not in kwargs["worker_nombre"]  # no legacy placeholder
     finally:
         app.dependency_overrides.clear()
+
+
+def test_completar_uses_worker_nombre_completo_when_worker_exists(client):
+    """
+    D-1 fix (symmetric with tomar): when worker exists, completar-reparacion
+    router passes `worker.nombre_completo` to the service, not the legacy
+    `W({id})` placeholder.
+    """
+    fake_worker = MagicMock()
+    fake_worker.nombre_completo = "MR(93)"
+
+    mock_worker_service = MagicMock()
+    mock_worker_service.find_worker_by_id.return_value = fake_worker
+
+    async def fake_completar(tag_spool, worker_id, worker_nombre):
+        return {
+            "success": True,
+            "tag_spool": tag_spool,
+            "worker_nombre": worker_nombre,
+            "estado_detalle": "PENDIENTE_METROLOGIA",
+            "cycle": 1,
+            "message": "ok",
+        }
+
+    mock_reparacion_service = MagicMock()
+    mock_reparacion_service.completar_reparacion.side_effect = fake_completar
+
+    app.dependency_overrides[get_worker_service] = lambda: mock_worker_service
+    app.dependency_overrides[get_reparacion_service] = lambda: mock_reparacion_service
+    try:
+        response = client.post(
+            "/api/completar-reparacion",
+            json={"worker_id": 93, "tag_spool": "MK-1923-TW-17422-004"},
+        )
+
+        assert response.status_code == 200
+        mock_reparacion_service.completar_reparacion.assert_called_once()
+        _, kwargs = mock_reparacion_service.completar_reparacion.call_args
+        assert kwargs["worker_nombre"] == "MR(93)"
+        assert "W(" not in kwargs["worker_nombre"]  # no legacy placeholder
+    finally:
+        app.dependency_overrides.clear()

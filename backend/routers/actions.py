@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, status
 from backend.core.dependency import get_reparacion_service, get_worker_service
 from backend.services.reparacion_service import ReparacionService
 from backend.services.worker_service import WorkerService
-from backend.models.action import ActionRequest, ReparacionRequest
+from backend.models.action import ReparacionRequest
 from backend.exceptions import WorkerNoEncontradoError
 import logging
 
