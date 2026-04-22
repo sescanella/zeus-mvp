@@ -4,6 +4,7 @@ import { PackageOpen } from 'lucide-react';
 import { SpoolCard } from '@/components/SpoolCard';
 import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
 import { useSpoolList } from '@/lib/SpoolListContext';
+import { ESTADO_LABELS } from '@/lib/constants';
 
 interface SpoolCardListProps {
   spools: SpoolCardData[];
@@ -11,6 +12,8 @@ interface SpoolCardListProps {
   onRemove?: (tag: string) => void;
   onUnionesClick?: (spool: SpoolCardData) => void;
   estadoFilter?: EstadoTrabajo | null;
+  /** v5.1 UX-1a: substring match against tag_spool, case insensitive. Trimmed before comparison. */
+  searchText?: string;
 }
 
 /**
@@ -28,7 +31,7 @@ interface SpoolCardListProps {
  *
  * Plan: 02-01-PLAN.md Task 2
  */
-export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, estadoFilter }: SpoolCardListProps) {
+export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, estadoFilter, searchText }: SpoolCardListProps) {
   const { priorities, setPriority } = useSpoolList();
 
   if (spools.length === 0) {
@@ -49,16 +52,24 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, e
     );
   }
 
-  const filtered = estadoFilter
-    ? spools.filter((s) => s.estado_trabajo === estadoFilter)
-    : spools;
+  const trimmedSearch = (searchText ?? '').trim().toLowerCase();
+  const filtered = spools
+    .filter((s) => !estadoFilter || s.estado_trabajo === estadoFilter)
+    .filter((s) => !trimmedSearch || s.tag_spool.toLowerCase().includes(trimmedSearch));
 
   if (filtered.length === 0) {
+    const rawSearch = searchText?.trim();
+    let message: string;
+    if (trimmedSearch && estadoFilter) {
+      message = `Sin spools "${ESTADO_LABELS[estadoFilter]}" que coincidan con "${rawSearch}"`;
+    } else if (trimmedSearch) {
+      message = `Sin spools que coincidan con "${rawSearch}"`;
+    } else {
+      message = 'Sin spools con ese estado';
+    }
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <p className="text-white/70 font-mono font-black text-base">
-          Sin spools con ese estado
-        </p>
+        <p className="text-white/70 font-mono font-black text-base">{message}</p>
       </div>
     );
   }

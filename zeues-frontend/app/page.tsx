@@ -26,6 +26,7 @@ import { MetrologiaModal } from '@/components/MetrologiaModal';
 import { UnionesModal } from '@/components/UnionesModal';
 import { SpoolCardList } from '@/components/SpoolCardList';
 import { NotificationToast } from '@/components/NotificationToast';
+import { Search, X as XIcon } from 'lucide-react';
 import {
   finalizarSpool,
   cancelarReparacion,
@@ -79,6 +80,7 @@ function HomePage() {
   // Filter state
   const [showFilter, setShowFilter] = useState(false);
   const [estadoFilter, setEstadoFilter] = useState<EstadoTrabajo | null>(null);
+  const [searchText, setSearchText] = useState(''); // v5.1 UX-1a: free-text filter on tag_spool
 
   // Count spools per estado for filter badges
   const estadoCounts = useMemo(() => {
@@ -505,6 +507,35 @@ function HomePage() {
 
       {/* Add Spool button + Filter */}
       <div className="px-4 py-4">
+        {/* Search input (v5.1 UX-1a) */}
+        {spools.length > 0 && (
+          <div className="relative mb-3">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Buscar por TAG (ej: MK-1923)"
+              aria-label="Buscar spool en el listado por TAG"
+              className="w-full h-12 pl-10 pr-10 bg-transparent border-2 border-white/30 text-white font-mono font-black placeholder:text-white/40 focus:outline-none focus:border-zeues-orange focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+            />
+            {searchText && (
+              <button
+                type="button"
+                onClick={() => setSearchText('')}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+              >
+                <XIcon size={18} strokeWidth={3} />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Button row */}
         <div className="flex gap-3">
           <button
@@ -570,6 +601,7 @@ function HomePage() {
           onRemove={handleRemove}
           onUnionesClick={handleUnionesClick}
           estadoFilter={estadoFilter}
+          searchText={searchText}
         />
       </div>
 
