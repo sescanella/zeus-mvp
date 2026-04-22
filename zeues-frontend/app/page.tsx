@@ -528,7 +528,7 @@ function HomePage() {
                 type="button"
                 onClick={() => setSearchText('')}
                 aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-white/70 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
               >
                 <XIcon size={18} strokeWidth={3} />
               </button>

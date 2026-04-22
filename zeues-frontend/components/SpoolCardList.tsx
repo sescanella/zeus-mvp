@@ -4,6 +4,7 @@ import { PackageOpen } from 'lucide-react';
 import { SpoolCard } from '@/components/SpoolCard';
 import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
 import { useSpoolList } from '@/lib/SpoolListContext';
+import { ESTADO_LABELS } from '@/lib/constants';
 
 interface SpoolCardListProps {
   spools: SpoolCardData[];
@@ -57,9 +58,15 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, e
     .filter((s) => !trimmedSearch || s.tag_spool.toLowerCase().includes(trimmedSearch));
 
   if (filtered.length === 0) {
-    const message = trimmedSearch
-      ? `Sin spools que coincidan con "${searchText?.trim()}"`
-      : 'Sin spools con ese estado';
+    const rawSearch = searchText?.trim();
+    let message: string;
+    if (trimmedSearch && estadoFilter) {
+      message = `Sin spools "${ESTADO_LABELS[estadoFilter]}" que coincidan con "${rawSearch}"`;
+    } else if (trimmedSearch) {
+      message = `Sin spools que coincidan con "${rawSearch}"`;
+    } else {
+      message = 'Sin spools con ese estado';
+    }
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
         <p className="text-white/70 font-mono font-black text-base">{message}</p>
