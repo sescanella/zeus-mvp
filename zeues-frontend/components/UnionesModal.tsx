@@ -77,7 +77,6 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   const [defaultDn, setDefaultDn] = useState<number | null>(null);
   const [defaultTipo, setDefaultTipo] = useState<string | null>(null);
   const [flashedRows, setFlashedRows] = useState<Set<number>>(new Set());
-  const [countUnlocked, setCountUnlocked] = useState(false);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const prevRowCountRef = useRef(0);
 
@@ -115,7 +114,6 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
       setDefaultDn(null);
       setDefaultTipo(null);
       setFlashedRows(new Set());
-      setCountUnlocked(false);
       loadUnions();
       setConfirmDelete(null);
     }
@@ -133,7 +131,6 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
   }, [rows.length]);
 
   const handleCountChange = (newCount: number) => {
-    if (!countUnlocked) return;
     if (newCount < 1 || newCount > MAX_UNIONS) return;
     setRows(prev => {
       if (newCount > prev.length) {
@@ -229,6 +226,18 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
     }));
   };
 
+  const handleSelectAllAvailable = () => {
+    setRows(prev => prev.map(r =>
+      isRowSelectable(r, operacion, spoolArmDone)
+        ? { ...r, selected: true }
+        : r
+    ));
+  };
+
+  const handleDeselectAll = () => {
+    setRows(prev => prev.map(r => ({ ...r, selected: false })));
+  };
+
   const isRowComplete = (row: UnionRow): boolean =>
     row.dn_union !== null && row.tipo_union !== null;
 
@@ -236,6 +245,12 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
 
   const selectedRows = useMemo(() => rows.filter(r => r.selected), [rows]);
   const selectedPD = useMemo(() => selectedRows.reduce((sum, r) => sum + (r.dn_union ?? 0), 0), [selectedRows]);
+  const selectableCount = useMemo(
+    () => rows.filter(r => isRowSelectable(r, operacion, spoolArmDone)).length,
+    [rows, operacion, spoolArmDone]
+  );
+  const someSelected = selectedRows.length > 0;
+  const showSelectAllButton = operacion !== null && selectableCount >= 2;
 
   const handleGuardar = async () => {
     setError(null);
@@ -302,68 +317,52 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
       {/* FIXED TOP ZONE */}
       <div className="shrink-0 p-4 pb-2">
         {/* Title row */}
-        <div className="flex items-center justify-between mb-2">
-          <div>
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <div className="min-w-0">
             <h2 className="font-mono font-black text-lg text-white">UNIONES</h2>
-            <p className="font-mono text-sm text-white/70">{spool.tag_spool}</p>
+            <p className="font-mono text-sm text-white/70 truncate">{spool.tag_spool}</p>
           </div>
-          <span className="font-mono text-sm text-white/70">
-            {completedCount} de {rows.length}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {showSelectAllButton && (
+              <button
+                type="button"
+                onClick={someSelected ? handleDeselectAll : handleSelectAllAvailable}
+                aria-label={someSelected ? 'Quitar selección de todas las uniones' : 'Seleccionar todas las uniones disponibles'}
+                aria-pressed={someSelected}
+                className="h-9 px-3 border-2 border-zeues-orange text-zeues-orange font-mono font-black text-xs cursor-pointer hover:bg-zeues-orange/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+              >
+                {someSelected ? 'QUITAR TODAS' : 'SELECCIONAR TODAS'}
+              </button>
+            )}
+            <span className="font-mono text-sm text-white/70">
+              {completedCount} de {rows.length}
+            </span>
+          </div>
         </div>
 
         {/* Quantity + Fill -- single row */}
         <div className="flex items-center gap-2 mt-2">
-          {/* Quantity control */}
-          {!countUnlocked ? (
-            <button
-              onClick={() => setCountUnlocked(true)}
-              aria-label="Desbloquear cambio de cantidad"
-              className="h-12 px-4 bg-white/10 border-2 border-white text-white font-mono font-black cursor-pointer hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset shrink-0 flex items-center gap-2"
-            >
-              <span className="text-xs text-white/70">TOTAL</span>
-              <span className="text-2xl">{rows.length}</span>
-            </button>
-          ) : (
-            <div className="flex items-center shrink-0">
-              <button
-                onClick={() => handleCountChange(rows.length - 1)}
-                disabled={rows.length <= 1}
-                aria-label="Reducir cantidad de uniones"
-                className="h-12 w-12 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
-              >
-                -
-              </button>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={MAX_UNIONS}
-                value={rows.length}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  if (!isNaN(val)) handleCountChange(val);
-                }}
-                aria-label="Cantidad total de uniones"
-                className="h-12 w-12 bg-zeues-navy border-y-2 border-white text-white font-mono font-black text-base text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <button
-                onClick={() => handleCountChange(rows.length + 1)}
-                disabled={rows.length >= MAX_UNIONS}
-                aria-label="Aumentar cantidad de uniones"
-                className="h-12 w-12 border-2 border-white text-white font-mono font-black text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
-              >
-                +
-              </button>
-              <button
-                onClick={() => setCountUnlocked(false)}
-                aria-label="Bloquear cantidad"
-                className="ml-1 h-12 px-3 border-2 border-white/30 text-white/70 font-mono text-xs cursor-pointer hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-              >
-                OK
-              </button>
-            </div>
-          )}
+          {/* Quantity control -- direct numeric input, no +/- buttons */}
+          <div className="flex items-center shrink-0">
+            <label htmlFor="uniones-count" className="h-12 px-3 border-2 border-r-0 border-white text-white/70 font-mono font-black text-xs flex items-center">
+              TOTAL
+            </label>
+            <input
+              id="uniones-count"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_UNIONS}
+              value={rows.length}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) handleCountChange(val);
+              }}
+              aria-label="Cantidad total de uniones"
+              className="h-12 w-16 bg-zeues-navy border-2 border-white text-white font-mono font-black text-lg text-center focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
 
           {/* Separator */}
           <div className="w-px h-8 bg-white/20 shrink-0" />
