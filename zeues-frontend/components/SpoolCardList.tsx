@@ -15,6 +15,8 @@ interface SpoolCardListProps {
   estadoFilter?: EstadoTrabajo | null;
   /** v5.1 UX-1a: substring match against tag_spool, case insensitive. Trimmed before comparison. */
   searchText?: string;
+  /** v5.1 UX-1d: exact match against ocupado_por (format "INICIALES(ID)", e.g. "MR(93)"). */
+  workerFilter?: string | null;
 }
 
 /**
@@ -32,7 +34,7 @@ interface SpoolCardListProps {
  *
  * Plan: 02-01-PLAN.md Task 2
  */
-export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, onNotasClick, estadoFilter, searchText }: SpoolCardListProps) {
+export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, onNotasClick, estadoFilter, searchText, workerFilter }: SpoolCardListProps) {
   const { priorities, setPriority } = useSpoolList();
 
   if (spools.length === 0) {
@@ -56,18 +58,20 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, o
   const trimmedSearch = (searchText ?? '').trim().toLowerCase();
   const filtered = spools
     .filter((s) => !estadoFilter || s.estado_trabajo === estadoFilter)
-    .filter((s) => !trimmedSearch || s.tag_spool.toLowerCase().includes(trimmedSearch));
+    .filter((s) => !trimmedSearch || s.tag_spool.toLowerCase().includes(trimmedSearch))
+    .filter((s) => !workerFilter || s.ocupado_por === workerFilter);
 
   if (filtered.length === 0) {
     const rawSearch = searchText?.trim();
-    let message: string;
-    if (trimmedSearch && estadoFilter) {
-      message = `Sin spools "${ESTADO_LABELS[estadoFilter]}" que coincidan con "${rawSearch}"`;
-    } else if (trimmedSearch) {
-      message = `Sin spools que coincidan con "${rawSearch}"`;
-    } else {
-      message = 'Sin spools con ese estado';
-    }
+    // Compose the message by describing each active filter. Listing the filters
+    // avoids the user thinking only the text search excluded everything when in
+    // reality estado and/or worker filters also narrowed the list.
+    const parts: string[] = [];
+    if (estadoFilter) parts.push(`"${ESTADO_LABELS[estadoFilter]}"`);
+    if (workerFilter) parts.push(`de ${workerFilter}`);
+    if (trimmedSearch) parts.push(`que coincidan con "${rawSearch}"`);
+    const message =
+      parts.length > 0 ? `Sin spools ${parts.join(' ')}` : 'Sin spools';
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
         <p className="text-white/70 font-mono font-black text-base">{message}</p>

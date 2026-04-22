@@ -27,7 +27,7 @@ import { UnionesModal } from '@/components/UnionesModal';
 import { NotasModal } from '@/components/NotasModal';
 import { SpoolCardList } from '@/components/SpoolCardList';
 import { NotificationToast } from '@/components/NotificationToast';
-import { Search, X as XIcon } from 'lucide-react';
+import { Search, X as XIcon, ChevronDown } from 'lucide-react';
 import {
   finalizarSpool,
   cancelarReparacion,
@@ -82,6 +82,7 @@ function HomePage() {
   const [showFilter, setShowFilter] = useState(false);
   const [estadoFilter, setEstadoFilter] = useState<EstadoTrabajo | null>(null);
   const [searchText, setSearchText] = useState(''); // v5.1 UX-1a: free-text filter on tag_spool
+  const [workerFilter, setWorkerFilter] = useState<string | null>(null); // v5.1 UX-1d: filter by ocupado_por (exact match "INICIALES(ID)")
 
   // Count spools per estado for filter badges
   const estadoCounts = useMemo(() => {
@@ -92,6 +93,28 @@ function HomePage() {
     }
     return counts;
   }, [spools]);
+
+  // v5.1 UX-1d: derive list of workers currently occupying at least one spool,
+  // ordered alphabetically. The dropdown only shows workers who have active
+  // occupation — selecting the same person who has multiple spools shows all.
+  const activeWorkers = useMemo(() => {
+    const workerCounts = new Map<string, number>();
+    for (const s of spools) {
+      if (s.ocupado_por) {
+        workerCounts.set(s.ocupado_por, (workerCounts.get(s.ocupado_por) ?? 0) + 1);
+      }
+    }
+    return Array.from(workerCounts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [spools]);
+
+  // Auto-clear worker filter if the selected worker no longer has any occupied spools
+  useEffect(() => {
+    if (workerFilter && !activeWorkers.some(w => w.name === workerFilter)) {
+      setWorkerFilter(null);
+    }
+  }, [workerFilter, activeWorkers]);
 
   // Single spool selection for processing
   const [selectedSpool, setSelectedSpool] = useState<SpoolCardData | null>(null);
@@ -572,46 +595,102 @@ function HomePage() {
             onClick={() => setShowFilter(!showFilter)}
             aria-expanded={showFilter}
             aria-controls="estado-filter-panel"
-            aria-label={showFilter ? 'Ocultar filtros de estado' : 'Mostrar filtros de estado'}
+            aria-label={showFilter ? 'Ocultar filtros' : 'Mostrar filtros'}
             className={`h-16 px-4 font-mono font-black text-sm tracking-widest border-4 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
-              estadoFilter
+              estadoFilter || workerFilter
                 ? 'bg-white/10 border-white text-white'
                 : 'border-white/30 text-white/70 hover:border-white/50'
             }`}
           >
-            {estadoFilter
-              ? <><span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded bg-white/20 text-xs font-black">{estadoCounts[estadoFilter] ?? 0}</span>{ESTADO_LABELS[estadoFilter]}</>
-              : 'FILTRAR'}
+            {(() => {
+              const activeCount = (estadoFilter ? 1 : 0) + (workerFilter ? 1 : 0);
+              if (activeCount === 0) return 'FILTRAR';
+              // Prefer the most specific label when only one filter is active.
+              if (activeCount === 1) {
+                const label = estadoFilter ? ESTADO_LABELS[estadoFilter] : workerFilter;
+                return (
+                  <>
+                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded bg-white/20 text-xs font-black">1</span>
+                    {label}
+                  </>
+                );
+              }
+              return (
+                <>
+                  <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded bg-white/20 text-xs font-black">{activeCount}</span>
+                  FILTROS
+                </>
+              );
+            })()}
           </button>
         </div>
 
-        {/* Filter chip panel — stays open until toggled */}
+        {/* Filter panel — stays open until toggled. Contains estado chips (v5.0) and worker dropdown (v5.1 UX-1d). */}
         {showFilter && (
           <div
             id="estado-filter-panel"
             role="region"
-            aria-label="Filtrar por estado"
-            className="flex flex-wrap gap-2 mt-3"
+            aria-label="Filtros del listado"
+            className="mt-3 space-y-3"
           >
-            {ALL_ESTADOS.map((estado) => (
-              <button
-                key={estado}
-                onClick={() => setEstadoFilter(estadoFilter === estado ? null : estado)}
-                aria-pressed={estadoFilter === estado}
-                className={`inline-flex items-center justify-center min-h-[44px] px-3 py-2 font-mono font-black text-sm border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
-                  estadoFilter === estado
-                    ? ESTADO_CHIP_COLORS[estado]
-                    : 'border-white/20 text-white/70 hover:border-white/40'
-                }`}
-              >
-                {estadoCounts[estado] != null && (
-                  <span className={`inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded text-xs font-black ${
-                    estadoFilter === estado ? 'bg-white/20' : 'bg-white/10'
-                  }`}>{estadoCounts[estado]}</span>
-                )}
-                {ESTADO_LABELS[estado]}
-              </button>
-            ))}
+            <div className="flex flex-wrap gap-2">
+              {ALL_ESTADOS.map((estado) => (
+                <button
+                  key={estado}
+                  onClick={() => setEstadoFilter(estadoFilter === estado ? null : estado)}
+                  aria-pressed={estadoFilter === estado}
+                  className={`inline-flex items-center justify-center min-h-[44px] px-3 py-2 font-mono font-black text-sm border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
+                    estadoFilter === estado
+                      ? ESTADO_CHIP_COLORS[estado]
+                      : 'border-white/20 text-white/70 hover:border-white/40'
+                  }`}
+                >
+                  {estadoCounts[estado] != null && (
+                    <span className={`inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1 mr-1.5 rounded text-xs font-black ${
+                      estadoFilter === estado ? 'bg-white/20' : 'bg-white/10'
+                    }`}>{estadoCounts[estado]}</span>
+                  )}
+                  {ESTADO_LABELS[estado]}
+                </button>
+              ))}
+            </div>
+
+            {/* Worker filter dropdown (v5.1 UX-1d) — only shown when at least one spool is occupied. */}
+            {activeWorkers.length > 0 && (
+              <div>
+                <label htmlFor="worker-filter" className="sr-only">
+                  Filtrar por trabajador
+                </label>
+                <div className="relative">
+                  <select
+                    id="worker-filter"
+                    value={workerFilter ?? ''}
+                    onChange={(e) => setWorkerFilter(e.target.value || null)}
+                    aria-label="Filtrar spools por trabajador ocupante"
+                    className={`w-full h-16 pl-4 pr-12 appearance-none font-mono font-black text-sm tracking-widest border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset ${
+                      workerFilter
+                        ? 'bg-white/10 border-white text-white'
+                        : 'bg-transparent border-white/30 text-white/70'
+                    }`}
+                  >
+                    <option value="" className="bg-zeues-navy text-white">
+                      TODOS LOS TRABAJADORES
+                    </option>
+                    {activeWorkers.map((w) => (
+                      <option key={w.name} value={w.name} className="bg-zeues-navy text-white">
+                        {w.name} · {w.count} {w.count === 1 ? 'spool' : 'spools'}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={20}
+                    strokeWidth={3}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/60"
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -626,6 +705,7 @@ function HomePage() {
           onNotasClick={handleNotasClick}
           estadoFilter={estadoFilter}
           searchText={searchText}
+          workerFilter={workerFilter}
         />
       </div>
 
