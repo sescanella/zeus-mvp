@@ -189,10 +189,9 @@ export function AddSpoolModal({
                   ref={nvInputRef}
                   id="add-filter-nv"
                   type="text"
-                  inputMode="numeric"
                   value={searchNV}
                   onChange={(e) => setSearchNV(e.target.value)}
-                  placeholder="Ej: 123"
+                  placeholder="Ej: NV0642"
                   aria-label="Buscar por número de nota de venta"
                   className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/40 focus:outline-none focus:border-zeues-orange"
                 />
@@ -207,10 +206,9 @@ export function AddSpoolModal({
                 <input
                   id="add-filter-tag"
                   type="text"
-                  inputMode="numeric"
                   value={searchTag}
                   onChange={(e) => setSearchTag(e.target.value)}
-                  placeholder="Ej: 1234"
+                  placeholder="Ej: MK-1923"
                   aria-label="Buscar por TAG de spool"
                   className="w-full h-12 pl-10 pr-4 bg-transparent border-2 border-white text-white font-mono font-black placeholder:text-white/40 focus:outline-none focus:border-zeues-orange"
                 />
