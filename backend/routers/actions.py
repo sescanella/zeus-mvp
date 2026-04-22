@@ -7,9 +7,11 @@ v4.0 uses /api/v4/occupation/iniciar and /api/v4/occupation/finalizar instead.
 """
 
 from fastapi import APIRouter, Depends, status
-from backend.core.dependency import get_reparacion_service
+from backend.core.dependency import get_reparacion_service, get_worker_service
 from backend.services.reparacion_service import ReparacionService
+from backend.services.worker_service import WorkerService
 from backend.models.action import ActionRequest, ReparacionRequest
+from backend.exceptions import WorkerNoEncontradoError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,8 @@ router = APIRouter()
 @router.post("/tomar-reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def tomar_reparacion(
     request: ReparacionRequest,
-    reparacion_service: ReparacionService = Depends(get_reparacion_service)
+    reparacion_service: ReparacionService = Depends(get_reparacion_service),
+    worker_service: WorkerService = Depends(get_worker_service),
 ):
     """
     Worker takes RECHAZADO spool for repair (v3.0 Phase 6).
@@ -73,15 +76,17 @@ async def tomar_reparacion(
     """
     logger.info(f"POST /api/tomar-reparacion - worker_id={request.worker_id}, tag_spool={request.tag_spool}")
 
-    # Worker nombre_completo needs to be fetched from worker_id
-    # For now, use format "W{worker_id}" as placeholder - service will fetch actual name
+    worker = worker_service.find_worker_by_id(request.worker_id)
+    if not worker:
+        raise WorkerNoEncontradoError(str(request.worker_id))
+
     result = await reparacion_service.tomar_reparacion(
         tag_spool=request.tag_spool,
         worker_id=request.worker_id,
-        worker_nombre=f"W({request.worker_id})"  # Placeholder - service fetches actual name
+        worker_nombre=worker.nombre_completo,
     )
 
-    logger.info(f"Reparacion tomada: {request.tag_spool} by worker_id {request.worker_id}")
+    logger.info(f"Reparacion tomada: {request.tag_spool} by {worker.nombre_completo}")
     return result
 
 
@@ -138,7 +143,8 @@ async def pausar_reparacion(
 @router.post("/completar-reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def completar_reparacion(
     request: ReparacionRequest,
-    reparacion_service: ReparacionService = Depends(get_reparacion_service)
+    reparacion_service: ReparacionService = Depends(get_reparacion_service),
+    worker_service: WorkerService = Depends(get_worker_service),
 ):
     """
     Worker completes repair and returns spool to metrologia queue (v3.0 Phase 6).
@@ -177,10 +183,14 @@ async def completar_reparacion(
     """
     logger.info(f"POST /api/completar-reparacion - worker_id={request.worker_id}, tag_spool={request.tag_spool}")
 
+    worker = worker_service.find_worker_by_id(request.worker_id)
+    if not worker:
+        raise WorkerNoEncontradoError(str(request.worker_id))
+
     result = await reparacion_service.completar_reparacion(
         tag_spool=request.tag_spool,
         worker_id=request.worker_id,
-        worker_nombre=f"W({request.worker_id})"  # Placeholder
+        worker_nombre=worker.nombre_completo,
     )
 
     logger.info(f"Reparacion completada: {request.tag_spool} -> PENDIENTE_METROLOGIA")
