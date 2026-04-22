@@ -80,6 +80,27 @@ def format_date_for_sheets(date_obj: date) -> str:
     return date_obj.strftime("%d-%m-%Y")
 
 
+def format_date_yyyymmdd(date_obj: date) -> str:
+    """
+    Formatea una fecha en formato compacto YYYYMMDD.
+
+    Usado por el módulo de Notas por spool (F-1) para anteponer fecha
+    a cada entrada, siguiendo la convención ya existente en la hoja
+    (ej. "20260415: lanzada a producción").
+
+    Args:
+        date_obj: Objeto date de Python
+
+    Returns:
+        String en formato YYYYMMDD (ej: "20260421")
+
+    Examples:
+        >>> format_date_yyyymmdd(date(2026, 4, 21))
+        '20260421'
+    """
+    return date_obj.strftime("%Y%m%d")
+
+
 def format_datetime_for_sheets(dt: datetime) -> str:
     """
     Formatea un datetime en formato DD-MM-YYYY HH:MM:SS para Google Sheets.

@@ -973,3 +973,58 @@ export async function getRegistro(workerId: number, fecha?: string): Promise<Reg
     throw error;
   }
 }
+
+
+// ============================================================================
+// v5.1 F-1: Notas por spool
+// ============================================================================
+
+export interface NotaReadResponse {
+  tag_spool: string;
+  nota: string; // full cell content, empty string when never written
+}
+
+export interface NotaAppendResponse {
+  success: boolean;
+  tag_spool: string;
+  nota: string; // full content after the append (includes new entry with YYYYMMDD prefix)
+}
+
+/**
+ * GET /api/spool/{tag}/notas
+ * Read the current Notas cell content for a spool.
+ */
+export async function getNotas(tagSpool: string): Promise<NotaReadResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/spool/${encodeURIComponent(tagSpool)}/notas`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await handleResponse<NotaReadResponse>(res);
+  } catch (error) {
+    console.error('getNotas error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/spool/{tag}/notas
+ * Append a new dated entry to the Notas cell.
+ * Backend prepends the YYYYMMDD prefix automatically.
+ */
+export async function appendNota(
+  tagSpool: string,
+  payload: { worker_id: number; texto: string }
+): Promise<NotaAppendResponse> {
+  try {
+    const res = await fetch(`${API_URL}/api/spool/${encodeURIComponent(tagSpool)}/notas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<NotaAppendResponse>(res);
+  } catch (error) {
+    console.error('appendNota error:', error);
+    throw error;
+  }
+}

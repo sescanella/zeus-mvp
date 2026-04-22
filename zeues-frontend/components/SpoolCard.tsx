@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, StickyNote } from 'lucide-react';
 import { hapticTap } from '@/lib/haptic';
 import type { SpoolCardData } from '@/lib/types';
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/constants';
@@ -15,6 +15,7 @@ export interface SpoolCardProps {
   onRemove?: (tag: string) => void;
   onPriorityChange?: (tag: string, priority: number | null) => void;
   onUnionesClick?: (spool: SpoolCardData) => void;
+  onNotasClick?: (spool: SpoolCardData) => void;
 }
 
 const OPERACION_LABELS: Record<string, string> = {
@@ -148,7 +149,7 @@ function formatElapsed(totalSeconds: number): string {
  *
  * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityChange, onUnionesClick }: SpoolCardProps) {
+export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityChange, onUnionesClick, onNotasClick }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -357,6 +358,26 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
           }`}>
             {spool.total_uniones ?? 0}
           </span>
+        </button>
+      )}
+
+      {/* Notas button — far right (v5.1 F-1) */}
+      {onNotasClick && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onNotasClick(spool); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onNotasClick(spool);
+            }
+          }}
+          aria-label={`Ver y agregar notas al spool ${spool.tag_spool}`}
+          className="flex flex-col items-center justify-center w-16 shrink-0 min-h-[5rem] border-l-4 border-white/20 cursor-pointer transition-colors duration-200 hover:bg-white/5 active:bg-white/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
+        >
+          <StickyNote size={20} className="text-white/70" aria-hidden="true" />
+          <span className="font-mono text-xs font-black tracking-widest text-white/70 mt-1">NOTAS</span>
         </button>
       )}
     </div>

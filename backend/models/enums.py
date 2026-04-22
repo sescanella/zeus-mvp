@@ -91,6 +91,9 @@ class EventoTipo(str, Enum):
     # so audit queries can distinguish manual admin actions from worker actions.
     SYSTEM_REMEDIATION = "SYSTEM_REMEDIATION"
 
+    # v5.1 Events (F-1 Notas por spool)
+    NOTAS_ACTUALIZADA = "NOTAS_ACTUALIZADA"  # Worker or operator appended a note to a spool
+
 
 class EstadoOcupacion(str, Enum):
     """

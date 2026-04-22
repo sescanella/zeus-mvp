@@ -24,6 +24,7 @@ import { ActionModal } from '@/components/ActionModal';
 import { WorkerModal } from '@/components/WorkerModal';
 import { MetrologiaModal } from '@/components/MetrologiaModal';
 import { UnionesModal } from '@/components/UnionesModal';
+import { NotasModal } from '@/components/NotasModal';
 import { SpoolCardList } from '@/components/SpoolCardList';
 import { NotificationToast } from '@/components/NotificationToast';
 import { Search, X as XIcon } from 'lucide-react';
@@ -99,6 +100,8 @@ function HomePage() {
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [unionesSpool, setUnionesSpool] = useState<SpoolCardData | null>(null);
+  const [notasSpool, setNotasSpool] = useState<SpoolCardData | null>(null);
+  const [notasWorkerId, setNotasWorkerId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   // Stable ref for refreshAll — safe for use in setInterval without stale closure
@@ -412,6 +415,26 @@ function HomePage() {
     modalStack.push('uniones');
   };
 
+  const handleNotasClick = (spool: SpoolCardData) => {
+    // Derive worker id from current occupancy if any, for author attribution in the
+    // audit trail. If the spool is free, we still allow reading but block saving by
+    // passing null (NotasModal hides the composer in that case).
+    let workerId: number | null = null;
+    if (spool.ocupado_por) {
+      const m = spool.ocupado_por.match(/\((\d+)\)/);
+      if (m) workerId = parseInt(m[1], 10);
+    }
+    setNotasWorkerId(workerId);
+    setNotasSpool(spool);
+    modalStack.push('notas');
+  };
+
+  const handleNotasClose = () => {
+    modalStack.pop();
+    setNotasSpool(null);
+    setNotasWorkerId(null);
+  };
+
   const handleUnionesComplete = async (selectedIds: string[]) => {
     const action = pendingAction;
 
@@ -600,6 +623,7 @@ function HomePage() {
           onCardClick={handleCardClick}
           onRemove={handleRemove}
           onUnionesClick={handleUnionesClick}
+          onNotasClick={handleNotasClick}
           estadoFilter={estadoFilter}
           searchText={searchText}
         />
@@ -667,6 +691,16 @@ function HomePage() {
           onComplete={handleUnionesComplete}
           onClose={() => { modalStack.pop(); setPendingAction(null); setUnionesSpool(null); }}
           isTopOfStack={modalStack.isOpen('uniones')}
+        />
+      )}
+
+      {notasSpool && (
+        <NotasModal
+          isOpen={modalStack.isOpen('notas')}
+          spool={notasSpool}
+          workerId={notasWorkerId}
+          onClose={handleNotasClose}
+          isTopOfStack={modalStack.isOpen('notas')}
         />
       )}
 
