@@ -8,7 +8,7 @@ Estrategia:
 - Singletons: SheetsRepository, SheetsService, ValidationService
   - Razon: Stateless o necesitan compartir estado (cache)
   - Lazy initialization: Se crean solo al primer uso
-- Nuevas instancias: WorkerService, SpoolService, OccupationService
+- Nuevas instancias: WorkerService, SpoolServiceV2, OccupationService
   - Razon: Pueden tener estado en el futuro
   - Reciben dependencias inyectadas automaticamente por FastAPI
 
@@ -40,7 +40,6 @@ from backend.services.sheets_service import SheetsService
 from backend.services.conflict_service import ConflictService
 from backend.core.column_map_cache import ColumnMapCache
 from backend.services.validation_service import ValidationService
-from backend.services.spool_service import SpoolService
 from backend.services.spool_service_v2 import SpoolServiceV2
 from backend.services.worker_service import WorkerService
 # ActionService removed - v2.1 endpoints deprecated in favor of v4.0 INICIAR/FINALIZAR
@@ -230,34 +229,6 @@ def get_worker_service(
         worker_service: WorkerService = Depends(get_worker_service)
     """
     return WorkerService(sheets_repository=sheets_repo)
-
-
-def get_spool_service(
-    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    validation_service: ValidationService = Depends(get_validation_service)
-) -> SpoolService:
-    """
-    Factory para SpoolService (nueva instancia por request).
-
-    Retorna una nueva instancia de SpoolService con dependencias inyectadas.
-    SpoolService requiere:
-    - SheetsRepository: Para leer hoja "Operaciones"
-    - ValidationService: Para validar elegibilidad de spools
-
-    Args:
-        sheets_repo: Repositorio de Google Sheets (inyectado automáticamente).
-        validation_service: Servicio de validación (inyectado automáticamente).
-
-    Returns:
-        Nueva instancia de SpoolService con dependencias configuradas.
-
-    Usage:
-        spool_service: SpoolService = Depends(get_spool_service)
-    """
-    return SpoolService(
-        sheets_repository=sheets_repo,
-        validation_service=validation_service
-    )
 
 
 def get_spool_service_v2(
