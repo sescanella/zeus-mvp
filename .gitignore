@@ -113,6 +113,9 @@ zeues-frontend/test-results/
 # Claude Code
 .claude/
 
+# GSD workflow (abandoned 2026-04-22, archive in docs/archive/)
+.planning/
+
 # Vercel
 .vercel
 
