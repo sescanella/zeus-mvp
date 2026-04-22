@@ -57,6 +57,8 @@ from backend.routers import spool_status_router
 # Pieza 2: Router REGISTRO implementado (worker daily production log)
 from backend.routers import registro_router
 
+from backend.routers import notas as notas_router
+
 # ============================================================================
 # INICIALIZACIÓN FASTAPI
 # ============================================================================
@@ -400,6 +402,9 @@ app.include_router(spool_status_router.router, prefix="/api", tags=["spool-statu
 
 # Pieza 2: Router REGISTRO registrado (worker daily production log)
 app.include_router(registro_router.router, prefix="/api", tags=["Registro"])
+
+# v5.1 F-1: Router NOTAS registrado (append-only spool notes)
+app.include_router(notas_router.router, prefix="/api", tags=["Notas"])
 
 
 # ============================================================================

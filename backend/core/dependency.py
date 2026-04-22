@@ -51,6 +51,7 @@ from backend.services.history_service import HistoryService
 from backend.services.metrologia_service import MetrologiaService
 from backend.services.reparacion_service import ReparacionService
 from backend.services.cycle_counter_service import CycleCounterService
+from backend.services.notas_service import NotasService
 from backend.config import config
 
 
@@ -546,6 +547,30 @@ def get_reparacion_service(
 # ============================================================================
 # UTILITY FUNCTIONS - Para testing y debugging
 # ============================================================================
+
+
+def get_notas_service(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+    metadata_repo: MetadataRepository = Depends(get_metadata_repository),
+    worker_service: WorkerService = Depends(get_worker_service),
+) -> NotasService:
+    """
+    Factory para NotasService (v5.1 F-1).
+
+    Retorna una nueva instancia de NotasService con dependencias inyectadas.
+    NotasService requiere:
+    - SheetsRepository: para leer/escribir la columna Notas en Operaciones
+    - MetadataRepository: para registrar evento NOTAS_ACTUALIZADA (audit ISO 9001)
+    - WorkerService: para validar worker_id antes de estampar autoría
+
+    Usage:
+        notas_service: NotasService = Depends(get_notas_service)
+    """
+    return NotasService(
+        sheets_repository=sheets_repo,
+        metadata_repository=metadata_repo,
+        worker_service=worker_service,
+    )
 
 
 def reset_singletons() -> None:

@@ -54,6 +54,10 @@ OPERACIONES_V4_COLUMNS = {
         "Uniones_SOLD_Completadas",
         "Pulgadas_ARM",
         "Pulgadas_SOLD"
+    ],
+    # v5.1 additions (F-1)
+    "v5.1_new": [
+        "Notas"  # Free-text notes column, append-only with YYYYMMDD: prefix
     ]
 }
 
@@ -214,10 +218,11 @@ def validate_v4_schema(
     # 1. Validate Operaciones sheet
     logger.info("Validating Operaciones sheet...")
     try:
-        # Combine v3.0 critical and v4.0 new columns
+        # Combine v3.0 critical, v4.0 new, and v5.1 new columns
         operaciones_required = (
             OPERACIONES_V4_COLUMNS["v3.0_critical"] +
-            OPERACIONES_V4_COLUMNS["v4.0_new"]
+            OPERACIONES_V4_COLUMNS["v4.0_new"] +
+            OPERACIONES_V4_COLUMNS["v5.1_new"]
         )
 
         ok, missing = validate_sheet_columns(
@@ -241,7 +246,11 @@ def validate_v4_schema(
         logger.error(f"Operaciones validation failed: {e}")
         results["Operaciones"] = {
             "status": "FAIL",
-            "missing": OPERACIONES_V4_COLUMNS["v3.0_critical"] + OPERACIONES_V4_COLUMNS["v4.0_new"],
+            "missing": (
+                OPERACIONES_V4_COLUMNS["v3.0_critical"]
+                + OPERACIONES_V4_COLUMNS["v4.0_new"]
+                + OPERACIONES_V4_COLUMNS["v5.1_new"]
+            ),
             "validated_count": 0,
             "error": str(e)
         }

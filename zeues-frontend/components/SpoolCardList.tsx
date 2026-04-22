@@ -11,6 +11,7 @@ interface SpoolCardListProps {
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
   onUnionesClick?: (spool: SpoolCardData) => void;
+  onNotasClick?: (spool: SpoolCardData) => void;
   estadoFilter?: EstadoTrabajo | null;
   /** v5.1 UX-1a: substring match against tag_spool, case insensitive. Trimmed before comparison. */
   searchText?: string;
@@ -31,7 +32,7 @@ interface SpoolCardListProps {
  *
  * Plan: 02-01-PLAN.md Task 2
  */
-export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, estadoFilter, searchText }: SpoolCardListProps) {
+export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, onNotasClick, estadoFilter, searchText }: SpoolCardListProps) {
   const { priorities, setPriority } = useSpoolList();
 
   if (spools.length === 0) {
@@ -94,6 +95,7 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, e
           onCardClick={onCardClick}
           onRemove={onRemove}
           onUnionesClick={onUnionesClick}
+          onNotasClick={onNotasClick}
           onPriorityChange={setPriority}
         />
       ))}
