@@ -28,10 +28,6 @@ def mocks(monkeypatch):
     sheets_repo.find_row_by_column_value.return_value = 42
     sheets_repo._index_to_column_letter.return_value = "G"
 
-    # Default spool exists.
-    fake_spool = MagicMock()
-    sheets_repo.get_spool_by_tag.return_value = fake_spool
-
     # Default worker exists.
     fake_worker = MagicMock()
     fake_worker.nombre_completo = "MR(93)"
@@ -77,7 +73,8 @@ def test_get_nota_returns_existing_content(service, mocks):
 
 
 def test_get_nota_raises_when_spool_missing(service, mocks):
-    mocks["sheets_repo"].get_spool_by_tag.return_value = None
+    # _find_spool_row raises SpoolNoEncontradoError when the row lookup returns None.
+    mocks["sheets_repo"].find_row_by_column_value.return_value = None
     with pytest.raises(SpoolNoEncontradoError):
         service.get_nota("DOES-NOT-EXIST")
 
@@ -148,7 +145,8 @@ def test_append_rejects_unknown_worker(service, mocks):
 
 
 def test_append_rejects_unknown_spool(service, mocks):
-    mocks["sheets_repo"].get_spool_by_tag.return_value = None
+    # _find_spool_row raises SpoolNoEncontradoError when the row lookup returns None.
+    mocks["sheets_repo"].find_row_by_column_value.return_value = None
     with pytest.raises(SpoolNoEncontradoError):
         service.append_nota(tag_spool="DOES-NOT-EXIST", worker_id=93, texto="nota")
 

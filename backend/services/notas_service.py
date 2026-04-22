@@ -11,6 +11,7 @@ Every append is also logged as NOTAS_ACTUALIZADA in the Metadata sheet
 for ISO 9001 audit trail.
 """
 
+import json
 import logging
 from typing import Optional
 
@@ -52,10 +53,8 @@ class NotasService:
         Raises:
             SpoolNoEncontradoError: si el spool no existe
         """
-        spool = self.sheets_repository.get_spool_by_tag(tag_spool)
-        if not spool:
-            raise SpoolNoEncontradoError(tag_spool)
-
+        # _find_spool_row raises SpoolNoEncontradoError if the tag is not found,
+        # so we don't need a separate get_spool_by_tag existence check.
         row_num = self._find_spool_row(tag_spool)
         current = self.sheets_repository.get_cell_value(
             sheet_name=config.HOJA_OPERACIONES_NOMBRE,
@@ -98,10 +97,8 @@ class NotasService:
         if not worker:
             raise WorkerNoEncontradoError(str(worker_id))
 
-        spool = self.sheets_repository.get_spool_by_tag(tag_spool)
-        if not spool:
-            raise SpoolNoEncontradoError(tag_spool)
-
+        # _find_spool_row raises SpoolNoEncontradoError if the tag is not found,
+        # so we don't need a separate get_spool_by_tag existence check.
         row_num = self._find_spool_row(tag_spool)
 
         # Read current content and append new entry
@@ -125,8 +122,6 @@ class NotasService:
 
         # Audit trail — ISO 9001 append-only event
         try:
-            import json
-
             self.metadata_repository.log_event(
                 evento_tipo="NOTAS_ACTUALIZADA",
                 tag_spool=tag_spool,
