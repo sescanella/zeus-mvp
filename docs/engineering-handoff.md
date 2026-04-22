@@ -373,9 +373,9 @@ Before marking Uniones sheet as complete, verify:
 - Repository: `/Users/sescanella/Documents/Obsidian Vault/Proyectos/KM/ZEUES-by-KM`
 
 **Documentation:**
-- v4.0 Requirements: `.planning/PROJECT.md`
-- Schema Migration History: `.planning/phases/07-data-model-foundation/`
-- Validation Scripts: `backend/scripts/`
+- Project overview: `CLAUDE.md` (repo root)
+- v4.0 milestone audit (historical): `docs/archive/milestones/v4.0-MILESTONE-AUDIT.md`
+- Validation Scripts: `backend/scripts/validate_schema_startup.py`, `validate_uniones_sheet.py`
 
 ### Common Questions
 

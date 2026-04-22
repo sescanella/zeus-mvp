@@ -849,9 +849,8 @@ After completing all tests:
 ## 📚 Reference
 
 **Key Files:**
-- Requirements: `.planning/milestones/v4.0-REQUIREMENTS.md`
-- Roadmap: `.planning/milestones/v4.0-ROADMAP.md`
-- Audit: `.planning/milestones/v4.0-MILESTONE-AUDIT.md`
+- v4.0 Milestone Audit: `docs/archive/milestones/v4.0-MILESTONE-AUDIT.md`
+- (v4.0 requirements / roadmap were retired with the `.planning/` cleanup in Apr 2026; the audit is the surviving reference.)
 
 **API Docs:** https://zeues-backend-mvp-production.up.railway.app/docs
 
