@@ -1,6 +1,6 @@
 # ZEUES - Manufacturing Traceability System
 
-[![v4.0](https://img.shields.io/badge/version-4.0--single--user-orange)](https://github.com)
+[![v5.x](https://img.shields.io/badge/version-5.x--single--page-orange)](https://github.com)
 [![Production](https://img.shields.io/badge/status-production-green)](https://zeues-frontend.vercel.app)
 [![Backend](https://img.shields.io/badge/backend-railway-blue)](https://zeues-backend-mvp-production.up.railway.app)
 [![Frontend](https://img.shields.io/badge/frontend-vercel-black)](https://zeues-frontend.vercel.app)
@@ -104,43 +104,44 @@ backend/
   core/                 # App configuration
 ```
 
-### Frontend (Next.js App Router)
+### Frontend (Next.js App Router, single-page)
+
+v5.0 collapsed the P1–P6 navigation flow into a single page driven by modals.
 
 ```
 zeues-frontend/
-  app/                        # 7+ page flow
-    page.tsx                  # P1: Operation selection (ARM/SOLD/MET/REP)
-    operacion/                # P2: Worker identification (filtered by role)
-    tipo-interaccion/         # P3: Action type (INICIAR/FINALIZAR)
-    seleccionar-spool/        # P4: Spool selection (multi-select)
-    seleccionar-uniones/      # P4b: Union selection
-    confirmar/                # P5: Confirmation (writes happen here)
-    exito/                    # P6: Success + auto-redirect
-    resultado-metrologia/     # Metrologia results
-    dashboard/                # Dashboard view
-  components/                 # Reusable UI components
-    SpoolTable.tsx            #   3-column spool table (SEL, NV, TAG)
-    SpoolFilterPanel.tsx      #   Collapsible filter panel
-    SpoolSelectionFooter.tsx  #   Selection count + continue button
-    BatchLimitModal.tsx       #   Batch size limit warning
-    UnionTable.tsx            #   Union selection table
-    BlueprintPageWrapper.tsx  #   Page layout wrapper
-    Modal.tsx / ErrorMessage.tsx / Loading.tsx / FixedFooter.tsx
+  app/
+    page.tsx                  # Main single-page app (worker + spool + actions)
+    dashboard/                # Supervisor dashboard view
+    mi-registro/              # Worker self-registration flow
+    layout.tsx
+    globals.css
+  components/                 # Reusable UI (modal-based flow)
+    ActionModal.tsx           #   Action chooser (INICIAR/FINALIZAR/…)
+    OperationModal.tsx        #   Operation picker (ARM/SOLD/MET/REP)
+    WorkerModal.tsx           #   Worker identification
+    WorkerPickerModal.tsx
+    MetrologiaModal.tsx       #   Inspection workflow
+    UnionesModal.tsx          #   Union selection
+    NotasModal.tsx            #   Notes per spool
+    AddSpoolModal.tsx
+    SpoolTable.tsx / SpoolCard.tsx / SpoolCardList.tsx
+    SpoolFilterPanel.tsx
+    BlueprintPageWrapper.tsx
+    Modal.tsx / ErrorMessage.tsx / Loading.tsx / NotificationToast.tsx
   lib/
     api.ts                    # Native fetch (no axios)
     types.ts                  # TypeScript interfaces
-    context.tsx               # React Context (global state)
-    error-classifier.ts       # Error categorization
-    operation-config.ts       # Operation definitions
-    spool-selection-utils.ts  # Selection helpers
-    hooks/                    # Custom React hooks
+    SpoolListContext.tsx      # React Context (spool list state)
+    spool-state-machine.ts    # Frontend state machine
+    error-classifier.ts, haptic.ts, local-storage.ts, operation-config.ts, constants.ts
 ```
 
 ### Google Sheets Data Model
 
 | Sheet | Columns | Purpose |
 |-------|---------|---------|
-| Operaciones | 72 | Spool master data + occupation + v4.0 counters |
+| Operaciones | 71 | Spool master data + occupation + v4.0 counters |
 | Uniones | 17 | Individual union records (ARM/SOLD/NDT) |
 | Trabajadores | 4 | Worker registry (Id, Nombre, Apellido, Activo) |
 | Roles | 3 | Multi-role support (Id, Rol, Activo) |
@@ -148,21 +149,17 @@ zeues-frontend/
 
 ---
 
-## User Flow
+## User Flow (v5.x single-page)
 
-```
-P1: Worker Identification
-  |  (select name from list)
-P2: Operation Selection (ARM / SOLD / MET / REP)
-  |
-P3: Action Type (INICIAR / FINALIZAR)
-  |
-P4: Spool Selection (filtered, multi-select)
-  |  (P4b: Union selection for v4.0 spools)
-P5: Confirmation (all writes happen here)
-  |
-P6: Success (auto-redirect to P1 after 5s)
-```
+A single page orchestrates the entire flow through modals. A worker:
+
+1. Identifies themselves via `WorkerModal`.
+2. Picks an operation (ARM / SOLD / MET / REP) via `OperationModal`.
+3. Selects spools from the filtered list (`SpoolTable` + `SpoolFilterPanel`).
+4. Chooses an action (INICIAR / FINALIZAR / inspect) via `ActionModal`.
+5. For v4.0 spools, picks unions via `UnionesModal`.
+6. Confirms — all Sheets writes happen at confirmation (P5 Confirmation Workflow).
+7. Toast-notification of success; list refreshes.
 
 ---
 
@@ -321,5 +318,5 @@ railway redeploy   # Force redeploy
 
 ---
 
-**Last updated:** 2026-02-07
-**Version:** 4.0-single-user
+**Last updated:** 2026-04-22
+**Version:** 5.x-single-page
