@@ -25,6 +25,7 @@ import { WorkerModal } from '@/components/WorkerModal';
 import { MetrologiaModal } from '@/components/MetrologiaModal';
 import { UnionesModal } from '@/components/UnionesModal';
 import { NotasModal } from '@/components/NotasModal';
+import { WorkerPickerModal } from '@/components/WorkerPickerModal';
 import { SpoolCardList } from '@/components/SpoolCardList';
 import { NotificationToast } from '@/components/NotificationToast';
 import { Search, X as XIcon, ChevronDown } from 'lucide-react';
@@ -33,9 +34,10 @@ import {
   cancelarReparacion,
   pausarReparacion,
   completarReparacion,
+  iniciarSpool,
 } from '@/lib/api';
 import { classifyApiError } from '@/lib/error-classifier';
-import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
+import type { SpoolCardData, EstadoTrabajo, Worker } from '@/lib/types';
 import { getValidActions, deriveOperation } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 import { ESTADO_LABELS, ESTADO_CHIP_COLORS, ALL_ESTADOS } from '@/lib/constants';
@@ -127,6 +129,11 @@ function HomePage() {
   const [notasWorkerId, setNotasWorkerId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
+  // v5.1 UX-2: batch-INICIAR flow. Holds the tags the user selected in
+  // AddSpoolModal while the WorkerPickerModal asks for an armador.
+  const [batchTags, setBatchTags] = useState<string[] | null>(null);
+  const [batchInProgress, setBatchInProgress] = useState(false);
+
   // Stable ref for refreshAll — safe for use in setInterval without stale closure
   const refreshAllRef = useRef(refreshAll);
   useEffect(() => {
@@ -158,6 +165,113 @@ function HomePage() {
 
   const handleAddSpoolClose = () => {
     modalStack.pop();
+  };
+
+  /**
+   * v5.1 UX-2: AddSpoolModal confirmed a batch selection. Remember the
+   * tags and open the worker picker. `AddSpoolModal` has already closed
+   * itself by now.
+   */
+  const handleBatchAdd = (tags: string[]) => {
+    if (tags.length === 0) return;
+    setBatchTags(tags);
+    modalStack.push('batch-worker-picker');
+  };
+
+  const handleBatchCancel = () => {
+    // Ignore ALL close signals (cancel button, ESC, backdrop) while the
+    // INICIAR batch is in-flight. The WorkerPickerModal also disables
+    // the cancel button via `disabled`, but the Modal's ESC handler
+    // calls onClose directly — so we guard here too.
+    if (batchInProgress) return;
+    modalStack.pop();
+    setBatchTags(null);
+  };
+
+  /**
+   * v5.1 UX-2: armador picked. For each selected tag, add it to the
+   * tracked card list (sequential — addSpool fetches /spool-status) and
+   * then fire POST /api/v4/occupation/iniciar in parallel with
+   * Promise.allSettled so one failure doesn't block the rest.
+   * The backend derives worker_nombre from worker_id since v5.0.
+   *
+   * Wrapped in try/finally so `batchInProgress` is always reset even
+   * if an unexpected synchronous error escapes (addSpool or enqueue).
+   * Without it a single throw would lock the UI with no recovery.
+   */
+  const handleBatchWorkerPick = async (worker: Worker) => {
+    if (!batchTags || batchTags.length === 0) return;
+    const tags = batchTags; // snapshot for this run
+    setBatchInProgress(true);
+
+    try {
+      // Step 1: ensure every spool is tracked in the card list before
+      // INICIAR fires. Sequential on purpose — addSpool hits the backend
+      // and parallelizing it could trigger the 60 writes/min Sheets
+      // rate limit. `addSpool` is idempotent (no-op if already tracked).
+      for (const tag of tags) {
+        try {
+          await addSpool(tag);
+        } catch {
+          // Ignore per-spool add errors; INICIAR below will report the real problem.
+        }
+      }
+
+      // Step 2: fire all INICIAR in parallel. Sheets tolerates ~5-10
+      // concurrent writes well below the 60/min ceiling.
+      const results = await Promise.allSettled(
+        tags.map((tag) =>
+          iniciarSpool({
+            tag_spool: tag,
+            worker_id: worker.id,
+            operacion: 'ARM',
+          })
+        )
+      );
+
+      const successes: string[] = [];
+      const failures: { tag: string; message: string }[] = [];
+      results.forEach((r, i) => {
+        const tag = tags[i];
+        if (r.status === 'fulfilled') {
+          successes.push(tag);
+        } else {
+          failures.push({ tag, message: classifyApiError(r.reason).userMessage });
+        }
+      });
+
+      // Step 3: refresh successfully-started spools in parallel so
+      // occupied badges update without waiting for the 30s poller.
+      // Failures here are silent — the card will eventually refresh via
+      // the poller. Parallel, not sequential, because no write pressure.
+      await Promise.allSettled(
+        successes.map((tag) => refreshSingle(tag))
+      );
+
+      // Step 4: user feedback. On a factory floor the operator needs to
+      // know exactly which tags failed so they can address each one.
+      if (successes.length > 0) {
+        enqueue(
+          `${successes.length} spool${successes.length === 1 ? '' : 's'} asignado${
+            successes.length === 1 ? '' : 's'
+          } a ${worker.nombre_completo}`,
+          'success'
+        );
+      }
+      if (failures.length > 0) {
+        // List every failed tag; the operator needs each one to diagnose.
+        const tagList = failures.map((f) => f.tag).join(', ');
+        const firstMsg = failures[0].message;
+        enqueue(
+          `Falló en: ${tagList} — ${firstMsg}`,
+          'error'
+        );
+      }
+    } finally {
+      setBatchInProgress(false);
+      modalStack.pop();
+      setBatchTags(null);
+    }
   };
 
   /**
@@ -719,10 +833,24 @@ function HomePage() {
       <AddSpoolModal
         isOpen={modalStack.isOpen('add-spool')}
         onAdd={handleAddSpool}
+        onBatchAdd={handleBatchAdd}
         onClose={handleAddSpoolClose}
         alreadyTracked={spools.map((s) => s.tag_spool)}
         isTopOfStack={modalStack.isOpen('add-spool')}
       />
+
+      {batchTags && (
+        <WorkerPickerModal
+          isOpen={modalStack.isOpen('batch-worker-picker')}
+          operationType="ARM"
+          title={`ASIGNAR ARMADOR A ${batchTags.length} SPOOL${batchTags.length === 1 ? '' : 'S'}`}
+          subtitle={batchTags.slice(0, 3).join(', ') + (batchTags.length > 3 ? `, +${batchTags.length - 3} más` : '')}
+          onPick={handleBatchWorkerPick}
+          onClose={handleBatchCancel}
+          disabled={batchInProgress}
+          isTopOfStack={modalStack.isOpen('batch-worker-picker')}
+        />
+      )}
 
       {selectedSpool && (
         <>

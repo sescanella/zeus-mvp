@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-export type ModalId = 'add-spool' | 'operation' | 'action' | 'worker' | 'metrologia' | 'uniones' | 'notas';
+export type ModalId = 'add-spool' | 'operation' | 'action' | 'worker' | 'metrologia' | 'uniones' | 'notas' | 'batch-worker-picker';
 
 export interface UseModalStackReturn {
   stack: ModalId[];

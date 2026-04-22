@@ -10,7 +10,15 @@ import type { Spool } from '@/lib/types';
 
 interface AddSpoolModalProps {
   isOpen: boolean;
+  /** Callback when the user adds a single spool (non-batch mode). */
   onAdd: (tag: string) => void;
+  /**
+   * Callback when the user confirms a batch selection to assign an armador to.
+   * Called with the list of TAGs; the parent is responsible for opening the
+   * worker picker and dispatching INICIAR per spool.
+   * v5.1 UX-2 (batch ingreso Escenario A).
+   */
+  onBatchAdd?: (tags: string[]) => void;
   onClose: () => void;
   alreadyTracked: string[];
   isTopOfStack?: boolean;
@@ -44,13 +52,22 @@ function relevanceScore(spool: Spool, searchTag: string, searchNV: string): numb
  * Inline search fields (NV + TAG) always visible at top.
  * Renders SpoolTable with alreadyTracked tags greyed out (disabledSpools).
  *
- * Multi-add: after adding a spool, the modal stays open for adding more.
- * Shows a counter of spools added in this session.
- * User closes the modal manually via the LISTO button when done.
+ * Two modes:
+ *  - Default "add-only": each tap on a row adds the spool to the tracked
+ *    list immediately. Modal stays open for adding more. Operator then
+ *    opens each card individually to start work (legacy flow).
+ *  - Batch mode (v5.1 UX-2): operator toggles "ASIGNAR ARMADOR AHORA" and
+ *    the table switches to multi-select. A confirm button at the bottom
+ *    fires `onBatchAdd(tags)` with every selected TAG so the parent can
+ *    pick an armador once and INICIAR all of them with that worker.
+ *
+ * If `onBatchAdd` is not provided, the batch toggle is hidden (backward
+ * compatible with any future caller that wants add-only).
  */
 export function AddSpoolModal({
   isOpen,
   onAdd,
+  onBatchAdd,
   onClose,
   alreadyTracked,
   isTopOfStack,
@@ -63,8 +80,13 @@ export function AddSpoolModal({
   const [searchNV, setSearchNV] = useState('');
   const [searchTag, setSearchTag] = useState('');
 
-  // Multi-add session state
+  // Multi-add session state (add-only mode)
   const [addedThisSession, setAddedThisSession] = useState<string[]>([]);
+
+  // Batch-mode state (v5.1 UX-2)
+  const batchEnabled = Boolean(onBatchAdd);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchSelected, setBatchSelected] = useState<string[]>([]);
 
   const nvInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,6 +107,8 @@ export function AddSpoolModal({
   useEffect(() => {
     if (isOpen) {
       setAddedThisSession([]);
+      setBatchMode(false);
+      setBatchSelected([]);
       setSearchNV('');
       setSearchTag('');
       fetchSpools();
@@ -95,6 +119,16 @@ export function AddSpoolModal({
       return () => clearTimeout(timer);
     }
   }, [isOpen, fetchSpools]);
+
+  // Toggling out of batch mode discards any pending multi-selection so
+  // the row-tap contract (add-only) is never ambiguous.
+  function handleToggleBatchMode() {
+    setBatchMode((prev) => {
+      const next = !prev;
+      if (!next) setBatchSelected([]);
+      return next;
+    });
+  }
 
   // Require at least 2 characters in either field before showing results.
   // This prevents rendering 2,000+ rows on low-end tablets when the list is unfiltered.
@@ -120,9 +154,23 @@ export function AddSpoolModal({
   };
 
   const handleRowClick = (tag: string) => {
+    if (batchMode) {
+      setBatchSelected((prev) =>
+        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+      );
+      return;
+    }
     setAddedThisSession((prev) => [...prev, tag]);
     onAdd(tag);
   };
+
+  function handleConfirmBatch() {
+    if (!onBatchAdd || batchSelected.length === 0) return;
+    onBatchAdd(batchSelected);
+    // Parent owns the flow from here. Close the modal so the worker picker
+    // isn't stacked underneath.
+    onClose();
+  }
 
   // Combine alreadyTracked with spools added this session for disabling
   const allDisabled = [...new Set([...alreadyTracked, ...addedThisSession])];
@@ -170,10 +218,55 @@ export function AddSpoolModal({
 
       {fetchState === 'success' && (
         <>
-          {/* Session counter */}
-          {addedThisSession.length > 0 && (
+          {/* Batch-mode toggle (v5.1 UX-2). Rendered only when the parent
+              wired the batch callback. Defaults OFF — legacy add-one-at-a-time
+              behavior is preserved. */}
+          {batchEnabled && (
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={handleToggleBatchMode}
+                role="switch"
+                aria-checked={batchMode}
+                className={`w-full h-12 px-4 font-mono font-black text-sm tracking-widest border-2 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset flex items-center justify-between ${
+                  batchMode
+                    ? 'bg-zeues-orange/10 border-zeues-orange text-zeues-orange'
+                    : 'border-white/30 text-white/70 hover:border-white/50'
+                }`}
+              >
+                <span>ASIGNAR ARMADOR AHORA</span>
+                <span
+                  className={`inline-flex items-center justify-center w-10 h-6 border-2 rounded-full ${
+                    batchMode ? 'bg-zeues-orange border-zeues-orange' : 'border-white/40'
+                  }`}
+                  aria-hidden="true"
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      batchMode ? 'translate-x-2' : '-translate-x-2'
+                    }`}
+                  />
+                </span>
+              </button>
+              {batchMode && (
+                <p className="mt-1 text-xs font-mono text-white/60">
+                  Selecciona varios spools y asigna un armador en un solo paso.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Session counter (add-only mode) */}
+          {!batchMode && addedThisSession.length > 0 && (
             <div className="mb-3 px-3 py-2 bg-green-900/30 border-2 border-green-400/40 font-mono text-sm text-green-400 font-black">
               {addedThisSession.length} spool{addedThisSession.length > 1 ? 's' : ''} agregado{addedThisSession.length > 1 ? 's' : ''}
+            </div>
+          )}
+
+          {/* Batch selection counter */}
+          {batchMode && batchSelected.length > 0 && (
+            <div className="mb-3 px-3 py-2 bg-zeues-orange/10 border-2 border-zeues-orange/50 font-mono text-sm text-zeues-orange font-black">
+              {batchSelected.length} spool{batchSelected.length > 1 ? 's' : ''} seleccionado{batchSelected.length > 1 ? 's' : ''}
             </div>
           )}
 
@@ -244,7 +337,7 @@ export function AddSpoolModal({
           ) : filteredSpools.length > 0 ? (
             <SpoolTable
               spools={filteredSpools}
-              selectedSpools={[]}
+              selectedSpools={batchMode ? batchSelected : []}
               onToggleSelect={handleRowClick}
               tipo={null}
               disabledSpools={allDisabled}
@@ -258,14 +351,33 @@ export function AddSpoolModal({
             </div>
           )}
 
-          {/* LISTO button */}
-          <button
-            onClick={onClose}
-            className="w-full h-14 mt-3 bg-zeues-orange text-white font-mono font-black text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset cursor-pointer"
-            aria-label="Cerrar modal de agregar spools"
-          >
-            LISTO
-          </button>
+          {/* Primary action — its label depends on the mode. */}
+          {batchMode ? (
+            <button
+              type="button"
+              onClick={handleConfirmBatch}
+              disabled={batchSelected.length === 0}
+              className="w-full h-14 mt-3 bg-zeues-orange text-white font-mono font-black text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label={
+                batchSelected.length === 0
+                  ? 'Selecciona al menos un spool para asignar armador'
+                  : `Asignar armador a ${batchSelected.length} spools`
+              }
+            >
+              {batchSelected.length === 0
+                ? 'SELECCIONA SPOOLS'
+                : `ASIGNAR ARMADOR (${batchSelected.length})`}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full h-14 mt-3 bg-zeues-orange text-white font-mono font-black text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset cursor-pointer"
+              aria-label="Cerrar modal de agregar spools"
+            >
+              LISTO
+            </button>
+          )}
         </>
       )}
     </Modal>
