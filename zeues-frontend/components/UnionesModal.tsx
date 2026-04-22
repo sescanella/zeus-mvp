@@ -325,8 +325,10 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
           <div className="flex items-center gap-2 shrink-0">
             {showSelectAllButton && (
               <button
+                type="button"
                 onClick={someSelected ? handleDeselectAll : handleSelectAllAvailable}
                 aria-label={someSelected ? 'Quitar selección de todas las uniones' : 'Seleccionar todas las uniones disponibles'}
+                aria-pressed={someSelected}
                 className="h-9 px-3 border-2 border-zeues-orange text-zeues-orange font-mono font-black text-xs cursor-pointer hover:bg-zeues-orange/10 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset"
               >
                 {someSelected ? 'QUITAR TODAS' : 'SELECCIONAR TODAS'}
