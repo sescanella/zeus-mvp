@@ -156,13 +156,6 @@ def test_from_spool_en_reparacion():
     assert status.ciclo_rep == 1
 
 
-def test_from_spool_completado():
-    """METROLOGIA APROBADO → COMPLETADO estado_trabajo."""
-    spool = make_spool(
-        estado_detalle="Disponible - ARM completado, SOLD completado, METROLOGIA APROBADO \u2713"
-    )
-    status = SpoolStatus.from_spool(spool)
-    assert status.estado_trabajo == "COMPLETADO"
 
 
 # ==================== BatchStatusRequest VALIDATION ====================

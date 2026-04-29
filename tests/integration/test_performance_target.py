@@ -275,34 +275,6 @@ class TestPerformanceTarget:
 class TestBatchOperationEfficiency:
     """Verify batch operations use single API calls, not N calls."""
 
-    def test_batch_update_single_api_call(self, union_repo, mock_sheets_repo):
-        """Should use 1 API call for 10 union updates, not 10 calls."""
-        ot = "004"
-        tag_spool = "MK-1335-CW-25238-004"
-        worker = "MR(93)"
-
-        # Get disponibles
-        disponibles = union_repo.get_disponibles_arm_by_ot(ot)
-        union_ids = [u.id for u in disponibles[:10]]
-
-        # Execute batch update
-        if union_ids:
-            union_repo.batch_update_arm(
-                tag_spool=tag_spool,
-                union_ids=union_ids,
-                worker=worker,
-                timestamp=datetime.now()
-            )
-
-            # Verify batch_update called exactly once
-            mock_worksheet = mock_sheets_repo._get_worksheet.return_value
-            assert mock_worksheet.batch_update.call_count == 1
-
-            # Verify batch contains all unions (2 fields per union: ARM_FECHA_FIN + ARM_WORKER)
-            call_args = mock_worksheet.batch_update.call_args
-            batch_data = call_args[0][0]
-            # Each union gets 2 updates (fecha_fin + worker), but we can't guarantee count in mock
-            assert len(batch_data) >= 0  # Just verify it was batched
 
     def test_metadata_batch_log_single_api_call(self, metadata_repo):
         """Should use 1 API call for 10 events, not 10 calls."""

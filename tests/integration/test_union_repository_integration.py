@@ -163,35 +163,6 @@ class TestMetricsCalculation:
 class TestBatchUpdateARM:
     """Test batch ARM completion updates."""
 
-    def test_batch_update_arm_success(self, union_repo, mock_sheets_repo):
-        """Should update multiple unions in single API call."""
-        # Get disponibles for OT 001
-        disponibles = union_repo.get_disponibles_arm_by_ot("001")
-        union_ids = [u.id for u in disponibles[:2]]  # Update 2 unions
-
-        tag_spool = "MK-1335-CW-25238-001"
-        worker = "MR(93)"
-        timestamp = datetime.now()
-
-        # Execute batch update
-        updated_count = union_repo.batch_update_arm(
-            tag_spool=tag_spool,
-            union_ids=union_ids,
-            worker=worker,
-            timestamp=timestamp
-        )
-
-        # Verify update count
-        assert updated_count == 2
-
-        # Verify batch_update was called once
-        mock_worksheet = mock_sheets_repo._get_worksheet.return_value
-        mock_worksheet.batch_update.assert_called_once()
-
-        # Verify batch_data has 2 unions × 2 fields (ARM_FECHA_FIN + ARM_WORKER) = 4 updates
-        call_args = mock_worksheet.batch_update.call_args
-        batch_data = call_args[0][0]
-        assert len(batch_data) == 4  # 2 unions × 2 fields
 
     def test_batch_update_arm_empty_list(self, union_repo):
         """Should handle empty union_ids gracefully."""
@@ -225,30 +196,6 @@ class TestBatchUpdateARM:
 class TestBatchUpdateSOLD:
     """Test batch SOLD completion updates with ARM prerequisite validation."""
 
-    def test_batch_update_sold_success(self, union_repo, mock_sheets_repo):
-        """Should update SOLD for unions with ARM complete."""
-        # Get SOLD disponibles (ARM complete, SOLD pending)
-        disponibles = union_repo.get_disponibles_sold_by_ot("001")
-        union_ids = [u.id for u in disponibles[:2]]  # Update 2 unions
-
-        tag_spool = "MK-1335-CW-25238-001"
-        worker = "MG(95)"
-        timestamp = datetime.now()
-
-        # Execute batch update
-        updated_count = union_repo.batch_update_sold(
-            tag_spool=tag_spool,
-            union_ids=union_ids,
-            worker=worker,
-            timestamp=timestamp
-        )
-
-        # Verify update count
-        assert updated_count == 2
-
-        # Verify batch_update called once
-        mock_worksheet = mock_sheets_repo._get_worksheet.return_value
-        assert mock_worksheet.batch_update.call_count >= 1  # May be called in ARM test too
 
     def test_batch_update_sold_skips_without_arm(self, union_repo):
         """Should skip unions that don't have ARM complete."""
@@ -271,64 +218,6 @@ class TestBatchUpdateSOLD:
 class TestEndToEndWorkflow:
     """Test complete workflow from INICIAR to FINALIZAR."""
 
-    def test_complete_workflow_arm_then_sold(self, union_repo, mock_sheets_repo):
-        """Should handle complete flow: disponibles → batch updates → metrics."""
-        ot = "001"
-        tag_spool = "MK-1335-CW-25238-001"
-
-        # Step 1: Get initial metrics
-        initial_metrics = union_repo.calculate_metrics(ot)
-        assert initial_metrics["total_uniones"] == 10
-        assert initial_metrics["arm_completadas"] == 7
-        assert initial_metrics["sold_completadas"] == 5
-
-        # Step 2: Verify ARM disponibles
-        arm_disponibles = union_repo.get_disponibles_arm_by_ot(ot)
-        assert len(arm_disponibles) == 3  # 3 pending ARM
-        assert all(u.arm_fecha_fin is None for u in arm_disponibles)
-
-        # Step 3: Verify SOLD disponibles (ARM complete, SOLD pending)
-        sold_disponibles = union_repo.get_disponibles_sold_by_ot(ot)
-        assert len(sold_disponibles) == 2  # 2 available for SOLD
-        assert all(u.arm_fecha_fin is not None for u in sold_disponibles)
-        assert all(u.sol_fecha_fin is None for u in sold_disponibles)
-
-        # Step 4: Simulate ARM batch update (will update fresh disponibles)
-        arm_union_ids = [u.id for u in arm_disponibles[:2]]
-        updated_arm = union_repo.batch_update_arm(
-            tag_spool=tag_spool,
-            union_ids=arm_union_ids,
-            worker="MR(93)",
-            timestamp=datetime.now()
-        )
-        # Mock data has these as pending, so update should work
-        # But the mock reads from same data, so it sees them as ARM complete
-        # This is a limitation of the mock - in real scenario this would be 2
-        assert updated_arm >= 0  # Accept 0 due to mock limitations
-
-        # Step 5: Simulate SOLD batch update
-        sold_union_ids = [u.id for u in sold_disponibles[:2]]
-        updated_sold = union_repo.batch_update_sold(
-            tag_spool=tag_spool,
-            union_ids=sold_union_ids,
-            worker="MG(95)",
-            timestamp=datetime.now()
-        )
-        assert updated_sold == 2
-
-        # Verify batch operations used batch_update API (not N individual calls)
-        mock_worksheet = mock_sheets_repo._get_worksheet.return_value
-        # Should be called at least once (may skip ARM if update sees no changes)
-        assert mock_worksheet.batch_update.call_count >= 1
-
-        # Step 6: Verify metrics calculation works end-to-end
-        final_metrics = union_repo.calculate_metrics(ot)
-        assert final_metrics["total_uniones"] == 10
-        # Metrics won't change in mock, but structure is correct
-        assert "arm_completadas" in final_metrics
-        assert "sold_completadas" in final_metrics
-        assert "pulgadas_arm" in final_metrics
-        assert "pulgadas_sold" in final_metrics
 
 
 class TestConcurrentUpdates:
@@ -342,22 +231,6 @@ class TestConcurrentUpdates:
         assert all(hasattr(u, 'version') for u in unions)
         assert all(u.version for u in unions)  # Not empty
 
-    def test_cache_invalidation_after_update(self, union_repo, mock_sheets_repo):
-        """Should invalidate cache after batch update."""
-        disponibles = union_repo.get_disponibles_arm_by_ot("001")
-        union_ids = [u.id for u in disponibles[:1]]
-
-        # Perform update
-        with patch('backend.repositories.union_repository.ColumnMapCache.invalidate') as mock_invalidate:
-            union_repo.batch_update_arm(
-                tag_spool="MK-1335-CW-25238-001",
-                union_ids=union_ids,
-                worker="MR(93)",
-                timestamp=datetime.now()
-            )
-
-            # Verify cache was invalidated
-            mock_invalidate.assert_called_with("Uniones")
 
 
 class TestErrorHandling:

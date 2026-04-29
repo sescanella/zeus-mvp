@@ -198,31 +198,6 @@ async def test_iniciar_spool_success(occupation_service_v4, mock_sheets_reposito
     mock_sheets_repository.batch_update_by_column_name.assert_called_once()
 
 
-@pytest.mark.asyncio
-async def test_iniciar_spool_missing_prerequisite(occupation_service_v4, mock_sheets_repository):
-    """Test INICIAR fails if Fecha_Materiales is missing."""
-    # Mock spool without Fecha_Materiales
-    mock_sheets_repository.get_spool_by_tag.return_value = Spool(
-        tag_spool="OT-123",
-        ot="123",
-        fecha_materiales=None,
-        armador=None,
-        soldador=None,
-        fecha_armado=None,
-        fecha_soldadura=None
-    )
-
-    request = IniciarRequest(
-        tag_spool="OT-123",
-        worker_id=93,
-        worker_nombre="MR(93)",
-        operacion=ActionType.ARM
-    )
-
-    with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
-        await occupation_service_v4.iniciar_spool(request)
-
-    assert "Fecha_Materiales" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

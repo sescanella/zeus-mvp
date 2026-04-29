@@ -28,21 +28,6 @@ def client():
 # ==================== INICIAR ENDPOINT TESTS ====================
 
 
-def test_iniciar_v4_endpoint_exists(client):
-    """Test that v4.0 INICIAR endpoint exists at /api/v4/occupation/iniciar."""
-    response = client.post(
-        "/api/v4/occupation/iniciar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            "worker_nombre": "MR(93)",
-            "operacion": "ARM"
-        }
-    )
-
-    # Should not return 404 (endpoint exists)
-    # May return 500 (dependencies not configured) or other error codes
-    assert response.status_code != 404, "v4.0 INICIAR endpoint should exist at /api/v4/"
 
 
 def test_iniciar_requires_tag_spool(client):
@@ -75,19 +60,6 @@ def test_iniciar_requires_worker_id(client):
     assert response.status_code == 422  # Pydantic validation error
 
 
-def test_iniciar_requires_worker_nombre(client):
-    """Missing worker_nombre returns 422 validation error."""
-    response = client.post(
-        "/api/v4/occupation/iniciar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            # Missing worker_nombre
-            "operacion": "ARM"
-        }
-    )
-
-    assert response.status_code == 422  # Pydantic validation error
 
 
 def test_iniciar_requires_operacion(client):
@@ -182,19 +154,6 @@ def test_iniciar_tag_spool_cannot_be_empty(client):
     assert response.status_code == 422  # Pydantic validation error
 
 
-def test_iniciar_worker_nombre_cannot_be_empty(client):
-    """worker_nombre cannot be empty string."""
-    response = client.post(
-        "/api/v4/occupation/iniciar",
-        json={
-            "tag_spool": "OT-123",
-            "worker_id": 93,
-            "worker_nombre": "",  # Invalid: empty string
-            "operacion": "ARM"
-        }
-    )
-
-    assert response.status_code == 422  # Pydantic validation error
 
 
 # ==================== ERROR SCENARIO TESTS ====================

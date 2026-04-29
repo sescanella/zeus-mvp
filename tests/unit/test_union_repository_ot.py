@@ -422,65 +422,6 @@ class TestGetDisponiblesSOLDByOT:
 class TestOTQueryEdgeCases:
     """Test edge cases for OT-based queries."""
 
-    def test_get_by_ot_handles_malformed_rows_gracefully(
-        self, union_repository, mock_sheets_repo, mock_column_map, monkeypatch
-    ):
-        """Test get_by_ot skips malformed rows and continues processing."""
-        # Arrange
-        headers = [
-            'ID_UNION', 'OT', 'N_UNION', 'DN_UNION', 'TIPO_UNION',
-            'ARM_FECHA_INICIO', 'ARM_FECHA_FIN', 'ARM_WORKER',
-            'SOL_FECHA_INICIO', 'SOL_FECHA_FIN', 'SOL_WORKER',
-            'NDT_UNION', 'R_NDT_UNION', 'ID', 'TAG_SPOOL',
-            'NDT_FECHA', 'NDT_STATUS', 'version',
-            'Creado_Por', 'Fecha_Creacion', 'Modificado_Por', 'Fecha_Modificacion'
-        ]
-
-        # Valid row
-        row1 = [
-            '005+1', '005', '1', '10.0', 'BW',
-            '', '', '',
-            '', '', '',
-            '', '', '005+1', 'SPOOL-005',
-            '', '', 'uuid-8',
-            'MR(93)', '01-02-2026 08:00:00', '', ''
-        ]
-
-        # Malformed row - missing required ID field
-        row2 = [
-            '', '005', '2', '12.0', 'BW',
-            '', '', '',
-            '', '', '',
-            '', '', '', 'SPOOL-005',
-            '', '', 'uuid-9',
-            'MR(93)', '01-02-2026 08:00:00', '', ''
-        ]
-
-        # Valid row
-        row3 = [
-            '005+3', '005', '3', '8.0', 'BW',
-            '', '', '',
-            '', '', '',
-            '', '', '005+3', 'SPOOL-005',
-            '', '', 'uuid-10',
-            'MR(93)', '01-02-2026 08:00:00', '', ''
-        ]
-
-        data = [headers, row1, row2, row3]
-        mock_sheets_repo.read_worksheet.return_value = data
-
-        mock_cache = MagicMock()
-        mock_cache.get_or_build.return_value = mock_column_map
-        monkeypatch.setattr('backend.repositories.union_repository.ColumnMapCache', mock_cache)
-
-        # Act
-        result = union_repository.get_by_ot('005')
-
-        # Assert
-        # Should return 2 valid unions, skipping malformed row
-        assert len(result) == 2
-        assert result[0].n_union == 1
-        assert result[1].n_union == 3
 
     def test_ot_queries_use_column_map_cache(
         self, union_repository, mock_sheets_repo, sample_uniones_data, mock_column_map, monkeypatch

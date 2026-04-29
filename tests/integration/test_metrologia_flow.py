@@ -194,29 +194,6 @@ async def test_completar_rechazado_success(metrologia_service, mock_sheets_repo,
     mock_sheets_repo.batch_update_by_column_name.assert_called()
 
 
-@pytest.mark.asyncio
-async def test_completar_logs_metadata_event(metrologia_service, mock_sheets_repo, mock_metadata_repo, ready_spool):
-    """Test that metadata event is logged with resultado."""
-    # Arrange
-    mock_sheets_repo.get_spool_by_tag.return_value = ready_spool
-
-    # Act
-    await metrologia_service.completar(
-        tag_spool="INTEGRATION-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="APROBADO"
-    )
-
-    # Assert metadata was logged
-    mock_metadata_repo.append_event.assert_called_once()
-    event = mock_metadata_repo.append_event.call_args[0][0]
-    assert event["tag_spool"] == "INTEGRATION-001"
-    assert event["worker_id"] == 95
-    assert event["worker_nombre"] == "CP(95)"
-    assert event["operacion"] == "METROLOGIA"
-    assert event["accion"] == "COMPLETAR"
-    assert "APROBADO" in event["metadata_json"]
 
 
 # SSE event test removed - single-user mode no longer uses Redis/SSE

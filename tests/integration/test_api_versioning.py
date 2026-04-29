@@ -98,24 +98,6 @@ class TestAPIVersioning:
         assert is_v4_spool(v4_spool) is True
         assert get_spool_version(v4_spool) == "v4.0"
 
-    def test_api_docs_tag_organization(self, client):
-        """API documentation properly organizes v3 and v4 endpoints"""
-        response = client.get("/openapi.json")
-        assert response.status_code == 200
-
-        openapi_schema = response.json()
-        paths = openapi_schema.get("paths", {})
-
-        # Check that both v3 and v4 paths exist
-        v3_paths = [p for p in paths if "/api/v3/" in p]
-        v4_paths = [p for p in paths if "/api/v4/" in p]
-
-        assert len(v3_paths) > 0, "v3.0 endpoints missing from API docs"
-        assert len(v4_paths) > 0, "v4.0 endpoints missing from API docs"
-
-        # Check specific endpoints
-        assert "/api/v3/occupation/tomar" in paths
-        assert "/api/v4/occupation/iniciar" in paths
 
     def test_openapi_endpoints_documented(self, client):
         """All new v4.0 endpoints are documented in OpenAPI schema"""

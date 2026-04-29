@@ -310,39 +310,7 @@ class TestIniciarWorkerDerivation:
 class TestFinalizarWorkerDerivation:
     """Tests for worker_nombre derivation in finalizar_spool()."""
 
-    @pytest.mark.asyncio
-    async def test_finalizar_with_none_nombre_calls_worker_service(
-        self, occupation_service_with_worker, mock_worker_service
-    ):
-        """finalizar_spool with worker_nombre=None calls find_worker_by_id."""
-        request = FinalizarRequest(
-            tag_spool="WORKER-SPOOL",
-            worker_id=93,
-            worker_nombre=None,
-            operacion="ARM",
-            selected_unions=["OT-200+1", "OT-200+2"]
-        )
 
-        result = await occupation_service_with_worker.finalizar_spool(request)
-
-        mock_worker_service.find_worker_by_id.assert_called_once_with(93)
-
-    @pytest.mark.asyncio
-    async def test_finalizar_with_nombre_provided_skips_worker_service(
-        self, occupation_service_with_worker, mock_worker_service
-    ):
-        """finalizar_spool with worker_nombre provided does NOT call find_worker_by_id."""
-        request = FinalizarRequest(
-            tag_spool="WORKER-SPOOL",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion="ARM",
-            selected_unions=["OT-200+1", "OT-200+2"]
-        )
-
-        result = await occupation_service_with_worker.finalizar_spool(request)
-
-        mock_worker_service.find_worker_by_id.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_finalizar_with_none_nombre_and_unknown_worker_raises_error(

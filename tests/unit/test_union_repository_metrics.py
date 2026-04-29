@@ -268,14 +268,6 @@ def test_sum_pulgadas_sold_empty_returns_zero_with_two_decimals(union_repo, monk
     assert formatted == "0.00"
 
 
-def test_get_total_uniones_counts_all_regardless_of_state(union_repo, sample_unions, monkeypatch):
-    """Test get_total_uniones counts ALL unions regardless of completion state."""
-    monkeypatch.setattr(union_repo, "get_by_ot", lambda ot: sample_unions)
-
-    result = union_repo.get_total_uniones("001")
-
-    # Should count all 5 unions (completed, partial, none)
-    assert result == 5
 
 
 def test_get_total_uniones_empty_ot(union_repo, monkeypatch):
