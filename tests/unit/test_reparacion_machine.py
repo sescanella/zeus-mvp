@@ -457,3 +457,152 @@ def test_cycle_tracking_across_transitions(reparacion_machine, mock_sheets_repo)
     updates = call_args.kwargs["updates"]
     estado_detalle_update = next(u for u in updates if u["column_name"] == "Estado_Detalle")
     assert "Ciclo 2/3" in estado_detalle_update["value"]
+
+
+# ============================================================================
+# T-131 / Bug 7 — async hydration regression tests
+# ============================================================================
+#
+# python-statemachine 2.5.0 silently ignores assignment to `current_state`
+# when transitions are awaited. Hydrating via the constructor's `start_value`
+# argument and `await activate_initial_state()` is the only path that propagates
+# state to the async engine. These tests pin that contract so a future refactor
+# can't reintroduce the direct-assignment bug.
+#
+# Without the fix, every test below raises:
+#   statemachine.exceptions.TransitionNotAllowed: Can't <event> when in rechazado.
+
+
+@pytest.fixture
+def repo_for_async():
+    """Bare-minimum repo mock that lets every callback in the SM run."""
+    repo = Mock()
+    repo.get_tag_spool_column_letter = Mock(return_value="G")
+    repo.find_row_by_column_value = Mock(return_value=10)
+    repo.get_cell_value = Mock(return_value="EN_REPARACION (Ciclo 1/3) - Ocupado: NR(93)")
+    repo.batch_update_by_column_name = Mock()
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_async_completar_from_en_reparacion(repo_for_async, mock_metadata_repo, mock_cycle_counter):
+    """COMPLETAR via async engine when SM is hydrated to en_reparacion."""
+    machine = REPARACIONStateMachine(
+        tag_spool="TEST-001",
+        sheets_repo=repo_for_async,
+        metadata_repo=mock_metadata_repo,
+        cycle_counter=mock_cycle_counter,
+        start_value="en_reparacion",
+    )
+    await machine.activate_initial_state()
+    assert machine.current_state.id == "en_reparacion"
+
+    await machine.completar()
+
+    assert machine.current_state.id == "pendiente_metrologia"
+    repo_for_async.batch_update_by_column_name.assert_called_once()
+    # Confirm Estado_Detalle was set to PENDIENTE_METROLOGIA
+    updates = repo_for_async.batch_update_by_column_name.call_args.kwargs["updates"]
+    estado = next(u for u in updates if u["column_name"] == "Estado_Detalle")
+    assert estado["value"] == "PENDIENTE_METROLOGIA"
+
+
+@pytest.mark.asyncio
+async def test_async_pausar_from_en_reparacion(repo_for_async, mock_metadata_repo, mock_cycle_counter):
+    """PAUSAR via async engine when SM is hydrated to en_reparacion."""
+    machine = REPARACIONStateMachine(
+        tag_spool="TEST-001",
+        sheets_repo=repo_for_async,
+        metadata_repo=mock_metadata_repo,
+        cycle_counter=mock_cycle_counter,
+        start_value="en_reparacion",
+    )
+    await machine.activate_initial_state()
+
+    await machine.pausar()
+
+    assert machine.current_state.id == "reparacion_pausada"
+    repo_for_async.batch_update_by_column_name.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_cancelar_from_en_reparacion(repo_for_async, mock_metadata_repo, mock_cycle_counter):
+    """CANCELAR via async engine when SM is hydrated to en_reparacion."""
+    machine = REPARACIONStateMachine(
+        tag_spool="TEST-001",
+        sheets_repo=repo_for_async,
+        metadata_repo=mock_metadata_repo,
+        cycle_counter=mock_cycle_counter,
+        start_value="en_reparacion",
+    )
+    await machine.activate_initial_state()
+
+    await machine.cancelar()
+
+    assert machine.current_state.id == "rechazado"
+
+
+@pytest.mark.asyncio
+async def test_async_cancelar_from_reparacion_pausada(repo_for_async, mock_metadata_repo, mock_cycle_counter):
+    """CANCELAR via async engine when SM is hydrated to reparacion_pausada."""
+    repo_for_async.get_cell_value = Mock(return_value="REPARACION_PAUSADA (Ciclo 2/3)")
+    machine = REPARACIONStateMachine(
+        tag_spool="TEST-001",
+        sheets_repo=repo_for_async,
+        metadata_repo=mock_metadata_repo,
+        cycle_counter=mock_cycle_counter,
+        start_value="reparacion_pausada",
+    )
+    await machine.activate_initial_state()
+
+    await machine.cancelar()
+
+    assert machine.current_state.id == "rechazado"
+
+
+@pytest.mark.asyncio
+async def test_async_tomar_resume_from_pausada(repo_for_async, mock_metadata_repo, mock_cycle_counter):
+    """TOMAR (resume) via async engine when SM is hydrated to reparacion_pausada."""
+    repo_for_async.get_cell_value = Mock(return_value="REPARACION_PAUSADA (Ciclo 2/3)")
+    machine = REPARACIONStateMachine(
+        tag_spool="TEST-001",
+        sheets_repo=repo_for_async,
+        metadata_repo=mock_metadata_repo,
+        cycle_counter=mock_cycle_counter,
+        start_value="reparacion_pausada",
+    )
+    await machine.activate_initial_state()
+
+    await machine.tomar(worker_id=93, worker_nombre="MR(93)")
+
+    assert machine.current_state.id == "en_reparacion"
+
+
+@pytest.mark.asyncio
+async def test_async_direct_assignment_does_not_hydrate(repo_for_async, mock_metadata_repo, mock_cycle_counter):
+    """
+    Pin Bug 7: replicate the EXACT pre-fix code path from reparacion_service —
+    construct, assign current_state directly to a non-initial state, then
+    await a transition. python-statemachine 2.5.0 raises TransitionNotAllowed
+    because the async engine never saw the assignment, and still believes the
+    machine is in `rechazado` (the class initial state).
+
+    If python-statemachine ever fixes this, this test will start failing
+    (DID NOT RAISE), and we can simplify reparacion_service back to direct
+    assignment.
+    """
+    machine = REPARACIONStateMachine(
+        tag_spool="TEST-001",
+        sheets_repo=repo_for_async,
+        metadata_repo=mock_metadata_repo,
+        cycle_counter=mock_cycle_counter,
+    )
+    # Direct assignment WITHOUT activate_initial_state — the buggy pattern
+    # that used to live in reparacion_service.completar_reparacion (line 317).
+    machine.current_state = machine.en_reparacion
+    # Property reflects the assignment
+    assert machine.current_state.id == "en_reparacion"
+    # ...but the async engine still thinks we're in rechazado
+    with pytest.raises(TransitionNotAllowed) as excinfo:
+        await machine.completar()
+    assert "rechazado" in str(excinfo.value).lower()

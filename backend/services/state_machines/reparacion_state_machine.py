@@ -53,7 +53,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         reparacion_pausada.to(rechazado)
     )
 
-    def __init__(self, tag_spool: str, sheets_repo, metadata_repo, cycle_counter=None):
+    def __init__(self, tag_spool: str, sheets_repo, metadata_repo, cycle_counter=None, *, start_value: str = None):
         """
         Initialize REPARACION state machine for a specific spool.
 
@@ -62,8 +62,11 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
             sheets_repo: SheetsRepository for column updates
             metadata_repo: MetadataRepository for event logging
             cycle_counter: CycleCounterService for cycle tracking
+            start_value: State ID to hydrate to ("rechazado", "en_reparacion",
+                "reparacion_pausada"). Pass when resuming a spool already past
+                the initial state.
         """
-        super().__init__(tag_spool, sheets_repo, metadata_repo)
+        super().__init__(tag_spool, sheets_repo, metadata_repo, start_value=start_value)
         self.cycle_counter = cycle_counter
 
     async def on_enter_en_reparacion(self, worker_id=None, worker_nombre=None, **kwargs):

@@ -32,7 +32,7 @@ class BaseOperationStateMachine(StateMachine):
     EN_PROGRESO = "en_progreso"
     COMPLETADO = "completado"
 
-    def __init__(self, tag_spool: str, sheets_repo, metadata_repo):
+    def __init__(self, tag_spool: str, sheets_repo, metadata_repo, *, start_value: Optional[str] = None):
         """
         Initialize state machine for a specific spool.
 
@@ -40,11 +40,19 @@ class BaseOperationStateMachine(StateMachine):
             tag_spool: Spool identifier
             sheets_repo: Repository for Sheets operations
             metadata_repo: Repository for metadata logging
+            start_value: Optional state ID to hydrate to (instead of the class
+                initial state). Required for async transitions when the spool
+                is not in the initial state — direct assignment to
+                `current_state` after construction does not propagate to the
+                async engine in python-statemachine 2.5.0, so callers that
+                need to resume from a non-initial state must pass start_value
+                here and call `await machine.activate_initial_state()` before
+                triggering transitions.
         """
         self.tag_spool = tag_spool
         self.sheets_repo = sheets_repo
         self.metadata_repo = metadata_repo
-        super().__init__()
+        super().__init__(start_value=start_value)
 
     def get_state_id(self) -> str:
         """

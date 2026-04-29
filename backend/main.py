@@ -29,6 +29,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 
+from statemachine.exceptions import StateMachineError
+
 from backend.config import config
 from backend.exceptions import ZEUSException
 from backend.models.error import ErrorResponse
@@ -214,6 +216,29 @@ async def zeus_exception_handler(request: Request, exc: ZEUSException):
     return JSONResponse(
         status_code=http_status,
         content=error_response.model_dump()
+    )
+
+
+@app.exception_handler(StateMachineError)
+async def state_machine_exception_handler(request: Request, exc: StateMachineError):
+    """
+    Handler for python-statemachine errors (TransitionNotAllowed, InvalidStateValue, etc.).
+
+    These represent an inconsistency between the spool's persisted state and the
+    transition the caller is trying to fire. Map to 400 (validation) instead of
+    letting the generic handler expose a 500 — the request itself is malformed
+    relative to current state, not an internal failure.
+    """
+    logging.error(f"State machine error: {exc}", exc_info=True)
+    error_response = ErrorResponse(
+        success=False,
+        error="INVALID_TRANSITION",
+        message="Operación no permitida en el estado actual del spool. Refresca la pantalla e intenta de nuevo.",
+        data={"detail": str(exc)} if config.ENVIRONMENT == "local" else None,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content=error_response.model_dump(),
     )
 
 

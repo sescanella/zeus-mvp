@@ -110,19 +110,23 @@ class ReparacionService:
             from backend.exceptions import SpoolBloqueadoError
             raise SpoolBloqueadoError(tag_spool)
 
-        # Step 4: Instantiate state machine and trigger TOMAR transition
+        # Step 4: Instantiate state machine hydrated to current state
+        # (python-statemachine 2.5.0 async engine ignores direct assignment
+        # to .current_state — must pass start_value to the constructor and
+        # call activate_initial_state() before triggering transitions).
+        if spool.estado_detalle and "REPARACION_PAUSADA" in spool.estado_detalle:
+            start_state = "reparacion_pausada"
+        else:
+            start_state = "rechazado"
+
         reparacion_machine = REPARACIONStateMachine(
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter
+            cycle_counter=self.cycle_counter,
+            start_value=start_state,
         )
-
-        # Hydrate to current state (RECHAZADO or REPARACION_PAUSADA)
-        if spool.estado_detalle and "REPARACION_PAUSADA" in spool.estado_detalle:
-            reparacion_machine.current_state = reparacion_machine.reparacion_pausada
-        else:
-            reparacion_machine.current_state = reparacion_machine.rechazado
+        await reparacion_machine.activate_initial_state()
 
         # Trigger TOMAR transition
         await reparacion_machine.tomar(worker_id=worker_id, worker_nombre=worker_nombre)
@@ -206,16 +210,15 @@ class ReparacionService:
                 f"Spool {tag_spool} no está ocupado por este trabajador"
             )
 
-        # Step 2: Instantiate state machine and trigger PAUSAR transition
+        # Step 2: Instantiate state machine hydrated to EN_REPARACION
         reparacion_machine = REPARACIONStateMachine(
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter
+            cycle_counter=self.cycle_counter,
+            start_value="en_reparacion",
         )
-
-        # Hydrate to EN_REPARACION state
-        reparacion_machine.current_state = reparacion_machine.en_reparacion
+        await reparacion_machine.activate_initial_state()
 
         # Trigger PAUSAR transition
         await reparacion_machine.pausar()
@@ -305,16 +308,15 @@ class ReparacionService:
                 operacion="REPARACION"
             )
 
-        # Step 2: Instantiate state machine and trigger COMPLETAR transition
+        # Step 2: Instantiate state machine hydrated to EN_REPARACION
         reparacion_machine = REPARACIONStateMachine(
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter
+            cycle_counter=self.cycle_counter,
+            start_value="en_reparacion",
         )
-
-        # Hydrate to EN_REPARACION state
-        reparacion_machine.current_state = reparacion_machine.en_reparacion
+        await reparacion_machine.activate_initial_state()
 
         # Trigger COMPLETAR transition
         await reparacion_machine.completar()
@@ -392,19 +394,20 @@ class ReparacionService:
         worker_nombre = spool.ocupado_por or ""
         self.validation_service.validar_puede_cancelar_reparacion(spool, worker_nombre, worker_id)
 
-        # Step 2: Instantiate state machine and trigger CANCELAR transition
+        # Step 2: Instantiate state machine hydrated to current state
+        if spool.estado_detalle and "REPARACION_PAUSADA" in spool.estado_detalle:
+            start_state = "reparacion_pausada"
+        else:
+            start_state = "en_reparacion"
+
         reparacion_machine = REPARACIONStateMachine(
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter
+            cycle_counter=self.cycle_counter,
+            start_value=start_state,
         )
-
-        # Hydrate to current state (EN_REPARACION or REPARACION_PAUSADA)
-        if spool.estado_detalle and "REPARACION_PAUSADA" in spool.estado_detalle:
-            reparacion_machine.current_state = reparacion_machine.reparacion_pausada
-        else:
-            reparacion_machine.current_state = reparacion_machine.en_reparacion
+        await reparacion_machine.activate_initial_state()
 
         # Trigger CANCELAR transition
         await reparacion_machine.cancelar()

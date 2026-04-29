@@ -372,36 +372,18 @@ export async function completarReparacion(payload: {
   worker_id: number;
   worker_nombre?: string;
 }): Promise<ReparacionResponse> {
-  try {
-    const res = await fetch(`${API_URL}/api/completar-reparacion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...payload,
-        operacion: 'REPARACION'  // Required by ActionRequest model
-      })
-    });
-
-    if (res.status === 403) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool bloqueado - contactar supervisor');
-    }
-
-    if (res.status === 404) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool no encontrado.');
-    }
-
-    if (res.status === 400) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
-    }
-
-    return await handleResponse<ReparacionResponse>(res);
-  } catch (error) {
-    console.error('completarReparacion error:', error);
-    throw error;
-  }
+  // Backend uses ReparacionRequest (worker_id + tag_spool only). The legacy
+  // `operacion: 'REPARACION'` field is implicit in the endpoint and was being
+  // silently dropped by Pydantic anyway — don't send it.
+  const res = await fetch(`${API_URL}/api/completar-reparacion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tag_spool: payload.tag_spool,
+      worker_id: payload.worker_id,
+    }),
+  });
+  return handleResponse<ReparacionResponse>(res);
 }
 
 /**
@@ -416,38 +398,12 @@ export async function tomarReparacion(payload: {
   tag_spool: string;
   worker_id: number;
 }): Promise<ReparacionResponse> {
-  try {
-    const res = await fetch(`${API_URL}/api/tomar-reparacion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.status === 404) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool no encontrado.');
-    }
-
-    if (res.status === 400) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
-    }
-
-    if (res.status === 403) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool bloqueado - contactar supervisor');
-    }
-
-    if (res.status === 409) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool ocupado por otro trabajador. Intenta más tarde.');
-    }
-
-    return await handleResponse<ReparacionResponse>(res);
-  } catch (error) {
-    console.error('tomarReparacion error:', error);
-    throw error;
-  }
+  const res = await fetch(`${API_URL}/api/tomar-reparacion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<ReparacionResponse>(res);
 }
 
 /**
@@ -458,33 +414,12 @@ export async function pausarReparacion(payload: {
   tag_spool: string;
   worker_id: number;
 }): Promise<ReparacionResponse> {
-  try {
-    const res = await fetch(`${API_URL}/api/pausar-reparacion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.status === 404) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool no encontrado.');
-    }
-
-    if (res.status === 400) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
-    }
-
-    if (res.status === 409) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Conflicto. Intenta de nuevo.');
-    }
-
-    return await handleResponse<ReparacionResponse>(res);
-  } catch (error) {
-    console.error('pausarReparacion error:', error);
-    throw error;
-  }
+  const res = await fetch(`${API_URL}/api/pausar-reparacion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<ReparacionResponse>(res);
 }
 
 /**
@@ -495,33 +430,12 @@ export async function cancelarReparacion(payload: {
   tag_spool: string;
   worker_id: number;
 }): Promise<ReparacionResponse> {
-  try {
-    const res = await fetch(`${API_URL}/api/cancelar-reparacion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.status === 404) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Spool no encontrado.');
-    }
-
-    if (res.status === 400) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error de validación. Verifica los datos.');
-    }
-
-    if (res.status === 409) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Conflicto. Intenta de nuevo.');
-    }
-
-    return await handleResponse<ReparacionResponse>(res);
-  } catch (error) {
-    console.error('cancelarReparacion error:', error);
-    throw error;
-  }
+  const res = await fetch(`${API_URL}/api/cancelar-reparacion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<ReparacionResponse>(res);
 }
 
 // ==========================================
