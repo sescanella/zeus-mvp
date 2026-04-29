@@ -184,8 +184,19 @@ function HomePage() {
     // the cancel button via `disabled`, but the Modal's ESC handler
     // calls onClose directly — so we guard here too.
     if (batchInProgress) return;
+    const count = batchTags?.length ?? 0;
     modalStack.pop();
     setBatchTags(null);
+    // T-132 / Bug 8: without this toast, dismissing the WorkerPickerModal
+    // (cancel / ESC / backdrop) leaves no trace — operator perceives
+    // "ASIGNAR ARMADOR (N) doesn't work" because the AddSpoolModal closed
+    // and nothing else happened.
+    if (count > 0) {
+      enqueue(
+        `Asignación cancelada — ningún spool fue asignado a un armador`,
+        'success',
+      );
+    }
   };
 
   /**
@@ -259,12 +270,25 @@ function HomePage() {
         );
       }
       if (failures.length > 0) {
-        // List every failed tag; the operator needs each one to diagnose.
-        const tagList = failures.map((f) => f.tag).join(', ');
-        const firstMsg = failures[0].message;
+        // T-132 / Bug 8: group failures by reason so the operator sees
+        // every distinct cause, not just the first failure's message.
+        // Heterogeneous batches (e.g., 1 ARM-not-completed + 1 already-
+        // occupied) used to be invisible because we only showed
+        // failures[0].message.
+        const byMsg = new Map<string, string[]>();
+        for (const f of failures) {
+          const arr = byMsg.get(f.message);
+          if (arr) arr.push(f.tag);
+          else byMsg.set(f.message, [f.tag]);
+        }
+        const summary = Array.from(byMsg.entries())
+          .map(([msg, tags]) => `${tags.join(', ')}: ${msg}`)
+          .join(' · ');
         enqueue(
-          `Falló en: ${tagList} — ${firstMsg}`,
-          'error'
+          failures.length === 1
+            ? `Falló ${failures[0].tag}: ${failures[0].message}`
+            : `${failures.length} fallos — ${summary}`,
+          'error',
         );
       }
     } finally {

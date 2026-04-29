@@ -120,8 +120,13 @@ export function WorkerPickerModal({
             ))}
 
             {workers.length === 0 && (
-              <p className="text-white/70 font-mono text-sm text-center py-4">
-                No hay trabajadores disponibles
+              <p
+                role="alert"
+                className="text-yellow-400 font-mono text-sm font-black text-center py-4 leading-relaxed"
+              >
+                No hay trabajadores con rol disponible para esta operación.
+                <br />
+                Contacta al supervisor.
               </p>
             )}
           </div>
