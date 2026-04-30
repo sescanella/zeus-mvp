@@ -2,6 +2,40 @@
 
 Tests automatizados con Playwright para los 4 flujos principales del MVP.
 
+## T-136 Performance Suite (`perf-flow-NN-*.spec.ts`)
+
+Suite de 8 specs que mide cada flujo crítico del home con 200 spools sintéticos
+en una hoja Sheets de **staging** (NUNCA prod). Genera artefactos cuantitativos
+(timings, network, console, screenshot) bajo `test-results/perf-baseline/`.
+
+**Prerequisitos** (corre desde la raíz del repo):
+
+```bash
+# 1. Apuntar backend local a staging (.env.local local-only, gitignored)
+#    GOOGLE_SHEET_ID=14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo
+#    Frontend zeues-frontend/.env.local: NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+
+# 2. Re-seedear 200 spools sintéticos en staging (idempotente, seed=42)
+source venv/bin/activate
+python scripts/seed_load_test.py --yes
+
+# 3. Regenerar la fixture de tags consumida por los specs
+python scripts/dump_staging_tags.py
+# → escribe e2e/fixtures/staging-tags.json (gitignored — siempre se regenera)
+
+# 4. Levantar backend + frontend
+PYTHONPATH="$(pwd)" uvicorn backend.main:app --port 8000 &
+cd zeues-frontend && npm run dev &
+
+# 5. Correr la suite
+cd zeues-frontend
+PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test e2e/perf-flow-*.spec.ts --project=chromium --workers=1
+```
+
+Detalles del setup, distribución del dataset y análisis pre/post-fix están
+en `docs/audits/T-136-perf-baseline-2026-04-29.md`.
+
 ## Estructura de Tests
 
 ```
