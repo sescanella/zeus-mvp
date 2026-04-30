@@ -16,8 +16,16 @@ from backend.services.sheets_service import SheetsService
 from backend.services.role_service import RoleService
 from backend.models.worker import Worker
 from backend.config import config
+from backend.utils.cache import get_cache
 
 logger = logging.getLogger(__name__)
+
+# T-136 D1 fix — cache the parsed list[Worker] so repeated requests in the
+# same TTL window skip the ~480ms cost of re-parsing 22 trabajadores +
+# applying model_copy(roles=...) per worker. Trabajadores changes rarely,
+# matches the 300s TTL already used for the raw rows in read_worksheet().
+_WORKERS_CACHE_KEY = "worker_service:all_workers_parsed"
+_WORKERS_CACHE_TTL_SECONDS = 300
 
 
 class WorkerService:
@@ -60,12 +68,26 @@ class WorkerService:
         v2.0: Integra roles desde hoja Roles para cada trabajador.
         OPTIMIZACIÓN: Batch loading - lee TODOS los roles UNA VEZ.
 
+        T-136 D1: la lista `list[Worker]` parseada se cachea durante
+        _WORKERS_CACHE_TTL_SECONDS (300s) para evitar repetir el coste
+        de Pydantic `model_copy(roles=...)` en cada request — el cuello
+        principal observado en el batch-status del home con 200 spools.
+
         Returns:
             Lista de objetos Worker parseados (activos e inactivos) con roles array
 
         Raises:
             SheetsConnectionError: Si falla la conexión con Sheets
         """
+        # T-136 D1: parsed-list cache (TTL 300s)
+        cache = get_cache()
+        cached = cache.get(_WORKERS_CACHE_KEY)
+        if cached is not None:
+            logger.debug(
+                f"Worker list cache hit ({len(cached)} workers, skipping Sheets parse)"
+            )
+            return cached
+
         logger.info("Retrieving all workers from Google Sheets")
 
         # Leer hoja de trabajadores
@@ -113,6 +135,10 @@ class WorkerService:
                 continue
 
         logger.info(f"Retrieved {len(workers)} workers from Sheets (v2.0 with roles)")
+
+        # T-136 D1: cache the parsed list. Subsequent requests within
+        # the TTL window skip the parse + model_copy loop entirely.
+        cache.set(_WORKERS_CACHE_KEY, workers, ttl_seconds=_WORKERS_CACHE_TTL_SECONDS)
         return workers
 
     def get_all_active_workers(self) -> list[Worker]:
