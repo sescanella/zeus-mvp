@@ -481,4 +481,87 @@ describe('Page — v5.0 single-page modal orchestration', () => {
       'OT-002',
     ]);
   });
+
+  // ── T-110 — skip OperationModal in deterministic transitions ──────────────
+  // Hotspot H2 of the north-star-clicks audit. Saves 2 clicks per spool cycle:
+  // one when ARM finishes and SOLD is the only valid next op, one when SOLD
+  // finishes and METROLOGIA is the only valid next op.
+
+  it('T-110: ARM_TERM (LIBRE + fecha_armado set, fecha_soldadura null) skips OperationModal and opens WorkerModal directly with operation=SOLD', () => {
+    // Mid-cycle spool: ARM completed, SOLD pending. Backend leaves the
+    // spool LIBRE (not occupied) until a worker grabs SOLD.
+    const armTermSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'LIBRE',
+      ocupado_por: null,
+      fecha_armado: '21-01-2026',
+      fecha_soldadura: null,
+      operacion_actual: null,
+    });
+    mockSpools = [armTermSpool, SPOOL_B];
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // OperationModal NOT shown — skipped.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    // ActionModal NOT shown — only one valid action (INICIAR), so it skips too.
+    expect(screen.queryByTestId('action-modal')).not.toBeInTheDocument();
+    // WorkerModal IS shown, pre-set to SOLD + INICIAR.
+    expect(screen.getByTestId('worker-modal')).toBeInTheDocument();
+    expect(capturedWorkerModalProps.operation).toBe('SOLD');
+    expect(capturedWorkerModalProps.action).toBe('INICIAR');
+  });
+
+  it('T-110: SOLD_TERM (PENDIENTE_METROLOGIA) skips OperationModal and opens MetrologiaModal directly', () => {
+    const soldTermSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'PENDIENTE_METROLOGIA',
+      ocupado_por: null,
+      fecha_armado: '21-01-2026',
+      fecha_soldadura: '22-01-2026',
+      operacion_actual: null,
+    });
+    mockSpools = [soldTermSpool, SPOOL_B];
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // OperationModal NOT shown — skipped.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    // MetrologiaModal opens directly.
+    expect(screen.getByTestId('metrologia-modal')).toBeInTheDocument();
+  });
+
+  it('T-110 regression: truly LIBRE spool (no fecha_armado yet) still opens OperationModal', () => {
+    // SPOOL_A is the default LIBRE spool with all dates null.
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // Original behavior preserved: OperationModal shown when no
+    // deterministic next step can be inferred.
+    expect(screen.getByTestId('operation-modal')).toBeInTheDocument();
+  });
+
+  it('T-110 regression: EN_PROGRESO ARM (occupied + operacion_actual=ARM) still skips via existing deriveOperation path', () => {
+    const enArmSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'MR(93)',
+      operacion_actual: 'ARM',
+    });
+    mockSpools = [enArmSpool, SPOOL_B];
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // OperationModal NOT shown — existing skip path (deriveOperation
+    // returns 'ARM' from operacion_actual) handles this case.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    // For an occupied spool, getValidActions returns ['FINALIZAR', 'PAUSAR']
+    // (length > 1) — so the ActionModal IS shown, asking the user to pick.
+    expect(screen.getByTestId('action-modal')).toBeInTheDocument();
+    expect(capturedActionModalProps.operation).toBe('ARM');
+  });
 });

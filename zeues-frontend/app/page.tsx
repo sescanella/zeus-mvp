@@ -38,7 +38,7 @@ import {
 } from '@/lib/api';
 import { classifyApiError } from '@/lib/error-classifier';
 import type { SpoolCardData, EstadoTrabajo, Worker } from '@/lib/types';
-import { getValidActions, deriveOperation } from '@/lib/spool-state-machine';
+import { getValidActions, deriveOperation, isMetReady } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 import { ESTADO_LABELS, ESTADO_CHIP_COLORS, ALL_ESTADOS } from '@/lib/constants';
 
@@ -300,10 +300,20 @@ function HomePage() {
 
   /**
    * Card click opens the modal chain for a single spool.
-   * Skips OperationModal when the spool already has an active operation.
+   * Skips OperationModal when the spool already has an active operation
+   * or when the next step is deterministic (T-110: ARM_TERM→SOLD,
+   * SOLD_TERM→MET).
    */
   const handleCardClick = (spool: SpoolCardData) => {
     setSelectedSpool(spool);
+
+    // T-110 hotspot H2: PENDIENTE_METROLOGIA has only one valid next
+    // step — open the MetrologiaModal directly. The MET path bypasses
+    // handleSelectOperation, so check it before deriveOperation.
+    if (isMetReady(spool)) {
+      modalStack.push('metrologia');
+      return;
+    }
 
     const knownOp = deriveOperation(spool);
     if (knownOp) {

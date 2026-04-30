@@ -50,8 +50,18 @@ export function getValidActions(spool: SpoolCardData): Action[] {
  * When a spool has an active operacion_actual (ARM, SOLD, REPARACION),
  * the operation is already known — no need to ask the user.
  *
- * Returns null when the operation cannot be determined (e.g., LIBRE spool
- * with no active operation), meaning the OperationModal should be shown.
+ * T-110: also returns 'SOLD' for the post-ARM intermediate state
+ * (estado_trabajo='LIBRE', fecha_armado set, fecha_soldadura still null,
+ * not occupied) — the only valid next operation is SOLD, so the
+ * OperationModal would just ask a question with one possible answer.
+ *
+ * MET is intentionally NOT returned here because the MET path is not
+ * routed through handleSelectOperation in page.tsx (it uses onSelectMet
+ * which pushes the MetrologiaModal directly). MET skipping is handled
+ * by isMetReady() and a dedicated branch in handleCardClick.
+ *
+ * Returns null when the operation cannot be determined (e.g., truly empty
+ * LIBRE spool with no work yet), meaning the OperationModal should be shown.
  *
  * Maps backend OperacionActual → frontend Operation:
  *   ARM → ARM, SOLD → SOLD, REPARACION → REP
@@ -66,5 +76,32 @@ export function deriveOperation(spool: SpoolCardData): Operation | null {
   if (spool.operacion_actual) {
     return OPERACION_TO_OPERATION[spool.operacion_actual] ?? null;
   }
+
+  // T-110 hotspot H2: ARM finished, SOLD pending. The backend leaves the
+  // spool LIBRE (not occupied) with fecha_armado set and fecha_soldadura
+  // null — the only valid next move is INICIAR SOLD. Skip OperationModal.
+  if (
+    spool.estado_trabajo === 'LIBRE' &&
+    !spool.ocupado_por &&
+    spool.fecha_armado !== null &&
+    spool.fecha_soldadura === null
+  ) {
+    return 'SOLD';
+  }
+
   return null;
+}
+
+/**
+ * T-110 hotspot H2: ARM + SOLD complete, metrología pending. Backend
+ * returns estado_trabajo='PENDIENTE_METROLOGIA' (see _derive_estado in
+ * backend/models/spool_status.py). The only valid next action is to
+ * inspect — open MetrologiaModal directly, skip OperationModal.
+ *
+ * Kept separate from deriveOperation because the MET flow does not
+ * route through handleSelectOperation in page.tsx — it pushes
+ * 'metrologia' onto the modal stack directly.
+ */
+export function isMetReady(spool: SpoolCardData): boolean {
+  return spool.estado_trabajo === 'PENDIENTE_METROLOGIA';
 }
