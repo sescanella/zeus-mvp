@@ -211,14 +211,56 @@ class ValidationService:
         # Import here to avoid circular dependency
         from backend.exceptions import SpoolOccupiedError
 
-        # 1. Check ARM completed (prerequisite)
+        # 1. Check ARM completed (prerequisite) — with per-union fallback when
+        #    Fecha_Armado is stale.
+        #
+        # Background: a small set of legacy/edge spools have all unions ARM-
+        # completed (every Uniones.ARM_FECHA_FIN populated, counters > 0,
+        # workers stamped) yet Operaciones.Fecha_Armado / Armador remain
+        # empty. Two confirmed cases on 2026-05-08 (MK-1344-GW-27133-009 and
+        # MK-1344-TW-27121-004) blocked metrología entry even though ARM was
+        # really done at the union level. Root cause is in the write path:
+        # OccupationService.finalizar_spool only writes the v2.1 columns
+        # when action_taken=="COMPLETAR" (occupation_service.py:1602-1606).
+        # If the operation took the PAUSAR branch (e.g. T-021 guard fired or
+        # total_uniones was corrupted as an Excel-date and skipped the
+        # numerical compare), the v2.1 columns stay empty.
+        #
+        # Read-side guard: if Fecha_Armado is empty, consult union_repository
+        # before raising. If every union has ARM_FECHA_FIN set, accept ARM
+        # as completed. Use distinctive log markers ([ARM_FALLBACK_OK] /
+        # [ARM_FALLBACK_FAILED]) so this code path can be greppable in
+        # Railway logs. Mirrors the SOLD H2 guard pattern below.
         if spool.fecha_armado is None:
-            raise DependenciasNoSatisfechasError(
-                tag_spool=spool.tag_spool,
-                operacion="METROLOGIA",
-                dependencia_faltante="ARM completado",
-                detalle="Armado debe finalizar antes de metrología"
-            )
+            arm_completed_via_unions = False
+            if self.union_repository is not None:
+                tag_unions = None
+                try:
+                    tag_unions = self.union_repository.get_by_spool(spool.tag_spool)
+                except Exception as e:
+                    logger.warning(
+                        f"[ARM_FALLBACK_FAILED] get_by_spool({spool.tag_spool}) raised "
+                        f"{type(e).__name__}: {e}. Falling back to strict Fecha_Armado check."
+                    )
+                    tag_unions = None
+
+                if isinstance(tag_unions, list) and len(tag_unions) > 0:
+                    arm_pending = [u for u in tag_unions if u.arm_fecha_fin is None]
+                    if not arm_pending:
+                        arm_completed_via_unions = True
+                        logger.info(
+                            f"[ARM_FALLBACK_OK] {spool.tag_spool}: Fecha_Armado empty "
+                            f"but all {len(tag_unions)} unions have ARM_FECHA_FIN set. "
+                            f"Allowing metrología entry."
+                        )
+
+            if not arm_completed_via_unions:
+                raise DependenciasNoSatisfechasError(
+                    tag_spool=spool.tag_spool,
+                    operacion="METROLOGIA",
+                    dependencia_faltante="ARM completado",
+                    detalle="Armado debe finalizar antes de metrología"
+                )
 
         # 2. Check SOLD completed (prerequisite)
         if spool.fecha_soldadura is None:

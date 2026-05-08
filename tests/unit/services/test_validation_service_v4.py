@@ -442,3 +442,149 @@ class TestMetrologiaPreEntryUnionsGuard:
         # Should not raise.
         service.validar_puede_completar_metrologia(spool, worker_id=99)
 
+
+# ─── ARM fallback for stale Fecha_Armado ─────────────────────────────────────
+#
+# Production incident 2026-05-08: Matías reported "falta ARM completado" when
+# attempting metrología on MK-1344-GW-27133-009. Direct sheet inspection
+# showed Operaciones.Fecha_Armado='' but every Uniones.ARM_FECHA_FIN populated
+# and counters at expected values. Root cause is in the write path (only
+# OccupationService.finalizar_spool with action_taken==COMPLETAR writes the
+# v2.1 columns); when the operation takes the PAUSAR branch the columns stay
+# empty even though ARM is really done at the union level.
+#
+# These tests pin the read-side fallback that unblocks the user without
+# requiring a data-fix migration: when Fecha_Armado is None, consult unions.
+
+
+class TestArmFallbackForStaleFechaArmado:
+    """ARM fallback in validar_puede_completar_metrologia."""
+
+    @pytest.fixture
+    def union_repository(self):
+        return Mock()
+
+    @pytest.fixture
+    def validation_service(self, union_repository):
+        return ValidationService(
+            role_service=None, union_repository=union_repository
+        )
+
+    @staticmethod
+    def _make_spool(tag="MK-1344-GW-27133-009", fecha_armado=False):
+        """Default fecha_armado=False reproduces the bug scenario."""
+        spool = Mock()
+        spool.tag_spool = tag
+        spool.fecha_armado = datetime(2026, 5, 8) if fecha_armado else None
+        spool.fecha_soldadura = datetime(2026, 5, 8)
+        spool.fecha_qc_metrologia = None
+        spool.estado_detalle = ""
+        spool.ocupado_por = None
+        return spool
+
+    def test_a_arm_fallback_passes_when_all_unions_have_arm_fecha_fin(
+        self, validation_service, union_repository
+    ):
+        """The bug fix scenario: Fecha_Armado='' but all unions ARM-completed.
+        Reproduces MK-1344-GW-27133-009 from 2026-05-08."""
+        spool = self._make_spool(fecha_armado=False)
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8, 9, 47, 5),
+                sol_fecha_fin=datetime(2026, 5, 8, 9, 49, 16),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8, 9, 47, 5),
+                sol_fecha_fin=datetime(2026, 5, 8, 9, 50, 26),
+            ),
+        ]
+        # Must NOT raise — all unions ARM done, fallback accepts.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=76)
+
+    def test_b_arm_fallback_blocks_when_any_union_arm_fecha_fin_is_none(
+        self, validation_service, union_repository
+    ):
+        """If even one union has arm_fecha_fin=None, fallback rejects.
+        Mirrors the existing strict semantics: ARM means ALL uniones armed."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        spool = self._make_spool(fecha_armado=False)
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8),
+                sol_fecha_fin=datetime(2026, 5, 8),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=None,  # one pending → fallback must reject
+                sol_fecha_fin=None,
+            ),
+        ]
+
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            validation_service.validar_puede_completar_metrologia(spool, worker_id=76)
+
+        assert exc_info.value.data["dependencia_faltante"] == "ARM completado"
+
+    def test_c_arm_fallback_blocks_when_union_repository_unavailable(self):
+        """If union_repository is None or get_by_spool raises, the fallback
+        does NOT pretend ARM is done. We bail back to the strict legacy
+        behavior — better to block than to admit an unverified spool."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        # Variant 1: union_repository is None.
+        service_no_repo = ValidationService(
+            role_service=None, union_repository=None
+        )
+        spool = self._make_spool(fecha_armado=False)
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            service_no_repo.validar_puede_completar_metrologia(spool, worker_id=76)
+        assert exc_info.value.data["dependencia_faltante"] == "ARM completado"
+
+        # Variant 2: union_repository present but get_by_spool raises.
+        union_repository = Mock()
+        union_repository.get_by_spool.side_effect = RuntimeError("sheets down")
+        service_failing_repo = ValidationService(
+            role_service=None, union_repository=union_repository
+        )
+        with pytest.raises(DependenciasNoSatisfechasError):
+            service_failing_repo.validar_puede_completar_metrologia(
+                spool, worker_id=76
+            )
+
+        # Variant 3: get_by_spool returns empty list (no Uniones rows).
+        # Fallback can't verify — must block.
+        union_repository_empty = Mock()
+        union_repository_empty.get_by_spool.return_value = []
+        service_empty = ValidationService(
+            role_service=None, union_repository=union_repository_empty
+        )
+        with pytest.raises(DependenciasNoSatisfechasError):
+            service_empty.validar_puede_completar_metrologia(spool, worker_id=76)
+
+    def test_d_existing_behavior_preserved_when_fecha_armado_is_set(
+        self, validation_service, union_repository
+    ):
+        """Regression guard: when Fecha_Armado is populated, the new code path
+        must not run. SOLD/H2 checks proceed as before."""
+        spool = self._make_spool(fecha_armado=True)
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8),
+                sol_fecha_fin=datetime(2026, 5, 8),
+            ),
+        ]
+
+        # Should not raise. The ARM check is short-circuited because
+        # fecha_armado is truthy; existing flow continues.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=76)
+
+        # Confirm get_by_spool was still called (by the H2 SOLD guard, NOT by
+        # the new ARM fallback). This proves we did not introduce a duplicate
+        # query and that the SOLD guard remains active.
+        assert union_repository.get_by_spool.call_count == 1
+
