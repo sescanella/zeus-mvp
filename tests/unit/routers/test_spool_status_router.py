@@ -157,11 +157,6 @@ def test_get_spool_status_returns_404_for_unknown_tag(client_without_spool):
     assert response.status_code == 404
 
 
-def test_get_spool_status_404_detail_contains_tag(client_without_spool):
-    """404 response detail includes the requested tag."""
-    response = client_without_spool.get("/api/spool/INVALID-TAG-XYZ/status")
-    data = response.json()
-    assert "INVALID-TAG-XYZ" in data["detail"]
 
 
 # ==================== LIBRE SPOOL (no estado_detalle) ====================

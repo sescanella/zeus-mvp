@@ -494,24 +494,44 @@ export async function getSpoolStatus(tag: string): Promise<SpoolCardData> {
 }
 
 /**
+ * Backend BatchStatusRequest enforces max_length=100 per request.
+ * Exported for use by tests asserting the chunking contract.
+ */
+export const BATCH_STATUS_CHUNK_SIZE = 100;
+
+/**
  * POST /api/spools/batch-status
- * Obtiene el estado de múltiples spools en una sola request.
+ * Obtiene el estado de múltiples spools.
  *
- * Used for 30s polling refresh of all tracked spool cards.
- * Response shape: { spools: SpoolCardData[], total: number }
+ * The backend caps each request at BATCH_STATUS_CHUNK_SIZE tags. When the
+ * caller passes more than that, this function splits into chunks and runs
+ * them in parallel with Promise.all, then merges the results in input order.
  *
- * @param tags - Array of TAG_SPOOL identifiers
- * @returns Promise<SpoolCardData[]> array of spool statuses
+ * @param tags - Array of TAG_SPOOL identifiers (any length)
+ * @returns Promise<SpoolCardData[]> array of spool statuses (omits not-found)
  * @throws ApiError if backend unavailable
  */
 export async function batchGetStatus(tags: string[]): Promise<SpoolCardData[]> {
-  const res = await fetch(`${API_URL}/api/spools/batch-status`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tags }),
-  });
-  const data = await handleResponse<{ spools: SpoolCardData[]; total: number }>(res);
-  return data.spools;
+  if (tags.length === 0) return [];
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < tags.length; i += BATCH_STATUS_CHUNK_SIZE) {
+    chunks.push(tags.slice(i, i + BATCH_STATUS_CHUNK_SIZE));
+  }
+
+  const responses = await Promise.all(
+    chunks.map(async (chunk) => {
+      const res = await fetch(`${API_URL}/api/spools/batch-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: chunk }),
+      });
+      const data = await handleResponse<{ spools: SpoolCardData[]; total: number }>(res);
+      return data.spools;
+    })
+  );
+
+  return responses.flat();
 }
 
 // ==========================================

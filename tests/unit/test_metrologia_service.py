@@ -9,6 +9,7 @@ from datetime import date
 
 from backend.services.metrologia_service import MetrologiaService
 from backend.services.validation_service import ValidationService
+from backend.services.cycle_counter_service import CycleCounterService
 from backend.models.spool import Spool
 from backend.exceptions import (
     SpoolNoEncontradoError,
@@ -24,6 +25,8 @@ def mock_sheets_repo():
     repo = Mock()
     repo.find_row_by_column_value = Mock(return_value=10)
     repo.batch_update_by_column_name = Mock()
+    # T-112: state machine reads Estado_Detalle to extract current cycle on RECHAZADO
+    repo.get_cell_value = Mock(return_value="")
     return repo
 
 
@@ -42,12 +45,19 @@ def validation_service():
 
 
 @pytest.fixture
-def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo):
+def cycle_counter():
+    """Real CycleCounterService for testing (T-112: now required by MetrologiaService)."""
+    return CycleCounterService()
+
+
+@pytest.fixture
+def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo, cycle_counter):
     """MetrologiaService with mocked dependencies (single-user mode: no Redis)."""
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo
+        metadata_repository=mock_metadata_repo,
+        cycle_counter=cycle_counter
     )
 
 
@@ -233,3 +243,128 @@ async def test_completar_continues_on_metadata_failure(metrologia_service, mock_
     )
 
     assert result["success"] is True
+
+
+# ============================================================================
+# T-112 REGRESSION TESTS — cycle_counter injection
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_t112_cycle_counter_passed_to_state_machine(
+    validation_service, mock_sheets_repo, mock_metadata_repo, ready_spool
+):
+    """T-112: MetrologiaService must inject cycle_counter into MetrologiaStateMachine.
+
+    Before fix, factory and constructor did not pass cycle_counter, so the
+    on_enter_rechazado callback fell back to the static "METROLOGIA RECHAZADO -
+    Pendiente reparación" string and never incremented the cycle. This test
+    locks in the injection.
+    """
+    mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
+    cycle_counter_mock = Mock(spec=CycleCounterService)
+
+    service = MetrologiaService(
+        validation_service=validation_service,
+        sheets_repository=mock_sheets_repo,
+        metadata_repository=mock_metadata_repo,
+        cycle_counter=cycle_counter_mock
+    )
+
+    with patch("backend.services.metrologia_service.MetrologiaStateMachine") as sm_cls:
+        # Provide a no-op state machine instance so completar() doesn't crash
+        sm_instance = Mock()
+        sm_cls.return_value = sm_instance
+
+        await service.completar(
+            tag_spool="TEST-001",
+            worker_id=95,
+            worker_nombre="CP(95)",
+            resultado="RECHAZADO"
+        )
+
+        sm_cls.assert_called_once()
+        kwargs = sm_cls.call_args.kwargs
+        assert kwargs["cycle_counter"] is cycle_counter_mock, (
+            "MetrologiaStateMachine must receive cycle_counter from MetrologiaService"
+        )
+
+
+@pytest.mark.asyncio
+async def test_t112_first_rechazado_writes_ciclo_1(
+    metrologia_service, mock_sheets_repo, ready_spool
+):
+    """T-112: First RECHAZADO writes Estado_Detalle with 'Ciclo 1/3'.
+
+    Before fix, the cycle was never written because cycle_counter was None.
+    """
+    mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
+    mock_sheets_repo.get_cell_value = Mock(return_value="")  # No prior cycle
+
+    await metrologia_service.completar(
+        tag_spool="TEST-001",
+        worker_id=95,
+        worker_nombre="CP(95)",
+        resultado="RECHAZADO"
+    )
+
+    # Verify Estado_Detalle was written with cycle 1/3
+    mock_sheets_repo.batch_update_by_column_name.assert_called_once()
+    updates = mock_sheets_repo.batch_update_by_column_name.call_args.kwargs["updates"]
+    estado_update = next(u for u in updates if u["column_name"] == "Estado_Detalle")
+    assert "Ciclo 1/3" in estado_update["value"]
+    assert "RECHAZADO" in estado_update["value"]
+
+
+@pytest.mark.asyncio
+async def test_t112_third_rechazado_transitions_to_bloqueado(
+    metrologia_service, mock_sheets_repo, ready_spool
+):
+    """T-112: Third RECHAZADO transitions Estado_Detalle to BLOQUEADO.
+
+    Simulates the state Sheets has after 2 prior rejections by returning
+    'Ciclo 2/3' from get_cell_value. The third rejection should yield BLOQUEADO.
+    """
+    mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
+    mock_sheets_repo.get_cell_value = Mock(
+        return_value="RECHAZADO (Ciclo 2/3) - Pendiente reparación"
+    )
+
+    await metrologia_service.completar(
+        tag_spool="TEST-001",
+        worker_id=95,
+        worker_nombre="CP(95)",
+        resultado="RECHAZADO"
+    )
+
+    # Verify Estado_Detalle was set to BLOQUEADO
+    updates = mock_sheets_repo.batch_update_by_column_name.call_args.kwargs["updates"]
+    estado_update = next(u for u in updates if u["column_name"] == "Estado_Detalle")
+    assert "BLOQUEADO" in estado_update["value"]
+    assert "supervisor" in estado_update["value"].lower()
+
+
+@pytest.mark.asyncio
+async def test_t112_aprobado_resets_cycle(
+    metrologia_service, mock_sheets_repo, ready_spool
+):
+    """T-112: APROBADO resets cycle counter (consecutive rejections broken).
+
+    With cycle_counter injected, on_enter_aprobado now calls reset_cycle()
+    instead of falling back to the static "METROLOGIA APROBADO ✓" string.
+    """
+    mock_sheets_repo.get_spool_by_tag = Mock(return_value=ready_spool)
+
+    await metrologia_service.completar(
+        tag_spool="TEST-001",
+        worker_id=95,
+        worker_nombre="CP(95)",
+        resultado="APROBADO"
+    )
+
+    updates = mock_sheets_repo.batch_update_by_column_name.call_args.kwargs["updates"]
+    estado_update = next(u for u in updates if u["column_name"] == "Estado_Detalle")
+    # reset_cycle() returns "METROLOGIA APROBADO ✓"
+    assert "APROBADO" in estado_update["value"]
+    # Should not contain any "Ciclo" indicator after reset
+    assert "Ciclo" not in estado_update["value"]

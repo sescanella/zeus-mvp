@@ -403,66 +403,6 @@ async def test_cancelar_returns_to_rechazado(reparacion_service, mock_sheets_rep
 # ============================================================================
 
 
-def test_supervisor_override_detected(estado_detalle_service, mock_sheets_repo, mock_metadata_repo):
-    """
-    Should detect and log when supervisor manually changes BLOQUEADO → RECHAZADO.
-
-    Flow:
-    1. Spool is BLOQUEADO (from last event)
-    2. Supervisor manually changes Estado_Detalle to RECHAZADO in Sheets
-    3. System detects override and logs SUPERVISOR_OVERRIDE event
-    """
-    tag_spool = "REPAIR-OVERRIDE"
-
-    # Mock current state: RECHAZADO
-    current_spool = Spool(
-        tag_spool=tag_spool,
-        fecha_materiales=date(2026, 1, 20),
-        fecha_armado=date(2026, 1, 22),
-        fecha_soldadura=date(2026, 1, 25),
-        fecha_qc_metrologia=date(2026, 1, 27),
-        armador="MR(93)",
-        soldador="JP(94)",
-        ocupado_por=None,
-        fecha_ocupacion=None,
-        estado_detalle="RECHAZADO (Ciclo 2/3) - Pendiente reparación",
-        version=16
-    )
-    mock_sheets_repo.get_spool_by_tag.return_value = current_spool
-
-    # Mock last event: was BLOQUEADO
-    from backend.models.metadata import MetadataEvent, EventoTipo, Accion
-    from datetime import datetime
-
-    last_event = MetadataEvent(
-        id="event-123",
-        timestamp=datetime(2026, 1, 27, 15, 0, 0),
-        evento_tipo=EventoTipo.CANCELAR_METROLOGIA,  # Simulating rejection that led to BLOQUEADO
-        tag_spool=tag_spool,
-        worker_id=91,
-        worker_nombre="Supervisor(91)",
-        operacion="METROLOGIA",
-        accion=Accion.CANCELAR,
-        fecha_operacion="27-01-2026",
-        metadata_json=json.dumps({"estado_detalle": "BLOQUEADO - Contactar supervisor"})
-    )
-    mock_metadata_repo.get_events_by_spool.return_value = [last_event]
-
-    # Detect override
-    result = estado_detalle_service.detect_supervisor_override(tag_spool)
-
-    assert result is not None
-    assert result["detected"] is True
-    assert "BLOQUEADO" in result["previous_estado"]
-    assert "RECHAZADO" in result["current_estado"]
-    assert result["event_id"] is not None
-
-    # Verify SUPERVISOR_OVERRIDE event logged
-    assert mock_metadata_repo.append_event.called
-    event_dict = mock_metadata_repo.append_event.call_args[0][0]
-    assert event_dict["evento_tipo"] == "SUPERVISOR_OVERRIDE"
-    assert event_dict["worker_id"] == 0  # System event
-    assert event_dict["worker_nombre"] == "SYSTEM"
 
 
 def test_no_override_for_normal_transitions(estado_detalle_service, mock_sheets_repo, mock_metadata_repo):

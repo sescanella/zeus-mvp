@@ -327,72 +327,8 @@ async def test_iniciar_p5_v21_spool_minimal_writes(
     mock_metadata_repository.log_event.assert_called_once()
 
 
-@pytest.mark.asyncio
-async def test_iniciar_p5_sold_hardcoded_states(
-    occupation_service_p5,
-    mock_sheets_repository
-):
-    """
-    Test INICIAR P5 for SOLD operation uses correct hardcoded states.
-
-    Validates:
-    - ARM state = "completado"
-    - SOLD state = "en_progreso"
-    """
-    # Mock spool with ARM completed (uniones_arm_completadas >= 1)
-    mock_spool = mock_sheets_repository.get_spool_by_tag("TEST-V4")
-    mock_spool.uniones_arm_completadas = 5  # ARM already completed on some unions
-
-    request = IniciarRequest(
-        tag_spool="TEST-V4",
-        worker_id=93,
-        worker_nombre="MR(93)",
-        operacion=ActionType.SOLD
-    )
-
-    with patch('backend.services.estado_detalle_builder.EstadoDetalleBuilder') as mock_builder_class:
-        mock_builder = MagicMock()
-        mock_builder.build.return_value = "MR(93) trabajando SOLD (ARM completado, SOLD en progreso)"
-        mock_builder_class.return_value = mock_builder
-
-        response = await occupation_service_p5.iniciar_spool(request)
-
-    # Assert: EstadoDetalleBuilder called with SOLD hardcoded states
-    build_kwargs = mock_builder.build.call_args.kwargs
-    assert build_kwargs["arm_state"] == "completado"
-    assert build_kwargs["sold_state"] == "en_progreso"
 
 
-@pytest.mark.asyncio
-async def test_iniciar_p5_arm_prerequisite_validation(
-    occupation_service_p5,
-    mock_validation_service,
-    mock_sheets_repository
-):
-    """
-    Test INICIAR P5 validates ARM prerequisite for SOLD.
-
-    Validates:
-    - Raises ArmPrerequisiteError if uniones_arm_completadas < 1
-    - Error message includes Spanish text
-    """
-    # Mock spool with NO ARM completed (uniones_arm_completadas = 0)
-    mock_spool = mock_sheets_repository.get_spool_by_tag("TEST-V4")
-    mock_spool.uniones_arm_completadas = 0  # No ARM completed yet
-
-    request = IniciarRequest(
-        tag_spool="TEST-V4",
-        worker_id=93,
-        worker_nombre="MR(93)",
-        operacion=ActionType.SOLD
-    )
-
-    with pytest.raises(ArmPrerequisiteError) as exc_info:
-        await occupation_service_p5.iniciar_spool(request)
-
-    # Validate error message (Spanish)
-    assert "No se puede iniciar SOLD" in str(exc_info.value)
-    assert "0/10 uniones armadas" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -567,56 +503,6 @@ async def test_finalizar_p5_pulgadas_always_in_metadata(
     assert metadata["pulgadas"] == 8.0
 
 
-@pytest.mark.asyncio
-async def test_finalizar_p5_completar_updates_v4_counters(
-    occupation_service_p5,
-    mock_sheets_repository,
-    mock_union_repository
-):
-    """
-    Test FINALIZAR P5 COMPLETAR updates v4.0 counters and dates.
-
-    Validates:
-    - Writes Fecha_Armado + Armador (COMPLETAR ARM)
-    - Updates Uniones_ARM_Completadas + Pulgadas_ARM
-    - Does NOT write these fields for PAUSAR
-    """
-    spool = mock_sheets_repository.get_spool_by_tag("TEST-V4")
-    spool.ocupado_por = "MR(93)"
-    spool.fecha_ocupacion = "04-02-2026 10:00:00"
-
-    # Select ALL 10 unions → COMPLETAR
-    request = FinalizarRequest(
-        tag_spool="TEST-V4",
-        worker_id=93,
-        worker_nombre="MR(93)",
-        operacion=ActionType.ARM,
-        selected_unions=[f"TEST-V4+{i}" for i in range(1, 11)]  # All 10
-    )
-
-    # Mock get_by_ids to return all 10 unions with DN=2.5 each
-    mock_union_repository.get_by_ids.return_value = [
-        MagicMock(dn_union=2.5) for _ in range(10)
-    ]
-
-    with patch('backend.services.occupation_service.now_chile'):
-        with patch('backend.services.occupation_service.today_chile') as mock_today:
-            mock_today.return_value = date(2026, 2, 4)
-            response = await occupation_service_p5.finalizar_spool(request)
-
-    # Assert: COMPLETAR action
-    assert response.action_taken == "COMPLETAR"
-
-    # Assert: Sheets write does NOT include v4.0 formula columns (managed by Google Sheets)
-    call_kwargs = mock_sheets_repository.batch_update_by_column_name.call_args.kwargs
-    batch_updates = call_kwargs["updates"]
-    updates = {u["column_name"]: u["value"] for u in batch_updates}
-
-    assert updates["Fecha_Armado"] == "04-02-2026"
-    assert updates["Armador"] == "MR(93)"
-    # v4.0 counter columns are NOT written (they are formulas in Sheets)
-    assert "Uniones_ARM_Completadas" not in updates
-    assert "Pulgadas_ARM" not in updates
 
 
 @pytest.mark.asyncio

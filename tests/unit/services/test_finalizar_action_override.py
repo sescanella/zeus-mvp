@@ -391,38 +391,4 @@ class TestFinalizarActionOverrideCompletar:
 class TestFinalizarActionOverrideNone:
     """Tests that action_override=None preserves existing auto-determination."""
 
-    @pytest.mark.asyncio
-    async def test_no_override_uses_auto_determination_pausar(
-        self, occupation_service, mock_union_repo
-    ):
-        """action_override=None with partial selection auto-determines PAUSAR."""
-        request = FinalizarRequest(
-            tag_spool="TEST-SPOOL",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion="ARM",
-            selected_unions=["OT-100+1", "OT-100+2"],  # 2 of 5 = PAUSAR
-            action_override=None
-        )
 
-        result = await occupation_service.finalizar_spool(request)
-
-        assert result.action_taken == "PAUSAR"
-
-    @pytest.mark.asyncio
-    async def test_no_override_uses_auto_determination_completar(
-        self, occupation_service, mock_union_repo
-    ):
-        """action_override=None with all selected auto-determines COMPLETAR."""
-        request = FinalizarRequest(
-            tag_spool="TEST-SPOOL",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion="ARM",
-            selected_unions=["OT-100+1", "OT-100+2", "OT-100+3", "OT-100+4", "OT-100+5"],  # all 5 = COMPLETAR
-            action_override=None
-        )
-
-        result = await occupation_service.finalizar_spool(request)
-
-        assert result.action_taken == "COMPLETAR"

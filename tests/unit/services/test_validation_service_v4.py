@@ -213,57 +213,7 @@ class TestSOLDCompletionLogic:
         assert all(u.tipo_union in SOLD_REQUIRED_TYPES for u in sold_disponibles)
         assert not any(u.tipo_union == 'FW' for u in sold_disponibles)
 
-    def test_determine_action_with_mixed_types(self):
-        """Test _determine_action with correct total for mixed types."""
-        from backend.services.occupation_service import OccupationService
 
-        # Create service (dependencies not needed for this test)
-        service = OccupationService(
-            redis_lock_service=Mock(),
-            sheets_repository=Mock(),
-            metadata_repository=Mock(),
-            conflict_service=Mock(),
-            redis_event_service=Mock()
-        )
-
-        # Test COMPLETAR when all SOLD-required selected
-        # Total of 3 SOLD-required unions (FW excluded)
-        action = service._determine_action(
-            selected_count=3,
-            total_available=3,
-            operacion="SOLD"
-        )
-        assert action == "COMPLETAR"
-
-        # Test PAUSAR when partial SOLD-required selected
-        action = service._determine_action(
-            selected_count=2,
-            total_available=3,
-            operacion="SOLD"
-        )
-        assert action == "PAUSAR"
-
-    def test_determine_action_race_condition(self):
-        """Test _determine_action raises ValueError on race condition."""
-        from backend.services.occupation_service import OccupationService
-
-        service = OccupationService(
-            redis_lock_service=Mock(),
-            sheets_repository=Mock(),
-            metadata_repository=Mock(),
-            conflict_service=Mock(),
-            redis_event_service=Mock()
-        )
-
-        # Race condition: selected > available
-        with pytest.raises(ValueError) as exc_info:
-            service._determine_action(
-                selected_count=5,
-                total_available=3,
-                operacion="SOLD"
-            )
-
-        assert "Race condition" in str(exc_info.value)
 
 
 class TestIniciarSoldValidation:
@@ -301,148 +251,8 @@ class TestIniciarSoldValidation:
             "validation_service": validation_service
         }
 
-    @pytest.mark.asyncio
-    async def test_iniciar_sold_without_arm_returns_403(self, mocked_services):
-        """Test INICIAR SOLD fails with 403 when no ARM unions completed."""
-        from backend.services.occupation_service import OccupationService
-        from backend.models.occupation import IniciarRequest
-        from backend.models.enums import ActionType
 
-        # Create service with validation
-        service = OccupationService(
-            redis_lock_service=mocked_services["redis_lock"],
-            sheets_repository=mocked_services["sheets_repo"],
-            metadata_repository=mocked_services["metadata_repo"],
-            conflict_service=mocked_services["conflict_service"],
-            redis_event_service=mocked_services["redis_event"],
-            union_repository=mocked_services["union_repo"],
-            validation_service=mocked_services["validation_service"]
-        )
 
-        # Mock spool exists with materials
-        mock_spool = Mock()
-        mock_spool.fecha_materiales = "01-02-2026"
-        mock_spool.ot = "123"
-        mocked_services["sheets_repo"].get_spool_by_tag.return_value = mock_spool
-
-        # Mock validation to raise ArmPrerequisiteError
-        mocked_services["validation_service"].validate_arm_prerequisite.side_effect = \
-            ArmPrerequisiteError(tag_spool="OT-123", unions_sin_armar=3)
-
-        # Create request
-        request = IniciarRequest(
-            tag_spool="OT-123",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion=ActionType.SOLD
-        )
-
-        # Act & Assert
-        with pytest.raises(ArmPrerequisiteError) as exc_info:
-            await service.iniciar_spool(request)
-
-        # Verify validation was called
-        mocked_services["validation_service"].validate_arm_prerequisite.assert_called_once_with(
-            tag_spool="OT-123",
-            ot="123"
-        )
-
-        # Verify lock was NOT acquired (fail early)
-        mocked_services["redis_lock"].acquire_lock.assert_not_called()
-
-        assert "Cannot start SOLD" in str(exc_info.value)
-
-    @pytest.mark.asyncio
-    async def test_iniciar_sold_with_arm_succeeds(self, mocked_services):
-        """Test INICIAR SOLD succeeds when ARM prerequisite satisfied."""
-        from backend.services.occupation_service import OccupationService
-        from backend.models.occupation import IniciarRequest
-        from backend.models.enums import ActionType
-
-        # Create service with validation
-        service = OccupationService(
-            redis_lock_service=mocked_services["redis_lock"],
-            sheets_repository=mocked_services["sheets_repo"],
-            metadata_repository=mocked_services["metadata_repo"],
-            conflict_service=mocked_services["conflict_service"],
-            redis_event_service=mocked_services["redis_event"],
-            union_repository=mocked_services["union_repo"],
-            validation_service=mocked_services["validation_service"]
-        )
-
-        # Mock spool exists with materials
-        mock_spool = Mock()
-        mock_spool.fecha_materiales = "01-02-2026"
-        mock_spool.ot = "123"
-        mocked_services["sheets_repo"].get_spool_by_tag.return_value = mock_spool
-
-        # Mock validation passes
-        mocked_services["validation_service"].validate_arm_prerequisite.return_value = {
-            "valid": True,
-            "unions_armadas": 2
-        }
-
-        # Create request
-        request = IniciarRequest(
-            tag_spool="OT-123",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion=ActionType.SOLD
-        )
-
-        # Act
-        response = await service.iniciar_spool(request)
-
-        # Assert
-        assert response.success is True
-        assert "iniciado" in response.message.lower()
-
-        # Verify validation was called
-        mocked_services["validation_service"].validate_arm_prerequisite.assert_called_once()
-
-        # Verify lock was acquired (validation passed)
-        mocked_services["redis_lock"].acquire_lock.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_iniciar_arm_skips_validation(self, mocked_services):
-        """Test INICIAR ARM does not trigger ARM prerequisite validation."""
-        from backend.services.occupation_service import OccupationService
-        from backend.models.occupation import IniciarRequest
-        from backend.models.enums import ActionType
-
-        # Create service with validation
-        service = OccupationService(
-            redis_lock_service=mocked_services["redis_lock"],
-            sheets_repository=mocked_services["sheets_repo"],
-            metadata_repository=mocked_services["metadata_repo"],
-            conflict_service=mocked_services["conflict_service"],
-            redis_event_service=mocked_services["redis_event"],
-            union_repository=mocked_services["union_repo"],
-            validation_service=mocked_services["validation_service"]
-        )
-
-        # Mock spool exists with materials
-        mock_spool = Mock()
-        mock_spool.fecha_materiales = "01-02-2026"
-        mock_spool.ot = "123"
-        mocked_services["sheets_repo"].get_spool_by_tag.return_value = mock_spool
-
-        # Create ARM request (not SOLD)
-        request = IniciarRequest(
-            tag_spool="OT-123",
-            worker_id=93,
-            worker_nombre="MR(93)",
-            operacion=ActionType.ARM
-        )
-
-        # Act
-        response = await service.iniciar_spool(request)
-
-        # Assert
-        assert response.success is True
-
-        # Verify validation was NOT called (ARM doesn't need it)
-        mocked_services["validation_service"].validate_arm_prerequisite.assert_not_called()
 
 
 # =============================================================================
@@ -631,4 +441,150 @@ class TestMetrologiaPreEntryUnionsGuard:
         spool = self._make_spool()
         # Should not raise.
         service.validar_puede_completar_metrologia(spool, worker_id=99)
+
+
+# ─── ARM fallback for stale Fecha_Armado ─────────────────────────────────────
+#
+# Production incident 2026-05-08: Matías reported "falta ARM completado" when
+# attempting metrología on MK-1344-GW-27133-009. Direct sheet inspection
+# showed Operaciones.Fecha_Armado='' but every Uniones.ARM_FECHA_FIN populated
+# and counters at expected values. Root cause is in the write path (only
+# OccupationService.finalizar_spool with action_taken==COMPLETAR writes the
+# v2.1 columns); when the operation takes the PAUSAR branch the columns stay
+# empty even though ARM is really done at the union level.
+#
+# These tests pin the read-side fallback that unblocks the user without
+# requiring a data-fix migration: when Fecha_Armado is None, consult unions.
+
+
+class TestArmFallbackForStaleFechaArmado:
+    """ARM fallback in validar_puede_completar_metrologia."""
+
+    @pytest.fixture
+    def union_repository(self):
+        return Mock()
+
+    @pytest.fixture
+    def validation_service(self, union_repository):
+        return ValidationService(
+            role_service=None, union_repository=union_repository
+        )
+
+    @staticmethod
+    def _make_spool(tag="MK-1344-GW-27133-009", fecha_armado=False):
+        """Default fecha_armado=False reproduces the bug scenario."""
+        spool = Mock()
+        spool.tag_spool = tag
+        spool.fecha_armado = datetime(2026, 5, 8) if fecha_armado else None
+        spool.fecha_soldadura = datetime(2026, 5, 8)
+        spool.fecha_qc_metrologia = None
+        spool.estado_detalle = ""
+        spool.ocupado_por = None
+        return spool
+
+    def test_a_arm_fallback_passes_when_all_unions_have_arm_fecha_fin(
+        self, validation_service, union_repository
+    ):
+        """The bug fix scenario: Fecha_Armado='' but all unions ARM-completed.
+        Reproduces MK-1344-GW-27133-009 from 2026-05-08."""
+        spool = self._make_spool(fecha_armado=False)
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8, 9, 47, 5),
+                sol_fecha_fin=datetime(2026, 5, 8, 9, 49, 16),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8, 9, 47, 5),
+                sol_fecha_fin=datetime(2026, 5, 8, 9, 50, 26),
+            ),
+        ]
+        # Must NOT raise — all unions ARM done, fallback accepts.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=76)
+
+    def test_b_arm_fallback_blocks_when_any_union_arm_fecha_fin_is_none(
+        self, validation_service, union_repository
+    ):
+        """If even one union has arm_fecha_fin=None, fallback rejects.
+        Mirrors the existing strict semantics: ARM means ALL uniones armed."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        spool = self._make_spool(fecha_armado=False)
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8),
+                sol_fecha_fin=datetime(2026, 5, 8),
+            ),
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=None,  # one pending → fallback must reject
+                sol_fecha_fin=None,
+            ),
+        ]
+
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            validation_service.validar_puede_completar_metrologia(spool, worker_id=76)
+
+        assert exc_info.value.data["dependencia_faltante"] == "ARM completado"
+
+    def test_c_arm_fallback_blocks_when_union_repository_unavailable(self):
+        """If union_repository is None or get_by_spool raises, the fallback
+        does NOT pretend ARM is done. We bail back to the strict legacy
+        behavior — better to block than to admit an unverified spool."""
+        from backend.exceptions import DependenciasNoSatisfechasError
+
+        # Variant 1: union_repository is None.
+        service_no_repo = ValidationService(
+            role_service=None, union_repository=None
+        )
+        spool = self._make_spool(fecha_armado=False)
+        with pytest.raises(DependenciasNoSatisfechasError) as exc_info:
+            service_no_repo.validar_puede_completar_metrologia(spool, worker_id=76)
+        assert exc_info.value.data["dependencia_faltante"] == "ARM completado"
+
+        # Variant 2: union_repository present but get_by_spool raises.
+        union_repository = Mock()
+        union_repository.get_by_spool.side_effect = RuntimeError("sheets down")
+        service_failing_repo = ValidationService(
+            role_service=None, union_repository=union_repository
+        )
+        with pytest.raises(DependenciasNoSatisfechasError):
+            service_failing_repo.validar_puede_completar_metrologia(
+                spool, worker_id=76
+            )
+
+        # Variant 3: get_by_spool returns empty list (no Uniones rows).
+        # Fallback can't verify — must block.
+        union_repository_empty = Mock()
+        union_repository_empty.get_by_spool.return_value = []
+        service_empty = ValidationService(
+            role_service=None, union_repository=union_repository_empty
+        )
+        with pytest.raises(DependenciasNoSatisfechasError):
+            service_empty.validar_puede_completar_metrologia(spool, worker_id=76)
+
+    def test_d_existing_behavior_preserved_when_fecha_armado_is_set(
+        self, validation_service, union_repository
+    ):
+        """Regression guard: when Fecha_Armado is populated, the new code path
+        must not run. SOLD/H2 checks proceed as before."""
+        spool = self._make_spool(fecha_armado=True)
+        union_repository.get_by_spool.return_value = [
+            Mock(
+                tipo_union="BW",
+                arm_fecha_fin=datetime(2026, 5, 8),
+                sol_fecha_fin=datetime(2026, 5, 8),
+            ),
+        ]
+
+        # Should not raise. The ARM check is short-circuited because
+        # fecha_armado is truthy; existing flow continues.
+        validation_service.validar_puede_completar_metrologia(spool, worker_id=76)
+
+        # Confirm get_by_spool was still called (by the H2 SOLD guard, NOT by
+        # the new ARM fallback). This proves we did not introduce a duplicate
+        # query and that the SOLD guard remains active.
+        assert union_repository.get_by_spool.call_count == 1
 

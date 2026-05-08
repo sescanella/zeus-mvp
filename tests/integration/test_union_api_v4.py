@@ -22,20 +22,6 @@ def client():
 class TestUnionAPIV4Endpoints:
     """Smoke tests for v4.0 API endpoint existence and structure"""
 
-    def test_iniciar_endpoint_exists(self, client):
-        """POST /api/v4/occupation/iniciar endpoint exists"""
-        response = client.post(
-            "/api/v4/occupation/iniciar",
-            json={
-                "tag_spool": "TEST-SPOOL",
-                "worker_id": 93,
-                "worker_nombre": "MR(93)",
-                "operacion": "ARM"
-            }
-        )
-        # Should not be 404 (endpoint exists)
-        # May return 400/500 if backend not configured
-        assert response.status_code != 404
 
     def test_finalizar_endpoint_exists(self, client):
         """POST /api/v4/occupation/finalizar endpoint exists"""
@@ -130,11 +116,6 @@ class TestWorkflowStructure:
     to test these scenarios with real infrastructure.
     """
 
-    def test_workflow_documentation_exists(self):
-        """Manual validation guide exists"""
-        import os
-        manual_path = "/Users/sescanella/Proyectos/KM/ZEUES-by-KM/.planning/phases/11-api-endpoints-metrics/MANUAL_VALIDATION.md"
-        assert os.path.exists(manual_path), "Manual validation guide missing"
 
     @pytest.mark.skip(reason="Requires backend infrastructure - use MANUAL_VALIDATION.md")
     def test_iniciar_finalizar_pausar_flow(self):

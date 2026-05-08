@@ -469,10 +469,12 @@ def get_metrologia_service(
         Skips occupation workflow entirely - inspection completes atomically.
         Single-user mode: No SSE event publishing needed.
     """
+    cycle_counter = CycleCounterService()
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository
+        metadata_repository=metadata_repository,
+        cycle_counter=cycle_counter
     )
 
 

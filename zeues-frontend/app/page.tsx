@@ -38,7 +38,7 @@ import {
 } from '@/lib/api';
 import { classifyApiError } from '@/lib/error-classifier';
 import type { SpoolCardData, EstadoTrabajo, Worker } from '@/lib/types';
-import { getValidActions, deriveOperation } from '@/lib/spool-state-machine';
+import { getValidActions, deriveOperation, isMetReady } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
 import { ESTADO_LABELS, ESTADO_CHIP_COLORS, ALL_ESTADOS } from '@/lib/constants';
 
@@ -300,10 +300,20 @@ function HomePage() {
 
   /**
    * Card click opens the modal chain for a single spool.
-   * Skips OperationModal when the spool already has an active operation.
+   * Skips OperationModal when the spool already has an active operation
+   * or when the next step is deterministic (T-110: ARM_TERM→SOLD,
+   * SOLD_TERM→MET).
    */
   const handleCardClick = (spool: SpoolCardData) => {
     setSelectedSpool(spool);
+
+    // T-110 hotspot H2: PENDIENTE_METROLOGIA has only one valid next
+    // step — open the MetrologiaModal directly. The MET path bypasses
+    // handleSelectOperation, so check it before deriveOperation.
+    if (isMetReady(spool)) {
+      modalStack.push('metrologia');
+      return;
+    }
 
     const knownOp = deriveOperation(spool);
     if (knownOp) {
@@ -362,6 +372,51 @@ function HomePage() {
         await pausarReparacion({ tag_spool: tag, worker_id: workerId });
       }
     }
+  };
+
+  /**
+   * T-111 hotspot H1: after a successful FINALIZAR (ARM/SOLD/REP) the only
+   * valid next move for the operator is the next operation in the chain
+   * (ARM→SOLD, SOLD→MET, REP→MET). Replicates the post-RECHAZADO handoff
+   * pattern from handleMetComplete (clear stack → refresh in background →
+   * pre-set selectedOperation/Action → push next modal) so the operator
+   * never has to re-click the card just to advance the chain.
+   *
+   * Caller MUST keep selectedSpool populated through this call — the next
+   * modal reads it. The helper itself does not clear selectedSpool; the
+   * following modal's own onComplete handler does (handleWorkerComplete /
+   * handleMetComplete).
+   *
+   * NOT applicable to PAUSAR (operator wants out), API failures (modal
+   * stays open for retry), or BLOQUEADO (no next step). Those callers
+   * skip this helper and clear state themselves.
+   */
+  const chainNextModalAfterFinalizar = async (
+    tag: string,
+    nextOp: Operation,
+    nextModal: 'worker' | 'metrologia',
+    nextAction: Action | null = 'INICIAR',
+  ) => {
+    modalStack.clear();
+    let refreshFailed = false;
+    try {
+      await refreshSingle(tag);
+    } catch {
+      // Refresh failure is non-fatal — the next modal operates on tag_spool,
+      // not on a stale spool snapshot. Warn the operator that the card may
+      // lag until the next 30s poll.
+      refreshFailed = true;
+    }
+    enqueue('Operacion completada', 'success');
+    if (refreshFailed) {
+      enqueue(
+        'Aviso: la card puede seguir mostrando el estado anterior hasta el proximo refresco.',
+        'error',
+      );
+    }
+    setSelectedOperation(nextOp);
+    setSelectedAction(nextAction);
+    modalStack.push(nextModal);
   };
 
   const handleSelectAction = async (action: Action, spoolOverride?: SpoolCardData, opOverride?: Operation) => {
@@ -425,25 +480,41 @@ function HomePage() {
       }
 
       setApiLoading(true);
+      let chained = false;
       try {
         await executeDirectAction(action, effectiveSpool, effectiveOp, workerId);
         const tag = effectiveSpool.tag_spool;
-        modalStack.clear();
 
-        try {
-          await refreshSingle(tag);
-        } catch {
-          // Spool may have been removed — ignore refresh errors
+        // T-111: post-FINALIZAR REP, the only valid next move is metrología.
+        // Auto-chain to MetrologiaModal so the operator does not have to
+        // re-click the card. PAUSAR REP keeps the legacy clear-and-exit
+        // behaviour (operator explicitly requested to stop the flow).
+        if (action === 'FINALIZAR' && effectiveOp === 'REP') {
+          await chainNextModalAfterFinalizar(tag, 'MET', 'metrologia', null);
+          chained = true;
+        } else {
+          modalStack.clear();
+          try {
+            await refreshSingle(tag);
+          } catch {
+            // Spool may have been removed — ignore refresh errors
+          }
+          enqueue('Operacion completada', 'success');
         }
-
-        enqueue('Operacion completada', 'success');
       } catch (err: unknown) {
         enqueue(classifyApiError(err).userMessage, 'error');
       } finally {
         setApiLoading(false);
-        setSelectedSpool(null);
-        setSelectedOperation(null);
-        setSelectedAction(null);
+        // When the chain takes over, the next modal owns the lifecycle —
+        // its onComplete handler (handleWorkerComplete / handleMetComplete)
+        // is responsible for clearing selection. Clearing here would
+        // unmount the just-pushed modal because of the {selectedSpool && ...}
+        // guard around the modal block.
+        if (!chained) {
+          setSelectedSpool(null);
+          setSelectedOperation(null);
+          setSelectedAction(null);
+        }
       }
     }
   };
@@ -599,78 +670,129 @@ function HomePage() {
   const handleUnionesComplete = async (selectedIds: string[]) => {
     const action = pendingAction;
 
-    // Clear ALL modals and state immediately to prevent flash of ActionModal/OperationModal
+    // Close the modal stack and the UnionesModal-specific scratch state
+    // immediately so the user sees no ActionModal/OperationModal flash.
+    // selectedSpool/Operation/Action are NOT cleared here — when the FINALIZAR
+    // path chains into the next modal (T-111), the next modal needs them
+    // populated. Each branch below decides whether to clear or chain.
     modalStack.clear();
     setPendingAction(null);
     setUnionesSpool(null);
-    setSelectedSpool(null);
-    setSelectedOperation(null);
-    setSelectedAction(null);
 
-    if (!action) return;
+    const clearSelection = () => {
+      setSelectedSpool(null);
+      setSelectedOperation(null);
+      setSelectedAction(null);
+    };
+
+    if (!action) {
+      clearSelection();
+      return;
+    }
 
     const tag = action.spool.tag_spool;
 
     if (action.type === 'EDIT') {
+      clearSelection();
       try {
         await refreshSingle(tag);
       } catch {
         // ignore
       }
       enqueue('Uniones guardadas', 'success');
-    } else if (action.type === 'FINALIZAR' || action.type === 'PAUSAR') {
-      if (selectedIds.length > 0 && action.workerId !== null && action.operation !== null) {
-        setApiLoading(true);
-        try {
-          await finalizarSpool({
-            tag_spool: tag,
-            worker_id: action.workerId,
-            operacion: action.operation,
-            selected_unions: selectedIds,
-          });
+      return;
+    }
+
+    if (action.type !== 'FINALIZAR' && action.type !== 'PAUSAR') {
+      clearSelection();
+      return;
+    }
+
+    // Happy FINALIZAR path with at least one union selected.
+    if (selectedIds.length > 0 && action.workerId !== null && action.operation !== null) {
+      setApiLoading(true);
+      let chained = false;
+      try {
+        await finalizarSpool({
+          tag_spool: tag,
+          worker_id: action.workerId,
+          operacion: action.operation,
+          selected_unions: selectedIds,
+        });
+
+        // T-111 hotspot H1: post-FINALIZAR ARM/SOLD, the next move is
+        // deterministic — INICIAR SOLD (next worker) or open MET. Auto-chain
+        // so the operator never re-clicks the card. PAUSAR with selected
+        // unions still ends the flow (operator chose to stop).
+        if (action.type === 'FINALIZAR') {
+          if (action.operation === 'ARM') {
+            await chainNextModalAfterFinalizar(tag, 'SOLD', 'worker', 'INICIAR');
+            chained = true;
+          } else if (action.operation === 'SOLD') {
+            await chainNextModalAfterFinalizar(tag, 'MET', 'metrologia', null);
+            chained = true;
+          }
+        }
+
+        if (!chained) {
           try {
             await refreshSingle(tag);
           } catch {
             // ignore
           }
           enqueue('Operacion completada', 'success');
-        } catch (err: unknown) {
-          enqueue(classifyApiError(err).userMessage, 'error');
-        } finally {
-          setApiLoading(false);
         }
-      } else if (selectedIds.length === 0 && action.type === 'PAUSAR' && action.workerId !== null && action.operation !== null) {
-        setApiLoading(true);
-        try {
-          await finalizarSpool({
-            tag_spool: tag,
-            worker_id: action.workerId,
-            operacion: action.operation,
-            selected_unions: [],
-            action_override: 'PAUSAR',
-          });
-          try {
-            await refreshSingle(tag);
-          } catch {
-            // ignore
-          }
-          enqueue('Uniones guardadas y spool pausado', 'success');
-        } catch (err: unknown) {
-          enqueue(classifyApiError(err).userMessage, 'error');
-        } finally {
-          setApiLoading(false);
+      } catch (err: unknown) {
+        enqueue(classifyApiError(err).userMessage, 'error');
+      } finally {
+        setApiLoading(false);
+        if (!chained) {
+          clearSelection();
         }
-      } else if (action.type === 'FINALIZAR') {
-        enqueue('Error: no se pudieron identificar las uniones seleccionadas', 'error');
-      } else {
+      }
+      return;
+    }
+
+    // PAUSAR with zero selected unions: keep partial progress, mark as paused.
+    if (selectedIds.length === 0 && action.type === 'PAUSAR' && action.workerId !== null && action.operation !== null) {
+      setApiLoading(true);
+      try {
+        await finalizarSpool({
+          tag_spool: tag,
+          worker_id: action.workerId,
+          operacion: action.operation,
+          selected_unions: [],
+          action_override: 'PAUSAR',
+        });
         try {
           await refreshSingle(tag);
         } catch {
           // ignore
         }
-        enqueue('Uniones guardadas', 'success');
+        enqueue('Uniones guardadas y spool pausado', 'success');
+      } catch (err: unknown) {
+        enqueue(classifyApiError(err).userMessage, 'error');
+      } finally {
+        setApiLoading(false);
+        clearSelection();
       }
+      return;
     }
+
+    if (action.type === 'FINALIZAR') {
+      clearSelection();
+      enqueue('Error: no se pudieron identificar las uniones seleccionadas', 'error');
+      return;
+    }
+
+    // PAUSAR fallback (no workerId/operation, just save uniones).
+    clearSelection();
+    try {
+      await refreshSingle(tag);
+    } catch {
+      // ignore
+    }
+    enqueue('Uniones guardadas', 'success');
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────

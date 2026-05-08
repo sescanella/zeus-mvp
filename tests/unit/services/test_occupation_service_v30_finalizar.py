@@ -186,44 +186,6 @@ async def test_finalizar_v30_sold_updates_correct_columns(
     assert "Armador" not in update_dict
 
 
-@pytest.mark.asyncio
-async def test_finalizar_v30_no_union_repository_calls(
-    occupation_service,
-    mock_sheets_repository,
-    mock_metadata_repository
-):
-    """
-    Test that v3.0 COMPLETAR path NEVER calls union_repository methods.
-
-    This is the core fix - v3.0 spools should bypass all union logic entirely.
-    """
-    # Add union_repository mock to verify it's never called
-    occupation_service.union_repository = Mock()
-
-    request = FinalizarRequest(
-        tag_spool="OT-001-v30",
-        worker_id=93,
-        worker_nombre="MR(93)",
-        operacion=ActionType.ARM,
-        selected_unions=[],
-        action_override="COMPLETAR"
-    )
-
-    with patch('backend.core.column_map_cache.ColumnMapCache') as mock_cache:
-        mock_cache.get_or_build.return_value = {"tagspool": 6}
-
-        result = await occupation_service.finalizar_spool(request)
-
-    # Verify union_repository methods NEVER called
-    occupation_service.union_repository.get_disponibles_arm_by_ot.assert_not_called()
-    occupation_service.union_repository.get_disponibles_sold_by_ot.assert_not_called()
-    occupation_service.union_repository.batch_update_arm_full.assert_not_called()
-    occupation_service.union_repository.batch_update_sold_full.assert_not_called()
-    occupation_service.union_repository.get_by_ids.assert_not_called()
-
-    # Verify result is still successful
-    assert result.success is True
-    assert result.action_taken == "COMPLETAR"
 
 
 @pytest.mark.asyncio

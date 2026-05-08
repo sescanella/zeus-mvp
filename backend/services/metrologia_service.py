@@ -18,6 +18,7 @@ from typing import Literal
 from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile
 from backend.domain.state_machines.metrologia_machine import MetrologiaStateMachine
 from backend.services.validation_service import ValidationService
+from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.exceptions import SpoolNoEncontradoError
@@ -43,7 +44,8 @@ class MetrologiaService:
         self,
         validation_service: ValidationService,
         sheets_repository: SheetsRepository,
-        metadata_repository: MetadataRepository
+        metadata_repository: MetadataRepository,
+        cycle_counter: CycleCounterService
     ):
         """
         Initialize metrología service with injected dependencies.
@@ -52,10 +54,12 @@ class MetrologiaService:
             validation_service: Service for prerequisite validation
             sheets_repository: Repository for Sheets reads/writes
             metadata_repository: Repository for audit logging
+            cycle_counter: Service for reparación cycle tracking (T-112: enables BLOQUEADO transition after 3 rejections)
         """
         self.validation_service = validation_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
+        self.cycle_counter = cycle_counter
         logger.info("MetrologiaService initialized with instant completion workflow")
 
     async def completar(
@@ -107,7 +111,8 @@ class MetrologiaService:
         metrologia_machine = MetrologiaStateMachine(
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
-            metadata_repo=self.metadata_repo
+            metadata_repo=self.metadata_repo,
+            cycle_counter=self.cycle_counter
         )
 
         # Step 3: Trigger state transition based on resultado

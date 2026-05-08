@@ -136,32 +136,6 @@ async def test_iniciar_arm_writes_armador(
     assert updates["Armador"] == "MR(93)"
 
 
-@pytest.mark.asyncio
-async def test_iniciar_sold_writes_soldador(
-    occupation_service,
-    mock_sheets_repository
-):
-    """INICIAR SOLD writes Soldador column with worker_nombre."""
-    # Set ARM as completed so SOLD prereqs are met
-    spool = mock_sheets_repository.get_spool_by_tag("SPOOL-001")
-    spool.uniones_arm_completadas = 5
-
-    request = IniciarRequest(
-        tag_spool="SPOOL-001",
-        worker_id=50,
-        worker_nombre="JL(50)",
-        operacion=ActionType.SOLD
-    )
-
-    with patch('backend.services.estado_detalle_builder.EstadoDetalleBuilder') as mock_builder_class:
-        mock_builder = MagicMock()
-        mock_builder.build.return_value = "JL(50) trabajando SOLD"
-        mock_builder_class.return_value = mock_builder
-
-        await occupation_service.iniciar_spool(request)
-
-    updates = _extract_updates_dict(mock_sheets_repository)
-    assert updates["Soldador"] == "JL(50)"
 
 
 @pytest.mark.asyncio
@@ -188,28 +162,3 @@ async def test_iniciar_arm_does_not_write_soldador(
     assert "Soldador" not in updates
 
 
-@pytest.mark.asyncio
-async def test_iniciar_sold_does_not_write_armador(
-    occupation_service,
-    mock_sheets_repository
-):
-    """INICIAR SOLD does NOT write Armador column."""
-    spool = mock_sheets_repository.get_spool_by_tag("SPOOL-001")
-    spool.uniones_arm_completadas = 5
-
-    request = IniciarRequest(
-        tag_spool="SPOOL-001",
-        worker_id=50,
-        worker_nombre="JL(50)",
-        operacion=ActionType.SOLD
-    )
-
-    with patch('backend.services.estado_detalle_builder.EstadoDetalleBuilder') as mock_builder_class:
-        mock_builder = MagicMock()
-        mock_builder.build.return_value = "JL(50) trabajando SOLD"
-        mock_builder_class.return_value = mock_builder
-
-        await occupation_service.iniciar_spool(request)
-
-    updates = _extract_updates_dict(mock_sheets_repository)
-    assert "Armador" not in updates

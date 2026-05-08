@@ -235,15 +235,61 @@ jest.mock('@/components/NotificationToast', () => ({
   },
 }));
 
-jest.mock('@/lib/api', () => ({
-  finalizarSpool: jest.fn(),
-  cancelarReparacion: jest.fn(),
+// Captured props from UnionesModal so T-111 tests can drive its onComplete.
+let capturedUnionesModalProps: Record<string, unknown> = {};
+
+jest.mock('@/components/UnionesModal', () => ({
+  UnionesModal: (props: Record<string, unknown>) => {
+    capturedUnionesModalProps = props;
+    if (!props.isOpen) return null;
+    return (
+      <div data-testid="uniones-modal">
+        <button
+          onClick={() =>
+            (props.onComplete as (ids: string[]) => void)(['u1', 'u2', 'u3'])
+          }
+        >
+          uniones-finalizar
+        </button>
+        <button
+          onClick={() => (props.onComplete as (ids: string[]) => void)([])}
+        >
+          uniones-pausar-empty
+        </button>
+      </div>
+    );
+  },
 }));
 
-import { finalizarSpool, cancelarReparacion } from '@/lib/api';
+jest.mock('@/lib/api', () => {
+  // Keep the real ApiError class so error-classifier's `instanceof ApiError`
+  // check still works inside tests that simulate API failures.
+  const actual = jest.requireActual('@/lib/api');
+  return {
+    ...actual,
+    finalizarSpool: jest.fn(),
+    cancelarReparacion: jest.fn(),
+    completarReparacion: jest.fn(),
+    pausarReparacion: jest.fn(),
+    iniciarSpool: jest.fn(),
+  };
+});
+
+import {
+  finalizarSpool,
+  cancelarReparacion,
+  completarReparacion,
+  pausarReparacion,
+} from '@/lib/api';
 const mockFinalizarSpool = finalizarSpool as jest.MockedFunction<typeof finalizarSpool>;
 const mockCancelarReparacion = cancelarReparacion as jest.MockedFunction<
   typeof cancelarReparacion
+>;
+const mockCompletarReparacion = completarReparacion as jest.MockedFunction<
+  typeof completarReparacion
+>;
+const mockPausarReparacion = pausarReparacion as jest.MockedFunction<
+  typeof pausarReparacion
 >;
 
 // ─── Setup / Teardown ─────────────────────────────────────────────────────────
@@ -258,6 +304,7 @@ beforeEach(() => {
   capturedWorkerModalProps = {};
   capturedMetrologiaModalProps = {};
   capturedSpoolCardListProps = {};
+  capturedUnionesModalProps = {};
 });
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -481,4 +528,335 @@ describe('Page — v5.0 single-page modal orchestration', () => {
       'OT-002',
     ]);
   });
+
+  // ── T-110 — skip OperationModal in deterministic transitions ──────────────
+  // Hotspot H2 of the north-star-clicks audit. Saves 2 clicks per spool cycle:
+  // one when ARM finishes and SOLD is the only valid next op, one when SOLD
+  // finishes and METROLOGIA is the only valid next op.
+
+  it('T-110: ARM_TERM (LIBRE + fecha_armado set, fecha_soldadura null) skips OperationModal and opens WorkerModal directly with operation=SOLD', () => {
+    // Mid-cycle spool: ARM completed, SOLD pending. Backend leaves the
+    // spool LIBRE (not occupied) until a worker grabs SOLD.
+    const armTermSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'LIBRE',
+      ocupado_por: null,
+      fecha_armado: '21-01-2026',
+      fecha_soldadura: null,
+      operacion_actual: null,
+    });
+    mockSpools = [armTermSpool, SPOOL_B];
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // OperationModal NOT shown — skipped.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    // ActionModal NOT shown — only one valid action (INICIAR), so it skips too.
+    expect(screen.queryByTestId('action-modal')).not.toBeInTheDocument();
+    // WorkerModal IS shown, pre-set to SOLD + INICIAR.
+    expect(screen.getByTestId('worker-modal')).toBeInTheDocument();
+    expect(capturedWorkerModalProps.operation).toBe('SOLD');
+    expect(capturedWorkerModalProps.action).toBe('INICIAR');
+  });
+
+  it('T-110: SOLD_TERM (PENDIENTE_METROLOGIA) skips OperationModal and opens MetrologiaModal directly', () => {
+    const soldTermSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'PENDIENTE_METROLOGIA',
+      ocupado_por: null,
+      fecha_armado: '21-01-2026',
+      fecha_soldadura: '22-01-2026',
+      operacion_actual: null,
+    });
+    mockSpools = [soldTermSpool, SPOOL_B];
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // OperationModal NOT shown — skipped.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    // MetrologiaModal opens directly.
+    expect(screen.getByTestId('metrologia-modal')).toBeInTheDocument();
+  });
+
+  it('T-110 regression: truly LIBRE spool (no fecha_armado yet) still opens OperationModal', () => {
+    // SPOOL_A is the default LIBRE spool with all dates null.
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // Original behavior preserved: OperationModal shown when no
+    // deterministic next step can be inferred.
+    expect(screen.getByTestId('operation-modal')).toBeInTheDocument();
+  });
+
+  it('T-110 regression: EN_PROGRESO ARM (occupied + operacion_actual=ARM) still skips via existing deriveOperation path', () => {
+    const enArmSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'MR(93)',
+      operacion_actual: 'ARM',
+    });
+    mockSpools = [enArmSpool, SPOOL_B];
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+
+    // OperationModal NOT shown — existing skip path (deriveOperation
+    // returns 'ARM' from operacion_actual) handles this case.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    // For an occupied spool, getValidActions returns ['FINALIZAR', 'PAUSAR']
+    // (length > 1) — so the ActionModal IS shown, asking the user to pick.
+    expect(screen.getByTestId('action-modal')).toBeInTheDocument();
+    expect(capturedActionModalProps.operation).toBe('ARM');
+  });
+
+  // ── T-111 — auto-chain next modal after FINALIZAR ─────────────────────────
+  // Hotspot H1 of the north-star-clicks audit. Replicates the post-RECHAZADO
+  // handoff pattern (handleMetComplete) so the operator never has to re-click
+  // the card after FINALIZAR ARM/SOLD/REP. Saves -5 clicks on the happy-path
+  // branch (rama A 26B → 21B post-T-110+T-111).
+
+  it('T-111: FINALIZAR ARM via UnionesModal auto-opens WorkerModal pre-set to SOLD/INICIAR', async () => {
+    const enArmSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'MR(93)',
+      operacion_actual: 'ARM',
+    });
+    mockSpools = [enArmSpool, SPOOL_B];
+    mockRefreshSingle.mockResolvedValue(undefined);
+    mockFinalizarSpool.mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof finalizarSpool>>);
+
+    render(<Page />);
+
+    // Walk the user through: card → ActionModal → FINALIZAR → UnionesModal
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+    // ActionModal shows FINALIZAR + PAUSAR; pick FINALIZAR via the existing
+    // mock helper (re-using select-INICIAR button text would be wrong here).
+    expect(screen.getByTestId('action-modal')).toBeInTheDocument();
+    await act(async () => {
+      (capturedActionModalProps.onSelectAction as (a: Action) => void)(
+        'FINALIZAR'
+      );
+    });
+
+    // UnionesModal opens with FINALIZAR semantics
+    expect(screen.getByTestId('uniones-modal')).toBeInTheDocument();
+
+    // User submits 3 selected unions
+    await act(async () => {
+      fireEvent.click(screen.getByText('uniones-finalizar'));
+    });
+
+    // T-111 assertion: WorkerModal opens automatically, pre-set to SOLD/INICIAR.
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-modal')).toBeInTheDocument();
+    });
+    expect(capturedWorkerModalProps.operation).toBe('SOLD');
+    expect(capturedWorkerModalProps.action).toBe('INICIAR');
+
+    // No flash of OperationModal/ActionModal/UnionesModal underneath.
+    expect(screen.queryByTestId('operation-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('uniones-modal')).not.toBeInTheDocument();
+
+    // API call + refresh both happened with the right tag.
+    expect(mockFinalizarSpool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tag_spool: 'OT-001',
+        operacion: 'ARM',
+        selected_unions: ['u1', 'u2', 'u3'],
+      })
+    );
+    expect(mockRefreshSingle).toHaveBeenCalledWith('OT-001');
+  });
+
+  it('T-111: FINALIZAR SOLD via UnionesModal auto-opens MetrologiaModal', async () => {
+    const enSoldSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'JS(45)',
+      operacion_actual: 'SOLD',
+      fecha_armado: '21-01-2026',
+    });
+    mockSpools = [enSoldSpool, SPOOL_B];
+    mockRefreshSingle.mockResolvedValue(undefined);
+    mockFinalizarSpool.mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof finalizarSpool>>);
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+    await act(async () => {
+      (capturedActionModalProps.onSelectAction as (a: Action) => void)(
+        'FINALIZAR'
+      );
+    });
+    expect(screen.getByTestId('uniones-modal')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('uniones-finalizar'));
+    });
+
+    // T-111 assertion: MetrologiaModal opens automatically.
+    await waitFor(() => {
+      expect(screen.getByTestId('metrologia-modal')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('worker-modal')).not.toBeInTheDocument();
+
+    expect(mockFinalizarSpool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tag_spool: 'OT-001',
+        operacion: 'SOLD',
+        selected_unions: ['u1', 'u2', 'u3'],
+      })
+    );
+  });
+
+  it('T-111: FINALIZAR REP via direct action auto-opens MetrologiaModal', async () => {
+    const enRepSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'PG(12)',
+      operacion_actual: 'REPARACION',
+    });
+    mockSpools = [enRepSpool, SPOOL_B];
+    mockRefreshSingle.mockResolvedValue(undefined);
+    mockCompletarReparacion.mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof completarReparacion>>);
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+    expect(screen.getByTestId('action-modal')).toBeInTheDocument();
+    // REP path goes through executeDirectAction (no UnionesModal).
+    await act(async () => {
+      (capturedActionModalProps.onSelectAction as (a: Action) => void)(
+        'FINALIZAR'
+      );
+    });
+
+    // T-111 assertion: MetrologiaModal opens automatically after REP completes.
+    await waitFor(() => {
+      expect(screen.getByTestId('metrologia-modal')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('worker-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-modal')).not.toBeInTheDocument();
+
+    expect(mockCompletarReparacion).toHaveBeenCalledWith({
+      tag_spool: 'OT-001',
+      worker_id: 12,
+    });
+    expect(mockRefreshSingle).toHaveBeenCalledWith('OT-001');
+  });
+
+  it('T-111 regression: PAUSAR ARM does NOT auto-open the next modal', async () => {
+    const enArmSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'MR(93)',
+      operacion_actual: 'ARM',
+    });
+    mockSpools = [enArmSpool, SPOOL_B];
+    mockRefreshSingle.mockResolvedValue(undefined);
+    mockFinalizarSpool.mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof finalizarSpool>>);
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+    await act(async () => {
+      (capturedActionModalProps.onSelectAction as (a: Action) => void)(
+        'PAUSAR'
+      );
+    });
+    expect(screen.getByTestId('uniones-modal')).toBeInTheDocument();
+
+    // PAUSAR with zero selected unions — saves uniones state, marks paused.
+    await act(async () => {
+      fireEvent.click(screen.getByText('uniones-pausar-empty'));
+    });
+
+    // No chain — operator explicitly chose to stop the flow.
+    await waitFor(() => {
+      expect(screen.queryByTestId('uniones-modal')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('worker-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('metrologia-modal')).not.toBeInTheDocument();
+  });
+
+  it('T-111 regression: FINALIZAR API failure does NOT auto-open the next modal', async () => {
+    const enArmSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'MR(93)',
+      operacion_actual: 'ARM',
+    });
+    mockSpools = [enArmSpool, SPOOL_B];
+    mockFinalizarSpool.mockRejectedValue(new Error('API down'));
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+    await act(async () => {
+      (capturedActionModalProps.onSelectAction as (a: Action) => void)(
+        'FINALIZAR'
+      );
+    });
+    expect(screen.getByTestId('uniones-modal')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('uniones-finalizar'));
+    });
+
+    // The API rejected — no chain modal opens. The error toast surfaces and
+    // the user can retry by re-clicking the card.
+    expect(screen.queryByTestId('worker-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('metrologia-modal')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('toast-error')).toBeInTheDocument();
+    });
+  });
+
+  it('T-111 regression: refreshSingle failure does NOT block the chain', async () => {
+    const enSoldSpool = makeSpoolCard('OT-001', {
+      estado_trabajo: 'EN_PROGRESO',
+      ocupado_por: 'JS(45)',
+      operacion_actual: 'SOLD',
+      fecha_armado: '21-01-2026',
+    });
+    mockSpools = [enSoldSpool, SPOOL_B];
+    mockFinalizarSpool.mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof finalizarSpool>>);
+    // Simulate refresh blowing up (eg. transient backend hiccup).
+    mockRefreshSingle.mockRejectedValue(new Error('refresh blew up'));
+
+    render(<Page />);
+
+    fireEvent.click(screen.getByTestId('card-OT-001'));
+    await act(async () => {
+      (capturedActionModalProps.onSelectAction as (a: Action) => void)(
+        'FINALIZAR'
+      );
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('uniones-finalizar'));
+    });
+
+    // Chain still happens — MetrologiaModal opens despite the refresh error.
+    await waitFor(() => {
+      expect(screen.getByTestId('metrologia-modal')).toBeInTheDocument();
+    });
+    // And a warning toast tells the operator the card may lag.
+    await waitFor(() => {
+      expect(screen.getByTestId('toast-error')).toBeInTheDocument();
+    });
+  });
+
+  // Ensure unused mocks don't trigger lint/jest "unused" complaints.
+  void mockPausarReparacion;
+  void capturedUnionesModalProps;
 });
