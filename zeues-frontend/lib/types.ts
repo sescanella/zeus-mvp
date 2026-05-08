@@ -288,3 +288,81 @@ export interface RegistroResponse {
   spools: SpoolGroup[];
 }
 
+// ==========================================
+// SUPERVISOR FEATURE TYPES
+// (server-side tracking list + audit log)
+// Mirrors backend/models/supervisor.py exactly.
+// ==========================================
+
+/**
+ * Tipos de eventos del audit log del supervisor.
+ * Debe coincidir 1:1 con backend/models/supervisor.py:EventType.
+ *
+ * Notas:
+ * - El frontend NO emite LIST_ADD/LIST_REMOVE/LIST_PRIORITY: el backend los
+ *   genera server-side cuando llega la mutación correspondiente.
+ * - LIST_MIGRATE / LIST_MIGRATE_PARTIAL los emite el frontend al final del
+ *   flujo de migración Capa 1 (éxito o parcial).
+ */
+export type SupervisorEventType =
+  | 'SESSION_START'
+  | 'SESSION_END'
+  | 'LIST_ADD'
+  | 'LIST_REMOVE'
+  | 'LIST_PRIORITY'
+  | 'LIST_MIGRATE'
+  | 'LIST_MIGRATE_PARTIAL'
+  | 'MODAL_OPEN'
+  | 'MODAL_CLOSE'
+  | 'NAVIGATE';
+
+/**
+ * Una fila en la tab Lista del audit Sheet.
+ * Mirrors backend TrackedSpool.
+ *
+ * - priority: 0=sin, 1=urgente, 2=alta, 3=normal.
+ * - added_at / updated_at: ISO 8601 strings (el backend serializa Pydantic
+ *   datetime a ISO al enviar JSON; al guardar en Sheets convierte a
+ *   DD-MM-YYYY HH:MM:SS, pero eso no nos toca al frontend).
+ * - notes: null si no hay nota.
+ */
+export interface TrackedSpool {
+  tag_spool: string;
+  priority: 0 | 1 | 2 | 3;
+  added_at: string;
+  updated_at: string;
+  notes: string | null;
+}
+
+/**
+ * Un evento del audit log.
+ * Mirrors backend AuditEvent.
+ *
+ * - id: UUID generado por el cliente para idempotencia en retries.
+ * - timestamp: ISO 8601 con timezone (use new Date().toISOString()).
+ * - session_id: UUID por pestaña/sesión, generado por audit-buffer.ts.
+ * - payload_json: string JSON serializado, NO objeto (el backend lo guarda
+ *   verbatim sin parsear). Use JSON.stringify(...) si quieres adjuntar datos.
+ */
+export interface SupervisorAuditEvent {
+  id: string;
+  timestamp: string;
+  session_id: string;
+  event_type: SupervisorEventType;
+  tag_spool?: string | null;
+  modal?: string | null;
+  route?: string | null;
+  payload_json?: string | null;
+}
+
+/**
+ * Capa 0 de migración: dump verbatim de localStorage al audit Sheet
+ * antes de tocar nada. Mirrors backend LegacySnapshot.
+ */
+export interface SupervisorLegacySnapshot {
+  snapshot_id: string;
+  captured_at?: string;          // default backend = now()
+  raw: string;                   // localStorage[zeues_v5_spool_tags] sin parsear
+  user_agent?: string | null;
+}
+

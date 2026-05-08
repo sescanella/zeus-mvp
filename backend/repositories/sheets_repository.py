@@ -79,7 +79,7 @@ class SheetsRepository:
         """
         self.logger = logging.getLogger(__name__)
         self._client: Optional[gspread.Client] = None
-        self._spreadsheet: Optional[gspread.Spreadsheet] = None
+        self._spreadsheets: dict[str, gspread.Spreadsheet] = {}
         self._cache = get_cache()  # Cache singleton para reducir API calls
         self._compatibility_mode = compatibility_mode  # v2.1 or v3.0
 
@@ -127,34 +127,54 @@ class SheetsRepository:
 
         return self._client
 
-    def _get_spreadsheet(self) -> gspread.Spreadsheet:
+    def open_spreadsheet(self, sheet_id: str) -> gspread.Spreadsheet:
         """
-        Obtiene el spreadsheet (libro) de Google Sheets.
+        Abre un spreadsheet por ID (cached).
+
+        Reusa el mismo gspread.Client autenticado para abrir cualquier libro
+        compartido con la service account. Cachea el handle por id para
+        que sucesivas llamadas no peguen otra vez al API de Drive.
+
+        Args:
+            sheet_id: ID del Google Sheet (ej. config.GOOGLE_SHEET_ID o
+                      config.GOOGLE_AUDIT_SHEET_ID)
 
         Returns:
             gspread.Spreadsheet
 
         Raises:
-            SheetsConnectionError: Si no se puede abrir el spreadsheet
+            SheetsConnectionError: Si el sheet no existe o no es accesible
         """
-        if not self._spreadsheet:
-            try:
-                client = self._get_client()
-                self._spreadsheet = client.open_by_key(config.GOOGLE_SHEET_ID)
-                self.logger.info(f"✅ Spreadsheet abierto: {self._spreadsheet.title}")
+        if sheet_id in self._spreadsheets:
+            return self._spreadsheets[sheet_id]
 
-            except gspread.exceptions.SpreadsheetNotFound:
-                raise SheetsConnectionError(
-                    "Spreadsheet no encontrado",
-                    details=f"ID: {config.GOOGLE_SHEET_ID}"
-                )
-            except Exception as e:
-                raise SheetsConnectionError(
-                    "Error abriendo spreadsheet",
-                    details=str(e)
-                )
+        try:
+            client = self._get_client()
+            spreadsheet = client.open_by_key(sheet_id)
+            self._spreadsheets[sheet_id] = spreadsheet
+            self.logger.info(f"✅ Spreadsheet abierto: {spreadsheet.title} ({sheet_id})")
+            return spreadsheet
 
-        return self._spreadsheet
+        except gspread.exceptions.SpreadsheetNotFound:
+            raise SheetsConnectionError(
+                "Spreadsheet no encontrado",
+                details=f"ID: {sheet_id}"
+            )
+        except Exception as e:
+            raise SheetsConnectionError(
+                "Error abriendo spreadsheet",
+                details=str(e)
+            )
+
+    def _get_spreadsheet(self) -> gspread.Spreadsheet:
+        """
+        Obtiene el spreadsheet de operaciones (Kronos).
+
+        Wrapper de compatibilidad sobre `open_spreadsheet()` que mantiene la
+        firma esperada por todo el código existente. Para nuevos consumidores
+        (audit sheet, etc.), usar `open_spreadsheet(sheet_id)` directamente.
+        """
+        return self.open_spreadsheet(config.GOOGLE_SHEET_ID)
 
     @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def read_worksheet(self, sheet_name: str) -> list[list]:

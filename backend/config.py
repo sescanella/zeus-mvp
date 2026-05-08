@@ -36,6 +36,13 @@ class Config:
     HOJA_TRABAJADORES_NOMBRE: str = os.getenv('HOJA_TRABAJADORES_NOMBRE', 'Trabajadores')
     HOJA_METADATA_NOMBRE: str = os.getenv('HOJA_METADATA_NOMBRE', 'Metadata')
 
+    # Supervisor audit spreadsheet (separate book from Kronos operations).
+    # MUST point to a different spreadsheet than GOOGLE_SHEET_ID.
+    GOOGLE_AUDIT_SHEET_ID: str = os.getenv('GOOGLE_AUDIT_SHEET_ID', '')
+    HOJA_AUDIT_LISTA_NOMBRE: str = os.getenv('HOJA_AUDIT_LISTA_NOMBRE', 'Lista')
+    HOJA_AUDIT_EVENTS_NOMBRE: str = os.getenv('HOJA_AUDIT_EVENTS_NOMBRE', 'Audit')
+    HOJA_AUDIT_SNAPSHOTS_NOMBRE: str = os.getenv('HOJA_AUDIT_SNAPSHOTS_NOMBRE', 'Snapshots_Legacy')
+
     # Cache configuration
     CACHE_TTL_SECONDS: int = int(os.getenv('CACHE_TTL_SECONDS', '300'))  # 5 minutos default
 
@@ -119,6 +126,7 @@ class Config:
         required_vars = {
             'GOOGLE_CLOUD_PROJECT_ID': cls.GOOGLE_CLOUD_PROJECT_ID,
             'GOOGLE_SHEET_ID': cls.GOOGLE_SHEET_ID,
+            'GOOGLE_AUDIT_SHEET_ID': cls.GOOGLE_AUDIT_SHEET_ID,
         }
 
         missing = [var for var, value in required_vars.items() if not value]
@@ -127,6 +135,13 @@ class Config:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}. "
                 f"Please check your .env.local file or Railway variables."
+            )
+
+        if cls.GOOGLE_AUDIT_SHEET_ID == cls.GOOGLE_SHEET_ID:
+            raise ValueError(
+                "GOOGLE_AUDIT_SHEET_ID must point to a different spreadsheet than "
+                "GOOGLE_SHEET_ID — auditing data must not be written to the Kronos "
+                "operations sheet."
             )
 
         # Validar que tenemos credenciales (JSON o archivo)
@@ -157,6 +172,7 @@ if __name__ == '__main__':
         print("✅ Configuración válida")
         print(f"   - Project ID: {config.GOOGLE_CLOUD_PROJECT_ID}")
         print(f"   - Sheet ID: {config.GOOGLE_SHEET_ID}")
+        print(f"   - Audit Sheet ID: {config.GOOGLE_AUDIT_SHEET_ID}")
         print(f"   - Service Account: {config.GOOGLE_SERVICE_ACCOUNT_EMAIL}")
         print(f"   - Environment: {config.ENVIRONMENT}")
         print(f"   - Timezone: {config.TIMEZONE}")

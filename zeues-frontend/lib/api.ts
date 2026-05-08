@@ -17,6 +17,9 @@ import {
   SaveUnionsRequest,
   SaveUnionsResponse,
   RegistroResponse,
+  TrackedSpool,
+  SupervisorAuditEvent,
+  SupervisorLegacySnapshot,
 } from './types';
 
 // ============= CONSTANTS =============
@@ -959,6 +962,221 @@ export async function appendNota(
     return await handleResponse<NotaAppendResponse>(res);
   } catch (error) {
     console.error('appendNota error:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// SUPERVISOR API FUNCTIONS
+// (server-side tracking list + audit log;
+//  replaces localStorage as source of truth)
+// ==========================================
+
+/**
+ * Backend AuditEventBatch enforces max_length=100 events per request.
+ * Exported for tests and callers that need to assert chunking behavior.
+ */
+export const SUPERVISOR_AUDIT_CHUNK_SIZE = 100;
+
+/**
+ * GET /api/supervisor/list
+ * Lee la lista actual de spools que Matías está siguiendo.
+ *
+ * Source of truth desde el deploy de la feature: server-side, no localStorage.
+ */
+export async function getSupervisorList(): Promise<TrackedSpool[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/supervisor/list`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await handleResponse<{ items: TrackedSpool[] }>(res);
+    return data.items;
+  } catch (error) {
+    console.error('getSupervisorList error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/supervisor/list/add
+ * Agrega (o re-agrega, idempotente) un spool a la lista del supervisor.
+ *
+ * Si el TAG ya existía, el server actualiza la fila en su lugar (no duplica).
+ * El server emite un evento LIST_ADD al audit automáticamente.
+ *
+ * @param tagSpool TAG_SPOOL a agregar.
+ * @param sessionId UUID de sesión del frontend (audit-buffer.ts).
+ * @param priority 0 (default, sin prioridad) | 1 urgente | 2 alta | 3 normal.
+ * @throws ApiError 400 si el server rechaza la validación.
+ */
+export async function addSupervisorList(
+  tagSpool: string,
+  sessionId: string,
+  priority: 0 | 1 | 2 | 3 = 0
+): Promise<TrackedSpool> {
+  try {
+    const res = await fetch(`${API_URL}/api/supervisor/list/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag_spool: tagSpool,
+        priority,
+        session_id: sessionId,
+      }),
+    });
+    const data = await handleResponse<{ item: TrackedSpool }>(res);
+    return data.item;
+  } catch (error) {
+    console.error('addSupervisorList error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/supervisor/list/remove
+ * Quita un spool de la lista. Idempotente: si no estaba, devuelve {removed:false}
+ * con HTTP 200 (no 404) — coherente con la UX optimista del frontend, que
+ * remueve la card antes de esperar respuesta.
+ */
+export async function removeSupervisorList(
+  tagSpool: string,
+  sessionId: string
+): Promise<{ removed: boolean; tag_spool: string }> {
+  try {
+    const res = await fetch(`${API_URL}/api/supervisor/list/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag_spool: tagSpool,
+        session_id: sessionId,
+      }),
+    });
+    return await handleResponse<{ removed: boolean; tag_spool: string }>(res);
+  } catch (error) {
+    console.error('removeSupervisorList error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/supervisor/list/priority
+ * Cambia la prioridad de un spool, preservando added_at y notes.
+ *
+ * Si el TAG no existía, el server lo crea (semánticamente equivalente a un
+ * add con esa prioridad). El audit recibe LIST_PRIORITY con previous y nueva
+ * prioridad en el payload.
+ */
+export async function setSupervisorPriority(
+  tagSpool: string,
+  priority: 0 | 1 | 2 | 3,
+  sessionId: string
+): Promise<TrackedSpool> {
+  try {
+    const res = await fetch(`${API_URL}/api/supervisor/list/priority`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag_spool: tagSpool,
+        priority,
+        session_id: sessionId,
+      }),
+    });
+    const data = await handleResponse<{ item: TrackedSpool }>(res);
+    return data.item;
+  } catch (error) {
+    console.error('setSupervisorPriority error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/supervisor/audit/batch
+ * Envía un lote de eventos de UI al audit log.
+ *
+ * El backend dedup por AuditEvent.id, así que retries son seguros.
+ * Si events.length > SUPERVISOR_AUDIT_CHUNK_SIZE, parte en chunks de 100 y
+ * los envía en paralelo (mismo patrón que batchGetStatus).
+ *
+ * Usado por audit-buffer.ts (Tarea #11). Idealmente NO bloquea la UI:
+ * los call sites deben hacer fire-and-forget y descartar errores transitorios.
+ *
+ * @returns Total de eventos efectivamente apendeados (post-dedup).
+ */
+export async function pushSupervisorAuditBatch(
+  events: SupervisorAuditEvent[]
+): Promise<number> {
+  if (events.length === 0) return 0;
+
+  const chunks: SupervisorAuditEvent[][] = [];
+  for (let i = 0; i < events.length; i += SUPERVISOR_AUDIT_CHUNK_SIZE) {
+    chunks.push(events.slice(i, i + SUPERVISOR_AUDIT_CHUNK_SIZE));
+  }
+
+  try {
+    const responses = await Promise.all(
+      chunks.map(async (chunk) => {
+        const res = await fetch(`${API_URL}/api/supervisor/audit/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: chunk }),
+        });
+        const data = await handleResponse<{ appended: number }>(res);
+        return data.appended;
+      })
+    );
+    return responses.reduce((sum, n) => sum + n, 0);
+  } catch (error) {
+    console.error('pushSupervisorAuditBatch error:', error);
+    throw error;
+  }
+}
+
+/**
+ * GET /api/supervisor/audit?since=ISO
+ * Endpoint de debug — lee eventos del audit con timestamp >= since.
+ *
+ * @param sinceIso ISO 8601 string (ej. new Date(Date.now() - 24*3600*1000).toISOString()).
+ */
+export async function getSupervisorAuditSince(
+  sinceIso: string
+): Promise<SupervisorAuditEvent[]> {
+  try {
+    const url = `${API_URL}/api/supervisor/audit?since=${encodeURIComponent(sinceIso)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await handleResponse<{ events: SupervisorAuditEvent[] }>(res);
+    return data.events;
+  } catch (error) {
+    console.error('getSupervisorAuditSince error:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/supervisor/legacy-snapshot
+ * Capa 0 de migración: dump verbatim de localStorage[zeues_v5_spool_tags].
+ *
+ * Idempotente por snapshot_id (cliente lo genera). Si ya existía, el server
+ * devuelve {written: false} sin error.
+ *
+ * Llamado UNA SOLA VEZ desde SpoolListContext (Tarea #12) al detectar que
+ * la lista del server está vacía Y localStorage tiene tags legacy.
+ */
+export async function postSupervisorLegacySnapshot(
+  snapshot: SupervisorLegacySnapshot
+): Promise<{ snapshot_id: string; written: boolean }> {
+  try {
+    const res = await fetch(`${API_URL}/api/supervisor/legacy-snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    });
+    return await handleResponse<{ snapshot_id: string; written: boolean }>(res);
+  } catch (error) {
+    console.error('postSupervisorLegacySnapshot error:', error);
     throw error;
   }
 }

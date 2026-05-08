@@ -61,6 +61,8 @@ from backend.routers import registro_router
 
 from backend.routers import notas as notas_router
 
+from backend.routers import supervisor_router
+
 # ============================================================================
 # INICIALIZACIÓN FASTAPI
 # ============================================================================
@@ -378,6 +380,30 @@ async def startup_event():
         logging.error(error_msg, exc_info=True)
         raise RuntimeError(error_msg) from e
 
+    # Validate the supervisor audit spreadsheet (separate book from Kronos
+    # operations). Catches misconfigured GOOGLE_AUDIT_SHEET_ID — e.g. PROD
+    # pointing at the DEV sheet, or someone renaming a tab. Fails the boot
+    # with a clear error rather than letting the app run with broken audit
+    # writes that wouldn't be discovered until a user mutation.
+    try:
+        logging.info(
+            f"🔄 Validating audit spreadsheet schema "
+            f"(id={config.GOOGLE_AUDIT_SHEET_ID})..."
+        )
+        from backend.repositories.supervisor_repository import SupervisorRepository
+
+        sheets_repo = get_sheets_repository()
+        SupervisorRepository(sheets_repo=sheets_repo).validate_schema()
+        logging.info("✅ Audit spreadsheet schema PASSED")
+    except Exception as e:
+        error_msg = (
+            f"❌ CRITICAL: Audit spreadsheet validation FAILED. "
+            f"Check GOOGLE_AUDIT_SHEET_ID and the three required tabs "
+            f"(Lista, Audit, Snapshots_Legacy). Error: {e}"
+        )
+        logging.error(error_msg, exc_info=True)
+        raise RuntimeError(error_msg) from e
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -430,6 +456,9 @@ app.include_router(registro_router.router, prefix="/api", tags=["Registro"])
 
 # v5.1 F-1: Router NOTAS registrado (append-only spool notes)
 app.include_router(notas_router.router, prefix="/api", tags=["Notas"])
+
+# Supervisor: server-side tracking list + audit log (replaces localStorage dependency).
+app.include_router(supervisor_router.router, prefix="/api/supervisor", tags=["Supervisor"])
 
 
 # ============================================================================
