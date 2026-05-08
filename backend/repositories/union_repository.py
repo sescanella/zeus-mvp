@@ -1270,6 +1270,7 @@ class UnionRepository:
             self.logger.error(f"Failed to batch update SOLD full for TAG_SPOOL {tag_spool}: {e}", exc_info=True)
             raise SheetsConnectionError(f"Failed to batch update SOLD full: {e}")
 
+    @retry_on_sheets_error(max_retries=3, backoff_seconds=1.0)
     def get_all_by_tag(self, tag_spool: str) -> list[dict]:
         """
         Get all unions for a spool with has_work flag for editability.
@@ -1279,6 +1280,13 @@ class UnionRepository:
 
         Returns:
             list[dict]: Each dict has n_union, dn_union, tipo_union, has_work
+
+        Notes:
+            Wrapped in @retry_on_sheets_error after PROD incident 2026-05-08:
+            burst Sheets reads (rapid INICIAR → Uniones modal navigation)
+            triggered HTTP 429 quota errors that cascaded to 503 toasts in
+            the frontend. Retry with exponential backoff (1s → 2s → 4s)
+            absorbs transient quota blips without surfacing them to Matías.
         """
         try:
             all_rows = self.sheets_repo.read_worksheet(self._sheet_name)
