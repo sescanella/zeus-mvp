@@ -187,7 +187,7 @@ class TestSheetsRepositoryErrors:
 
         # Inject mocked client to skip auth
         repo._client = mock_client
-        repo._spreadsheet = mock_spreadsheet
+        repo._spreadsheets["test-sheet-id"] = mock_spreadsheet
         # Clear any cache
         repo._cache = MagicMock()
         repo._cache.get.return_value = None
@@ -226,11 +226,12 @@ class TestSheetsRepositoryErrors:
 
         repo = SheetsRepository()
 
+        mock_config.GOOGLE_SHEET_ID = "test-sheet-id"
         mock_spreadsheet = MagicMock()
         mock_spreadsheet.worksheet.side_effect = WorksheetNotFound("NoSheet")
         mock_spreadsheet.worksheets.return_value = [MagicMock(title="Operaciones")]
         repo._client = MagicMock()
-        repo._spreadsheet = mock_spreadsheet
+        repo._spreadsheets["test-sheet-id"] = mock_spreadsheet
         repo._cache = MagicMock()
         repo._cache.get.return_value = None
 
@@ -244,12 +245,13 @@ class TestSheetsRepositoryErrors:
 
         repo = SheetsRepository()
 
+        mock_config.GOOGLE_SHEET_ID = "test-sheet-id"
         mock_spreadsheet = MagicMock()
         mock_worksheet = MagicMock()
         mock_worksheet.get_all_values.return_value = []
         mock_spreadsheet.worksheet.return_value = mock_worksheet
         repo._client = MagicMock()
-        repo._spreadsheet = mock_spreadsheet
+        repo._spreadsheets["test-sheet-id"] = mock_spreadsheet
         repo._cache = MagicMock()
         repo._cache.get.return_value = None
 
@@ -261,12 +263,13 @@ class TestSheetsRepositoryErrors:
         """Failed batch update should raise SheetsUpdateError."""
         repo = SheetsRepository()
 
+        mock_config.GOOGLE_SHEET_ID = "test-sheet-id"
         mock_spreadsheet = MagicMock()
         mock_worksheet = MagicMock()
         mock_worksheet.batch_update.side_effect = Exception("Network timeout")
         mock_spreadsheet.worksheet.return_value = mock_worksheet
         repo._client = MagicMock()
-        repo._spreadsheet = mock_spreadsheet
+        repo._spreadsheets["test-sheet-id"] = mock_spreadsheet
         repo._cache = MagicMock()
 
         updates = [{"row": 10, "column": "V", "value": "test"}]

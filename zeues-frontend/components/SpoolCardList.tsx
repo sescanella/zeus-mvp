@@ -37,6 +37,19 @@ interface SpoolCardListProps {
 export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, onNotasClick, estadoFilter, searchText, workerFilter }: SpoolCardListProps) {
   const { priorities, setPriority } = useSpoolList();
 
+  // setPriority is async (server-side persistence); SpoolCard expects a sync
+  // callback. Wrap it to swallow rejections — failure here just means the
+  // server didn't persist the priority change. Optimistic UI already shows
+  // the new value; on the next reload it will revert if the server didn't
+  // save it. We log to console so unexpected failures are still discoverable
+  // in DevTools without breaking the no-op contract.
+  const handlePriorityChange = (tag: string, priority: number | null) => {
+    setPriority(tag, priority).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('setPriority failed for', tag, err);
+    });
+  };
+
   if (spools.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -100,7 +113,7 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, o
           onRemove={onRemove}
           onUnionesClick={onUnionesClick}
           onNotasClick={onNotasClick}
-          onPriorityChange={setPriority}
+          onPriorityChange={handlePriorityChange}
         />
       ))}
     </div>

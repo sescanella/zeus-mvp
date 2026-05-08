@@ -51,6 +51,8 @@ from backend.services.metrologia_service import MetrologiaService
 from backend.services.reparacion_service import ReparacionService
 from backend.services.cycle_counter_service import CycleCounterService
 from backend.services.notas_service import NotasService
+from backend.repositories.supervisor_repository import SupervisorRepository
+from backend.services.supervisor_service import SupervisorService
 from backend.config import config
 
 
@@ -544,6 +546,50 @@ def get_notas_service(
         metadata_repository=metadata_repo,
         worker_service=worker_service,
     )
+
+
+def get_supervisor_repository(
+    sheets_repo: SheetsRepository = Depends(get_sheets_repository),
+) -> SupervisorRepository:
+    """
+    Factory para SupervisorRepository (nueva instancia por request).
+
+    Lee/escribe el spreadsheet de auditoría (config.GOOGLE_AUDIT_SHEET_ID),
+    distinto del libro de operaciones de Kronos. Reusa el mismo gspread.Client
+    autenticado vía sheets_repo.open_spreadsheet(...).
+
+    Args:
+        sheets_repo: SheetsRepository singleton (inyectado automáticamente).
+
+    Returns:
+        Nueva instancia de SupervisorRepository.
+
+    Usage:
+        supervisor_repo: SupervisorRepository = Depends(get_supervisor_repository)
+    """
+    return SupervisorRepository(sheets_repo=sheets_repo)
+
+
+def get_supervisor_service(
+    supervisor_repo: SupervisorRepository = Depends(get_supervisor_repository),
+) -> SupervisorService:
+    """
+    Factory para SupervisorService (nueva instancia por request).
+
+    Single-user (Matías). Encapsula validaciones (priority 0..3, tag no vacío,
+    session_id requerido) y emite audit events server-side por cada cambio
+    de lista (LIST_ADD/LIST_REMOVE/LIST_PRIORITY).
+
+    Args:
+        supervisor_repo: SupervisorRepository (inyectado automáticamente).
+
+    Returns:
+        Nueva instancia de SupervisorService.
+
+    Usage:
+        supervisor_service: SupervisorService = Depends(get_supervisor_service)
+    """
+    return SupervisorService(supervisor_repo=supervisor_repo)
 
 
 def reset_singletons() -> None:

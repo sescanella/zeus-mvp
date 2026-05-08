@@ -1,16 +1,24 @@
 'use client';
 
 /**
- * SpoolListContext — state management backbone for v5.0 single-page view.
+ * SpoolListContext — server-driven state backbone for v5.0 single-page view.
  *
- * Single source of truth for the spool card list. Manages:
- * - Adding/removing spools (with API fetch + localStorage sync)
- * - Batch refresh polling via refreshAll (stable callback using useRef)
- * - Single card refresh via refreshSingle
- * - On-mount hydration from localStorage
- * - Priority management per spool (1=urgente, 2=alta, 3=normal, null=sin prioridad)
+ * Source of truth: ZEUES_App_Audit Lista tab via /api/supervisor/list.
+ * localStorage is NO longer authoritative; it only exists transiently as
+ * legacy data that gets migrated on first post-deploy load.
  *
- * Plan: 04-01-PLAN.md Task 1
+ * Migration safety net (3 layers, defense in depth — Matías cannot lose work):
+ *   Layer 0: snapshot the verbatim localStorage value to Snapshots_Legacy
+ *            BEFORE any per-tag write. If snapshot POST fails, we bail.
+ *   Layer 1: per-tag migration with Promise.allSettled — localStorage is
+ *            cleared ONLY after every legacy tag is confirmed in the server.
+ *   Layer 2: ensureMigrated() runs before each mutation, in case the
+ *            mount-time migration was skipped or partially failed earlier.
+ *
+ * Mutation flow (add/remove/setPriority):
+ *   1. Optimistic dispatch immediately.
+ *   2. fire server write.
+ *   3. on failure: revert dispatch + rethrow → page.tsx shows toast.
  */
 
 import React, {
@@ -20,13 +28,38 @@ import React, {
   useEffect,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 import type { SpoolCardData } from './types';
-import { getSpoolStatus, batchGetStatus } from './api';
-import { loadPersistedSpools, savePersistedSpools } from './local-storage';
-import type { PersistedSpool } from './local-storage';
+import {
+  getSpoolStatus,
+  batchGetStatus,
+  getSupervisorList,
+  addSupervisorList,
+  removeSupervisorList,
+  setSupervisorPriority,
+  postSupervisorLegacySnapshot,
+} from './api';
+import { loadPersistedSpools, STORAGE_KEY } from './local-storage';
+import { getSessionId, pushAuditEvent } from './audit-buffer';
 
-// ─── State & Actions ──────────────────────────────────────────────────────────
+// ─── Priority normalization ──────────────────────────────────────────────────
+//
+// Frontend uses `number | null` (null = sin prioridad) so SpoolCard's chip
+// renderer can stay agnostic. Backend uses 0|1|2|3 (0 = sin prioridad). Convert
+// at the boundary; never leak server enum into UI components.
+
+type ServerPriority = 0 | 1 | 2 | 3;
+
+function priorityToServer(p: number | null): ServerPriority {
+  if (p === 1 || p === 2 || p === 3) return p;
+  return 0;
+}
+function priorityFromServer(p: ServerPriority): number | null {
+  return p === 0 ? null : p;
+}
+
+// ─── State & Actions ─────────────────────────────────────────────────────────
 
 interface SpoolListState {
   spools: SpoolCardData[];
@@ -47,7 +80,6 @@ function reducer(state: SpoolListState, action: SpoolListAction): SpoolListState
       return { ...state, spools: action.spools };
 
     case 'ADD_SPOOL': {
-      // Guard against duplicates
       const exists = state.spools.some(
         (s) => s.tag_spool === action.spool.tag_spool
       );
@@ -86,14 +118,84 @@ function reducer(state: SpoolListState, action: SpoolListAction): SpoolListState
   }
 }
 
-// ─── Context ──────────────────────────────────────────────────────────────────
+// ─── Migration helper (Layers 0 + 1) ─────────────────────────────────────────
+
+/**
+ * One-shot migration of legacy localStorage entries to the server.
+ *
+ * - Returns null if there is nothing to migrate (no localStorage entry, SSR).
+ * - Layer 0: snapshots the raw localStorage value to Snapshots_Legacy first.
+ *   If the snapshot POST fails, bails out without touching localStorage —
+ *   the next reload retries from scratch.
+ * - Layer 1: Promise.allSettled so partial failures don't abort the rest.
+ *   Clears localStorage ONLY when 100% of legacy tags landed server-side.
+ * - Emits LIST_MIGRATE or LIST_MIGRATE_PARTIAL to the audit buffer.
+ */
+async function runMigrationIfPending(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  const legacyRaw = window.localStorage.getItem(STORAGE_KEY);
+  if (legacyRaw === null || legacyRaw.length === 0) return;
+
+  // Layer 0 — verbatim snapshot before mutating anything.
+  const snapshotId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `snap-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    await postSupervisorLegacySnapshot({
+      snapshot_id: snapshotId,
+      captured_at: new Date().toISOString(),
+      raw: legacyRaw,
+      user_agent:
+        typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Layer 0 snapshot failed; aborting migration', err);
+    return;
+  }
+
+  // Layer 1 — per-tag migration with allSettled.
+  const legacy = loadPersistedSpools();
+  if (legacy.length === 0) {
+    // Snapshot raw exists but parser produced nothing usable. Safe to clear.
+    window.localStorage.removeItem(STORAGE_KEY);
+    return;
+  }
+
+  const sessionId = getSessionId();
+  const results = await Promise.allSettled(
+    legacy.map((t) =>
+      addSupervisorList(t.tag, sessionId, priorityToServer(t.priority))
+    )
+  );
+  const ok = results.filter((r) => r.status === 'fulfilled').length;
+
+  if (ok === legacy.length) {
+    window.localStorage.removeItem(STORAGE_KEY);
+    pushAuditEvent({
+      event_type: 'LIST_MIGRATE',
+      payload: { migrated: ok },
+    });
+  } else {
+    pushAuditEvent({
+      event_type: 'LIST_MIGRATE_PARTIAL',
+      payload: { ok, total: legacy.length },
+    });
+    // localStorage stays for next attempt (Layer 2 will pick this up).
+  }
+}
+
+// ─── Context ─────────────────────────────────────────────────────────────────
 
 interface SpoolListContextValue {
   spools: SpoolCardData[];
   priorities: Map<string, number | null>;
+  hydrated: boolean;
   addSpool: (tag: string) => Promise<void>;
-  removeSpool: (tag: string) => void;
-  setPriority: (tag: string, priority: number | null) => void;
+  removeSpool: (tag: string) => Promise<void>;
+  setPriority: (tag: string, priority: number | null) => Promise<void>;
   refreshAll: () => Promise<void>;
   refreshSingle: (tag: string) => Promise<void>;
 }
@@ -102,64 +204,140 @@ const SpoolListContext = createContext<SpoolListContextValue | undefined>(
   undefined
 );
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function SpoolListProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { spools: [], priorities: new Map() });
+  const [state, dispatch] = useReducer(reducer, {
+    spools: [],
+    priorities: new Map(),
+  });
+  const [hydrated, setHydrated] = useState(false);
 
-  // Stable ref so refreshAll does not depend on spools in its closure
+  // Stable ref so callbacks do not depend on spools in their closures.
   const spoolsRef = useRef<SpoolCardData[]>(state.spools);
   useEffect(() => {
     spoolsRef.current = state.spools;
   }, [state.spools]);
 
-  // On mount: load persisted spools (with priorities) and hydrate via batchGetStatus
+  const prioritiesRef = useRef<Map<string, number | null>>(state.priorities);
   useEffect(() => {
-    const persisted = loadPersistedSpools();
-    if (persisted.length === 0) return;
+    prioritiesRef.current = state.priorities;
+  }, [state.priorities]);
 
-    // Load priorities
-    const prioMap = new Map<string, number | null>();
-    persisted.forEach((p) => prioMap.set(p.tag, p.priority));
-    dispatch({ type: 'LOAD_PRIORITIES', priorities: prioMap });
-
-    // Hydrate spool data from API
-    const tags = persisted.map((p) => p.tag);
-    batchGetStatus(tags).then((fresh) => {
-      dispatch({ type: 'SET_SPOOLS', spools: fresh });
-    });
-  }, []);
-
-  // Sync localStorage whenever spools or priorities change
+  // Mount: server fetch → migration if needed → re-fetch → populate state.
   useEffect(() => {
-    const persisted: PersistedSpool[] = state.spools.map((s) => ({
-      tag: s.tag_spool,
-      priority: state.priorities.get(s.tag_spool) ?? null,
-    }));
-    savePersistedSpools(persisted);
-  }, [state.spools, state.priorities]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const initialList = await getSupervisorList();
+        if (cancelled) return;
 
-  // addSpool: fetch from API then add to state (guard duplicates in reducer)
-  const addSpool = useCallback(async (tag: string) => {
-    // Early exit if already tracked (avoids unnecessary API call)
-    const alreadyTracked = spoolsRef.current.some((s) => s.tag_spool === tag);
-    if (alreadyTracked) return;
+        if (initialList.length === 0) {
+          await runMigrationIfPending();
+          if (cancelled) return;
+        }
 
-    const spool = await getSpoolStatus(tag);
-    dispatch({ type: 'ADD_SPOOL', spool });
+        const finalList = await getSupervisorList();
+        if (cancelled) return;
+
+        const tags = finalList.map((s) => s.tag_spool);
+        const fullCards = tags.length > 0 ? await batchGetStatus(tags) : [];
+        if (cancelled) return;
+
+        const prioMap = new Map<string, number | null>();
+        finalList.forEach((s) =>
+          prioMap.set(s.tag_spool, priorityFromServer(s.priority))
+        );
+
+        dispatch({ type: 'SET_SPOOLS', spools: fullCards });
+        dispatch({ type: 'LOAD_PRIORITIES', priorities: prioMap });
+        setHydrated(true);
+        pushAuditEvent({ event_type: 'SESSION_START' });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('SpoolListContext mount-time hydration failed', err);
+        // Unblock the UI; user can retry by adding a spool manually.
+        setHydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // removeSpool: remove from reducer state (localStorage syncs via effect)
-  const removeSpool = useCallback((tag: string) => {
-    dispatch({ type: 'REMOVE_SPOOL', tag });
+  // Layer 2: before any mutation, ensure migration ran. Idempotent — if there's
+  // nothing in localStorage, this is a no-op.
+  const ensureMigrated = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    if (window.localStorage.getItem(STORAGE_KEY) !== null) {
+      await runMigrationIfPending();
+    }
   }, []);
 
-  // setPriority: update priority for a tracked spool
-  const setPriority = useCallback((tag: string, priority: number | null) => {
-    dispatch({ type: 'SET_PRIORITY', tag, priority });
-  }, []);
+  // addSpool: optimistic dispatch + server write + rollback on failure.
+  const addSpool = useCallback(
+    async (tag: string) => {
+      await ensureMigrated();
+      if (spoolsRef.current.some((s) => s.tag_spool === tag)) return;
 
-  // refreshAll: stable callback that uses ref to avoid stale closures
+      // getSpoolStatus throws on 404 — let it propagate before we touch state.
+      const optimistic = await getSpoolStatus(tag);
+      dispatch({ type: 'ADD_SPOOL', spool: optimistic });
+      try {
+        await addSupervisorList(tag, getSessionId(), 0);
+      } catch (err) {
+        dispatch({ type: 'REMOVE_SPOOL', tag });
+        throw err;
+      }
+    },
+    [ensureMigrated]
+  );
+
+  // removeSpool: optimistic dispatch + server write + rollback on failure.
+  const removeSpool = useCallback(
+    async (tag: string) => {
+      await ensureMigrated();
+      const previous = spoolsRef.current.find((s) => s.tag_spool === tag);
+      if (!previous) return;
+
+      dispatch({ type: 'REMOVE_SPOOL', tag });
+      try {
+        await removeSupervisorList(tag, getSessionId());
+      } catch (err) {
+        dispatch({ type: 'ADD_SPOOL', spool: previous });
+        throw err;
+      }
+    },
+    [ensureMigrated]
+  );
+
+  // setPriority: optimistic dispatch + server write + rollback on failure.
+  const setPriority = useCallback(
+    async (tag: string, priority: number | null) => {
+      await ensureMigrated();
+      const previousPriority = prioritiesRef.current.get(tag) ?? null;
+
+      dispatch({ type: 'SET_PRIORITY', tag, priority });
+      try {
+        await setSupervisorPriority(
+          tag,
+          priorityToServer(priority),
+          getSessionId()
+        );
+      } catch (err) {
+        dispatch({
+          type: 'SET_PRIORITY',
+          tag,
+          priority: previousPriority,
+        });
+        throw err;
+      }
+    },
+    [ensureMigrated]
+  );
+
+  // refreshAll: re-fetch full card data for all currently-tracked tags.
+  // Does NOT re-fetch the supervisor Lista — relies on optimistic state for that.
   const refreshAll = useCallback(async () => {
     const tags = spoolsRef.current.map((s) => s.tag_spool);
     if (tags.length === 0) return;
@@ -167,7 +345,6 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_SPOOLS', spools: fresh });
   }, []);
 
-  // refreshSingle: fetch one card and update in place
   const refreshSingle = useCallback(async (tag: string) => {
     const spool = await getSpoolStatus(tag);
     dispatch({ type: 'UPDATE_SPOOL', spool });
@@ -176,6 +353,7 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
   const value: SpoolListContextValue = {
     spools: state.spools,
     priorities: state.priorities,
+    hydrated,
     addSpool,
     removeSpool,
     setPriority,
@@ -190,7 +368,7 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useSpoolList(): SpoolListContextValue {
   const ctx = useContext(SpoolListContext);

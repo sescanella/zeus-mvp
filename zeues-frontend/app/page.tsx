@@ -37,6 +37,7 @@ import {
   iniciarSpool,
 } from '@/lib/api';
 import { classifyApiError } from '@/lib/error-classifier';
+import { pushAuditEvent } from '@/lib/audit-buffer';
 import type { SpoolCardData, EstadoTrabajo, Worker } from '@/lib/types';
 import { getValidActions, deriveOperation, isMetReady } from '@/lib/spool-state-machine';
 import type { Operation, Action } from '@/lib/spool-state-machine';
@@ -75,7 +76,7 @@ function parseWorkerIdFromOcupadoPor(ocupadoPor: string): number | null {
 // ─── HomePage (inner component) ───────────────────────────────────────────────
 
 function HomePage() {
-  const { spools, addSpool, removeSpool, refreshAll, refreshSingle } =
+  const { spools, hydrated, addSpool, removeSpool, refreshAll, refreshSingle } =
     useSpoolList();
   const modalStack = useModalStack();
   const { toasts, enqueue, dismiss } = useNotificationToast();
@@ -156,11 +157,63 @@ function HomePage() {
     };
   }, [modalStack.stack.length]);
 
+  // ── Audit instrumentation: MODAL_OPEN / MODAL_CLOSE ─────────────────────────
+  // Single observer pattern. Avoids instrumenting 30+ modalStack.push/pop/clear
+  // callsites. Snapshots the tag at OPEN time so MODAL_CLOSE keeps the right
+  // association even if selectedSpool was already cleared by the close handler.
+  const previousModalRef = useRef<string | null>(null);
+  const previousModalTagRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousModalRef.current;
+    const current = modalStack.current;
+    const currentTag = selectedSpool?.tag_spool ?? null;
+
+    // Always sync the tag ref so MODAL_CLOSE picks up the latest tag if the
+    // user changed the selected card while a modal was open (rare, defensive).
+    if (current !== null) previousModalTagRef.current = currentTag;
+    else if (previous === null) previousModalTagRef.current = null;
+
+    if (previous === current) return;
+
+    if (previous !== null) {
+      pushAuditEvent({
+        event_type: 'MODAL_CLOSE',
+        modal: previous,
+        tag_spool: previousModalTagRef.current ?? undefined,
+      });
+    }
+    if (current !== null) {
+      pushAuditEvent({
+        event_type: 'MODAL_OPEN',
+        modal: current,
+        tag_spool: currentTag ?? undefined,
+      });
+    } else {
+      previousModalTagRef.current = null;
+    }
+    previousModalRef.current = current;
+  }, [modalStack, selectedSpool]);
+
+  // ── Audit instrumentation: SESSION_END on tab close ─────────────────────────
+  // audit-buffer already installs its own beforeunload listener that flushes
+  // via sendBeacon — our event will be carried by that flush.
+  useEffect(() => {
+    const handler = () => {
+      pushAuditEvent({ event_type: 'SESSION_END' });
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const handleAddSpool = async (tag: string) => {
-    await addSpool(tag);
-    enqueue(`Spool ${tag} agregado`, 'success');
+    try {
+      await addSpool(tag);
+      enqueue(`Spool ${tag} agregado`, 'success');
+    } catch {
+      enqueue('No se pudo agregar el spool — reintenta.', 'error');
+    }
   };
 
   const handleAddSpoolClose = () => {
@@ -542,8 +595,18 @@ function HomePage() {
 
     if (resultado === 'APROBADO') {
       modalStack.clear();
-      removeSpool(tag);
-      enqueue(`Metrologia aprobada — ${tag}`, 'success');
+      try {
+        await removeSpool(tag);
+        enqueue(`Metrologia aprobada — ${tag}`, 'success');
+      } catch {
+        // Spool fue aprobado en el server (modal lo confirmó), pero la lista
+        // del supervisor no se sincronizó. La card se ve "aprobada" en otra
+        // sesión pero acá sigue listada hasta el próximo reload.
+        enqueue(
+          `Metrologia aprobada — ${tag}. Aviso: no se pudo quitar de la lista, refresca.`,
+          'error',
+        );
+      }
       setSelectedSpool(null);
       setSelectedOperation(null);
       setSelectedAction(null);
@@ -584,14 +647,22 @@ function HomePage() {
   const handleRemove = async (tag: string) => {
     const spool = spools.find(s => s.tag_spool === tag);
     if (!spool) {
-      removeSpool(tag);
+      try {
+        await removeSpool(tag);
+      } catch {
+        enqueue('No se pudo quitar el spool — reintenta.', 'error');
+      }
       return;
     }
 
     // Libre spool — frontend-only removal
     if (!spool.ocupado_por) {
-      removeSpool(tag);
-      enqueue('Spool quitado', 'success');
+      try {
+        await removeSpool(tag);
+        enqueue('Spool quitado', 'success');
+      } catch {
+        enqueue('No se pudo quitar el spool — reintenta.', 'error');
+      }
       return;
     }
 
@@ -620,10 +691,19 @@ function HomePage() {
           selected_unions: [],
         });
       }
-      removeSpool(tag);
-      enqueue('Spool quitado y liberado', 'success');
     } catch {
       enqueue('Error al liberar spool', 'error');
+      return;
+    }
+    // Backend release succeeded — now remove from the supervisor list.
+    try {
+      await removeSpool(tag);
+      enqueue('Spool quitado y liberado', 'success');
+    } catch {
+      enqueue(
+        'Spool liberado pero no se quitó de la lista. Refresca.',
+        'error',
+      );
     }
   };
 
@@ -962,16 +1042,31 @@ function HomePage() {
 
       {/* Spool card list */}
       <div className="px-4">
-        <SpoolCardList
-          spools={spools}
-          onCardClick={handleCardClick}
-          onRemove={handleRemove}
-          onUnionesClick={handleUnionesClick}
-          onNotasClick={handleNotasClick}
-          estadoFilter={estadoFilter}
-          searchText={searchText}
-          workerFilter={workerFilter}
-        />
+        {!hydrated ? (
+          <div
+            className="flex flex-col items-center justify-center py-16 gap-4"
+            role="status"
+            aria-label="Cargando lista"
+          >
+            <p
+              className="text-white/70 font-mono font-black text-base tracking-widest"
+              aria-hidden="true"
+            >
+              CARGANDO LISTA...
+            </p>
+          </div>
+        ) : (
+          <SpoolCardList
+            spools={spools}
+            onCardClick={handleCardClick}
+            onRemove={handleRemove}
+            onUnionesClick={handleUnionesClick}
+            onNotasClick={handleNotasClick}
+            estadoFilter={estadoFilter}
+            searchText={searchText}
+            workerFilter={workerFilter}
+          />
+        )}
       </div>
 
       {/* ── Modals ── */}
