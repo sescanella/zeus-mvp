@@ -197,9 +197,18 @@ class SheetsRepository:
                 return all_values
 
             # Cachear con TTL según tipo de hoja
-            # Trabajadores cambian poco → TTL largo (300s)
-            # Operaciones cambian frecuente → TTL corto (60s)
-            ttl = 300 if sheet_name == config.HOJA_TRABAJADORES_NOMBRE else 60
+            # Trabajadores y Uniones cambian poco → TTL largo (300s).
+            # Uniones moved to 300s after PROD incident 2026-05-08: rapid
+            # modal navigation (INICIAR → Uniones) burst-spiked Sheets reads
+            # past the 300/min/user quota and triggered HTTP 429 → 503 toasts
+            # ("Error del servidor"). At single-user scale, 5 minutes of
+            # staleness is harmless — Matías operates sequentially.
+            # Operaciones cambian frecuente → TTL corto (60s).
+            long_ttl_sheets = {
+                config.HOJA_TRABAJADORES_NOMBRE,
+                "Uniones",  # config has no constant for this; literal name
+            }
+            ttl = 300 if sheet_name in long_ttl_sheets else 60
 
             self._cache.set(cache_key, all_values, ttl_seconds=ttl)
 
