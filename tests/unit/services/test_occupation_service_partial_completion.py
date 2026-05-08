@@ -258,3 +258,282 @@ def test_completar_guard_rejects_out_of_sync_counters(service):
             total_uniones_spool=7,
             ya_completadas=4,   # 4 already done + 5 selected = 9 > 7 total
         )
+
+
+# ============================================================================
+# T-240 + T-241 — Reconciliation tests (Fecha_Armado/Soldadura backfill)
+# ============================================================================
+#
+# Bug: when a worker pauses or completes a spool whose unions are already
+# all ARM-complete (or SOLD-complete), Operaciones.Fecha_{Armado,Soldadura}
+# stay empty. PROD evidence on MK-1344-GW-27133-009 (T-240) and
+# MK-1344-TW-27121-004 (T-241).
+#
+# Fix: defense-in-depth helper `_reconcile_completion_columns` reads Uniones
+# directly and backfills the v2.1 columns when all relevant unions are done.
+# Date and worker come from the union with max(*_FECHA_FIN) for accuracy.
+#
+# These tests must FAIL before the fix and PASS after.
+# Reference: docs/plan T-240+T-241 reconcile Fecha_Armado/Soldadura.
+
+class TestT240T241Reconciliation:
+    """Tests for T-240 (ARM) and T-241 (SOLD) reconciliation."""
+
+    def _extract_keyed_updates(self, mock_sheets_repo):
+        """Helper: pull last batch_update_by_column_name into a flat dict."""
+        call_args = mock_sheets_repo.batch_update_by_column_name.call_args
+        if call_args is None:
+            return {}
+        updates = call_args[1]["updates"] if "updates" in call_args[1] else call_args[0][1]
+        return {u["column_name"]: u["value"] for u in updates}
+
+    @pytest.mark.asyncio
+    async def test_path_a_pausar_override_with_all_arm_complete_writes_fecha_armado(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        T-240 Path A: action_override=PAUSAR on a spool whose 5 unions are
+        already ARM-complete from a prior session must trigger reconcile
+        and write Fecha_Armado + Armador. Reproduces MK-1344-GW-27133-009.
+        """
+        all_complete = [_make_union(i, arm_done=True) for i in range(1, 6)]
+        mock_union_repository.get_by_spool = MagicMock(return_value=all_complete)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = None  # the bug
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM", selected_unions=[], action_override="PAUSAR",
+        )
+        result = await service.finalizar_spool(request)
+
+        keyed = self._extract_keyed_updates(mock_sheets_repository)
+        assert keyed.get("Fecha_Armado") == "10-04-2026"
+        assert keyed.get("Armador") == "NR(94)"
+        assert result.action_taken == "COMPLETAR"
+
+    @pytest.mark.asyncio
+    async def test_path_a_pausar_override_with_partial_arm_does_not_reconcile(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        T-021 invariant regression: action_override=PAUSAR on a genuinely
+        partial spool (2 of 5 ARM done) must NOT write Fecha_Armado.
+        Action stays PAUSAR.
+        """
+        partial = [
+            _make_union(1, arm_done=True),
+            _make_union(2, arm_done=True),
+            _make_union(3, arm_done=False),
+            _make_union(4, arm_done=False),
+            _make_union(5, arm_done=False),
+        ]
+        mock_union_repository.get_by_spool = MagicMock(return_value=partial)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM", selected_unions=[], action_override="PAUSAR",
+        )
+        result = await service.finalizar_spool(request)
+
+        keyed = self._extract_keyed_updates(mock_sheets_repository)
+        assert "Fecha_Armado" not in keyed
+        assert "Armador" not in keyed
+        assert result.action_taken == "PAUSAR"
+
+    @pytest.mark.asyncio
+    async def test_t241_sold_reconciliation_excludes_fw_unions(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        T-241: SOLD reconciliation must use SOLD_REQUIRED_TYPES filter.
+        Spool with 3 BW (all SOLD-done) + 2 FW (no SOLD). Fecha_Soldadura
+        must be written despite FW.sol_fecha_fin being None.
+        """
+        unions = [
+            _make_union(1, arm_done=True, sold_done=True, tipo="BW"),
+            _make_union(2, arm_done=True, sold_done=True, tipo="BW"),
+            _make_union(3, arm_done=True, sold_done=True, tipo="BW"),
+            _make_union(4, arm_done=True, sold_done=False, tipo="FW"),
+            _make_union(5, arm_done=True, sold_done=False, tipo="FW"),
+        ]
+        mock_union_repository.get_by_spool = MagicMock(return_value=unions)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = "2026-04-09"  # already done
+        mock_spool.fecha_soldadura = None       # the bug
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=129, worker_nombre="FF(129)",
+            operacion="SOLD", selected_unions=[], action_override="PAUSAR",
+        )
+        result = await service.finalizar_spool(request)
+
+        keyed = self._extract_keyed_updates(mock_sheets_repository)
+        assert keyed.get("Fecha_Soldadura") == "10-04-2026"
+        assert keyed.get("Soldador") == "FF(129)"
+        assert result.action_taken == "COMPLETAR"
+
+    @pytest.mark.asyncio
+    async def test_reconciliation_idempotent_when_fecha_already_populated(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        Idempotency: spool with Fecha_Armado already set (e.g. populated by
+        a prior happy-path COMPLETAR) must NOT have it re-written by
+        reconciliation. Preserves the original audit timestamp.
+        """
+        from datetime import date
+        all_complete = [_make_union(i, arm_done=True) for i in range(1, 6)]
+        mock_union_repository.get_by_spool = MagicMock(return_value=all_complete)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = date(2026, 3, 15)  # already set, earlier date
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM", selected_unions=[], action_override="PAUSAR",
+        )
+        await service.finalizar_spool(request)
+
+        keyed = self._extract_keyed_updates(mock_sheets_repository)
+        # Reconciliation no-op: Fecha_Armado not in updates (preserved)
+        assert "Fecha_Armado" not in keyed
+        assert "Armador" not in keyed
+
+    @pytest.mark.asyncio
+    async def test_reconciliation_uses_max_fecha_fin_not_today(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        Date attribution: Fecha_Armado must equal max(ARM_FECHA_FIN), NOT
+        today_chile(). Two unions with different finish dates — pick the
+        latest. Worker comes from the union tied to that latest date.
+        """
+        unions = [
+            Union(
+                id="OT-999+1", ot="999", tag_spool="OT-999", n_union=1,
+                dn_union=2.0, tipo_union="BW",
+                arm_fecha_inicio=None,
+                arm_fecha_fin=datetime(2026, 4, 5),  # earlier
+                arm_worker="NR(94)",
+                sol_fecha_inicio=None, sol_fecha_fin=None, sol_worker=None,
+                ndt_fecha=None, ndt_status=None, version="v1",
+            ),
+            Union(
+                id="OT-999+2", ot="999", tag_spool="OT-999", n_union=2,
+                dn_union=2.0, tipo_union="BW",
+                arm_fecha_inicio=None,
+                arm_fecha_fin=datetime(2026, 4, 12),  # latest — wins
+                arm_worker="JP(95)",
+                sol_fecha_inicio=None, sol_fecha_fin=None, sol_worker=None,
+                ndt_fecha=None, ndt_status=None, version="v1",
+            ),
+        ]
+        mock_union_repository.get_by_spool = MagicMock(return_value=unions)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM", selected_unions=[], action_override="PAUSAR",
+        )
+        await service.finalizar_spool(request)
+
+        keyed = self._extract_keyed_updates(mock_sheets_repository)
+        assert keyed.get("Fecha_Armado") == "12-04-2026"  # max, not today
+        assert keyed.get("Armador") == "JP(95)"           # worker of latest
+
+    @pytest.mark.asyncio
+    async def test_reconciliation_fallback_worker_when_arm_worker_empty(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        Edge case: union has ARM_FECHA_FIN populated but ARM_WORKER is empty
+        (legacy/corrupt row). Fall back to the worker who clicked PAUSAR.
+        """
+        unions = [
+            Union(
+                id="OT-999+1", ot="999", tag_spool="OT-999", n_union=1,
+                dn_union=2.0, tipo_union="BW",
+                arm_fecha_inicio=None,
+                arm_fecha_fin=datetime(2026, 4, 12),
+                arm_worker=None,  # empty — corrupt
+                sol_fecha_inicio=None, sol_fecha_fin=None, sol_worker=None,
+                ndt_fecha=None, ndt_status=None, version="v1",
+            ),
+        ]
+        mock_union_repository.get_by_spool = MagicMock(return_value=unions)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM", selected_unions=[], action_override="PAUSAR",
+        )
+        await service.finalizar_spool(request)
+
+        keyed = self._extract_keyed_updates(mock_sheets_repository)
+        assert keyed.get("Armador") == "MR(93)"  # fallback to clicker
+
+    @pytest.mark.asyncio
+    async def test_reconcile_helper_returns_empty_when_union_repo_unavailable(
+        self, mock_sheets_repository, mock_metadata_repository, mock_conflict_service
+    ):
+        """
+        Helper is robust to missing union_repository — returns {} and the
+        caller (Path A or B) treats it as no-op.
+        """
+        service_no_unions = OccupationService(
+            sheets_repository=mock_sheets_repository,
+            metadata_repository=mock_metadata_repository,
+            conflict_service=mock_conflict_service,
+            union_repository=None,
+        )
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_armado = None
+
+        result = service_no_unions._reconcile_completion_columns(
+            spool=mock_spool, operacion="ARM", fallback_worker="MR(93)",
+        )
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_helper_returns_empty_for_unknown_operacion(
+        self, service, mock_sheets_repository
+    ):
+        """Unknown operacion (not ARM/SOLD) returns {} silently."""
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        result = service._reconcile_completion_columns(
+            spool=mock_spool, operacion="REPARACION", fallback_worker="MR(93)",
+        )
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_helper_returns_empty_for_sold_with_only_fw_unions(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        SOLD reconciliation on a spool whose only unions are FW (no SOLD
+        required at all) must return {} — Fecha_Soldadura should NEVER be
+        set on such a spool.
+        """
+        fw_only = [
+            _make_union(1, arm_done=True, sold_done=False, tipo="FW"),
+            _make_union(2, arm_done=True, sold_done=False, tipo="FW"),
+        ]
+        mock_union_repository.get_by_spool = MagicMock(return_value=fw_only)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.fecha_soldadura = None
+
+        result = service._reconcile_completion_columns(
+            spool=mock_spool, operacion="SOLD", fallback_worker="FF(129)",
+        )
+        assert result == {}

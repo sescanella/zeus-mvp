@@ -963,6 +963,120 @@ class OccupationService:
             # Don't block operation on metrología check failure
             return False
 
+    def _reconcile_completion_columns(
+        self,
+        spool,
+        operacion: str,
+        fallback_worker: str,
+    ) -> dict:
+        """
+        Defense-in-depth backfill for T-240 (ARM) and T-241 (SOLD).
+
+        When all relevant unions in `Uniones` carry `ARM_FECHA_FIN` /
+        `SOL_FECHA_FIN` but `Operaciones.Fecha_{Armado,Soldadura}` is empty,
+        return the column writes that backfill the v2.1 columns. Both the
+        date and the worker come from the union with `max(*_FECHA_FIN)` —
+        the truth of when the work actually closed and who closed it —
+        rather than `today_chile()` / `worker_nombre`. This preserves
+        cycle-time analytics and audit accuracy.
+
+        Returns an empty dict (no-op) when:
+            - The relevant Operaciones column is already populated
+              (idempotent — never overwrite).
+            - There are no relevant unions, OR not all of them are complete
+              (preserves T-021 invariant: never write Fecha_* when work is
+              genuinely partial).
+            - UnionRepository is unavailable, or the read fails.
+
+        Args:
+            spool: Spool model already fetched fresh by the caller (we
+                read its `fecha_armado` / `fecha_soldadura` for the
+                idempotency gate).
+            operacion: "ARM" or "SOLD".
+            fallback_worker: `worker_nombre` from the request — used only
+                when the latest relevant union has an empty `arm_worker`
+                / `sol_worker` (legacy/corrupt rows).
+
+        Returns:
+            dict mapping Operaciones column names to values, e.g.
+            {"Fecha_Armado": "12-04-2026", "Armador": "JP(95)"}.
+        """
+        if self.union_repository is None:
+            return {}
+
+        try:
+            all_unions = self.union_repository.get_by_spool(spool.tag_spool)
+        except Exception as e:
+            logger.warning(
+                f"[RECONCILE] get_by_spool({spool.tag_spool}) failed: {e}; "
+                f"skipping reconciliation"
+            )
+            return {}
+
+        # T-096 guard mirror: refuse to act on a non-list result. Mirrors
+        # the same pattern used at line ~1163 — if the repository did not
+        # return a list (mock, broken stub, or transient client failure),
+        # we stay on the safe side and skip reconciliation rather than
+        # iterate something that could yield bogus rows.
+        if not isinstance(all_unions, list):
+            logger.warning(
+                f"[RECONCILE] get_by_spool({spool.tag_spool}) returned non-list "
+                f"{type(all_unions).__name__}; skipping reconciliation"
+            )
+            return {}
+
+        if not all_unions:
+            return {}  # v3.0 spool without uniones — out of scope
+
+        if operacion == "ARM":
+            relevant = all_unions  # every union needs ARM regardless of type
+            date_attr = "arm_fecha_fin"
+            worker_attr = "arm_worker"
+            sheet_date_col = "Fecha_Armado"
+            sheet_worker_col = "Armador"
+            already_populated = spool.fecha_armado is not None
+        elif operacion == "SOLD":
+            relevant = [u for u in all_unions if u.tipo_union in SOLD_REQUIRED_TYPES]
+            date_attr = "sol_fecha_fin"
+            worker_attr = "sol_worker"
+            sheet_date_col = "Fecha_Soldadura"
+            sheet_worker_col = "Soldador"
+            already_populated = spool.fecha_soldadura is not None
+        else:
+            return {}
+
+        if already_populated:
+            return {}
+        if not relevant:
+            # SOLD case: spool with only FW unions — Fecha_Soldadura should
+            # never be set (FW does not require SOLD). Skip silently.
+            return {}
+
+        fechas = [getattr(u, date_attr) for u in relevant]
+        if any(f is None for f in fechas):
+            # T-021 invariant: do NOT write Fecha_* when work is genuinely
+            # partial. Returning {} here is what keeps the pre-existing
+            # T-021 fix correct.
+            return {}
+
+        completion_date = max(fechas).date()
+        latest_union = max(relevant, key=lambda u: getattr(u, date_attr))
+        completion_worker = getattr(latest_union, worker_attr) or fallback_worker
+
+        updates = {
+            sheet_date_col: format_date_for_sheets(completion_date),
+            sheet_worker_col: sanitize_for_sheets(completion_worker),
+        }
+        logger.info(
+            f"[RECONCILE] {spool.tag_spool} {operacion}: all {len(relevant)} "
+            f"unions complete but {sheet_date_col} was empty. Backfilling "
+            f"{sheet_date_col}={updates[sheet_date_col]}, "
+            f"{sheet_worker_col}={updates[sheet_worker_col]} "
+            f"(latest_union_id={latest_union.id}, "
+            f"fallback_worker={fallback_worker})"
+        )
+        return updates
+
     async def finalizar_spool(self, request: FinalizarRequest) -> OccupationResponse:
         """
         Finalizar trabajo en un spool (v4.0 FINALIZAR operation).
@@ -1254,6 +1368,20 @@ class OccupationService:
                     action_taken = "PAUSAR"
                     logger.info(f"action_override=PAUSAR: skipping union writes for {tag_spool}")
 
+                    # T-240/T-241: Reconcile Fecha_Armado/Soldadura against
+                    # Uniones reality before the early-return. If all relevant
+                    # unions are already complete from a prior session, write
+                    # the v2.1 columns even though the user clicked Pausar —
+                    # otherwise the spool stays corrupt and downstream
+                    # validations (validation_service, metrología routing,
+                    # state hydration) keep tripping. Idempotent: empty dict
+                    # if columns already populated or work genuinely partial.
+                    reconcile_updates = self._reconcile_completion_columns(
+                        spool=spool,
+                        operacion=operacion,
+                        fallback_worker=worker_nombre,
+                    )
+
                     # Jump directly to occupation clearing + metadata logging
                     # (skip Step 5 metrología check and Step 6 union processing)
                     try:
@@ -1262,6 +1390,12 @@ class OccupationService:
                             "Fecha_Ocupacion": "",
                             "Estado_Detalle": f"{operacion} parcial (pausado)"
                         }
+                        if reconcile_updates:
+                            updates_dict.update(reconcile_updates)
+                            updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
+                            # Flip action_taken so response + metadata reflect
+                            # what actually happened, not what the user clicked.
+                            action_taken = "COMPLETAR"
 
                         from backend.core.column_map_cache import ColumnMapCache
                         from backend.config import config
@@ -1309,7 +1443,8 @@ class OccupationService:
                     except Exception as e:
                         logger.error(f"Failed to clear occupation for action_override=PAUSAR: {e}")
 
-                    # Log PAUSAR event to Metadata
+                    # Log event to Metadata. Note: action_taken may have
+                    # flipped to COMPLETAR above if reconciliation fired.
                     try:
                         event = (
                             MetadataEventBuilder()
@@ -1319,23 +1454,59 @@ class OccupationService:
                                 "unions_processed": 0,
                                 "selected_unions": [],
                                 "pulgadas": 0.0,
-                                "action_override": "PAUSAR"
+                                "action_override": "PAUSAR",
+                                "reconciliation_applied": bool(reconcile_updates),
+                                "reconciled_columns": list(reconcile_updates.keys()) if reconcile_updates else [],
                             })
                             .build()
                         )
                         self.metadata_repository.log_event(**event)
-                        logger.info(f"✅ Metadata logged: PAUSAR_SPOOL for {tag_spool} (action_override)")
+                        logger.info(
+                            f"✅ Metadata logged: {action_taken}_SPOOL for {tag_spool} "
+                            f"(action_override=PAUSAR, reconciled={bool(reconcile_updates)})"
+                        )
 
                     except Exception as e:
                         logger.error(f"❌ CRITICAL: Metadata logging failed for action_override=PAUSAR: {e}")
 
+                    # T-240/T-241: if reconciliation flipped to COMPLETAR,
+                    # also run the metrología auto-trigger so the spool
+                    # enters the inspection queue. Mirrors the regular
+                    # COMPLETAR flow's auto-trigger block (Step 8.3).
+                    metrologia_new_state = None
+                    if reconcile_updates:
+                        try:
+                            if self.should_trigger_metrologia(tag_spool):
+                                from backend.services.state_service import StateService
+                                state_service = StateService(
+                                    occupation_service=self,
+                                    sheets_repository=self.sheets_repository,
+                                    metadata_repository=self.metadata_repository,
+                                )
+                                metrologia_new_state = await state_service.trigger_metrologia_transition(tag_spool)
+                                if metrologia_new_state:
+                                    logger.info(
+                                        f"[RECONCILE] Metrología auto-transition for "
+                                        f"{tag_spool}: {metrologia_new_state}"
+                                    )
+                        except Exception as e:
+                            logger.error(
+                                f"[RECONCILE] metrología trigger failed: {e}",
+                                exc_info=True,
+                            )
+
                     return OccupationResponse(
                         success=True,
                         tag_spool=tag_spool,
-                        message=f"Trabajo pausado en {tag_spool} (acción directa)",
-                        action_taken="PAUSAR",
+                        message=(
+                            f"Operación completada en {tag_spool} (reconciliado)"
+                            if reconcile_updates
+                            else f"Trabajo pausado en {tag_spool} (acción directa)"
+                        ),
+                        action_taken=action_taken,
                         unions_processed=0,
-                        pulgadas=0.0
+                        pulgadas=0.0,
+                        metrologia_triggered=bool(metrologia_new_state) if reconcile_updates else None,
                     )
             else:
                 # Step 5: Auto-determine action (PAUSAR vs COMPLETAR)
@@ -1560,6 +1731,36 @@ class OccupationService:
                 logger.error(f"Failed to update metrics in Operaciones for {tag_spool}: {e}", exc_info=True)
                 # Don't block the operation on metrics update failure
 
+            # Step 6.7: T-240/T-241 — Reconcile Fecha_Armado/Soldadura
+            # against Uniones reality. Defense-in-depth for the case where
+            # the T-021 guard below uses calculate_metrics() (cache-backed)
+            # and the cache invalidation after batch_update_arm_full
+            # silently failed or raced. This re-fetches the spool and reads
+            # Uniones authoritatively to backfill v2.1 columns when all
+            # relevant unions are complete but the column is empty.
+            #
+            # Idempotent: empty dict if columns already populated OR if
+            # work is genuinely partial (preserves T-021 invariant).
+            reconcile_updates: dict = {}
+            try:
+                fresh_spool = self.sheets_repository.get_spool_by_tag(tag_spool)
+                if fresh_spool is None:
+                    logger.warning(
+                        f"[RECONCILE] {tag_spool} disappeared during "
+                        f"reconciliation; skipping"
+                    )
+                else:
+                    reconcile_updates = self._reconcile_completion_columns(
+                        spool=fresh_spool,
+                        operacion=operacion,
+                        fallback_worker=worker_nombre,
+                    )
+            except Exception as e:
+                logger.error(
+                    f"[RECONCILE] failed for {tag_spool}: {e}",
+                    exc_info=True,
+                )
+
             # Step 7: Clear occupation fields in Operaciones sheet
             # Build updates dict (varies by PAUSAR vs COMPLETAR)
             try:
@@ -1597,18 +1798,34 @@ class OccupationService:
                         )
                         action_taken = "PAUSAR"
 
+                # T-240/T-241: if Step 6.7 reconciliation found that all
+                # relevant unions are actually complete (read directly from
+                # Uniones, bypassing the metrics cache that the T-021 guard
+                # above relied on), force COMPLETAR so the v2.1 columns get
+                # written. This rescues Path B where stale cache wrongly
+                # forces PAUSAR despite the unions being done.
+                if reconcile_updates:
+                    action_taken = "COMPLETAR"
+
                 if action_taken == "COMPLETAR":
-                    sanitized_worker = sanitize_for_sheets(worker_nombre)
-                    if operacion == "ARM":
-                        updates_dict.update({
-                            "Fecha_Armado": format_date_for_sheets(today_chile()),
-                            "Armador": sanitized_worker
-                        })
-                    elif operacion == "SOLD":
-                        updates_dict.update({
-                            "Fecha_Soldadura": format_date_for_sheets(today_chile()),
-                            "Soldador": sanitized_worker
-                        })
+                    if reconcile_updates:
+                        # Reconciliation provides the accurate date+worker
+                        # from the latest union (max ARM_FECHA_FIN), not
+                        # today_chile()/worker_nombre. This preserves
+                        # cycle-time analytics for prior-session work.
+                        updates_dict.update(reconcile_updates)
+                    else:
+                        sanitized_worker = sanitize_for_sheets(worker_nombre)
+                        if operacion == "ARM":
+                            updates_dict.update({
+                                "Fecha_Armado": format_date_for_sheets(today_chile()),
+                                "Armador": sanitized_worker
+                            })
+                        elif operacion == "SOLD":
+                            updates_dict.update({
+                                "Fecha_Soldadura": format_date_for_sheets(today_chile()),
+                                "Soldador": sanitized_worker
+                            })
 
                     updates_dict["Estado_Detalle"] = f"{operacion} completado - Disponible"
                 else:  # PAUSAR
