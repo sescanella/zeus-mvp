@@ -482,8 +482,7 @@ class TestT240T241Reconciliation:
         keyed = self._extract_keyed_updates(mock_sheets_repository)
         assert keyed.get("Armador") == "MR(93)"  # fallback to clicker
 
-    @pytest.mark.asyncio
-    async def test_reconcile_helper_returns_empty_when_union_repo_unavailable(
+    def test_reconcile_helper_returns_empty_when_union_repo_unavailable(
         self, mock_sheets_repository, mock_metadata_repository, mock_conflict_service
     ):
         """
@@ -504,8 +503,7 @@ class TestT240T241Reconciliation:
         )
         assert result == {}
 
-    @pytest.mark.asyncio
-    async def test_reconcile_helper_returns_empty_for_unknown_operacion(
+    def test_reconcile_helper_returns_empty_for_unknown_operacion(
         self, service, mock_sheets_repository
     ):
         """Unknown operacion (not ARM/SOLD) returns {} silently."""
@@ -515,8 +513,7 @@ class TestT240T241Reconciliation:
         )
         assert result == {}
 
-    @pytest.mark.asyncio
-    async def test_reconcile_helper_returns_empty_for_sold_with_only_fw_unions(
+    def test_reconcile_helper_returns_empty_for_sold_with_only_fw_unions(
         self, service, mock_sheets_repository, mock_union_repository
     ):
         """
