@@ -216,8 +216,14 @@ class SheetsRepository:
             spreadsheet = self._get_spreadsheet()
             worksheet = spreadsheet.worksheet(sheet_name)
 
-            # Leer todos los valores (batch read)
-            all_values = worksheet.get_all_values()
+            # Read with UNFORMATTED_VALUE so cells with date-format applied to
+            # numeric columns (e.g. Total_Uniones formatted as "Fecha" returns
+            # "1900-01-06" instead of 7) come back as their native numeric
+            # values. Date-formatted real dates come back as Excel serial
+            # ints — `SheetsService.parse_date()` handles both.
+            all_values = worksheet.get_all_values(
+                value_render_option=gspread.utils.ValueRenderOption.unformatted
+            )
 
             # Never cache empty results — they indicate a transient API issue
             if not all_values or len(all_values) == 0:
@@ -720,7 +726,10 @@ class SheetsRepository:
             return None
 
         value = all_rows[row][idx]
-        return value.strip() if value else None
+        if value is None or value == "":
+            return None
+        s = str(value).strip()
+        return s if s else None
 
     def get_fecha_ocupacion(self, sheet_name: str, row: int) -> Optional[str]:
         """
@@ -750,7 +759,10 @@ class SheetsRepository:
             return None
 
         value = all_rows[row][idx]
-        return value.strip() if value else None
+        if value is None or value == "":
+            return None
+        s = str(value).strip()
+        return s if s else None
 
     def get_version(self, sheet_name: str, row: int) -> int:
         """
@@ -1042,34 +1054,32 @@ class SheetsRepository:
 
         normalize = normalize_column_name
 
-        def get_col_value(col_name: str) -> Optional[str]:
-            """Helper to safely get column value by name."""
+        def get_col_value(col_name: str):
+            """
+            Helper to safely get column value by name. Returns the raw cell
+            value (str, int, float, bool, or None) — callers must coerce.
+            With UNFORMATTED_VALUE reads, numeric cells come back as int/float
+            rather than as strings.
+            """
             normalized = normalize(col_name)
             if normalized not in column_map:
                 return None
             col_index = column_map[normalized]  # Already 0-indexed from build_column_map
             if col_index < len(row_data):
                 value = row_data[col_index]
-                return value if value and value.strip() else None
+                if value is None or value == "":
+                    return None
+                if isinstance(value, str) and not value.strip():
+                    return None
+                return value
             return None
 
-        def parse_date(date_str: Optional[str]) -> Optional[date]:
-            """Helper to parse date string to date object."""
-            if not date_str:
-                return None
-            try:
-                # Try YYYY-MM-DD format first
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            except ValueError:
-                try:
-                    # Try DD/MM/YYYY format (Google Sheets default)
-                    return datetime.strptime(date_str, "%d/%m/%Y").date()
-                except ValueError:
-                    try:
-                        # Try DD-MM-YYYY format
-                        return datetime.strptime(date_str, "%d-%m-%Y").date()
-                    except ValueError:
-                        return None
+        # Delegate to SheetsService.parse_date so we share one implementation
+        # that understands strings AND Excel serial dates (UNFORMATTED_VALUE
+        # returns date-formatted cells as serial ints).
+        from backend.services.sheets_service import SheetsService as _SS
+        def parse_date(value) -> Optional[date]:
+            return _SS.parse_date(value)
 
         # Build Spool object
         try:
@@ -1196,34 +1206,27 @@ class SheetsRepository:
 
         normalize = normalize_column_name
 
-        def get_col_value(row_data: list, col_name: str) -> Optional[str]:
-            """Helper to safely get column value by name."""
+        def get_col_value(row_data: list, col_name: str):
+            """
+            Helper to safely get column value by name. Returns raw cell value
+            (str/int/float/bool/None) — caller must coerce.
+            """
             normalized = normalize(col_name)
             if normalized not in column_map:
                 return None
-            col_index = column_map[normalized]  # Already 0-indexed from build_column_map
+            col_index = column_map[normalized]
             if col_index < len(row_data):
                 value = row_data[col_index]
-                return value if value and value.strip() else None
+                if value is None or value == "":
+                    return None
+                if isinstance(value, str) and not value.strip():
+                    return None
+                return value
             return None
 
-        def parse_date(date_str: Optional[str]) -> Optional[date]:
-            """Helper to parse date string to date object."""
-            if not date_str:
-                return None
-            try:
-                # Try YYYY-MM-DD format first
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            except ValueError:
-                try:
-                    # Try DD/MM/YYYY format (Google Sheets default)
-                    return datetime.strptime(date_str, "%d/%m/%Y").date()
-                except ValueError:
-                    try:
-                        # Try DD-MM-YYYY format
-                        return datetime.strptime(date_str, "%d-%m-%Y").date()
-                    except ValueError:
-                        return None
+        from backend.services.sheets_service import SheetsService as _SS
+        def parse_date(value) -> Optional[date]:
+            return _SS.parse_date(value)
 
         # Filter spools
         ready_spools = []
@@ -1299,31 +1302,24 @@ class SheetsRepository:
 
         normalize = normalize_column_name
 
-        def get_col_value(row_data: list, col_name: str) -> Optional[str]:
-            """Helper to safely get column value by name."""
+        def get_col_value(row_data: list, col_name: str):
+            """Raw cell value (str/int/float/bool/None) — caller coerces."""
             normalized = normalize(col_name)
             if normalized not in column_map:
                 return None
-            col_index = column_map[normalized]  # Already 0-indexed from build_column_map
+            col_index = column_map[normalized]
             if col_index < len(row_data):
                 value = row_data[col_index]
-                return value if value and str(value).strip() else None
+                if value is None or value == "":
+                    return None
+                if isinstance(value, str) and not value.strip():
+                    return None
+                return value
             return None
 
-        def parse_date(date_str: Optional[str]) -> Optional[date]:
-            """Helper to parse date string to date object."""
-            if not date_str:
-                return None
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            except ValueError:
-                try:
-                    return datetime.strptime(date_str, "%d/%m/%Y").date()
-                except ValueError:
-                    try:
-                        return datetime.strptime(date_str, "%d-%m-%Y").date()
-                    except ValueError:
-                        return None
+        from backend.services.sheets_service import SheetsService as _SS
+        def parse_date(value) -> Optional[date]:
+            return _SS.parse_date(value)
 
         spools = []
         # Skip header (row 0)

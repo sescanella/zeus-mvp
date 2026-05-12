@@ -9,7 +9,7 @@ Responsabilidades:
 - Validación de consistencia de datos
 """
 from typing import Optional, Union, TYPE_CHECKING
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
 
 from backend.models.worker import Worker
@@ -217,19 +217,16 @@ class SheetsService:
             return default
 
     @staticmethod
-    def parse_date(value: str) -> Optional[date]:
+    def parse_date(value) -> Optional[date]:
         """
         Parsea fechas en múltiples formatos comunes.
 
-        Formatos soportados:
-        - DD/MM/YYYY (ej: 30/7/2025, 08/11/2025)
-        - DD/MM/YY (ej: 30/7/25, 08/11/25)
-        - YYYY-MM-DD (ej: 2025-11-08)
-        - DD-MMM-YYYY (ej: 08-Nov-2025)
-        - DD-MM-YYYY (ej: 08-11-2025)
-
-        Args:
-            value: String con la fecha
+        Acepta:
+        - Strings: DD/MM/YYYY, DD/MM/YY, YYYY-MM-DD, DD-MMM-YYYY, DD-MM-YYYY
+        - Excel serial dates como int/float (resultado de leer una celda con
+          formato "Fecha" con value_render_option=UNFORMATTED_VALUE). El
+          epoch de Google Sheets/Excel es 1899-12-30 (compensa el bug de
+          año bisiesto 1900 que tiene Excel).
 
         Returns:
             date object o None si vacío/inválido
@@ -237,16 +234,29 @@ class SheetsService:
         Examples:
             >>> SheetsService.parse_date("30/7/2025")
             date(2025, 7, 30)
-            >>> SheetsService.parse_date("2025-11-08")
-            date(2025, 11, 8)
+            >>> SheetsService.parse_date(46153)
+            date(2026, 5, 11)
             >>> SheetsService.parse_date("")
             None
-            >>> SheetsService.parse_date("invalid")
-            None  # + warning log
         """
         # Manejar valores vacíos/nulos
-        if not value or value is None:
+        if value is None or value == "":
             return None
+
+        # Excel/Google Sheets serial date (cell with date format read as
+        # UNFORMATTED_VALUE). Treat booleans as not-a-date even though they
+        # are subclasses of int in Python.
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            try:
+                return date(1899, 12, 30) + timedelta(days=int(value))
+            except (ValueError, OverflowError) as e:
+                logger.warning(
+                    f"Valor inválido para serial date: {value!r}. "
+                    f"Error: {e}"
+                )
+                return None
 
         # Limpiar espacios
         value_str = str(value).strip()
@@ -305,15 +315,27 @@ class SheetsService:
         if len(row) < 4:
             raise ValueError(f"Fila de trabajador incompleta: {len(row)} columnas (se esperan al menos 4)")
 
+        # With value_render_option=UNFORMATTED_VALUE, the worker Id may come
+        # back as int and the Activo column may come back as a Python bool.
+        # Coerce defensively before calling .strip()/.isdigit()/etc.
+        def _as_text(v) -> str:
+            if v is None:
+                return ""
+            if isinstance(v, bool):
+                return "TRUE" if v else "FALSE"
+            return str(v).strip()
+
         # Detectar formato basándose en si la primera columna es un Id numérico
         first_col_is_id = False
-        if row[0] and str(row[0]).strip().isdigit():
+        if isinstance(row[0], (int, float)) and not isinstance(row[0], bool):
+            first_col_is_id = True
+        elif row[0] and _as_text(row[0]).isdigit():
             first_col_is_id = True
 
         # Determinar estructura del sheet
         if len(row) >= 5 and first_col_is_id:
             # Formato v2.0 completo: A=Id | B=Nombre | C=Apellido | D=Rol | E=Activo
-            worker_id = int(row[0].strip())
+            worker_id = int(_as_text(row[0]))
             idx_nombre = 1
             idx_apellido = 2
             idx_rol = 3
@@ -321,7 +343,7 @@ class SheetsService:
             has_rol = True
         elif len(row) == 4 and first_col_is_id:
             # Formato híbrido (migración parcial): A=Id | B=Nombre | C=Apellido | D=Activo (SIN Rol)
-            worker_id = int(row[0].strip())
+            worker_id = int(_as_text(row[0]))
             idx_nombre = 1
             idx_apellido = 2
             idx_rol = None  # No hay columna Rol
@@ -338,12 +360,12 @@ class SheetsService:
             worker_id = None  # Se genera después de parsear nombre+apellido
 
         # 2. Parsear nombre (obligatorio)
-        nombre = row[idx_nombre].strip() if row[idx_nombre] else ""
+        nombre = _as_text(row[idx_nombre])
         if not nombre:
             raise ValueError("Nombre de trabajador vacío")
 
         # 3. Parsear apellido (obligatorio)
-        apellido = row[idx_apellido].strip() if row[idx_apellido] else ""
+        apellido = _as_text(row[idx_apellido])
         if not apellido:
             raise ValueError(f"Apellido de trabajador vacío (nombre: {nombre})")
 
@@ -358,7 +380,7 @@ class SheetsService:
 
         if has_rol and idx_rol is not None:
             # Parsear rol desde columna
-            rol_str = row[idx_rol].strip() if row[idx_rol] else ""
+            rol_str = _as_text(row[idx_rol])
             if not rol_str:
                 raise ValueError(f"Rol de trabajador vacío (nombre: {nombre} {apellido})")
 
@@ -389,13 +411,18 @@ class SheetsService:
             rol = RolTrabajador.AYUDANTE
 
         # 5. Parsear activo (obligatorio, TRUE/FALSE)
-        activo_str = row[idx_activo].strip().upper() if row[idx_activo] else ""
-        if not activo_str:
-            logger.warning(f"Campo Activo vacío para {nombre} {apellido}, usando FALSE por defecto")
-            activo = False
+        # UNFORMATTED_VALUE returns checkbox/boolean cells as Python bool;
+        # FORMATTED_VALUE returns the string "TRUE"/"FALSE". Handle both.
+        raw_activo = row[idx_activo]
+        if isinstance(raw_activo, bool):
+            activo = bool(raw_activo)
         else:
-            # Google Sheets retorna "TRUE" o "FALSE" como strings
-            activo = activo_str == "TRUE"
+            activo_str = _as_text(raw_activo).upper()
+            if not activo_str:
+                logger.warning(f"Campo Activo vacío para {nombre} {apellido}, usando FALSE por defecto")
+                activo = False
+            else:
+                activo = activo_str == "TRUE"
 
         return Worker(
             id=worker_id,
@@ -463,119 +490,98 @@ class SheetsService:
         idx_pulgadas_arm = self._get_col_idx("Pulgadas_ARM")
         idx_pulgadas_sold = self._get_col_idx("Pulgadas_SOLD")
 
+        # With value_render_option=UNFORMATTED_VALUE every cell can come back
+        # as int/float/bool/str depending on its on-sheet type. The helpers
+        # below normalize each value so calling .strip()/int()/float() is
+        # always safe.
+        def _cell_str(v) -> Optional[str]:
+            if v is None:
+                return None
+            s = str(v).strip()
+            return s if s != "" else None
+
+        def _cell_int(v, field_name: str, tag: str) -> Optional[int]:
+            if v is None or v == "":
+                return None
+            try:
+                n = int(v) if not isinstance(v, bool) else None
+                if n is None:
+                    return None
+                if n < 0:
+                    logger.warning(f"Negative {field_name} for {tag}: {n}, defaulting to None")
+                    return None
+                return n
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid {field_name} for {tag}: {v!r}, defaulting to None")
+                return None
+
+        def _cell_float(v, field_name: str, tag: str) -> Optional[float]:
+            if v is None or v == "":
+                return None
+            try:
+                f = float(v) if not isinstance(v, bool) else None
+                if f is None:
+                    return None
+                if f < 0:
+                    logger.warning(f"Negative {field_name} for {tag}: {f}, defaulting to None")
+                    return None
+                return f
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid {field_name} for {tag}: {v!r}, defaulting to None")
+                return None
+
         # 2. Parsear SPLIT (spool identifier - obligatorio)
-        tag_spool = row[idx_tag_spool].strip() if idx_tag_spool < len(row) and row[idx_tag_spool] else None
+        tag_spool = _cell_str(row[idx_tag_spool]) if idx_tag_spool < len(row) else None
         if not tag_spool:
             raise ValueError("SPLIT (spool identifier) vacío en fila")
 
         # 3. Parsear NV (v2.0 - opcional para filtrado multidimensional)
-        nv = row[idx_nv].strip() if idx_nv < len(row) and row[idx_nv] else None
-        if nv == '':
-            nv = None
+        nv = _cell_str(row[idx_nv]) if idx_nv < len(row) else None
 
         # 4. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
         # No leemos estados de Operaciones porque es READ-ONLY en v2.0
         arm_status = ActionStatus.PENDIENTE
         sold_status = ActionStatus.PENDIENTE
 
-        # 5. Parsear fechas (solo lectura, NO se usan para determinar estado)
+        # 5. Parsear fechas — parse_date acepta tanto strings DD/MM/YYYY como
+        # Excel serial dates (int/float, resultado de UNFORMATTED_VALUE
+        # sobre celdas con formato Fecha).
         fecha_materiales = self.parse_date(row[idx_fecha_materiales]) if idx_fecha_materiales < len(row) else None
         fecha_armado = self.parse_date(row[idx_fecha_armado]) if idx_fecha_armado < len(row) else None
         fecha_soldadura = self.parse_date(row[idx_fecha_soldadura]) if idx_fecha_soldadura < len(row) else None
 
         # 6. Parsear trabajadores legacy (solo lectura informativa)
-        armador = row[idx_armador].strip() if idx_armador < len(row) and row[idx_armador] else None
-        if armador == '':
-            armador = None
-
-        soldador = row[idx_soldador].strip() if idx_soldador < len(row) and row[idx_soldador] else None
-        if soldador == '':
-            soldador = None
+        armador = _cell_str(row[idx_armador]) if idx_armador < len(row) else None
+        soldador = _cell_str(row[idx_soldador]) if idx_soldador < len(row) else None
 
         # 7. Parsear campos v3.0 (ocupación)
-        ocupado_por = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
-        if ocupado_por == '':
-            ocupado_por = None
-
-        fecha_ocupacion = row[idx_fecha_ocupacion].strip() if idx_fecha_ocupacion < len(row) and row[idx_fecha_ocupacion] else None
-        if fecha_ocupacion == '':
-            fecha_ocupacion = None
-
-        # Estado_Detalle (v3.0)
-        estado_detalle = row[idx_estado_detalle].strip() if idx_estado_detalle < len(row) and row[idx_estado_detalle] else None
-        if estado_detalle == '':
-            estado_detalle = None
+        ocupado_por = _cell_str(row[idx_ocupado_por]) if idx_ocupado_por < len(row) else None
+        fecha_ocupacion = _cell_str(row[idx_fecha_ocupacion]) if idx_fecha_ocupacion < len(row) else None
+        estado_detalle = _cell_str(row[idx_estado_detalle]) if idx_estado_detalle < len(row) else None
 
         # 8. v4.0: Parse campos de métricas de uniones
-        # OT (Orden de Trabajo)
-        ot = row[idx_ot].strip() if idx_ot < len(row) and row[idx_ot] else None
-        if ot == '':
-            ot = None
+        ot = _cell_str(row[idx_ot]) if idx_ot < len(row) else None
 
-        # Total_Uniones (v4.0 version detection field)
-        total_uniones = None
-        total_uniones_raw = row[idx_total_uniones] if idx_total_uniones < len(row) and row[idx_total_uniones] else None
-        if total_uniones_raw:
-            try:
-                total_uniones = int(total_uniones_raw)
-                if total_uniones < 0:
-                    logger.warning(f"Negative Total_Uniones for {tag_spool}: {total_uniones}, defaulting to None")
-                    total_uniones = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Total_Uniones for {tag_spool}: {total_uniones_raw}, defaulting to None")
-                total_uniones = None
-
-        # Uniones_ARM_Completadas
-        uniones_arm_completadas = None
-        uniones_arm_raw = row[idx_uniones_arm] if idx_uniones_arm < len(row) and row[idx_uniones_arm] else None
-        if uniones_arm_raw:
-            try:
-                uniones_arm_completadas = int(uniones_arm_raw)
-                if uniones_arm_completadas < 0:
-                    logger.warning(f"Negative Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_completadas}, defaulting to None")
-                    uniones_arm_completadas = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_raw}, defaulting to None")
-                uniones_arm_completadas = None
-
-        # Uniones_SOLD_Completadas
-        uniones_sold_completadas = None
-        uniones_sold_raw = row[idx_uniones_sold] if idx_uniones_sold < len(row) and row[idx_uniones_sold] else None
-        if uniones_sold_raw:
-            try:
-                uniones_sold_completadas = int(uniones_sold_raw)
-                if uniones_sold_completadas < 0:
-                    logger.warning(f"Negative Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_completadas}, defaulting to None")
-                    uniones_sold_completadas = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_raw}, defaulting to None")
-                uniones_sold_completadas = None
-
-        # Pulgadas_ARM
-        pulgadas_arm = None
-        pulgadas_arm_raw = row[idx_pulgadas_arm] if idx_pulgadas_arm < len(row) and row[idx_pulgadas_arm] else None
-        if pulgadas_arm_raw:
-            try:
-                pulgadas_arm = float(pulgadas_arm_raw)
-                if pulgadas_arm < 0:
-                    logger.warning(f"Negative Pulgadas_ARM for {tag_spool}: {pulgadas_arm}, defaulting to None")
-                    pulgadas_arm = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Pulgadas_ARM for {tag_spool}: {pulgadas_arm_raw}, defaulting to None")
-                pulgadas_arm = None
-
-        # Pulgadas_SOLD
-        pulgadas_sold = None
-        pulgadas_sold_raw = row[idx_pulgadas_sold] if idx_pulgadas_sold < len(row) and row[idx_pulgadas_sold] else None
-        if pulgadas_sold_raw:
-            try:
-                pulgadas_sold = float(pulgadas_sold_raw)
-                if pulgadas_sold < 0:
-                    logger.warning(f"Negative Pulgadas_SOLD for {tag_spool}: {pulgadas_sold}, defaulting to None")
-                    pulgadas_sold = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Pulgadas_SOLD for {tag_spool}: {pulgadas_sold_raw}, defaulting to None")
-                pulgadas_sold = None
+        total_uniones = _cell_int(
+            row[idx_total_uniones] if idx_total_uniones < len(row) else None,
+            "Total_Uniones", tag_spool,
+        )
+        uniones_arm_completadas = _cell_int(
+            row[idx_uniones_arm] if idx_uniones_arm < len(row) else None,
+            "Uniones_ARM_Completadas", tag_spool,
+        )
+        uniones_sold_completadas = _cell_int(
+            row[idx_uniones_sold] if idx_uniones_sold < len(row) else None,
+            "Uniones_SOLD_Completadas", tag_spool,
+        )
+        pulgadas_arm = _cell_float(
+            row[idx_pulgadas_arm] if idx_pulgadas_arm < len(row) else None,
+            "Pulgadas_ARM", tag_spool,
+        )
+        pulgadas_sold = _cell_float(
+            row[idx_pulgadas_sold] if idx_pulgadas_sold < len(row) else None,
+            "Pulgadas_SOLD", tag_spool,
+        )
 
         # 9. Crear objeto Spool con datos base
         # NOTA: Los estados reales se reconstruyen en ValidationService desde MetadataRepository

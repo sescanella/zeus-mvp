@@ -7,7 +7,7 @@ import logging
 import re
 import uuid
 from typing import Optional, Literal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from backend.models.union import Union
 from backend.repositories.sheets_repository import SheetsRepository, retry_on_sheets_error
@@ -927,19 +927,34 @@ class UnionRepository:
             # Return None for empty cells
             return value if value and str(value).strip() else None
 
-        def parse_datetime(value: Optional[str]) -> Optional[datetime]:
-            """Parse datetime from Sheets format (DD-MM-YYYY HH:MM:SS)."""
-            if not value:
+        def parse_datetime(value) -> Optional[datetime]:
+            """
+            Parse datetime from Sheets format. Accepts:
+            - strings "DD-MM-YYYY HH:MM:SS" or "DD-MM-YYYY"
+            - Excel serial datetimes (int/float) — result of UNFORMATTED_VALUE
+              on a date-time formatted cell.
+            """
+            if value is None or value == "":
                 return None
-
-            try:
-                # Handle Sheets format: "30-01-2026 14:30:00"
-                return datetime.strptime(value.strip(), "%d-%m-%Y %H:%M:%S")
-            except ValueError:
-                # Try alternative format without time
+            # Excel/Google serial date-time
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
                 try:
-                    dt = datetime.strptime(value.strip(), "%d-%m-%Y")
-                    return dt
+                    epoch = datetime(1899, 12, 30)
+                    return epoch + timedelta(days=float(value))
+                except (ValueError, OverflowError):
+                    self.logger.warning(f"Failed to parse serial datetime: {value!r}")
+                    return None
+
+            s = str(value).strip()
+            if not s:
+                return None
+            try:
+                return datetime.strptime(s, "%d-%m-%Y %H:%M:%S")
+            except ValueError:
+                try:
+                    return datetime.strptime(s, "%d-%m-%Y")
                 except ValueError:
                     self.logger.warning(f"Failed to parse datetime: {value}")
                     return None
@@ -1694,18 +1709,28 @@ class UnionRepository:
         """
         _WORKER_ID_PATTERN = re.compile(r"\((\d+)\)")
 
-        def extract_worker_id(raw: str) -> Optional[int]:
+        def extract_worker_id(raw) -> Optional[int]:
             """Extract numeric ID from worker string like 'MR(93)'."""
-            if not raw:
+            if raw is None or raw == "":
                 return None
-            match = _WORKER_ID_PATTERN.search(raw)
+            match = _WORKER_ID_PATTERN.search(str(raw))
             return int(match.group(1)) if match else None
 
-        def extract_date_part(datetime_str: str) -> Optional[str]:
-            """Extract DD-MM-YYYY from 'DD-MM-YYYY HH:MM:SS' or 'DD-MM-YYYY'."""
-            if not datetime_str:
+        def extract_date_part(datetime_value) -> Optional[str]:
+            """
+            Extract DD-MM-YYYY from a string like 'DD-MM-YYYY HH:MM:SS' or
+            'DD-MM-YYYY', or convert an Excel serial date/datetime
+            (UNFORMATTED_VALUE) to its DD-MM-YYYY form.
+            """
+            if datetime_value is None or datetime_value == "":
                 return None
-            return datetime_str.strip().split(" ")[0]
+            if isinstance(datetime_value, (int, float)) and not isinstance(datetime_value, bool):
+                try:
+                    d = (datetime(1899, 12, 30) + timedelta(days=float(datetime_value))).date()
+                    return d.strftime("%d-%m-%Y")
+                except (ValueError, OverflowError):
+                    return None
+            return str(datetime_value).strip().split(" ")[0]
 
         try:
             all_rows = self.sheets_repo.read_worksheet(self._sheet_name)

@@ -124,114 +124,113 @@ class SpoolServiceV2:
         if len(row) < required_len:
             row = row + [''] * (required_len - len(row))
 
-        # 1. TAG_SPOOL (obligatorio)
-        tag_spool = row[idx_tag_spool].strip() if row[idx_tag_spool] else None
-        if not tag_spool:
+        # With value_render_option=UNFORMATTED_VALUE every cell may come back
+        # as int/float/bool/str depending on its on-sheet type. These two
+        # helpers normalize each value into something safe to call .strip()
+        # or parse as int/float on.
+        def _cell_str(v) -> Optional[str]:
+            """Cell → stripped string, or None if empty/None."""
+            if v is None:
+                return None
+            s = str(v).strip()
+            return s if s != "" else None
+
+        def _cell_int(v, field_name: str) -> Optional[int]:
+            """Cell → non-negative int, or None on empty/invalid."""
+            if v is None or v == "":
+                return None
+            try:
+                n = int(v) if not isinstance(v, bool) else None
+                if n is None:
+                    return None
+                if n < 0:
+                    logger.warning(f"Negative {field_name} for {tag_spool_pre}: {n}, defaulting to None")
+                    return None
+                return n
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid {field_name} for {tag_spool_pre}: {v!r}, defaulting to None")
+                return None
+
+        def _cell_float(v, field_name: str) -> Optional[float]:
+            """Cell → non-negative float, or None on empty/invalid."""
+            if v is None or v == "":
+                return None
+            try:
+                f = float(v) if not isinstance(v, bool) else None
+                if f is None:
+                    return None
+                if f < 0:
+                    logger.warning(f"Negative {field_name} for {tag_spool_pre}: {f}, defaulting to None")
+                    return None
+                return f
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid {field_name} for {tag_spool_pre}: {v!r}, defaulting to None")
+                return None
+
+        # 1. TAG_SPOOL (obligatorio). Pre-name so logging helpers can use it.
+        tag_spool_pre = _cell_str(row[idx_tag_spool])
+        if not tag_spool_pre:
             raise ValueError("TAG_SPOOL vacío")
+        tag_spool = tag_spool_pre
 
         # 2. OT (opcional) - v4.0 Foreign key para Uniones sheet
-        ot = row[idx_ot].strip() if idx_ot < len(row) and row[idx_ot] else None
-        if ot == '':
-            ot = None
+        ot = _cell_str(row[idx_ot]) if idx_ot < len(row) else None
 
         # 3. NV (opcional)
-        nv = row[idx_nv].strip() if idx_nv < len(row) and row[idx_nv] else None
-        if nv == '':
-            nv = None
+        nv = _cell_str(row[idx_nv]) if idx_nv < len(row) else None
 
         # 4. Estados ARM/SOLD siempre PENDIENTE (se reconstruyen desde Metadata)
         arm_status = ActionStatus.PENDIENTE
         sold_status = ActionStatus.PENDIENTE
 
-        # 5. Parsear fechas usando SheetsService.parse_date()
+        # 5. Parsear fechas usando SheetsService.parse_date() — acepta tanto
+        # strings DD/MM/YYYY como Excel serial dates (UNFORMATTED ints).
         fecha_materiales = SheetsService.parse_date(row[idx_fecha_materiales] if idx_fecha_materiales < len(row) else "")
         fecha_armado = SheetsService.parse_date(row[idx_fecha_armado] if idx_fecha_armado < len(row) else "")
         fecha_soldadura = SheetsService.parse_date(row[idx_fecha_soldadura] if idx_fecha_soldadura < len(row) else "")
         fecha_qc_metrologia = SheetsService.parse_date(row[idx_fecha_qc_metrologia] if idx_fecha_qc_metrologia < len(row) else "")
 
         # 6. Parsear trabajadores
-        armador = row[idx_armador].strip() if idx_armador < len(row) and row[idx_armador] else None
-        if armador == '':
-            armador = None
+        armador = _cell_str(row[idx_armador]) if idx_armador < len(row) else None
+        soldador = _cell_str(row[idx_soldador]) if idx_soldador < len(row) else None
 
-        soldador = row[idx_soldador].strip() if idx_soldador < len(row) and row[idx_soldador] else None
-        if soldador == '':
-            soldador = None
-
-        # 7. v4.0: Parse Total_Uniones (columna 68) con validación
-        total_uniones_raw = row[idx_total_uniones] if idx_total_uniones < len(row) and row[idx_total_uniones] else None
-        total_uniones = None
-        if total_uniones_raw:
-            try:
-                total_uniones = int(total_uniones_raw)
-                if total_uniones < 0:
-                    logger.warning(f"Negative Total_Uniones for {tag_spool}: {total_uniones}, defaulting to None")
-                    total_uniones = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Total_Uniones for {tag_spool}: {total_uniones_raw}, defaulting to None")
-                total_uniones = None
+        # 7. v4.0: Parse Total_Uniones (columna 68)
+        total_uniones = _cell_int(
+            row[idx_total_uniones] if idx_total_uniones < len(row) else None,
+            "Total_Uniones",
+        )
 
         # 8. v4.0: Parse Uniones_ARM_Completadas (columna 69)
-        uniones_arm_raw = row[idx_uniones_arm] if idx_uniones_arm < len(row) and row[idx_uniones_arm] else None
-        uniones_arm_completadas = None
-        if uniones_arm_raw:
-            try:
-                uniones_arm_completadas = int(uniones_arm_raw)
-                if uniones_arm_completadas < 0:
-                    logger.warning(f"Negative Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_completadas}, defaulting to None")
-                    uniones_arm_completadas = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Uniones_ARM_Completadas for {tag_spool}: {uniones_arm_raw}, defaulting to None")
-                uniones_arm_completadas = None
+        uniones_arm_completadas = _cell_int(
+            row[idx_uniones_arm] if idx_uniones_arm < len(row) else None,
+            "Uniones_ARM_Completadas",
+        )
 
         # 9. v4.0: Parse Uniones_SOLD_Completadas (columna 70)
-        uniones_sold_raw = row[idx_uniones_sold] if idx_uniones_sold < len(row) and row[idx_uniones_sold] else None
-        uniones_sold_completadas = None
-        if uniones_sold_raw:
-            try:
-                uniones_sold_completadas = int(uniones_sold_raw)
-                if uniones_sold_completadas < 0:
-                    logger.warning(f"Negative Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_completadas}, defaulting to None")
-                    uniones_sold_completadas = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Uniones_SOLD_Completadas for {tag_spool}: {uniones_sold_raw}, defaulting to None")
-                uniones_sold_completadas = None
+        uniones_sold_completadas = _cell_int(
+            row[idx_uniones_sold] if idx_uniones_sold < len(row) else None,
+            "Uniones_SOLD_Completadas",
+        )
 
         # 10. v4.0: Parse Pulgadas_ARM (columna 71)
-        pulgadas_arm_raw = row[idx_pulgadas_arm] if idx_pulgadas_arm < len(row) and row[idx_pulgadas_arm] else None
-        pulgadas_arm = None
-        if pulgadas_arm_raw:
-            try:
-                pulgadas_arm = float(pulgadas_arm_raw)
-                if pulgadas_arm < 0:
-                    logger.warning(f"Negative Pulgadas_ARM for {tag_spool}: {pulgadas_arm}, defaulting to None")
-                    pulgadas_arm = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Pulgadas_ARM for {tag_spool}: {pulgadas_arm_raw}, defaulting to None")
-                pulgadas_arm = None
+        pulgadas_arm = _cell_float(
+            row[idx_pulgadas_arm] if idx_pulgadas_arm < len(row) else None,
+            "Pulgadas_ARM",
+        )
 
         # 11. v4.0: Parse Pulgadas_SOLD (columna 72)
-        pulgadas_sold_raw = row[idx_pulgadas_sold] if idx_pulgadas_sold < len(row) and row[idx_pulgadas_sold] else None
-        pulgadas_sold = None
-        if pulgadas_sold_raw:
-            try:
-                pulgadas_sold = float(pulgadas_sold_raw)
-                if pulgadas_sold < 0:
-                    logger.warning(f"Negative Pulgadas_SOLD for {tag_spool}: {pulgadas_sold}, defaulting to None")
-                    pulgadas_sold = None
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid Pulgadas_SOLD for {tag_spool}: {pulgadas_sold_raw}, defaulting to None")
-                pulgadas_sold = None
+        pulgadas_sold = _cell_float(
+            row[idx_pulgadas_sold] if idx_pulgadas_sold < len(row) else None,
+            "Pulgadas_SOLD",
+        )
 
         # 12. v3.0: Parse Ocupado_Por (columna 64)
         idx_ocupado_por = self.sheets_service._get_col_idx("Ocupado_Por")
-        ocupado_por_raw = row[idx_ocupado_por].strip() if idx_ocupado_por < len(row) and row[idx_ocupado_por] else None
-        ocupado_por = ocupado_por_raw if ocupado_por_raw else None
+        ocupado_por = _cell_str(row[idx_ocupado_por]) if idx_ocupado_por < len(row) else None
 
         # 13. v3.0: Parse Estado_Detalle (columna 67) - CRITICAL for REPARACION filter
         idx_estado_detalle = self.sheets_service._get_col_idx("Estado_Detalle")
-        estado_detalle_raw = row[idx_estado_detalle].strip() if idx_estado_detalle < len(row) and row[idx_estado_detalle] else None
-        estado_detalle = estado_detalle_raw if estado_detalle_raw else None
+        estado_detalle = _cell_str(row[idx_estado_detalle]) if idx_estado_detalle < len(row) else None
 
         return Spool(
             tag_spool=tag_spool,
