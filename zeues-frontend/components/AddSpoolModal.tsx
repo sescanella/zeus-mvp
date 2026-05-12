@@ -166,10 +166,10 @@ export function AddSpoolModal({
 
   function handleConfirmBatch() {
     if (!onBatchAdd || batchSelected.length === 0) return;
+    // Parent owns the modal stack: it will pop this modal and push the
+    // worker picker atomically. Calling onClose() here used to race the
+    // parent's push() and silently cancel the transition.
     onBatchAdd(batchSelected);
-    // Parent owns the flow from here. Close the modal so the worker picker
-    // isn't stacked underneath.
-    onClose();
   }
 
   // Combine alreadyTracked with spools added this session for disabling

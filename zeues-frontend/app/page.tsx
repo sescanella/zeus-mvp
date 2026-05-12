@@ -246,6 +246,11 @@ function HomePage() {
   const handleBatchAdd = (tags: string[]) => {
     if (tags.length === 0) return;
     setBatchTags(tags);
+    // Swap top of stack atomically: pop AddSpoolModal, push the worker
+    // picker. Both updaters use setStack(prev => …) so they compose in a
+    // single render commit. Previously AddSpoolModal called onClose()
+    // itself, which raced this push and left the picker unmounted.
+    modalStack.pop();
     modalStack.push('batch-worker-picker');
   };
 
