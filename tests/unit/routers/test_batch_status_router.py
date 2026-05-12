@@ -166,7 +166,6 @@ def test_batch_status_computed_fields_present(client_with_two_spools):
     spool = data["spools"][0]
     assert "operacion_actual" in spool
     assert "estado_trabajo" in spool
-    assert "ciclo_rep" in spool
 
 
 def test_batch_status_occupied_spool_has_correct_operacion_actual(client_with_two_spools):

@@ -16,7 +16,6 @@ from backend.exceptions import (
     OperacionNoIniciadaError,
     NoAutorizadoError,
     RolNoAutorizadoError,
-    SpoolBloqueadoError,
     OperacionNoDisponibleError,
     ArmPrerequisiteError
 )
@@ -374,9 +373,9 @@ class ValidationService:
                 operacion="METROLOGIA"
             )
 
-        # 3b. Check NOT RECHAZADO or BLOQUEADO (needs reparación, not re-inspection)
+        # 3b. Check NOT RECHAZADO (needs reparación, not re-inspection)
         estado = spool.estado_detalle or ""
-        if "RECHAZADO" in estado or "BLOQUEADO" in estado:
+        if "RECHAZADO" in estado:
             raise OperacionYaCompletadaError(
                 tag_spool=spool.tag_spool,
                 operacion="METROLOGIA"
@@ -413,7 +412,7 @@ class ValidationService:
         Validate worker can TOMAR spool for reparación (Phase 6).
 
         Prerequisites (ALL must be true):
-        - Estado_Detalle contains "RECHAZADO" (not BLOQUEADO)
+        - Estado_Detalle contains "RECHAZADO" or "REPARACION_PAUSADA"
         - Spool NOT occupied (ocupado_por == None)
         - Worker has appropriate role (no role restriction per user decision)
 
@@ -422,7 +421,6 @@ class ValidationService:
             worker_id: ID of worker attempting to take spool for repair
 
         Raises:
-            SpoolBloqueadoError: If spool is BLOQUEADO (needs supervisor intervention)
             OperacionNoDisponibleError: If spool not RECHAZADO
             SpoolOccupiedError: If spool currently occupied
         """
@@ -431,14 +429,7 @@ class ValidationService:
         # Import here to avoid circular dependency
         from backend.exceptions import SpoolOccupiedError
 
-        # 1. Check NOT BLOQUEADO (cannot repair blocked spools)
-        if spool.estado_detalle and "BLOQUEADO" in spool.estado_detalle:
-            raise SpoolBloqueadoError(
-                tag_spool=spool.tag_spool,
-                mensaje="Spool bloqueado después de 3 rechazos. Contactar supervisor."
-            )
-
-        # 2. Check RECHAZADO or REPARACION_PAUSADA (can repair rejected or resume paused repair)
+        # 1. Check RECHAZADO or REPARACION_PAUSADA (can repair rejected or resume paused repair)
         if not spool.estado_detalle or (
             "RECHAZADO" not in spool.estado_detalle and "REPARACION_PAUSADA" not in spool.estado_detalle
         ):
@@ -448,7 +439,7 @@ class ValidationService:
                 mensaje="Solo spools RECHAZADOS o REPARACION_PAUSADA pueden ser reparados"
             )
 
-        # 3. Check NOT occupied
+        # 2. Check NOT occupied
         if spool.ocupado_por is not None:
             # Extract worker ID and name from ocupado_por format "INICIALES(ID)"
             try:
@@ -464,7 +455,7 @@ class ValidationService:
                 owner_name=owner_name
             )
 
-        # 4. No role restriction for REPARACION per user decision
+        # 3. No role restriction for REPARACION per user decision
         # Any active worker can repair (no specific role check needed)
 
         logger.debug(f"[V3.0 Phase 6] ✅ REPARACION TOMAR validation passed | {spool.tag_spool}")

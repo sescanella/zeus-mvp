@@ -1277,7 +1277,7 @@ class SheetsRepository:
         """
         Get ALL spools from Operaciones sheet (v3.0).
 
-        Used by reparacion endpoint to filter RECHAZADO/BLOQUEADO spools.
+        Used by reparacion endpoint to filter RECHAZADO spools.
         Returns all spools with v3.0 fields (ocupado_por, estado_detalle).
 
         Returns:

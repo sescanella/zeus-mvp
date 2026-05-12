@@ -151,7 +151,7 @@ class StatusSpoolFilter(SpoolFilter):
     """
     Filtra spools basándose en el estado del spool (Status_Spool).
 
-    Valores comunes: 'EN_PROCESO', 'BLOQUEADO', 'COMPLETADO'
+    Valores comunes: 'EN_PROCESO', 'COMPLETADO'
     """
 
     def __init__(self, required_status: str):
@@ -299,22 +299,20 @@ class ARMCompletionFilter(SpoolFilter):
 
 class MetrologiaNotCompletedFilter(SpoolFilter):
     """
-    Filtra spools que NO hayan completado metrología ni estén rechazados/bloqueados.
+    Filtra spools que NO hayan completado metrología ni estén rechazados.
 
     Excluye si:
     - fecha_qc_metrologia tiene dato (ya APROBADO)
-    - Estado_Detalle contiene "RECHAZADO" o "BLOQUEADO" (ya inspeccionado, pendiente reparación)
+    - Estado_Detalle contiene "RECHAZADO" (ya inspeccionado, pendiente reparación)
     """
 
     def apply(self, spool: Spool) -> FilterResult:
-        # Excluir si ya APROBADO (tiene fecha)
         if spool.fecha_qc_metrologia is not None and spool.fecha_qc_metrologia != "":
             return FilterResult(passed=False, reason=f"Metrología ya aprobada (fecha={spool.fecha_qc_metrologia})")
 
-        # Excluir si RECHAZADO o BLOQUEADO (pendiente reparación)
         estado = spool.estado_detalle or ""
-        if "RECHAZADO" in estado or "BLOQUEADO" in estado:
-            return FilterResult(passed=False, reason=f"Spool rechazado/bloqueado (estado={estado})")
+        if "RECHAZADO" in estado:
+            return FilterResult(passed=False, reason=f"Spool rechazado (estado={estado})")
 
         return FilterResult(passed=True, reason="Metrología pendiente de inspección")
 
@@ -327,7 +325,7 @@ class MetrologiaNotCompletedFilter(SpoolFilter):
         return (
             "Verifica que metrología NO esté completada ni rechazada. "
             "Excluye si fecha_qc_metrologia con dato (APROBADO) o "
-            "Estado_Detalle contiene RECHAZADO/BLOQUEADO"
+            "Estado_Detalle contiene RECHAZADO"
         )
 
 

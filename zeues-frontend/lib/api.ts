@@ -258,46 +258,25 @@ export async function completarMetrologia(
  * GET /api/spools/reparacion
  * Obtiene spools RECHAZADO disponibles para reparación.
  *
- * Returns spools where estado_detalle contains "RECHAZADO" or "BLOQUEADO".
+ * Returns spools where estado_detalle contains "RECHAZADO".
  * Skips occupied spools (ocupado_por != None).
- * For each spool:
- * - Parses cycle count from Estado_Detalle
- * - Checks if blocked (cycle >= 3)
- * - Includes fecha_rechazo (from Fecha_QC_Metrologia)
  *
  * @returns Promise with:
- *   - spools: Array of RECHAZADO/BLOQUEADO spools
+ *   - spools: Array of RECHAZADO spools
  *   - total: Total count
- *   - bloqueados: Count of BLOQUEADO spools
  *   - filtro_aplicado: Description
  * @throws Error si falla request
- *
- * @example
- * const result = await getSpoolsReparacion();
- * console.log(result);
- * // {
- * //   spools: [
- * //     { tag_spool: "MK-123", cycle: 2, bloqueado: false, ... },
- * //     { tag_spool: "MK-456", cycle: 3, bloqueado: true, ... }
- * //   ],
- * //   total: 2,
- * //   bloqueados: 1
- * // }
  */
 export async function getSpoolsReparacion(): Promise<{
   spools: Array<{
     tag_spool: string;
     estado_detalle: string;
     fecha_rechazo: string;
-    cycle: number;
-    bloqueado: boolean;
   }>;
   total: number;
-  bloqueados: number;
   filtro_aplicado: string;
 }> {
   try {
-    // Use /api/spools/iniciar?operacion=REPARACION endpoint (uses FilterRegistry)
     const url = `${API_URL}/api/spools/iniciar?operacion=REPARACION`;
     const res = await fetch(url, {
       method: 'GET',
@@ -314,26 +293,15 @@ export async function getSpoolsReparacion(): Promise<{
       filtro_aplicado: string;
     }>(res);
 
-    // Transform response — extract cycle/bloqueado from estado_detalle
-    const spools = data.spools.map((spool) => {
-      const ed = spool.estado_detalle || '';
-      const isBloqueado = ed.includes('BLOQUEADO');
-      const cycleMatch = ed.match(/Ciclo (\d+)\/3/);
-      const cycle = isBloqueado ? 3 : cycleMatch ? parseInt(cycleMatch[1], 10) : 0;
-
-      return {
-        tag_spool: spool.tag_spool,
-        estado_detalle: ed,
-        fecha_rechazo: spool.fecha_qc_metrologia || '',
-        cycle,
-        bloqueado: isBloqueado,
-      };
-    });
+    const spools = data.spools.map((spool) => ({
+      tag_spool: spool.tag_spool,
+      estado_detalle: spool.estado_detalle || '',
+      fecha_rechazo: spool.fecha_qc_metrologia || '',
+    }));
 
     return {
       spools,
       total: data.total,
-      bloqueados: spools.filter((s) => s.bloqueado).length,
       filtro_aplicado: data.filtro_aplicado
     };
   } catch (error) {
@@ -360,7 +328,7 @@ export async function getSpoolsReparacion(): Promise<{
  * @throws Error if:
  *   - 404: Spool not found
  *   - 400: Spool not EN_REPARACION
- *   - 403: Worker doesn't own the spool or spool is BLOQUEADO
+ *   - 403: Worker doesn't own the spool
  *
  * @example
  * const result = await completarReparacion({
@@ -395,7 +363,7 @@ export async function completarReparacion(payload: {
  *
  * @param payload - Datos de la acción (worker_id, tag_spool)
  * @returns Promise with success message
- * @throws Error if spool BLOQUEADO (HTTP 403) or not available
+ * @throws Error if spool not available
  */
 export async function tomarReparacion(payload: {
   tag_spool: string;

@@ -1,14 +1,14 @@
 """
 SpoolStatus model and batch request/response models for v5.0 single-page frontend.
 
-SpoolStatus wraps a Spool object and adds three computed fields:
-operacion_actual, estado_trabajo, ciclo_rep.
+SpoolStatus wraps a Spool object and adds two computed fields:
+operacion_actual and estado_trabajo.
 
 State derivation strategy (v5.1):
   - estado_trabajo and operacion_actual are derived from FACTUAL columns
     (ocupado_por, fecha_armado, fecha_soldadura, fecha_qc_metrologia)
   - estado_detalle is passed through as-is for admin/debug display only
-  - estado_detalle is ONLY used for reparacion/bloqueado detection (cycle info)
+  - estado_detalle is the source for RECHAZADO/EN_REPARACION detection
     since those states have no dedicated column — they embed in estado_detalle
 
 These models are consumed by:
@@ -31,17 +31,16 @@ def _derive_estado(spool: "Spool") -> dict:
     Derive estado_trabajo and operacion_actual from factual spool columns.
 
     Priority order (first match wins):
-    1. BLOQUEADO — estado_detalle contains "BLOQUEADO"
-    2. RECHAZADO — estado_detalle contains "RECHAZADO"
-    3. EN_REPARACION — estado_detalle contains "EN_REPARACION" + occupied
-    4. PENDIENTE_METROLOGIA — estado_detalle contains "PENDIENTE_METROLOGIA"
+    1. RECHAZADO — estado_detalle contains "RECHAZADO"
+    2. EN_REPARACION — estado_detalle contains "EN_REPARACION" + occupied
+    3. PENDIENTE_METROLOGIA — estado_detalle contains "PENDIENTE_METROLOGIA"
        or (ARM+SOLD done, metrologia not done, not occupied)
-    5. COMPLETADO — fecha_armado + fecha_soldadura + fecha_qc_metrologia all set
-    6. EN_PROGRESO — ocupado_por is set
-    7. LIBRE — default
+    4. COMPLETADO — fecha_armado + fecha_soldadura + fecha_qc_metrologia all set
+    5. EN_PROGRESO — ocupado_por is set
+    6. LIBRE — default
 
-    For states 1-4, estado_detalle is the only source (no dedicated columns).
-    For states 5-7, factual columns are the sole authority.
+    For states 1-3, estado_detalle is the only source (no dedicated columns).
+    For states 4-6, factual columns are the sole authority.
     """
     ed = (spool.estado_detalle or "").strip()
     is_occupied = bool(spool.ocupado_por)
@@ -52,33 +51,20 @@ def _derive_estado(spool: "Spool") -> dict:
     result: dict = {
         "operacion_actual": None,
         "estado_trabajo": "LIBRE",
-        "ciclo_rep": None,
     }
 
-    # 1. BLOQUEADO (only in estado_detalle)
-    if "BLOQUEADO" in ed:
-        result["estado_trabajo"] = "BLOQUEADO"
-        return result
-
-    # 2. RECHAZADO with cycle (only in estado_detalle)
-    m = re.search(r"RECHAZADO.*?Ciclo\s+(\d+)/3", ed)
-    if m:
-        result["estado_trabajo"] = "RECHAZADO"
-        result["ciclo_rep"] = int(m.group(1))
-        return result
+    # 1. RECHAZADO
     if "RECHAZADO" in ed:
         result["estado_trabajo"] = "RECHAZADO"
         return result
 
-    # 3. EN_REPARACION (only in estado_detalle)
-    m = re.search(r"EN_REPARACION.*?Ciclo\s+(\d+)/3", ed)
-    if m:
+    # 2. EN_REPARACION
+    if "EN_REPARACION" in ed:
         result["operacion_actual"] = "REPARACION"
         result["estado_trabajo"] = "EN_PROGRESO"
-        result["ciclo_rep"] = int(m.group(1))
         return result
 
-    # 4. PENDIENTE_METROLOGIA (estado_detalle or factual)
+    # 3. PENDIENTE_METROLOGIA (estado_detalle or factual)
     if "PENDIENTE_METROLOGIA" in ed or "REPARACION completado" in ed:
         result["estado_trabajo"] = "PENDIENTE_METROLOGIA"
         return result
@@ -86,12 +72,12 @@ def _derive_estado(spool: "Spool") -> dict:
         result["estado_trabajo"] = "PENDIENTE_METROLOGIA"
         return result
 
-    # 5. COMPLETADO — all three phases done
+    # 4. COMPLETADO — all three phases done
     if arm_done and sold_done and met_done:
         result["estado_trabajo"] = "COMPLETADO"
         return result
 
-    # 6. EN_PROGRESO — occupied by a worker
+    # 5. EN_PROGRESO — occupied by a worker
     if is_occupied:
         result["estado_trabajo"] = "EN_PROGRESO"
         # Determine which operation from estado_detalle hint
@@ -104,7 +90,7 @@ def _derive_estado(spool: "Spool") -> dict:
             result["operacion_actual"] = "SOLD"
         return result
 
-    # 7. LIBRE — default
+    # 6. LIBRE — default
     return result
 
 
@@ -234,7 +220,7 @@ class SpoolStatus(BaseModel):
     Computed view of a Spool for the v5.0 single-page frontend.
 
     Pass-through fields come directly from the Spool object.
-    Computed fields (operacion_actual, estado_trabajo, ciclo_rep) are
+    Computed fields (operacion_actual, estado_trabajo) are
     derived from factual spool columns via _derive_estado().
     completion_history is computed to avoid redundant display logic in frontend.
     """
@@ -291,12 +277,8 @@ class SpoolStatus(BaseModel):
         None,
         description=(
             "Estado del spool: 'LIBRE' | 'EN_PROGRESO' | 'PAUSADO' | 'COMPLETADO'"
-            " | 'RECHAZADO' | 'BLOQUEADO' | 'PENDIENTE_METROLOGIA'"
+            " | 'RECHAZADO' | 'PENDIENTE_METROLOGIA'"
         )
-    )
-    ciclo_rep: Optional[int] = Field(
-        None,
-        description="Ciclo de reparacion (1-3) para RECHAZADO/REPARACION, None en otros casos"
     )
 
     @classmethod
@@ -344,7 +326,6 @@ class SpoolStatus(BaseModel):
             soldador_display=soldador_display,
             operacion_actual=parsed.get("operacion_actual"),
             estado_trabajo=parsed.get("estado_trabajo"),
-            ciclo_rep=parsed.get("ciclo_rep"),
         )
 
 

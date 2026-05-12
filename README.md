@@ -26,7 +26,7 @@ Optimized for single-tablet use on the manufacturing floor with glove-friendly t
 - **Occupation tracking** - INICIAR/FINALIZAR workflows with automatic PAUSAR vs COMPLETAR determination
 - **Union-level tracking** - Individual union records per spool (Armado & Soldadura)
 - **Metrologia** - Instant inspection workflow (APROBADO/RECHAZADO)
-- **Reparacion** - Bounded repair cycles (max 3 before BLOQUEADO)
+- **Reparacion** - Unlimited repair cycles
 - **Hierarchical state machines** - ARM, SOLD, Metrologia, Reparacion
 - **Pulgadas-diametro metrics** - DN_UNION sum business metric
 - **P5 Confirmation Workflow** - All writes happen only at user confirmation

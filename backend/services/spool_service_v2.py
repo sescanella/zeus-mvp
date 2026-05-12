@@ -555,16 +555,11 @@ class SpoolServiceV2:
 
         REGLA DE NEGOCIO v3.0 Phase 6 (FilterRegistry - 2026-02-05):
         - Estado_Detalle: CONTIENE "RECHAZADO"
-          * Incluye: "RECHAZADO (Ciclo 1/3)", "RECHAZADO (Ciclo 2/3)", etc.
-          * Incluye: "METROLOGIA RECHAZADO - Pendiente reparación"
-          * Excluye: "BLOQUEADO - Contactar supervisor" (no contiene "RECHAZADO")
         - Ocupado_Por: SIN DATO (spool no ocupado)
 
         Estados válidos:
-        - ✅ "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
-        - ✅ "METROLOGIA RECHAZADO - Pendiente reparación"
-        - ❌ "BLOQUEADO - Contactar supervisor"
-        - ❌ "EN_REPARACION (Ciclo 2/3) - Ocupado: MR(93)"
+        - ✅ "RECHAZADO - Pendiente reparación"
+        - ❌ "EN_REPARACION - Ocupado: MR(93)"
 
         DEPRECATED: Usa get_spools_disponibles("REPARACION", "INICIAR") en su lugar.
 

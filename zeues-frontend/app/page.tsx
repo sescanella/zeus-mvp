@@ -463,9 +463,8 @@ function HomePage() {
    * following modal's own onComplete handler does (handleWorkerComplete /
    * handleMetComplete).
    *
-   * NOT applicable to PAUSAR (operator wants out), API failures (modal
-   * stays open for retry), or BLOQUEADO (no next step). Those callers
-   * skip this helper and clear state themselves.
+   * NOT applicable to PAUSAR (operator wants out) or API failures (modal
+   * stays open for retry). Those callers skip this helper and clear state themselves.
    */
   const chainNextModalAfterFinalizar = async (
     tag: string,

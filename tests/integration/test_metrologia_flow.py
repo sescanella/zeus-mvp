@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from backend.services.metrologia_service import MetrologiaService
 from backend.services.validation_service import ValidationService
-from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.models.spool import Spool
@@ -43,7 +42,6 @@ def mock_sheets_repo():
     repo.find_row_by_column_value.return_value = 2
     repo.update_cell_by_column_name.return_value = None
     repo.batch_update_by_column_name.return_value = None
-    # T-112: state machine reads Estado_Detalle to extract current cycle on RECHAZADO
     repo.get_cell_value.return_value = ""
     return repo
 
@@ -63,19 +61,12 @@ def validation_service():
 
 
 @pytest.fixture
-def cycle_counter():
-    """Real CycleCounterService for testing (T-112: now required by MetrologiaService)."""
-    return CycleCounterService()
-
-
-@pytest.fixture
-def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo, cycle_counter):
+def metrologia_service(validation_service, mock_sheets_repo, mock_metadata_repo):
     """MetrologiaService with mocked dependencies."""
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=mock_sheets_repo,
-        metadata_repository=mock_metadata_repo,
-        cycle_counter=cycle_counter
+        metadata_repository=mock_metadata_repo
     )
 
 
@@ -363,115 +354,3 @@ def test_spool_prerequisites_for_metrologia(occupied_spool, arm_incomplete_spool
     # Both should have fecha_materiales (base requirement)
     assert occupied_spool.fecha_materiales is not None
     assert arm_incomplete_spool.fecha_materiales is not None
-
-
-# ============================================================================
-# T-112 REGRESSION — 3 consecutive RECHAZADOs activate BLOQUEADO branch
-# ============================================================================
-
-
-@pytest.mark.asyncio
-async def test_t112_three_consecutive_rechazados_reach_bloqueado(
-    metrologia_service, mock_sheets_repo, ready_spool
-):
-    """T-112: 3 consecutive RECHAZADOs through MetrologiaService transition spool to BLOQUEADO.
-
-    Simulates the end-to-end metrología side of the cycle: each rejection reads the
-    Estado_Detalle that was written by the previous rejection. The reparación leg
-    (TOMAR/CANCELAR) is mocked away because it preserves Estado_Detalle and is
-    covered by separate tests in test_reparacion_service.py — what matters here is
-    that Metrología's own callback now reads + increments + persists the cycle,
-    which was the dead branch before T-112.
-    """
-    mock_sheets_repo.get_spool_by_tag.return_value = ready_spool
-
-    # Simulate Sheets persistence: get_cell_value returns whatever was written last.
-    written_estados = [""]  # Initial state: no cycle info
-
-    def fake_get_cell_value(**kwargs):
-        return written_estados[-1]
-
-    def fake_batch_update(**kwargs):
-        for update in kwargs.get("updates", []):
-            if update["column_name"] == "Estado_Detalle":
-                written_estados.append(update["value"])
-
-    mock_sheets_repo.get_cell_value.side_effect = fake_get_cell_value
-    mock_sheets_repo.batch_update_by_column_name.side_effect = fake_batch_update
-
-    # Rejection 1
-    await metrologia_service.completar(
-        tag_spool="INTEGRATION-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="RECHAZADO"
-    )
-    assert "Ciclo 1/3" in written_estados[-1]
-
-    # Rejection 2
-    await metrologia_service.completar(
-        tag_spool="INTEGRATION-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="RECHAZADO"
-    )
-    assert "Ciclo 2/3" in written_estados[-1]
-
-    # Rejection 3 → BLOQUEADO
-    await metrologia_service.completar(
-        tag_spool="INTEGRATION-001",
-        worker_id=95,
-        worker_nombre="CP(95)",
-        resultado="RECHAZADO"
-    )
-    assert "BLOQUEADO" in written_estados[-1]
-    assert "supervisor" in written_estados[-1].lower()
-
-
-@pytest.mark.asyncio
-async def test_t112_bloqueado_blocks_tomar_reparacion(mock_sheets_repo, ready_spool):
-    """T-112: Once BLOQUEADO, ReparacionService.tomar_reparacion raises 403 SPOOL_BLOQUEADO.
-
-    Verifies the downstream enforcement of the cycle: a spool whose Estado_Detalle
-    has reached BLOQUEADO must not be takeable for repair.
-    """
-    from backend.services.reparacion_service import ReparacionService
-    from backend.exceptions import SpoolBloqueadoError
-    from backend.models.spool import Spool
-    from datetime import date as _date
-
-    bloqueado_spool = Spool(
-        tag_spool="INTEGRATION-001",
-        fecha_materiales=_date(2026, 1, 20),
-        fecha_armado=_date(2026, 1, 22),
-        fecha_soldadura=_date(2026, 1, 25),
-        fecha_qc_metrologia=None,
-        armador="MR(93)",
-        soldador="JP(94)",
-        ocupado_por=None,
-        fecha_ocupacion=None,
-        estado_detalle="BLOQUEADO - Contactar supervisor",
-        version=10
-    )
-    mock_sheets_repo.get_spool_by_tag.return_value = bloqueado_spool
-
-    validation = ValidationService(role_service=None)
-    cycle_counter = CycleCounterService()
-    metadata_repo = Mock(spec=MetadataRepository)
-
-    reparacion_service = ReparacionService(
-        validation_service=validation,
-        cycle_counter_service=cycle_counter,
-        sheets_repository=mock_sheets_repo,
-        metadata_repository=metadata_repo
-    )
-
-    with pytest.raises(SpoolBloqueadoError) as exc:
-        await reparacion_service.tomar_reparacion(
-            tag_spool="INTEGRATION-001",
-            worker_id=95,
-            worker_nombre="CP(95)"
-        )
-
-    # SpoolBloqueadoError maps to HTTP 403 with code SPOOL_BLOQUEADO (main.py:187)
-    assert "BLOQUEADO" in str(exc.value).upper() or "bloqueado" in str(exc.value).lower()

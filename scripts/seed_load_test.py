@@ -366,8 +366,7 @@ def build_spool(seq: int, estado: str) -> tuple[list, list[list], list[list]]:
         )
         sold_done = total_uniones
         pulgadas_sold = sum(union_dns)
-        ciclo = random.randint(1, 2)  # 1 or 2 — cycle 3 means BLOQUEADO
-        estado_detalle = f"RECHAZADO (Ciclo {ciclo}/3) - Pendiente reparación"
+        estado_detalle = "RECHAZADO - Pendiente reparación"
 
     elif estado == "EN_REPARACION":
         armador_token = w_token(armador)
@@ -380,10 +379,9 @@ def build_spool(seq: int, estado: str) -> tuple[list, list[list], list[list]]:
         )
         sold_done = total_uniones
         pulgadas_sold = sum(union_dns)
-        ciclo = random.randint(1, 2)
         ocupado_por = w_token(reparador)
         fecha_ocupacion = fmt_dt(now_cl() - timedelta(hours=random.randint(1, 8)))
-        estado_detalle = f"EN_REPARACION (Ciclo {ciclo}/3) - Ocupado: {ocupado_por}"
+        estado_detalle = f"EN_REPARACION - Ocupado: {ocupado_por}"
 
     else:
         raise ValueError(f"Unknown estado: {estado}")

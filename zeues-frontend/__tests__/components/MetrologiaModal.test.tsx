@@ -35,7 +35,6 @@ const baseSpool: SpoolCardData = {
   soldador_display: null,
   operacion_actual: null,
   estado_trabajo: 'PENDIENTE_METROLOGIA',
-  ciclo_rep: null,
 };
 
 const metrologiaWorker = {

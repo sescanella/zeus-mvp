@@ -12,7 +12,6 @@ export const ESTADO_LABELS: Record<EstadoTrabajo, string> = {
   COMPLETADO: 'Completado',
   RECHAZADO: 'Rechazado',
   PENDIENTE_METROLOGIA: 'Pend. Metrología',
-  BLOQUEADO: 'Bloqueado',
 };
 
 /**
@@ -26,7 +25,6 @@ export const ESTADO_COLORS: Record<EstadoTrabajo, string> = {
   COMPLETADO: 'text-green-400 border-green-400',
   RECHAZADO: 'text-red-400 border-red-400',
   PENDIENTE_METROLOGIA: 'text-blue-300 border-blue-400',
-  BLOQUEADO: 'text-red-500 border-red-500 bg-red-600/20',
 };
 
 /**
@@ -40,7 +38,6 @@ export const ESTADO_CHIP_COLORS: Record<EstadoTrabajo, string> = {
   COMPLETADO: 'border-green-400 text-green-400 bg-green-400/10',
   RECHAZADO: 'border-red-400 text-red-400 bg-red-400/10',
   PENDIENTE_METROLOGIA: 'border-blue-300 text-blue-300 bg-blue-300/10',
-  BLOQUEADO: 'border-red-500 text-red-500 bg-red-500/10',
 };
 
 /**
@@ -53,5 +50,4 @@ export const ALL_ESTADOS: EstadoTrabajo[] = [
   'COMPLETADO',
   'RECHAZADO',
   'PENDIENTE_METROLOGIA',
-  'BLOQUEADO',
 ];
