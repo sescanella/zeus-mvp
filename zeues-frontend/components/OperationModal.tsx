@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { X } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { ALL_OPERATIONS } from '@/lib/spool-state-machine';
 import type { SpoolCardData, Operation } from '@/lib/spool-state-machine';
@@ -55,13 +56,23 @@ export function OperationModal({
       className="bg-zeues-navy border-4 border-white"
     >
       {/* Header */}
-      <div className="mb-4">
-        <h2 className="text-xl font-black text-white font-mono tracking-widest">
-          SELECCIONAR OPERACIÓN
-        </h2>
-        <p className="text-sm text-white/70 font-mono mt-1">
-          {spool.tag_spool}
-        </p>
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-white font-mono tracking-widest">
+            SELECCIONAR OPERACIÓN
+          </h2>
+          <p className="text-sm text-white/70 font-mono mt-1">
+            {spool.tag_spool}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar modal"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+        >
+          <X size={24} strokeWidth={3} />
+        </button>
       </div>
 
       {/* Operation buttons — always show all 4 */}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { getTodasUniones, guardarUniones } from '@/lib/api';
 import { classifyApiError } from '@/lib/error-classifier';
@@ -353,6 +354,14 @@ export function UnionesModal({ isOpen, spool, operacion, onComplete, onClose, is
             <span className="font-mono text-sm text-white/70">
               {completedCount} de {rows.length}
             </span>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar modal"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+            >
+              <X size={24} strokeWidth={3} />
+            </button>
           </div>
         </div>
 

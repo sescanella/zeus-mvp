@@ -13,6 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { Loading } from '@/components/Loading';
 import { getWorkers } from '@/lib/api';
@@ -77,15 +78,26 @@ export function WorkerPickerModal({
       className="bg-zeues-navy border-4 border-white"
     >
       <div className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-white font-mono font-black text-xl tracking-widest uppercase">
-            {title}
-          </h2>
-          {subtitle && (
-            <p className="text-white/70 font-mono text-sm mt-1 truncate">
-              {subtitle}
-            </p>
-          )}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-white font-mono font-black text-xl tracking-widest uppercase">
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="text-white/70 font-mono text-sm mt-1 truncate">
+                {subtitle}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={disabled}
+            aria-label="Cerrar modal"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+          >
+            <X size={24} strokeWidth={3} />
+          </button>
         </div>
 
         {loading ? (

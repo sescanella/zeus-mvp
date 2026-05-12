@@ -6,6 +6,11 @@ import { createPortal } from 'react-dom';
 interface ModalProps {
   isOpen: boolean;
   onClose?: () => void;
+  /**
+   * Optional callback for backdrop clicks. Opt-in:
+   * omitir (o pasar null) deshabilita el cierre por click-fuera (default seguro).
+   * Pasar `() => onClose()` habilita click-outside-to-close.
+   */
   onBackdropClick?: (() => void) | null;
   children: React.ReactNode;
   className?: string;
@@ -120,17 +125,11 @@ export function Modal({ isOpen, onClose, onBackdropClick, children, className = 
   const hasCustomMaxH = className.includes('max-h-');
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Only handle clicks on the backdrop itself, not content
-    if (e.target === e.currentTarget) {
-      if (onBackdropClick === null) {
-        // null means backdrop clicks are disabled
-        return;
-      }
-      if (onBackdropClick) {
-        onBackdropClick();
-      } else if (onClose) {
-        onClose();
-      }
+    if (e.target !== e.currentTarget) return;
+    // Opt-in: solo cierra si el caller pasa explícitamente una función.
+    // undefined o null = ignorar backdrop click (default).
+    if (typeof onBackdropClick === 'function') {
+      onBackdropClick();
     }
   };
 
