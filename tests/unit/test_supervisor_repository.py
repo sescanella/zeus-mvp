@@ -80,7 +80,7 @@ def test_upsert_inserts_when_tag_absent(repo):
     ws = _ws_lista(repo)
     ws.col_values.return_value = ["TAG_SPOOL"]  # nadie
 
-    spool = TrackedSpool(tag_spool="MK-NEW", priority=1)
+    spool = TrackedSpool(tag_spool="MK-NEW")
     repo.upsert_tracked_spool(spool)
 
     ws.append_row.assert_called_once()
@@ -88,23 +88,23 @@ def test_upsert_inserts_when_tag_absent(repo):
 
 
 def test_upsert_updates_when_tag_present(repo):
-    """Tag ya existe en fila 4 → update A4:E4, sin append."""
+    """Tag ya existe en fila 4 → update A4:D4, sin append."""
     ws = _ws_lista(repo)
     ws.col_values.return_value = ["TAG_SPOOL", "MK-A", "MK-B", "MK-TARGET"]
     # → "MK-TARGET" está en row index 4 (1-indexed: header en 1, MK-A 2, MK-B 3, MK-TARGET 4)
 
-    spool = TrackedSpool(tag_spool="MK-TARGET", priority=2)
+    spool = TrackedSpool(tag_spool="MK-TARGET")
     repo.upsert_tracked_spool(spool)
 
     ws.update.assert_called_once()
     call = ws.update.call_args
-    assert call.kwargs["range_name"] == "A4:E4"
+    assert call.kwargs["range_name"] == "A4:D4"
     assert call.kwargs["value_input_option"] == "USER_ENTERED"
     ws.append_row.assert_not_called()
 
 
 def test_upsert_returns_the_spool(repo):
-    spool = TrackedSpool(tag_spool="X", priority=1)
+    spool = TrackedSpool(tag_spool="X")
     result = repo.upsert_tracked_spool(spool)
     assert result is spool
 
@@ -214,7 +214,7 @@ def test_append_snapshot_idempotent_on_duplicate_id(repo):
 def test_list_returns_empty_when_only_headers(repo):
     ws = _ws_lista(repo)
     ws.get_all_values.return_value = [
-        ["TAG_SPOOL", "Priority", "Added_At", "Updated_At", "Notes"]
+        ["TAG_SPOOL", "Added_At", "Updated_At", "Notes"]
     ]
     assert repo.list_tracked_spools() == []
 
@@ -222,15 +222,14 @@ def test_list_returns_empty_when_only_headers(repo):
 def test_list_parses_valid_rows(repo):
     ws = _ws_lista(repo)
     ws.get_all_values.return_value = [
-        ["TAG_SPOOL", "Priority", "Added_At", "Updated_At", "Notes"],
-        ["MK-1", "1", "08-05-2026 09:00:00", "08-05-2026 09:00:00", "una nota"],
-        ["MK-2", "0", "08-05-2026 09:01:00", "08-05-2026 09:01:00", ""],
+        ["TAG_SPOOL", "Added_At", "Updated_At", "Notes"],
+        ["MK-1", "08-05-2026 09:00:00", "08-05-2026 09:00:00", "una nota"],
+        ["MK-2", "08-05-2026 09:01:00", "08-05-2026 09:01:00", ""],
     ]
 
     items = repo.list_tracked_spools()
     assert len(items) == 2
     assert items[0].tag_spool == "MK-1"
-    assert items[0].priority == 1
     assert items[0].notes == "una nota"
     assert items[1].tag_spool == "MK-2"
     assert items[1].notes is None
@@ -240,10 +239,10 @@ def test_list_skips_rows_that_fail_to_parse(repo):
     """Una fila garbage no rompe el resto."""
     ws = _ws_lista(repo)
     ws.get_all_values.return_value = [
-        ["TAG_SPOOL", "Priority", "Added_At", "Updated_At", "Notes"],
-        ["MK-OK", "1", "08-05-2026 09:00:00", "08-05-2026 09:00:00", ""],
-        ["MK-BAD", "1", "no-es-fecha", "tampoco", ""],
-        ["MK-OK-2", "2", "08-05-2026 09:00:00", "08-05-2026 09:00:00", ""],
+        ["TAG_SPOOL", "Added_At", "Updated_At", "Notes"],
+        ["MK-OK", "08-05-2026 09:00:00", "08-05-2026 09:00:00", ""],
+        ["MK-BAD", "no-es-fecha", "tampoco", ""],
+        ["MK-OK-2", "08-05-2026 09:00:00", "08-05-2026 09:00:00", ""],
     ]
 
     items = repo.list_tracked_spools()
@@ -281,7 +280,7 @@ def test_get_audit_since_filters_by_timestamp(repo):
 
 def test_validate_schema_passes_with_correct_headers(repo):
     _ws_lista(repo).row_values.return_value = [
-        "TAG_SPOOL", "Priority", "Added_At", "Updated_At", "Notes",
+        "TAG_SPOOL", "Added_At", "Updated_At", "Notes",
     ]
     _ws_audit(repo).row_values.return_value = [
         "ID", "Timestamp", "Session_ID", "Event_Type",

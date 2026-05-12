@@ -5,8 +5,7 @@ Mockean SupervisorRepository — no llamadas reales a Sheets.
 Cubren validaciones, idempotencia, auditoría, y resilience cuando el audit
 append falla (no debe bloquear la mutación principal).
 """
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -36,21 +35,13 @@ def service(mock_repo):
 
 def test_add_rejects_empty_tag(service, mock_repo):
     with pytest.raises(ValueError, match="tag_spool"):
-        service.add_to_list("   ", priority=1, session_id="sess-1")
-    mock_repo.upsert_tracked_spool.assert_not_called()
-
-
-def test_add_rejects_invalid_priority(service, mock_repo):
-    with pytest.raises(ValueError, match="priority"):
-        service.add_to_list("MK-1", priority=4, session_id="sess-1")
-    with pytest.raises(ValueError, match="priority"):
-        service.add_to_list("MK-1", priority=-1, session_id="sess-1")
+        service.add_to_list("   ", session_id="sess-1")
     mock_repo.upsert_tracked_spool.assert_not_called()
 
 
 def test_add_rejects_empty_session_id(service, mock_repo):
     with pytest.raises(ValueError, match="session_id"):
-        service.add_to_list("MK-1", priority=1, session_id="")
+        service.add_to_list("MK-1", session_id="")
     mock_repo.upsert_tracked_spool.assert_not_called()
 
 
@@ -67,16 +58,14 @@ def test_add_calls_upsert_and_emits_audit(service, mock_repo):
     """Happy path: upsert + audit append, ambos con datos correctos."""
     mock_repo.upsert_tracked_spool.side_effect = lambda s: s
 
-    result = service.add_to_list("MK-NEW", priority=2, session_id="sess-1")
+    result = service.add_to_list("MK-NEW", session_id="sess-1")
 
     assert result.tag_spool == "MK-NEW"
-    assert result.priority == 2
 
     mock_repo.upsert_tracked_spool.assert_called_once()
     upserted_spool = mock_repo.upsert_tracked_spool.call_args.args[0]
     assert isinstance(upserted_spool, TrackedSpool)
     assert upserted_spool.tag_spool == "MK-NEW"
-    assert upserted_spool.priority == 2
 
     # Audit
     mock_repo.append_audit_events.assert_called_once()
@@ -85,13 +74,11 @@ def test_add_calls_upsert_and_emits_audit(service, mock_repo):
     assert events[0].event_type == EventType.LIST_ADD
     assert events[0].tag_spool == "MK-NEW"
     assert events[0].session_id == "sess-1"
-    payload = json.loads(events[0].payload_json)
-    assert payload["priority"] == 2
 
 
 def test_add_strips_whitespace_from_tag(service, mock_repo):
     mock_repo.upsert_tracked_spool.side_effect = lambda s: s
-    result = service.add_to_list("  MK-X  ", priority=0, session_id="s")
+    result = service.add_to_list("  MK-X  ", session_id="s")
     assert result.tag_spool == "MK-X"
 
 
@@ -100,7 +87,7 @@ def test_add_audit_failure_does_not_block_upsert(service, mock_repo):
     mock_repo.upsert_tracked_spool.side_effect = lambda s: s
     mock_repo.append_audit_events.side_effect = RuntimeError("audit down")
 
-    result = service.add_to_list("MK-1", priority=1, session_id="sess-1")
+    result = service.add_to_list("MK-1", session_id="sess-1")
 
     # Mutación principal exitosa; audit falló silenciosamente
     assert result.tag_spool == "MK-1"
@@ -132,85 +119,6 @@ def test_remove_emits_audit_when_actually_deleted(service, mock_repo):
     events = mock_repo.append_audit_events.call_args.args[0]
     assert events[0].event_type == EventType.LIST_REMOVE
     assert events[0].tag_spool == "MK-DEL"
-
-
-# ─── set_priority ─────────────────────────────────────────────────────────────
-
-
-def test_set_priority_preserves_added_at_and_notes_when_existing(service, mock_repo):
-    """Si el tag ya estaba, added_at y notes se conservan."""
-    SCL = pytz.timezone("America/Santiago")
-    original_added = SCL.localize(datetime(2026, 5, 1, 10, 0, 0))
-
-    existing = TrackedSpool(
-        tag_spool="MK-EXIST",
-        priority=1,
-        added_at=original_added,
-        updated_at=original_added,
-        notes="nota original",
-    )
-    mock_repo.list_tracked_spools.return_value = [existing]
-    mock_repo.upsert_tracked_spool.side_effect = lambda s: s
-
-    result = service.set_priority(
-        "MK-EXIST", priority=3, session_id="sess-1"
-    )
-
-    upserted = mock_repo.upsert_tracked_spool.call_args.args[0]
-    assert upserted.priority == 3
-    assert upserted.added_at == original_added  # preservado
-    assert upserted.updated_at != original_added  # actualizado
-    assert upserted.notes == "nota original"  # preservado
-    assert result.priority == 3
-
-
-def test_set_priority_creates_fresh_when_tag_missing(service, mock_repo):
-    """Si el tag no existía, set_priority equivale a add con priority dada."""
-    mock_repo.list_tracked_spools.return_value = []
-    mock_repo.upsert_tracked_spool.side_effect = lambda s: s
-
-    result = service.set_priority(
-        "MK-NEW-VIA-PRIORITY", priority=2, session_id="sess-1"
-    )
-
-    upserted = mock_repo.upsert_tracked_spool.call_args.args[0]
-    assert upserted.tag_spool == "MK-NEW-VIA-PRIORITY"
-    assert upserted.priority == 2
-    assert upserted.notes is None
-    assert result.priority == 2
-
-
-def test_set_priority_audit_payload_has_previous_and_new(service, mock_repo):
-    """El audit event de LIST_PRIORITY incluye previous_priority y nuevo."""
-    SCL = pytz.timezone("America/Santiago")
-    existing = TrackedSpool(
-        tag_spool="MK-X",
-        priority=1,
-        added_at=SCL.localize(datetime(2026, 5, 1)),
-        updated_at=SCL.localize(datetime(2026, 5, 1)),
-    )
-    mock_repo.list_tracked_spools.return_value = [existing]
-    mock_repo.upsert_tracked_spool.side_effect = lambda s: s
-
-    service.set_priority("MK-X", priority=3, session_id="sess-1")
-
-    events = mock_repo.append_audit_events.call_args.args[0]
-    payload = json.loads(events[0].payload_json)
-    assert payload["priority"] == 3
-    assert payload["previous_priority"] == 1
-    assert events[0].event_type == EventType.LIST_PRIORITY
-
-
-def test_set_priority_audit_previous_is_null_when_new(service, mock_repo):
-    mock_repo.list_tracked_spools.return_value = []
-    mock_repo.upsert_tracked_spool.side_effect = lambda s: s
-
-    service.set_priority("MK-FRESH", priority=2, session_id="sess-1")
-
-    events = mock_repo.append_audit_events.call_args.args[0]
-    payload = json.loads(events[0].payload_json)
-    assert payload["priority"] == 2
-    assert payload["previous_priority"] is None
 
 
 # ─── Passthroughs ─────────────────────────────────────────────────────────────
@@ -251,7 +159,6 @@ def test_list_tracked_spools_passthrough(service, mock_repo):
     sample = [
         TrackedSpool(
             tag_spool="A",
-            priority=1,
             added_at=SCL.localize(datetime(2026, 5, 1)),
             updated_at=SCL.localize(datetime(2026, 5, 1)),
         )
