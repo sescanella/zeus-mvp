@@ -62,6 +62,7 @@ from backend.routers import registro_router
 from backend.routers import notas as notas_router
 
 from backend.routers import supervisor_router
+from backend.routers import admin as admin_router
 
 # ============================================================================
 # INICIALIZACIÓN FASTAPI
@@ -193,7 +194,8 @@ async def zeus_exception_handler(request: Request, exc: ZEUSException):
 
         # 503 SERVICE UNAVAILABLE
         "SHEETS_CONNECTION_ERROR": status.HTTP_503_SERVICE_UNAVAILABLE,
-        "SHEETS_UPDATE_ERROR": status.HTTP_503_SERVICE_UNAVAILABLE
+        "SHEETS_UPDATE_ERROR": status.HTTP_503_SERVICE_UNAVAILABLE,
+        "CRITICAL_COLUMN_DRIFT": status.HTTP_503_SERVICE_UNAVAILABLE
     }
 
     http_status = status_map.get(exc.error_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -301,43 +303,47 @@ async def startup_event():
     logging.info(f"CORS Origins: {config.ALLOWED_ORIGINS}")
     logging.info("API versioning enabled: v3.0 endpoints at /api/v3/, v4.0 endpoints at /api/v4/ (future)")
 
-    # v2.1: Pre-warm column map cache para hoja Operaciones
+    # Pre-warm ColumnMapCache for every sheet declared in the schema
+    # registry. Build failures raise CriticalColumnDriftError, which we
+    # surface as a hard RuntimeError so Railway marks the container
+    # unhealthy. Better the container refuses to start than serving
+    # corrupted data with stale indices.
     try:
-        logging.info("🔄 Pre-warming ColumnMapCache for 'Operaciones'...")
+        from backend.core.sheet_schema import ALL_SCHEMAS
         sheets_repo = get_sheets_repository()
-        column_map = ColumnMapCache.get_or_build("Operaciones", sheets_repo)
-
-        logging.info(f"✅ Column map loaded: {len(column_map)} columns detected")
-
-        # Validar columnas críticas para operaciones ARM/SOLD
-        critical_columns = [
-            "SPLIT",  # Spool identifier (actual column name, NOT TAG_SPOOL)
-            "Fecha_Materiales",
-            "Fecha_Armado",
-            "Armador",
-            "Fecha_Soldadura",
-            "Soldador"
-        ]
-
-        all_present, missing = ColumnMapCache.validate_critical_columns(
-            "Operaciones",
-            critical_columns
-        )
-
-        if not all_present:
-            logging.error(
-                f"❌ CRITICAL: Missing columns in Operaciones sheet: {missing}. "
-                f"App may fail at runtime!"
+        for sheet_name, schema in ALL_SCHEMAS.items():
+            logging.info(f"🔄 Pre-warming ColumnMapCache for '{sheet_name}'...")
+            column_map = ColumnMapCache.get_or_build(sheet_name, sheets_repo)
+            logging.info(
+                f"✅ Column map loaded for '{sheet_name}': "
+                f"{len(column_map)} entries"
             )
-        else:
-            logging.info(f"✅ All {len(critical_columns)} critical columns validated")
-
+            # Round-trip validation: header at column_map[norm(c)] must
+            # normalize back to `c` for every critical column.
+            ok, drifts = ColumnMapCache.validate_critical_columns_strict(
+                sheet_name, sorted(schema.critical_columns)
+            )
+            if not ok:
+                raise RuntimeError(
+                    f"Critical column drift detected for '{sheet_name}': "
+                    f"{drifts}. Restore the column or update sheet_schema.py."
+                )
+            logging.info(
+                f"✅ {len(schema.critical_columns)} critical columns validated "
+                f"for '{sheet_name}' (round-trip)"
+            )
+    except RuntimeError:
+        # Surface to outer runtime so Railway marks the deploy unhealthy.
+        raise
     except Exception as e:
-        # No bloquear startup - el cache se construirá lazy en primera request
-        logging.warning(
-            f"⚠️  Failed to pre-warm column map cache: {e}. "
-            f"Cache will be built on first request (lazy loading)."
+        # Any other exception during pre-warm is also fatal — better than
+        # the previous behavior (warn and lazy-load with stale indices).
+        error_msg = (
+            f"❌ CRITICAL: Failed to pre-warm/validate ColumnMapCache: {e}. "
+            "Application cannot start."
         )
+        logging.error(error_msg, exc_info=True)
+        raise RuntimeError(error_msg) from e
 
     # v4.0: Validate complete schema before accepting traffic
     try:
@@ -459,6 +465,9 @@ app.include_router(notas_router.router, prefix="/api", tags=["Notas"])
 
 # Supervisor: server-side tracking list + audit log (replaces localStorage dependency).
 app.include_router(supervisor_router.router, prefix="/api/supervisor", tags=["Supervisor"])
+
+# Admin: manual override for column-cache invalidation (drift recovery).
+app.include_router(admin_router.router, prefix="/api", tags=["Admin"])
 
 
 # ============================================================================

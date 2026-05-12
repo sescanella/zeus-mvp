@@ -55,38 +55,30 @@ class SpoolServiceV2:
         """
         self.sheets_repository = sheets_repository or SheetsRepository()
 
-        # v2.2: Obtener column_map desde cache (lazy load)
+        # Drift-resilient: pass repo + sheet name to SheetsService. Its
+        # `_column_map` property reads the global cache on every access, so
+        # an auto-rebuild triggered by `read_worksheet` is picked up here
+        # without re-instantiating this service.
+        self.sheets_service = SheetsService(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            sheets_repository=self.sheets_repository,
+        )
+
+        # Backwards-compatible snapshot for callers that read self.column_map
+        # directly. Not used internally.
         self.column_map = ColumnMapCache.get_or_build(
             config.HOJA_OPERACIONES_NOMBRE,
-            self.sheets_repository
+            self.sheets_repository,
         )
 
-        # Crear SheetsService con column_map
-        self.sheets_service = SheetsService(column_map=self.column_map)
+        # Critical-column validation is enforced inside ColumnMapCache itself
+        # (round-trip check against ALL_SCHEMAS) — any missing critical
+        # column raises CriticalColumnDriftError during cache build.
 
-        # Validar columnas críticas
-        critical_columns = [
-            "SPLIT",  # Spool identifier (actual column name in Sheet, NOT TAG_SPOOL)
-            "Fecha_Materiales",
-            "Fecha_Armado",
-            "Armador",
-            "Fecha_Soldadura",
-            "Soldador",
-            "Fecha_QC_Metrología"
-        ]
-
-        all_present, missing = ColumnMapCache.validate_critical_columns(
-            config.HOJA_OPERACIONES_NOMBRE,
-            critical_columns
+        logger.info(
+            f"SpoolServiceV2 initialized with {len(self.column_map)} columns "
+            "(drift-resilient v2.2)"
         )
-
-        if not all_present:
-            raise ValueError(
-                f"Missing critical columns in Operaciones sheet: {missing}. "
-                f"Check Google Sheets structure."
-            )
-
-        logger.info(f"SpoolServiceV2 initialized with {len(self.column_map)} columns (v2.1 Direct Read)")
 
     def parse_spool_row(self, row: list) -> Spool:
         """

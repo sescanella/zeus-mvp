@@ -120,12 +120,15 @@ def get_sheets_service(
     global _sheets_service_singleton
 
     if _sheets_service_singleton is None:
-        # Obtener column_map desde cache (lazy load)
-        column_map = ColumnMapCache.get_or_build(
-            config.HOJA_OPERACIONES_NOMBRE,
-            sheets_repo
+        # Drift-resilient construction: the SheetsService holds a reference
+        # to the repository and reads the column map from the global cache
+        # on each access — so an invalidation triggered by read_worksheet
+        # (auto-detected header change) is reflected here without recreating
+        # the singleton.
+        _sheets_service_singleton = SheetsService(
+            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
+            sheets_repository=sheets_repo,
         )
-        _sheets_service_singleton = SheetsService(column_map=column_map)
 
     return _sheets_service_singleton
 

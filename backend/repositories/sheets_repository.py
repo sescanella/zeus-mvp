@@ -13,7 +13,11 @@ from functools import wraps
 import time
 
 from backend.config import config
-from backend.exceptions import SheetsConnectionError, SheetsUpdateError
+from backend.exceptions import (
+    SheetsConnectionError,
+    SheetsUpdateError,
+    CriticalColumnDriftError,
+)
 from backend.utils.cache import get_cache
 from backend.utils.normalize import normalize_column_name
 from backend.utils.sanitize import sanitize_for_sheets
@@ -199,6 +203,12 @@ class SheetsRepository:
 
         if cached_data is not None and len(cached_data) > 0:
             self.logger.info(f"✅ Cache hit: '{sheet_name}' ({len(cached_data)} filas)")
+            # Drift detection on cache hit too: the row cache (TTL 60s/300s)
+            # is decoupled from the column-map cache (eternal). If the
+            # column-map was invalidated externally (e.g. admin endpoint)
+            # while the row cache is still warm, this call ensures the
+            # column-map matches the rows we are about to return.
+            self._maybe_refresh_column_map(sheet_name, cached_data[0])
             return cached_data
 
         # Cache miss - leer de Google Sheets
@@ -215,6 +225,11 @@ class SheetsRepository:
                     f"Google Sheets returned empty data for '{sheet_name}' — not caching"
                 )
                 return all_values
+
+            # Drift detection: hash the header row and rebuild the column
+            # map if it differs from what we cached last time. Done BEFORE
+            # caching the rows so the column-map and row data stay aligned.
+            self._maybe_refresh_column_map(sheet_name, all_values[0])
 
             # Cachear con TTL según tipo de hoja
             # Trabajadores y Uniones cambian poco → TTL largo (300s).
@@ -247,6 +262,35 @@ class SheetsRepository:
             raise SheetsConnectionError(
                 f"Error leyendo hoja '{sheet_name}'",
                 details=str(e)
+            )
+
+    def _maybe_refresh_column_map(self, sheet_name: str, header_row: list[str]) -> None:
+        """
+        Hand the freshly-observed header to ColumnMapCache. If the hash
+        differs from the cached one, the cache rebuilds atomically with
+        the new header. If a critical column is missing or shifted out of
+        its expected position, this raises CriticalColumnDriftError —
+        which propagates to the caller (HTTP 503) instead of letting the
+        rest of the request operate with stale column indices.
+
+        Cero llamadas extras a Sheets — el header_row ya estaba en memoria.
+        """
+        try:
+            from backend.core.column_map_cache import ColumnMapCache
+            ColumnMapCache.get_or_rebuild_if_changed(
+                sheet_name=sheet_name,
+                header_row=header_row,
+                sheets_repository=self,
+            )
+        except CriticalColumnDriftError:
+            # Propagate to caller; the request will surface as HTTP 503.
+            raise
+        except Exception as e:
+            # Defensive: hash/build failures must NOT block reads. Log and
+            # let the request continue with whatever cache exists.
+            self.logger.warning(
+                f"Column drift check failed for '{sheet_name}': {e}. "
+                "Continuing with existing column map."
             )
 
     def find_row_by_column_value(

@@ -34,76 +34,27 @@ from backend.core.column_map_cache import ColumnMapCache
 from backend.config import config
 
 
-# Expected v4.0 schema definitions
+# Single source of truth for sheet schemas lives in backend.core.sheet_schema.
+# This script delegates to that registry — the v4.0_new/v5.1_new buckets that
+# used to live here are now treated as `critical_columns` if production
+# depends on them, or `expected_columns` if they are nice-to-have.
+from backend.core.sheet_schema import (
+    ALL_SCHEMAS,
+    OPERACIONES_SCHEMA,
+    UNIONES_SCHEMA,
+    METADATA_SCHEMA,
+)
+
+# Backwards-compatible aliases (some callers might still import these names).
 OPERACIONES_V4_COLUMNS = {
-    # v3.0 columns (0-67) - validate critical subset
-    "v3.0_critical": [
-        "TAG_SPOOL",
-        "Armador",
-        "Soldador",
-        "Fecha_Armado",
-        "Fecha_Soldadura",
-        "Ocupado_Por",
-        "Fecha_Ocupacion",
-        "Estado_Detalle"
-    ],
-    # v4.0 additions (68-72)
-    "v4.0_new": [
-        "Total_Uniones",
-        "Uniones_ARM_Completadas",
-        "Uniones_SOLD_Completadas",
-        "Pulgadas_ARM",
-        "Pulgadas_SOLD"
-    ],
-    # v5.1 additions (F-1)
-    "v5.1_new": [
-        "Notas"  # Free-text notes column, append-only with YYYYMMDD: prefix
-    ]
+    "v3.0_critical": sorted(OPERACIONES_SCHEMA.critical_columns),
+    "v4.0_new": sorted(OPERACIONES_SCHEMA.expected_columns),
+    "v5.1_new": [],
 }
-
-UNIONES_V4_COLUMNS = [
-    # Core fields (1-6)
-    "ID",
-    "OT",
-    "N_UNION",
-    "TAG_SPOOL",
-    "DN_UNION",
-    "TIPO_UNION",
-    # ARM operation (7-9)
-    "ARM_FECHA_INICIO",
-    "ARM_FECHA_FIN",
-    "ARM_WORKER",
-    # SOLD operation (10-12)
-    "SOL_FECHA_INICIO",
-    "SOL_FECHA_FIN",
-    "SOL_WORKER",
-    # NDT inspection (13-16)
-    "NDT_UNION",
-    "R_NDT_UNION",
-    "NDT_FECHA",
-    "NDT_STATUS",
-    # Version control (17)
-    "version"
-]
-
+UNIONES_V4_COLUMNS = sorted(UNIONES_SCHEMA.critical_columns)
 METADATA_V4_COLUMNS = {
-    # v3.0 columns (1-10) - validate all
-    "v3.0_existing": [
-        "ID",
-        "Timestamp",
-        "Evento_Tipo",
-        "TAG_SPOOL",
-        "Worker_ID",
-        "Worker_Nombre",
-        "Operacion",
-        "Accion",
-        "Fecha_Operacion",
-        "Metadata_JSON"
-    ],
-    # v4.0 addition (11)
-    "v4.0_new": [
-        "N_UNION"
-    ]
+    "v3.0_existing": sorted(METADATA_SCHEMA.critical_columns),
+    "v4.0_new": sorted(METADATA_SCHEMA.expected_columns),
 }
 
 
@@ -140,20 +91,30 @@ def validate_sheet_columns(
 
     try:
         # Build column map (this will cache it)
-        column_map = ColumnMapCache.get_or_build(sheet_name, repo)
+        ColumnMapCache.get_or_build(sheet_name, repo)
 
-        # Use ColumnMapCache.validate_critical_columns for validation
-        all_present, missing = ColumnMapCache.validate_critical_columns(
+        # Round-trip check (stronger than presence-only): for each required
+        # column, the header at the cached index must normalize back to the
+        # same required name. Catches collisions where two distinct sheet
+        # columns normalize to the same key.
+        ok, drifts = ColumnMapCache.validate_critical_columns_strict(
             sheet_name=sheet_name,
-            required_columns=required_columns
+            required_columns=required_columns,
         )
 
-        if all_present:
-            logger.debug(f"Sheet '{sheet_name}': All {len(required_columns)} required columns found")
-        else:
-            logger.error(f"Sheet '{sheet_name}': Missing {len(missing)} required columns: {missing}")
+        if ok:
+            logger.debug(
+                f"Sheet '{sheet_name}': All {len(required_columns)} "
+                "required columns validated (round-trip)"
+            )
+            return True, []
 
-        return all_present, missing
+        missing = [d["expected"] for d in drifts]
+        logger.error(
+            f"Sheet '{sheet_name}': drift detected on "
+            f"{len(drifts)} columns: {drifts}"
+        )
+        return False, missing
 
     except Exception as e:
         logger.error(f"Failed to validate sheet '{sheet_name}': {e}")

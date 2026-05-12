@@ -30,7 +30,10 @@ def mock_sheets_repository():
     """Create mock SheetsRepository for testing."""
     mock = Mock()
 
-    # Default header row for Uniones sheet (19 cols: OT required by _row_to_union)
+    # Default header row for Uniones sheet — must include every column
+    # declared as critical in backend/core/sheet_schema.py UNIONES_SCHEMA.
+    # Failing to include them now triggers CriticalColumnDriftError at
+    # cache build time.
     header = [
         "ID",                    # col 0
         "OT",                    # col 1
@@ -44,13 +47,15 @@ def mock_sheets_repository():
         "SOL_FECHA_INICIO",     # col 9
         "SOL_FECHA_FIN",        # col 10
         "SOL_WORKER",           # col 11
-        "NDT_FECHA",            # col 12
-        "NDT_STATUS",           # col 13
-        "version",              # col 14
-        "Creado_Por",           # col 15
-        "Fecha_Creacion",       # col 16
-        "Modificado_Por",       # col 17
-        "Fecha_Modificacion",   # col 18
+        "NDT_UNION",            # col 12 (critical)
+        "R_NDT_UNION",          # col 13 (critical)
+        "NDT_FECHA",            # col 14
+        "NDT_STATUS",           # col 15
+        "version",              # col 16
+        "Creado_Por",           # col 17
+        "Fecha_Creacion",       # col 18
+        "Modificado_Por",       # col 19
+        "Fecha_Modificacion",   # col 20
     ]
 
     # Sample data rows (OT column required by UnionRepository._row_to_union)
@@ -71,6 +76,8 @@ def mock_sheets_repository():
             "",                     # SOL_FECHA_INICIO
             "",                     # SOL_FECHA_FIN (pending)
             "",                     # SOL_WORKER
+            "",                     # NDT_UNION
+            "",                     # R_NDT_UNION
             "",                     # NDT_FECHA
             "",                     # NDT_STATUS
             "version-uuid-1",       # version
@@ -94,6 +101,8 @@ def mock_sheets_repository():
             "",
             "",
             "",
+            "",                     # NDT_UNION
+            "",                     # R_NDT_UNION
             "",
             "",
             "version-uuid-2",
@@ -117,6 +126,8 @@ def mock_sheets_repository():
             "21-01-2026 11:00:00",  # SOL_FECHA_INICIO
             "21-01-2026 13:00:00",  # SOL_FECHA_FIN (complete)
             "MG(95)",
+            "",                     # NDT_UNION
+            "",                     # R_NDT_UNION
             "",
             "",
             "version-uuid-3",
@@ -140,6 +151,8 @@ def mock_sheets_repository():
             "",
             "",
             "",
+            "",                     # NDT_UNION
+            "",                     # R_NDT_UNION
             "",
             "",
             "version-uuid-4",
@@ -254,33 +267,25 @@ class TestUnionRepository:
         assert sold_sum_124 == 4.0
 
     def test_handles_missing_columns_gracefully(self, mock_sheets_repository):
-        """Test repository doesn't crash if optional columns are missing."""
-        # Modify mock to have minimal columns (OT required by _row_to_union)
-        minimal_header = [
+        """Critical columns must be present (post-drift-detection). Optional
+        columns being absent is still tolerated."""
+        from backend.exceptions import CriticalColumnDriftError
+
+        # Header missing several critical columns (ARM_*, SOL_*, NDT_UNION,
+        # R_NDT_UNION, version) — drift detection MUST raise.
+        bad_header = [
             "ID", "OT", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
-            "Creado_Por", "Fecha_Creacion"
+            "Creado_Por", "Fecha_Creacion",
         ]
-        minimal_row = [
-            "OT-126+1",
-            "126",                  # OT
-            "OT-126",
-            "1",
-            "5.0",
-            "Tipo A",
-            "MR(93)",
-            "23-01-2026 10:00:00",
+        bad_row = [
+            "OT-126+1", "126", "OT-126", "1", "5.0", "Tipo A",
+            "MR(93)", "23-01-2026 10:00:00",
         ]
-        mock_sheets_repository.read_worksheet.return_value = [minimal_header, minimal_row]
+        mock_sheets_repository.read_worksheet.return_value = [bad_header, bad_row]
 
         repo = UnionRepository(mock_sheets_repository)
-        unions = repo.get_by_spool("OT-126")
-
-        assert len(unions) == 1
-        assert unions[0].tag_spool == "OT-126"
-        # Optional fields should be None
-        assert unions[0].arm_fecha_inicio is None
-        assert unions[0].arm_fecha_fin is None
-        assert unions[0].ndt_status is None
+        with pytest.raises((CriticalColumnDriftError, Exception)):
+            repo.get_by_spool("OT-126")
 
     def test_uses_column_map_cache(self, mock_sheets_repository):
         """Test repository uses ColumnMapCache for dynamic column access."""
@@ -301,22 +306,24 @@ class TestUnionRepository:
 
     def test_uses_tag_spool_as_foreign_key(self, mock_sheets_repository):
         """Test repository uses TAG_SPOOL for queries but synthesizes ID from OT+N_UNION."""
-        # Use same header and row structure as main fixture (19 cols, OT required)
+        # Use same header structure as the main fixture (21 cols including
+        # NDT_UNION + R_NDT_UNION as critical columns)
         header = mock_sheets_repository.read_worksheet.return_value[0]
         row_special = [
-            "9999",                   # ID (sequential, will be overridden by synthesis)
+            "9999",                   # ID
             "SPECIAL",                # OT
             "SPECIAL-001",            # TAG_SPOOL
             "1", "6.0", "Tipo D",     # N_UNION, DN_UNION, TIPO_UNION
             "", "", "",              # ARM_FECHA_INICIO, ARM_FECHA_FIN, ARM_WORKER
             "", "", "",              # SOL_*
-            "", "",                   # NDT_*
+            "", "",                   # NDT_UNION, R_NDT_UNION
+            "", "",                   # NDT_FECHA, NDT_STATUS
             "version-uuid-5",         # version
-            "MR(93)",                  # Creado_Por (worker format)
+            "MR(93)",                  # Creado_Por
             "24-01-2026 11:00:00",    # Fecha_Creacion
             "", "",                   # Modificado_Por, Fecha_Modificacion
         ]
-        assert len(row_special) == 19, "Row must match header length"
+        assert len(row_special) == 21, "Row must match header length"
         mock_sheets_repository.read_worksheet.return_value = [header, row_special]
 
         repo = UnionRepository(mock_sheets_repository)
@@ -328,47 +335,47 @@ class TestUnionRepository:
         assert unions[0].id == "SPECIAL+1"
 
     def test_row_to_union_validates_required_fields(self, mock_sheets_repository):
-        """Test _row_to_union raises ValueError for missing required fields."""
-        # Create row with missing TAG_SPOOL
-        header = [
-            "ID", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
-            "Creado_Por", "Fecha_Creacion"
-        ]
+        """Test _row_to_union skips rows with missing TAG_SPOOL."""
+        # Reuse complete fixture header (21 cols) and build a row with
+        # TAG_SPOOL empty. Parse error must be logged, row skipped.
+        header = mock_sheets_repository.read_worksheet.return_value[0]
         invalid_row = [
             "OT-999+1",
-            "",  # TAG_SPOOL missing (empty)
-            "1",
-            "2.0",
-            "Tipo A",
-            "MR(93)",
-            "25-01-2026 12:00:00",
+            "999",         # OT
+            "",            # TAG_SPOOL missing
+            "1", "2.0", "Tipo A",
+            "", "", "",
+            "", "", "",
+            "", "",
+            "", "",
+            "version-uuid-x",
+            "MR(93)", "25-01-2026 12:00:00",
+            "", "",
         ]
         mock_sheets_repository.read_worksheet.return_value = [header, invalid_row]
 
         repo = UnionRepository(mock_sheets_repository)
 
-        # Should return empty list (parse error logged but not raised)
         unions = repo.get_by_spool("OT-999")
         assert len(unions) == 0
 
     def test_datetime_parsing_handles_multiple_formats(self, mock_sheets_repository):
         """Test datetime parsing handles both full and date-only formats."""
-        header = [
-            "ID", "OT", "TAG_SPOOL", "N_UNION", "DN_UNION", "TIPO_UNION",
-            "ARM_FECHA_INICIO", "ARM_FECHA_FIN",
-            "Creado_Por", "Fecha_Creacion"
-        ]
+        header = mock_sheets_repository.read_worksheet.return_value[0]
         row_with_dates = [
             "OT-200+1",
             "200",                   # OT
             "OT-200",
-            "1",
-            "3.5",
-            "Tipo B",
-            "26-01-2026 14:30:00",  # Full datetime
-            "26-01-2026",           # Date only
+            "1", "3.5", "Tipo B",
+            "26-01-2026 14:30:00",  # ARM_FECHA_INICIO full datetime
+            "26-01-2026",           # ARM_FECHA_FIN date only
             "MR(93)",
-            "25-01-2026 10:00:00",
+            "", "", "",             # SOL_*
+            "", "",                  # NDT_UNION, R_NDT_UNION
+            "", "",                  # NDT_FECHA, NDT_STATUS
+            "version-uuid-y",
+            "MR(93)", "25-01-2026 10:00:00",
+            "", "",
         ]
         mock_sheets_repository.read_worksheet.return_value = [header, row_with_dates]
 
@@ -378,14 +385,12 @@ class TestUnionRepository:
         assert len(unions) == 1
         assert unions[0].arm_fecha_inicio is not None
         assert unions[0].arm_fecha_fin is not None
-        # Both should be datetime objects
         assert isinstance(unions[0].arm_fecha_inicio, datetime)
         assert isinstance(unions[0].arm_fecha_fin, datetime)
 
     def test_empty_sheet_returns_empty_list(self, mock_sheets_repository):
-        """Test repository handles empty sheet gracefully."""
-        # Empty sheet (header only)
-        header = ["ID", "TAG_SPOOL", "N_UNION"]
+        """Test repository handles empty sheet gracefully (header-only)."""
+        header = mock_sheets_repository.read_worksheet.return_value[0]
         mock_sheets_repository.read_worksheet.return_value = [header]
 
         repo = UnionRepository(mock_sheets_repository)
@@ -395,7 +400,7 @@ class TestUnionRepository:
 
     def test_get_disponibles_returns_empty_for_empty_sheet(self, mock_sheets_repository):
         """Test get_disponibles handles empty sheet gracefully."""
-        header = ["ID", "TAG_SPOOL"]
+        header = mock_sheets_repository.read_worksheet.return_value[0]
         mock_sheets_repository.read_worksheet.return_value = [header]
 
         repo = UnionRepository(mock_sheets_repository)

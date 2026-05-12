@@ -8,13 +8,17 @@ Responsabilidades:
 - Manejo de valores vacíos, nulos e inválidos
 - Validación de consistencia de datos
 """
-from typing import Optional
+from typing import Optional, Union, TYPE_CHECKING
 from datetime import datetime, date
 import logging
 
 from backend.models.worker import Worker
 from backend.models.spool import Spool
 from backend.models.enums import ActionStatus
+from backend.exceptions import CriticalColumnDriftError
+
+if TYPE_CHECKING:
+    from backend.repositories.sheets_repository import SheetsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -23,34 +27,70 @@ class SheetsService:
     """
     Servicio para parsear filas de Google Sheets a modelos Pydantic.
 
-    v2.1 (Dynamic Column Mapping):
+    v2.1 (Dynamic Column Mapping) + drift-resilient:
     - Lee headers (row 1) para construir mapeo dinámico
     - Busca columnas por NOMBRE en lugar de índice hardcodeado
-    - Resistente a cambios en estructura del spreadsheet
+    - `_column_map` es un property que SIEMPRE consulta el caché global
+      `ColumnMapCache` — si la planilla cambió y el caché fue invalidado,
+      el próximo acceso ya ve los índices nuevos sin reinstanciar este
+      servicio.
     """
 
-    def __init__(self, column_map: dict[str, int]):
+    def __init__(
+        self,
+        sheet_name: Optional[str] = None,
+        sheets_repository: Optional["SheetsRepository"] = None,
+        column_map: Optional[dict[str, int]] = None,
+    ):
         """
-        Inicializa el servicio con un mapeo de columnas (REQUERIDO v2.1).
+        Inicializa el servicio. Acepta dos firmas:
 
-        Args:
-            column_map: Diccionario {nombre_columna_normalizado: índice}.
-                        Obtener desde ColumnMapCache.get_or_build()
+        Recomendada (drift-resilient):
+            SheetsService(sheet_name="Operaciones", sheets_repository=repo)
+            → `_column_map` será una property dinámica que siempre lee el
+              caché global. Cualquier rebuild posterior se refleja
+              automáticamente.
+
+        Legacy (tests, scripts ad-hoc):
+            SheetsService(column_map=some_static_map)
+            → `_column_map` queda fijo en el dict pasado. Útil para tests
+              unitarios sin SheetsRepository.
 
         Raises:
-            ValueError: Si column_map está vacío o es None
-
-        Examples:
-            >>> from backend.core.column_map_cache import ColumnMapCache
-            >>> column_map = ColumnMapCache.get_or_build("Operaciones", sheets_repo)
-            >>> sheets_service = SheetsService(column_map=column_map)
+            ValueError: Si ni column_map ni (sheet_name + sheets_repository)
+                están presentes; o si column_map se pasa vacío.
         """
-        if not column_map:
+        if sheet_name is not None and sheets_repository is not None:
+            self._sheet_name = sheet_name
+            self._sheets_repo = sheets_repository
+            self._static_column_map: Optional[dict[str, int]] = None
+            # Fail-fast at construction: trigger a build if not cached yet.
+            _ = self._column_map
+        elif column_map:
+            self._sheet_name = None
+            self._sheets_repo = None
+            self._static_column_map = dict(column_map)
+        else:
             raise ValueError(
-                "column_map is required. "
-                "Use ColumnMapCache.get_or_build() to obtain it."
+                "SheetsService requires either (sheet_name + sheets_repository) "
+                "or a non-empty column_map. Use ColumnMapCache.get_or_build() "
+                "to obtain a map."
             )
-        self._column_map = column_map
+
+    @property
+    def _column_map(self) -> dict[str, int]:
+        """
+        Always returns the live column map.
+
+        If constructed with `sheet_name + sheets_repository`, defers to the
+        global ColumnMapCache — picks up any rebuild done by
+        `read_worksheet` automatically. Otherwise returns the static map
+        provided at construction time.
+        """
+        if self._static_column_map is not None:
+            return self._static_column_map
+        from backend.core.column_map_cache import ColumnMapCache
+        return ColumnMapCache.get_or_build(self._sheet_name, self._sheets_repo)
 
     @staticmethod
     def build_column_map(header_row: list[str]) -> dict[str, int]:
@@ -91,40 +131,36 @@ class SheetsService:
         logger.debug(f"Built column map with {len(column_map)} entries")
         return column_map
 
-    def _get_col_idx(self, column_name: str, fallback_idx: Optional[int] = None) -> int:
+    def _get_col_idx(self, column_name: str) -> int:
         """
         Obtiene el índice de una columna por su nombre.
 
-        The column map is validated at startup, so all critical columns
-        should always be present. fallback_idx is kept for backward
-        compatibility but logs a WARNING if used.
+        Si la columna no existe en el mapeo (planilla rota o columna crítica
+        renombrada/eliminada), se lanza `CriticalColumnDriftError` que
+        propaga como HTTP 503 — mejor fallar fuerte que devolver índice
+        equivocado y corromper datos silenciosamente.
 
         Args:
-            column_name: Nombre de la columna (ej: "Fecha_Armado")
-            fallback_idx: DEPRECATED - Legacy fallback index (logs warning if used)
+            column_name: Nombre de la columna (ej: "Fecha_Armado").
 
         Returns:
-            Índice de la columna
+            Índice (0-based) de la columna en la fila.
 
         Raises:
-            ValueError: Si la columna no se encuentra y no hay fallback
+            CriticalColumnDriftError: Si la columna no está en el mapeo
+                vigente.
         """
         from backend.utils.normalize import normalize_column_name
         normalized = normalize_column_name(column_name)
 
-        if normalized in self._column_map:
-            return self._column_map[normalized]
+        column_map = self._column_map
+        if normalized in column_map:
+            return column_map[normalized]
 
-        if fallback_idx is not None:
-            logger.warning(
-                f"Column '{column_name}' not found in map, using DEPRECATED fallback index {fallback_idx}. "
-                f"This indicates a column map issue — investigate."
-            )
-            return fallback_idx
-
-        raise ValueError(
-            f"Column '{column_name}' not found in column map. "
-            f"Available: {list(self._column_map.keys())[:15]}"
+        raise CriticalColumnDriftError(
+            sheet_name=self._sheet_name or "<static-map>",
+            expected_column=column_name,
+            actual_header_at_index=None,
         )
 
     # ==================== WORKER SHEET CONSTANTS (STABLE) ====================

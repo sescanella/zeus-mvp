@@ -145,12 +145,12 @@ class TestSheetsServiceInit:
 
     def test_empty_column_map_raises(self):
         """SheetsService with empty column_map should raise ValueError."""
-        with pytest.raises(ValueError, match="column_map is required"):
+        with pytest.raises(ValueError, match="requires either"):
             SheetsService(column_map={})
 
     def test_none_column_map_raises(self):
         """SheetsService with None column_map should raise ValueError."""
-        with pytest.raises(ValueError, match="column_map is required"):
+        with pytest.raises(ValueError, match="requires either"):
             SheetsService(column_map=None)
 
 

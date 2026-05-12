@@ -259,6 +259,41 @@ class SheetsRateLimitError(ZEUSException):
         )
 
 
+class CriticalColumnDriftError(ZEUSException):
+    """
+    A column declared as critical in sheet_schema.py is missing from the
+    Google Sheets header, or its name in the cached position differs from
+    the expected one. Surfaces as HTTP 503 — better to fail loud than to
+    serve wrong data with stale column indices.
+    """
+
+    def __init__(
+        self,
+        sheet_name: str,
+        expected_column: str,
+        actual_header_at_index: Optional[str] = None,
+    ):
+        if actual_header_at_index is None:
+            detail = f"column missing from '{sheet_name}' header"
+        else:
+            detail = (
+                f"expected '{expected_column}' in '{sheet_name}' but cached index "
+                f"now points to {actual_header_at_index!r}"
+            )
+        super().__init__(
+            message=(
+                f"Critical column drift detected: {detail}. "
+                "Engineering must restore the column or update the schema registry."
+            ),
+            error_code="CRITICAL_COLUMN_DRIFT",
+            data={
+                "sheet_name": sheet_name,
+                "expected_column": expected_column,
+                "actual_header_at_index": actual_header_at_index,
+            }
+        )
+
+
 # ==================== EXCEPCIONES 409 (CONFLICT) - CONCURRENCIA ====================
 
 class SpoolOccupiedError(ZEUSException):
