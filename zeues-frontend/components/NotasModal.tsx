@@ -1,18 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Modal } from '@/components/Modal';
-import { appendNota, getNotas } from '@/lib/api';
+import { appendNota, getNotas, getWorkers } from '@/lib/api';
 import { classifyApiError } from '@/lib/error-classifier';
-import type { SpoolCardData } from '@/lib/types';
+import type { SpoolCardData, Worker } from '@/lib/types';
 
 const MAX_LENGTH = 500;
 
 interface NotasModalProps {
   isOpen: boolean;
   spool: SpoolCardData;
-  workerId: number | null; // current worker signing the note; null → modal shows read-only
+  workerId: number | null; // hint: if the spool is occupied, preselect this worker; otherwise the modal asks the user to identify themselves.
   onClose: () => void;
   onSaved?: (tagSpool: string) => void;
   isTopOfStack?: boolean;
@@ -23,11 +23,12 @@ interface NotasModalProps {
  *
  * Read + append workflow for the per-spool `Notas` column. The previous
  * history is shown read-only (pre-wrap preserves newlines and the
- * `YYYYMMDD:` prefixes written by planning). Users can add a new entry;
- * backend prepends today's date in YYYYMMDD format and appends with \n.
+ * `YYYYMMDD:` prefixes written by the backend).
  *
- * Requires `workerId` to save; if absent, the textarea/save button are
- * hidden (useful for a "viewer" mode — not currently invoked anywhere).
+ * Author attribution: if `workerId` is provided (spool occupied), the
+ * composer is enabled immediately and that worker signs the note. If
+ * `workerId` is null (spool free), the modal loads the active worker list
+ * and asks the user to pick who is signing before the textarea unlocks.
  */
 export function NotasModal({
   isOpen,
@@ -43,6 +44,11 @@ export function NotasModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [pickedWorkerId, setPickedWorkerId] = useState<number | null>(null);
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [workersLoading, setWorkersLoading] = useState(false);
+  const [workersError, setWorkersError] = useState<string | null>(null);
+
   const loadNotas = useCallback(async () => {
     if (!spool.tag_spool) return;
     setLoading(true);
@@ -57,25 +63,56 @@ export function NotasModal({
     }
   }, [spool.tag_spool]);
 
-  useEffect(() => {
-    if (isOpen) {
-      setHistory('');
-      setNewText('');
-      setError(null);
-      loadNotas();
+  const loadWorkers = useCallback(async () => {
+    setWorkersLoading(true);
+    setWorkersError(null);
+    try {
+      const list = await getWorkers();
+      setWorkers(list);
+    } catch (err: unknown) {
+      setWorkersError(classifyApiError(err).userMessage);
+    } finally {
+      setWorkersLoading(false);
     }
-  }, [isOpen, loadNotas]);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setHistory('');
+    setNewText('');
+    setError(null);
+    setPickedWorkerId(workerId);
+    loadNotas();
+    if (workerId === null) {
+      loadWorkers();
+    }
+  }, [isOpen, workerId, loadNotas, loadWorkers]);
+
+  const pickedWorker = useMemo(
+    () =>
+      pickedWorkerId === null
+        ? null
+        : workers.find((w) => w.id === pickedWorkerId) ?? null,
+    [pickedWorkerId, workers]
+  );
+
+  // The signature is shown only when we resolved the picked worker's name in
+  // the locally loaded list. When the prop pre-seeded `pickedWorkerId` (spool
+  // occupied case) we don't fetch the workers list, so we just don't show the
+  // explicit "Firmando como" line — the spool occupation header already makes
+  // authorship obvious.
+  const showSignaturePicker = workerId === null;
 
   const trimmed = newText.trim();
-  const canSave = workerId !== null && trimmed.length > 0 && !saving;
+  const canSave = pickedWorkerId !== null && trimmed.length > 0 && !saving;
 
   async function handleSave() {
-    if (!canSave || workerId === null) return;
+    if (!canSave || pickedWorkerId === null) return;
     setSaving(true);
     setError(null);
     try {
       const res = await appendNota(spool.tag_spool, {
-        worker_id: workerId,
+        worker_id: pickedWorkerId,
         texto: trimmed,
       });
       setHistory(res.nota);
@@ -89,6 +126,7 @@ export function NotasModal({
   }
 
   const remaining = MAX_LENGTH - newText.length;
+  const composerDisabled = saving || pickedWorkerId === null;
 
   return (
     <Modal
@@ -151,42 +189,110 @@ export function NotasModal({
       )}
 
       {/* Composer */}
-      {workerId !== null && (
-        <div className="shrink-0 p-4 pt-2 space-y-2">
-          <label htmlFor="nota-input" className="sr-only">
-            Nueva nota
-          </label>
-          <textarea
-            id="nota-input"
-            value={newText}
-            onChange={(e) => setNewText(e.target.value.slice(0, MAX_LENGTH))}
-            placeholder="Escribe una nota. Se guardará con la fecha de hoy."
-            rows={3}
-            aria-label="Escribir nueva nota"
-            disabled={saving}
-            className="w-full p-3 bg-zeues-navy border-2 border-white text-white font-mono text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-60"
-          />
-          <div className="flex items-center justify-between gap-2">
-            <span
-              className={`font-mono text-xs ${
-                remaining < 50 ? 'text-yellow-400' : 'text-white/50'
-              }`}
-              aria-live="polite"
+      <div className="shrink-0 p-4 pt-2 space-y-2">
+        {showSignaturePicker && (
+          <div className="space-y-1">
+            <label
+              htmlFor="nota-worker-select"
+              className="block font-mono text-xs text-white/70"
             >
-              {remaining} caracteres
-            </span>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!canSave}
-              aria-label="Guardar nueva nota"
-              className="h-12 px-6 bg-zeues-orange border-2 border-zeues-orange text-zeues-navy font-mono font-black text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zeues-orange/90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-            >
-              {saving ? 'GUARDANDO...' : 'GUARDAR'}
-            </button>
+              Selecciona tu nombre para firmar la nota
+            </label>
+            {workersLoading && (
+              <div
+                className="flex items-center gap-2 py-2"
+                role="status"
+                aria-label="Cargando trabajadores"
+              >
+                <div
+                  className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                  aria-hidden="true"
+                />
+                <span className="font-mono text-xs text-white/50">
+                  Cargando trabajadores…
+                </span>
+              </div>
+            )}
+            {workersError && (
+              <p
+                role="alert"
+                className="font-mono text-xs text-red-400"
+              >
+                {workersError}
+              </p>
+            )}
+            {!workersLoading && !workersError && (
+              <select
+                id="nota-worker-select"
+                value={pickedWorkerId ?? ''}
+                onChange={(e) =>
+                  setPickedWorkerId(e.target.value ? parseInt(e.target.value, 10) : null)
+                }
+                aria-required="true"
+                aria-describedby="nota-worker-hint"
+                disabled={saving || workers.length === 0}
+                className="w-full h-12 px-3 bg-zeues-navy border-2 border-white text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-60"
+              >
+                <option value="">— Elige un trabajador —</option>
+                {workers.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.nombre}
+                    {w.apellido ? ` ${w.apellido}` : ''} ({w.id})
+                  </option>
+                ))}
+              </select>
+            )}
+            {pickedWorker && (
+              <p className="font-mono text-xs text-white/70">
+                Firmando como{' '}
+                <span className="text-white font-black">
+                  {pickedWorker.nombre}
+                  {pickedWorker.apellido ? ` ${pickedWorker.apellido}` : ''}
+                </span>
+              </p>
+            )}
           </div>
+        )}
+
+        <label htmlFor="nota-input" className="sr-only">
+          Nueva nota
+        </label>
+        <textarea
+          id="nota-input"
+          value={newText}
+          onChange={(e) => setNewText(e.target.value.slice(0, MAX_LENGTH))}
+          placeholder={
+            pickedWorkerId === null
+              ? 'Selecciona tu nombre arriba para escribir una nota.'
+              : 'Escribe una nota. Se guardará con la fecha de hoy.'
+          }
+          rows={3}
+          aria-label="Escribir nueva nota"
+          aria-describedby={showSignaturePicker ? 'nota-worker-hint' : undefined}
+          disabled={composerDisabled}
+          className="w-full p-3 bg-zeues-navy border-2 border-white text-white font-mono text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset disabled:opacity-60"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span
+            id="nota-worker-hint"
+            className={`font-mono text-xs ${
+              remaining < 50 ? 'text-yellow-400' : 'text-white/50'
+            }`}
+            aria-live="polite"
+          >
+            {remaining} caracteres
+          </span>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            aria-label="Guardar nueva nota"
+            className="h-12 px-6 bg-zeues-orange border-2 border-zeues-orange text-zeues-navy font-mono font-black text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zeues-orange/90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+          >
+            {saving ? 'GUARDANDO...' : 'GUARDAR'}
+          </button>
         </div>
-      )}
+      </div>
     </Modal>
   );
 }
