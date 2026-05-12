@@ -46,20 +46,34 @@ describe('loadPersistedSpools', () => {
     expect(loadPersistedSpools()).toEqual([]);
   });
 
-  it('parses new format {tag, priority} correctly', () => {
+  it('parses new format {tag} correctly', () => {
     const spools: PersistedSpool[] = [
-      { tag: 'MK-123', priority: 1 },
-      { tag: 'OT-456', priority: null },
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
     ];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(spools));
     expect(loadPersistedSpools()).toEqual(spools);
   });
 
-  it('migrates old format (plain string[]) to PersistedSpool[] with null priority', () => {
+  it('migrates old format (plain string[]) to PersistedSpool[]', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(['MK-123', 'OT-456']));
     expect(loadPersistedSpools()).toEqual([
-      { tag: 'MK-123', priority: null },
-      { tag: 'OT-456', priority: null },
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
+    ]);
+  });
+
+  it('tolerates and discards intermediate {tag, priority} format', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        { tag: 'MK-123', priority: 1 },
+        { tag: 'OT-456', priority: null },
+      ])
+    );
+    expect(loadPersistedSpools()).toEqual([
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
     ]);
   });
 
@@ -69,17 +83,9 @@ describe('loadPersistedSpools', () => {
       JSON.stringify(['MK-123', 42, null, { noTag: 'bad' }, { tag: 'OT-456', priority: 2 }])
     );
     expect(loadPersistedSpools()).toEqual([
-      { tag: 'MK-123', priority: null },
-      { tag: 'OT-456', priority: 2 },
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
     ]);
-  });
-
-  it('treats non-number priority as null', () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify([{ tag: 'MK-123', priority: 'high' }])
-    );
-    expect(loadPersistedSpools()).toEqual([{ tag: 'MK-123', priority: null }]);
   });
 });
 
@@ -96,8 +102,8 @@ describe('loadTags', () => {
 
   it('returns string[] from new PersistedSpool[] format', () => {
     const spools: PersistedSpool[] = [
-      { tag: 'MK-123', priority: 1 },
-      { tag: 'OT-456', priority: null },
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
     ];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(spools));
     expect(loadTags()).toEqual(['MK-123', 'OT-456']);
@@ -119,16 +125,16 @@ describe('savePersistedSpools', () => {
 
   it('writes PersistedSpool[] as JSON under STORAGE_KEY', () => {
     const spools: PersistedSpool[] = [
-      { tag: 'MK-123', priority: 1 },
-      { tag: 'OT-456', priority: null },
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
     ];
     savePersistedSpools(spools);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) as string)).toEqual(spools);
   });
 
   it('overwrites existing value', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ tag: 'OLD-001', priority: null }]));
-    const newSpools: PersistedSpool[] = [{ tag: 'NEW-001', priority: 2 }];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ tag: 'OLD-001' }]));
+    const newSpools: PersistedSpool[] = [{ tag: 'NEW-001' }];
     savePersistedSpools(newSpools);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) as string)).toEqual(newSpools);
   });
@@ -141,21 +147,21 @@ describe('saveTags (legacy)', () => {
     localStorage.clear();
   });
 
-  it('writes tags as PersistedSpool[] with null priorities under STORAGE_KEY', () => {
+  it('writes tags as PersistedSpool[] under STORAGE_KEY', () => {
     const tags = ['MK-123', 'OT-456'];
     saveTags(tags);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) as string)).toEqual([
-      { tag: 'MK-123', priority: null },
-      { tag: 'OT-456', priority: null },
+      { tag: 'MK-123' },
+      { tag: 'OT-456' },
     ]);
   });
 
   it('overwrites existing value', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ tag: 'OLD-001', priority: 1 }]));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ tag: 'OLD-001' }]));
     saveTags(['NEW-001', 'NEW-002']);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) as string)).toEqual([
-      { tag: 'NEW-001', priority: null },
-      { tag: 'NEW-002', priority: null },
+      { tag: 'NEW-001' },
+      { tag: 'NEW-002' },
     ]);
   });
 });
@@ -172,7 +178,7 @@ describe('SSR safety — typeof window guard', () => {
   });
 
   it('savePersistedSpools does not throw (SSR guard present)', () => {
-    expect(() => savePersistedSpools([{ tag: 'MK-123', priority: null }])).not.toThrow();
+    expect(() => savePersistedSpools([{ tag: 'MK-123' }])).not.toThrow();
   });
 
   it('saveTags does not throw (SSR guard present)', () => {

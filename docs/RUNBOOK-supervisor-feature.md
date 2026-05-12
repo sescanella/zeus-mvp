@@ -35,10 +35,11 @@ This proves the list is server-backed; localStorage is no longer authoritative.
 ### A3. Migration — happy path (Layers 0 + 1)
 
 1. Clear the audit Sheet's `Lista` tab manually.
-2. DevTools console:
+2. DevTools console (legacy `priority` field, if present, is tolerated and
+   silently discarded by the parser — this seed verifies that tolerance):
    ```js
    localStorage.setItem('zeues_v5_spool_tags',
-     JSON.stringify([{tag:'FAKE-A',priority:1},{tag:'FAKE-B',priority:2}]));
+     JSON.stringify([{tag:'FAKE-A',priority:1},{tag:'FAKE-B'}]));
    ```
 3. Reload.
 4. ✓ if:
@@ -115,7 +116,7 @@ Run this checklist **before** promoting the merge to Railway.
 - [ ] Distinct from operations sheets `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ` (PROD ops) and `14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo` (staging ops).
 - [ ] Three tabs present: `Lista`, `Audit`, `Snapshots_Legacy`.
 - [ ] Each tab has the expected header row in row 1:
-  - `Lista`: `TAG_SPOOL | Priority | Added_At | Updated_At | Notes`
+  - `Lista`: `TAG_SPOOL | Added_At | Updated_At | Notes`
   - `Audit`: `ID | Timestamp | Session_ID | Event_Type | TAG_SPOOL | Modal | Route | Payload_JSON`
   - `Snapshots_Legacy`: `Snapshot_ID | Captured_At | Raw_JSON | User_Agent`
 - [ ] All three tabs have **zero data rows** (only the header).
