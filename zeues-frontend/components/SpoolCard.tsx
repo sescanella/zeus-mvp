@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { X, StickyNote } from 'lucide-react';
-import { hapticTap } from '@/lib/haptic';
 import type { SpoolCardData } from '@/lib/types';
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/constants';
 
@@ -10,10 +9,8 @@ export type { SpoolCardData };
 
 export interface SpoolCardProps {
   spool: SpoolCardData;
-  priority: number | null; // 1=urgente, 2=alta, 3=normal, null=sin prioridad
   onCardClick: (spool: SpoolCardData) => void;
   onRemove?: (tag: string) => void;
-  onPriorityChange?: (tag: string, priority: number | null) => void;
   onUnionesClick?: (spool: SpoolCardData) => void;
   onNotasClick?: (spool: SpoolCardData) => void;
 }
@@ -23,21 +20,6 @@ const OPERACION_LABELS: Record<string, string> = {
   SOLD: 'Soldadura',
   REPARACION: 'Reparación',
 };
-
-// ─── Priority color map ────────────────────────────────────────────────────────
-const PRIORITY_COLORS: Record<number, string> = {
-  1: 'bg-red-600 text-white border-red-500',
-  2: 'bg-zeues-orange text-white border-zeues-orange',
-  3: 'bg-white/20 text-white border-white/30',
-};
-const PRIORITY_DEFAULT = 'bg-white/5 text-white/70 border-white/10';
-
-// ─── Priority cycle ────────────────────────────────────────────────────────────
-function nextPriority(current: number | null): number | null {
-  if (current === null) return 1;
-  if (current === 3) return null;
-  return current + 1;
-}
 
 // ─── useElapsedSeconds ─────────────────────────────────────────────────────────
 
@@ -139,17 +121,13 @@ function formatElapsed(totalSeconds: number): string {
 /**
  * Individual spool card for the v5.0 single-page view.
  *
- * Layout: flex row with priority block on the left and card content on the right.
- * - Priority block: fixed w-16, clickable to cycle 1→2→3→null
+ * Layout: flex row with card content; optional Uniones/Notas buttons on the right.
  * - Content block: tag, badges, worker + timer on same row
  *
  * Timer is hidden when estado_trabajo === 'PAUSADO' (STATE-06).
  * Keyboard accessible: Enter/Space triggers onCardClick on content area.
- * Priority button uses stopPropagation to avoid triggering onCardClick.
- *
- * Plan: 02-01-PLAN.md Task 1
  */
-export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityChange, onUnionesClick, onNotasClick }: SpoolCardProps) {
+export function SpoolCard({ spool, onCardClick, onRemove, onUnionesClick, onNotasClick }: SpoolCardProps) {
   const isPausado = spool.estado_trabajo === 'PAUSADO';
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -177,29 +155,7 @@ export function SpoolCard({ spool, priority, onCardClick, onRemove, onPriorityCh
 
   return (
     <div className="flex border-4 rounded-none border-white/20 min-h-[5rem]">
-      {/* Priority block — left side */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          hapticTap();
-          onPriorityChange?.(spool.tag_spool, nextPriority(priority));
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            e.stopPropagation();
-            hapticTap();
-            onPriorityChange?.(spool.tag_spool, nextPriority(priority));
-          }
-        }}
-        aria-label={`Prioridad spool ${spool.tag_spool}: ${priority ?? 'sin prioridad'}. Click para cambiar`}
-        className={`flex flex-col items-center justify-center w-16 shrink-0 min-h-[5rem] border-r-4 border-white/20 cursor-pointer transition-colors duration-200 hover:opacity-80 active:opacity-60 focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${priority !== null ? PRIORITY_COLORS[priority] : PRIORITY_DEFAULT}`}
-      >
-        <span className="font-mono text-sm font-black tracking-widest uppercase">PRIO</span>
-        <span className="font-mono text-2xl font-black">{priority ?? '-'}</span>
-      </button>
-
-      {/* Content — right side (clickable for card action) */}
+      {/* Content — left side (clickable for card action) */}
       <div
         role="button"
         tabIndex={0}

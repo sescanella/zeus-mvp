@@ -15,7 +15,7 @@
  *   Layer 2: ensureMigrated() runs before each mutation, in case the
  *            mount-time migration was skipped or partially failed earlier.
  *
- * Mutation flow (add/remove/setPriority):
+ * Mutation flow (add/remove):
  *   1. Optimistic dispatch immediately.
  *   2. fire server write.
  *   3. on failure: revert dispatch + rethrow → page.tsx shows toast.
@@ -37,43 +37,23 @@ import {
   getSupervisorList,
   addSupervisorList,
   removeSupervisorList,
-  setSupervisorPriority,
   postSupervisorLegacySnapshot,
 } from './api';
 import { loadPersistedSpools, STORAGE_KEY } from './local-storage';
 import { getSessionId, pushAuditEvent } from './audit-buffer';
 import { classifyApiError } from './error-classifier';
 
-// ─── Priority normalization ──────────────────────────────────────────────────
-//
-// Frontend uses `number | null` (null = sin prioridad) so SpoolCard's chip
-// renderer can stay agnostic. Backend uses 0|1|2|3 (0 = sin prioridad). Convert
-// at the boundary; never leak server enum into UI components.
-
-type ServerPriority = 0 | 1 | 2 | 3;
-
-function priorityToServer(p: number | null): ServerPriority {
-  if (p === 1 || p === 2 || p === 3) return p;
-  return 0;
-}
-function priorityFromServer(p: ServerPriority): number | null {
-  return p === 0 ? null : p;
-}
-
 // ─── State & Actions ─────────────────────────────────────────────────────────
 
 interface SpoolListState {
   spools: SpoolCardData[];
-  priorities: Map<string, number | null>;
 }
 
 type SpoolListAction =
   | { type: 'SET_SPOOLS'; spools: SpoolCardData[] }
   | { type: 'ADD_SPOOL'; spool: SpoolCardData }
   | { type: 'REMOVE_SPOOL'; tag: string }
-  | { type: 'UPDATE_SPOOL'; spool: SpoolCardData }
-  | { type: 'SET_PRIORITY'; tag: string; priority: number | null }
-  | { type: 'LOAD_PRIORITIES'; priorities: Map<string, number | null> };
+  | { type: 'UPDATE_SPOOL'; spool: SpoolCardData };
 
 function reducer(state: SpoolListState, action: SpoolListAction): SpoolListState {
   switch (action.type) {
@@ -88,14 +68,11 @@ function reducer(state: SpoolListState, action: SpoolListAction): SpoolListState
       return { ...state, spools: [...state.spools, action.spool] };
     }
 
-    case 'REMOVE_SPOOL': {
-      const newPriorities = new Map(state.priorities);
-      newPriorities.delete(action.tag);
+    case 'REMOVE_SPOOL':
       return {
+        ...state,
         spools: state.spools.filter((s) => s.tag_spool !== action.tag),
-        priorities: newPriorities,
       };
-    }
 
     case 'UPDATE_SPOOL':
       return {
@@ -104,15 +81,6 @@ function reducer(state: SpoolListState, action: SpoolListAction): SpoolListState
           s.tag_spool === action.spool.tag_spool ? action.spool : s
         ),
       };
-
-    case 'SET_PRIORITY': {
-      const newPriorities = new Map(state.priorities);
-      newPriorities.set(action.tag, action.priority);
-      return { ...state, priorities: newPriorities };
-    }
-
-    case 'LOAD_PRIORITIES':
-      return { ...state, priorities: action.priorities };
 
     default:
       return state;
@@ -167,9 +135,7 @@ async function runMigrationIfPending(): Promise<void> {
 
   const sessionId = getSessionId();
   const results = await Promise.allSettled(
-    legacy.map((t) =>
-      addSupervisorList(t.tag, sessionId, priorityToServer(t.priority))
-    )
+    legacy.map((t) => addSupervisorList(t.tag, sessionId))
   );
   const ok = results.filter((r) => r.status === 'fulfilled').length;
 
@@ -192,13 +158,11 @@ async function runMigrationIfPending(): Promise<void> {
 
 interface SpoolListContextValue {
   spools: SpoolCardData[];
-  priorities: Map<string, number | null>;
   hydrated: boolean;
   hydrationError: boolean;
   retryHydration: () => Promise<void>;
   addSpool: (tag: string) => Promise<void>;
   removeSpool: (tag: string) => Promise<void>;
-  setPriority: (tag: string, priority: number | null) => Promise<void>;
   refreshAll: () => Promise<void>;
   refreshSingle: (tag: string) => Promise<void>;
 }
@@ -212,7 +176,6 @@ const SpoolListContext = createContext<SpoolListContextValue | undefined>(
 export function SpoolListProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
     spools: [],
-    priorities: new Map(),
   });
   const [hydrated, setHydrated] = useState(false);
   const [hydrationError, setHydrationError] = useState(false);
@@ -222,11 +185,6 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     spoolsRef.current = state.spools;
   }, [state.spools]);
-
-  const prioritiesRef = useRef<Map<string, number | null>>(state.priorities);
-  useEffect(() => {
-    prioritiesRef.current = state.priorities;
-  }, [state.priorities]);
 
   // Hydration: server fetch → migration if needed → re-fetch → populate state.
   // On failure: 1 retry with delay from classifyApiError, then surface error
@@ -249,13 +207,7 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
       const fullCards = tags.length > 0 ? await batchGetStatus(tags) : [];
       if (cancelledRef.current) return true;
 
-      const prioMap = new Map<string, number | null>();
-      finalList.forEach((s) =>
-        prioMap.set(s.tag_spool, priorityFromServer(s.priority))
-      );
-
       dispatch({ type: 'SET_SPOOLS', spools: fullCards });
-      dispatch({ type: 'LOAD_PRIORITIES', priorities: prioMap });
       return true;
     },
     []
@@ -339,7 +291,7 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
       const optimistic = await getSpoolStatus(tag);
       dispatch({ type: 'ADD_SPOOL', spool: optimistic });
       try {
-        await addSupervisorList(tag, getSessionId(), 0);
+        await addSupervisorList(tag, getSessionId());
       } catch (err) {
         dispatch({ type: 'REMOVE_SPOOL', tag });
         throw err;
@@ -366,31 +318,6 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     [ensureMigrated]
   );
 
-  // setPriority: optimistic dispatch + server write + rollback on failure.
-  const setPriority = useCallback(
-    async (tag: string, priority: number | null) => {
-      await ensureMigrated();
-      const previousPriority = prioritiesRef.current.get(tag) ?? null;
-
-      dispatch({ type: 'SET_PRIORITY', tag, priority });
-      try {
-        await setSupervisorPriority(
-          tag,
-          priorityToServer(priority),
-          getSessionId()
-        );
-      } catch (err) {
-        dispatch({
-          type: 'SET_PRIORITY',
-          tag,
-          priority: previousPriority,
-        });
-        throw err;
-      }
-    },
-    [ensureMigrated]
-  );
-
   // refreshAll: re-fetch full card data for all currently-tracked tags.
   // Does NOT re-fetch the supervisor Lista — relies on optimistic state for that.
   const refreshAll = useCallback(async () => {
@@ -407,13 +334,11 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
 
   const value: SpoolListContextValue = {
     spools: state.spools,
-    priorities: state.priorities,
     hydrated,
     hydrationError,
     retryHydration,
     addSpool,
     removeSpool,
-    setPriority,
     refreshAll,
     refreshSingle,
   };

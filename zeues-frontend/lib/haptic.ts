@@ -8,7 +8,7 @@
  *   - prefers-reduced-motion check respects user accessibility preference
  *
  * Call sites:
- *   hapticTap()     — consequential button presses (worker select, priority cycle)
+ *   hapticTap()     — consequential button presses (worker select)
  *   hapticSuccess() — operation completed successfully (INICIAR/FINALIZAR/MET)
  *   hapticError()   — error state reached (API error, validation failure)
  */
@@ -25,7 +25,7 @@ function isHapticAvailable(): boolean {
   return true;
 }
 
-/** Short tap — for consequential button presses (worker select, priority cycle). */
+/** Short tap — for consequential button presses (worker select). */
 export function hapticTap(): void {
   if (!isHapticAvailable()) return;
   navigator.vibrate(50);
