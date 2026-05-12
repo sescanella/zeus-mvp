@@ -5,7 +5,7 @@ Single-user (Matías). No worker_id; cada mutación se identifica por session_id
 (UUID por pestaña/sesión, generado por el frontend).
 
 Garantías clave:
-- Cada cambio de lista (add/remove/priority) emite un AuditEvent server-side.
+- Cada cambio de lista (add/remove) emite un AuditEvent server-side.
   Si el audit append falla, se loggea pero NO bloquea la mutación principal.
 - TAG_SPOOL no se valida contra el sheet de operaciones — single source of
   truth para la lista del supervisor es el sheet de auditoría.
@@ -22,7 +22,6 @@ from backend.models.supervisor import (
     TrackedSpool,
 )
 from backend.repositories.supervisor_repository import SupervisorRepository
-from backend.utils.date_formatter import now_chile
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +32,9 @@ class SupervisorService:
 
     Validaciones:
     - tag_spool no vacío (post-strip).
-    - priority en {0, 1, 2, 3}.
     - session_id no vacío.
     Las violaciones lanzan ValueError; el router las traduce a HTTP 400.
     """
-
-    VALID_PRIORITIES = {0, 1, 2, 3}
 
     def __init__(self, supervisor_repo: SupervisorRepository):
         self.repo = supervisor_repo
@@ -54,12 +50,6 @@ class SupervisorService:
         if not clean:
             raise ValueError("tag_spool no puede estar vacío")
         return clean
-
-    @classmethod
-    def _validate_priority(cls, priority: int) -> int:
-        if priority not in cls.VALID_PRIORITIES:
-            raise ValueError("priority debe ser 0, 1, 2 o 3")
-        return priority
 
     @staticmethod
     def _validate_session(session_id: str) -> str:
@@ -109,27 +99,24 @@ class SupervisorService:
     def add_to_list(
         self,
         tag_spool: str,
-        priority: int = 0,
         session_id: str = "",
     ) -> TrackedSpool:
         """
         Agrega (o re-agrega, idempotente) un spool a la lista.
 
-        Si el tag ya existía, su fila se actualiza con la nueva prioridad y
-        timestamps frescos. Emite LIST_ADD.
+        Si el tag ya existía, su fila se actualiza con timestamps frescos.
+        Emite LIST_ADD.
         """
         clean_tag = self._validate_tag(tag_spool)
-        self._validate_priority(priority)
         clean_session = self._validate_session(session_id)
 
-        spool = TrackedSpool(tag_spool=clean_tag, priority=priority)
+        spool = TrackedSpool(tag_spool=clean_tag)
         written = self.repo.upsert_tracked_spool(spool)
 
         self._emit_list_audit(
             EventType.LIST_ADD,
             written.tag_spool,
             clean_session,
-            payload={"priority": priority},
         )
         return written
 
@@ -150,62 +137,6 @@ class SupervisorService:
                 EventType.LIST_REMOVE, clean_tag, clean_session
             )
         return deleted
-
-    def set_priority(
-        self,
-        tag_spool: str,
-        priority: int,
-        session_id: str,
-    ) -> TrackedSpool:
-        """
-        Cambia la prioridad de un spool, preservando added_at y notes.
-
-        Si el tag no existe, crea una fila nueva (semánticamente equivale
-        a un add). Emite LIST_PRIORITY con la prioridad anterior y la nueva
-        en el payload.
-        """
-        clean_tag = self._validate_tag(tag_spool)
-        self._validate_priority(priority)
-        clean_session = self._validate_session(session_id)
-
-        existing = self._find_existing(clean_tag)
-        if existing is None:
-            spool = TrackedSpool(tag_spool=clean_tag, priority=priority)
-            previous_priority: Optional[int] = None
-        else:
-            spool = TrackedSpool(
-                tag_spool=existing.tag_spool,
-                priority=priority,
-                added_at=existing.added_at,
-                updated_at=now_chile(),
-                notes=existing.notes,
-            )
-            previous_priority = existing.priority
-
-        written = self.repo.upsert_tracked_spool(spool)
-
-        self._emit_list_audit(
-            EventType.LIST_PRIORITY,
-            written.tag_spool,
-            clean_session,
-            payload={
-                "priority": priority,
-                "previous_priority": previous_priority,
-            },
-        )
-        return written
-
-    def _find_existing(self, tag_spool: str) -> Optional[TrackedSpool]:
-        """
-        Busca el TrackedSpool actual para un tag, o None si no existe.
-
-        Linealiza la lista completa. Es OK porque la lista del supervisor es
-        chica (~100 filas máx). Si crece mucho, agregar repo.get_tracked_spool.
-        """
-        for s in self.repo.list_tracked_spools():
-            if s.tag_spool == tag_spool:
-                return s
-        return None
 
     # ─── Audit — passthroughs ────────────────────────────────────────────
 

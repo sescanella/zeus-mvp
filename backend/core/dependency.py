@@ -579,9 +579,9 @@ def get_supervisor_service(
     """
     Factory para SupervisorService (nueva instancia por request).
 
-    Single-user (Matías). Encapsula validaciones (priority 0..3, tag no vacío,
-    session_id requerido) y emite audit events server-side por cada cambio
-    de lista (LIST_ADD/LIST_REMOVE/LIST_PRIORITY).
+    Single-user (Matías). Encapsula validaciones (tag no vacío, session_id
+    requerido) y emite audit events server-side por cada cambio de lista
+    (LIST_ADD/LIST_REMOVE).
 
     Args:
         supervisor_repo: SupervisorRepository (inyectado automáticamente).

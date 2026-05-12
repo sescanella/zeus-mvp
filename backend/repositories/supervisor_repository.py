@@ -53,7 +53,7 @@ class SupervisorRepository:
 
     EXPECTED_HEADERS: dict[str, list[str]] = {
         config.HOJA_AUDIT_LISTA_NOMBRE: [
-            "TAG_SPOOL", "Priority", "Added_At", "Updated_At", "Notes",
+            "TAG_SPOOL", "Added_At", "Updated_At", "Notes",
         ],
         config.HOJA_AUDIT_EVENTS_NOMBRE: [
             "ID", "Timestamp", "Session_ID", "Event_Type",
@@ -147,7 +147,7 @@ class SupervisorRepository:
         Inserta o actualiza la fila de un spool. Garantiza una sola fila por TAG_SPOOL.
 
         Comportamiento:
-        - Si la tag ya existe → actualiza A:E de esa fila (single API call).
+        - Si la tag ya existe → actualiza A:D de esa fila (single API call).
         - Si no existe → append_row al final.
 
         Returns el TrackedSpool tal como quedó persistido.
@@ -159,8 +159,8 @@ class SupervisorRepository:
 
         try:
             if existing_row is not None:
-                # Update A{row}:E{row} — 5 columnas en un solo call.
-                end_col = _col_letter(len(row_data) - 1)  # "E" para 5 cols
+                # Update A{row}:D{row} — 4 columnas en un solo call.
+                end_col = _col_letter(len(row_data) - 1)  # "D" para 4 cols
                 cell_range = f"A{existing_row}:{end_col}{existing_row}"
                 ws.update(
                     range_name=cell_range,
