@@ -1133,6 +1133,7 @@ function HomePage() {
           onPick={handleBatchWorkerPick}
           onClose={handleBatchCancel}
           disabled={batchInProgress}
+          processingMessage={`ASIGNANDO ${batchTags.length} SPOOL${batchTags.length === 1 ? '' : 'S'}…`}
           isTopOfStack={modalStack.isOpen('batch-worker-picker')}
         />
       )}

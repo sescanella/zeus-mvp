@@ -28,6 +28,9 @@ interface WorkerPickerModalProps {
   onPick: (worker: Worker) => void;
   onClose: () => void;
   disabled?: boolean;           // true while the parent is processing the pick
+  // Shown while disabled=true. Without this, opacity-50 buttons read as
+  // "broken" — the operator can't tell the app is working.
+  processingMessage?: string;
   isTopOfStack?: boolean;
 }
 
@@ -39,6 +42,7 @@ export function WorkerPickerModal({
   onPick,
   onClose,
   disabled = false,
+  processingMessage = 'ASIGNANDO…',
   isTopOfStack,
 }: WorkerPickerModalProps) {
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -88,7 +92,14 @@ export function WorkerPickerModal({
           )}
         </div>
 
-        {loading ? (
+        {disabled ? (
+          <div className="flex flex-col gap-3">
+            <Loading message={processingMessage} />
+            <p className="text-white/60 font-mono text-xs text-center">
+              Esto puede tardar unos segundos. No cierres la ventana.
+            </p>
+          </div>
+        ) : loading ? (
           <Loading message="CARGANDO" />
         ) : error ? (
           <div className="flex flex-col gap-3">
@@ -132,15 +143,16 @@ export function WorkerPickerModal({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={disabled}
-          className="w-full h-12 font-mono font-black text-white/70 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
-          aria-label="Cancelar"
-        >
-          CANCELAR
-        </button>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full h-12 font-mono font-black text-white/70 border border-white/20 rounded cursor-pointer hover:text-white hover:border-white/40 focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset text-sm"
+            aria-label="Cancelar"
+          >
+            CANCELAR
+          </button>
+        )}
       </div>
     </Modal>
   );
