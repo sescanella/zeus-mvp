@@ -42,6 +42,7 @@ import {
 } from './api';
 import { loadPersistedSpools, STORAGE_KEY } from './local-storage';
 import { getSessionId, pushAuditEvent } from './audit-buffer';
+import { classifyApiError } from './error-classifier';
 
 // ─── Priority normalization ──────────────────────────────────────────────────
 //
@@ -193,6 +194,8 @@ interface SpoolListContextValue {
   spools: SpoolCardData[];
   priorities: Map<string, number | null>;
   hydrated: boolean;
+  hydrationError: boolean;
+  retryHydration: () => Promise<void>;
   addSpool: (tag: string) => Promise<void>;
   removeSpool: (tag: string) => Promise<void>;
   setPriority: (tag: string, priority: number | null) => Promise<void>;
@@ -212,6 +215,7 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     priorities: new Map(),
   });
   const [hydrated, setHydrated] = useState(false);
+  const [hydrationError, setHydrationError] = useState(false);
 
   // Stable ref so callbacks do not depend on spools in their closures.
   const spoolsRef = useRef<SpoolCardData[]>(state.spools);
@@ -224,46 +228,97 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     prioritiesRef.current = state.priorities;
   }, [state.priorities]);
 
-  // Mount: server fetch → migration if needed → re-fetch → populate state.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // Hydration: server fetch → migration if needed → re-fetch → populate state.
+  // On failure: 1 retry with delay from classifyApiError, then surface error
+  // to the UI (hydrationError=true) so it can show a Reintentar button.
+  // Returns true on success, false on final failure.
+  const hydrateOnce = useCallback(
+    async (cancelledRef: { current: boolean }): Promise<boolean> => {
+      const initialList = await getSupervisorList();
+      if (cancelledRef.current) return true;
+
+      if (initialList.length === 0) {
+        await runMigrationIfPending();
+        if (cancelledRef.current) return true;
+      }
+
+      const finalList = await getSupervisorList();
+      if (cancelledRef.current) return true;
+
+      const tags = finalList.map((s) => s.tag_spool);
+      const fullCards = tags.length > 0 ? await batchGetStatus(tags) : [];
+      if (cancelledRef.current) return true;
+
+      const prioMap = new Map<string, number | null>();
+      finalList.forEach((s) =>
+        prioMap.set(s.tag_spool, priorityFromServer(s.priority))
+      );
+
+      dispatch({ type: 'SET_SPOOLS', spools: fullCards });
+      dispatch({ type: 'LOAD_PRIORITIES', priorities: prioMap });
+      return true;
+    },
+    []
+  );
+
+  const hydrate = useCallback(
+    async (cancelledRef: { current: boolean }) => {
       try {
-        const initialList = await getSupervisorList();
-        if (cancelled) return;
-
-        if (initialList.length === 0) {
-          await runMigrationIfPending();
-          if (cancelled) return;
-        }
-
-        const finalList = await getSupervisorList();
-        if (cancelled) return;
-
-        const tags = finalList.map((s) => s.tag_spool);
-        const fullCards = tags.length > 0 ? await batchGetStatus(tags) : [];
-        if (cancelled) return;
-
-        const prioMap = new Map<string, number | null>();
-        finalList.forEach((s) =>
-          prioMap.set(s.tag_spool, priorityFromServer(s.priority))
-        );
-
-        dispatch({ type: 'SET_SPOOLS', spools: fullCards });
-        dispatch({ type: 'LOAD_PRIORITIES', priorities: prioMap });
+        await hydrateOnce(cancelledRef);
+        if (cancelledRef.current) return;
+        setHydrationError(false);
         setHydrated(true);
         pushAuditEvent({ event_type: 'SESSION_START' });
-      } catch (err) {
+      } catch (firstErr) {
+        if (cancelledRef.current) return;
+        const classified = classifyApiError(firstErr);
         // eslint-disable-next-line no-console
-        console.error('SpoolListContext mount-time hydration failed', err);
-        // Unblock the UI; user can retry by adding a spool manually.
-        setHydrated(true);
+        console.warn(
+          'SpoolListContext hydration failed, retrying',
+          classified.type,
+          firstErr
+        );
+        const delay = classified.retryDelay ?? 2000;
+        await new Promise((r) => setTimeout(r, delay));
+        if (cancelledRef.current) return;
+        try {
+          await hydrateOnce(cancelledRef);
+          if (cancelledRef.current) return;
+          setHydrationError(false);
+          setHydrated(true);
+          pushAuditEvent({ event_type: 'SESSION_START' });
+        } catch (secondErr) {
+          if (cancelledRef.current) return;
+          // eslint-disable-next-line no-console
+          console.error(
+            'SpoolListContext hydration failed after retry',
+            secondErr
+          );
+          setHydrationError(true);
+          setHydrated(true);
+        }
       }
-    })();
+    },
+    [hydrateOnce]
+  );
+
+  // Mount: kick off initial hydration.
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    void hydrate(cancelledRef);
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
-  }, []);
+  }, [hydrate]);
+
+  // User-triggered retry from the empty error state. Resets flags and tries
+  // again from scratch; same retry-once policy.
+  const retryHydration = useCallback(async () => {
+    setHydrated(false);
+    setHydrationError(false);
+    const cancelledRef = { current: false };
+    await hydrate(cancelledRef);
+  }, [hydrate]);
 
   // Layer 2: before any mutation, ensure migration ran. Idempotent — if there's
   // nothing in localStorage, this is a no-op.
@@ -354,6 +409,8 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     spools: state.spools,
     priorities: state.priorities,
     hydrated,
+    hydrationError,
+    retryHydration,
     addSpool,
     removeSpool,
     setPriority,

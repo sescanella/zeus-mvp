@@ -76,8 +76,16 @@ function parseWorkerIdFromOcupadoPor(ocupadoPor: string): number | null {
 // ─── HomePage (inner component) ───────────────────────────────────────────────
 
 function HomePage() {
-  const { spools, hydrated, addSpool, removeSpool, refreshAll, refreshSingle } =
-    useSpoolList();
+  const {
+    spools,
+    hydrated,
+    hydrationError,
+    retryHydration,
+    addSpool,
+    removeSpool,
+    refreshAll,
+    refreshSingle,
+  } = useSpoolList();
   const modalStack = useModalStack();
   const { toasts, enqueue, dismiss } = useNotificationToast();
 
@@ -204,6 +212,16 @@ function HomePage() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
+
+  // ── Hydration error → persistent error toast ────────────────────────────────
+  useEffect(() => {
+    if (hydrationError) {
+      enqueue(
+        'No se pudo cargar tu lista de spools. Toca Reintentar.',
+        'error'
+      );
+    }
+  }, [hydrationError, enqueue]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -1054,6 +1072,27 @@ function HomePage() {
             >
               CARGANDO LISTA...
             </p>
+          </div>
+        ) : hydrationError ? (
+          <div
+            className="flex flex-col items-center justify-center py-16 gap-4"
+            role="alert"
+          >
+            <p className="text-white/90 font-mono font-black text-base tracking-widest text-center px-4">
+              NO SE PUDO CARGAR TU LISTA
+            </p>
+            <p className="text-white/60 font-mono text-sm text-center px-4">
+              Verifica conexion e intenta de nuevo.
+            </p>
+            <button
+              onClick={() => {
+                void retryHydration();
+              }}
+              className="h-16 px-8 bg-zeues-navy border-4 border-yellow-400 text-white font-mono font-black tracking-widest hover:bg-yellow-400/10 active:scale-95 transition-all"
+              aria-label="Reintentar cargar la lista"
+            >
+              REINTENTAR
+            </button>
           </div>
         ) : (
           <SpoolCardList
