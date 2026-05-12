@@ -123,11 +123,29 @@ describe('SpoolCardList — callback propagation', () => {
 
 // ─── Sorting ──────────────────────────────────────────────────────────────────
 
-describe('SpoolCardList — priority sorting', () => {
-  it('renders spools in original order when no priorities are set', () => {
+describe('SpoolCardList — sorting', () => {
+  it('renders spools in original order when fecha_ocupacion is null for all', () => {
     renderWithProvider(<SpoolCardList spools={spools} {...defaultProps} />);
     const tags = screen.getAllByText(/^OT-00[123]$/).map((el) => el.textContent);
     expect(tags).toEqual(['OT-001', 'OT-002', 'OT-003']);
+  });
+
+  it('sorts by fecha_ocupacion descending (newest first)', () => {
+    const olderSpool: SpoolCardData = {
+      ...makeSpool('OLD'),
+      fecha_ocupacion: '01-03-2026 09:00:00',
+    };
+    const newerSpool: SpoolCardData = {
+      ...makeSpool('NEW'),
+      fecha_ocupacion: '10-03-2026 09:00:00',
+    };
+    renderWithProvider(
+      <SpoolCardList spools={[olderSpool, newerSpool]} {...defaultProps} />
+    );
+    const cards = screen.getAllByRole('button', { name: /^Procesar spool/ });
+    // First card rendered should be the newer one.
+    expect(cards[0]).toHaveAccessibleName(/NEW/);
+    expect(cards[1]).toHaveAccessibleName(/OLD/);
   });
 });
 
