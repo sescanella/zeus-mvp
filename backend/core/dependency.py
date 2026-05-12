@@ -49,7 +49,6 @@ from backend.services.state_service import StateService
 from backend.services.history_service import HistoryService
 from backend.services.metrologia_service import MetrologiaService
 from backend.services.reparacion_service import ReparacionService
-from backend.services.cycle_counter_service import CycleCounterService
 from backend.services.notas_service import NotasService
 from backend.repositories.supervisor_repository import SupervisorRepository
 from backend.services.supervisor_service import SupervisorService
@@ -474,12 +473,10 @@ def get_metrologia_service(
         Skips occupation workflow entirely - inspection completes atomically.
         Single-user mode: No SSE event publishing needed.
     """
-    cycle_counter = CycleCounterService()
     return MetrologiaService(
         validation_service=validation_service,
         sheets_repository=sheets_repo,
-        metadata_repository=metadata_repository,
-        cycle_counter=cycle_counter
+        metadata_repository=metadata_repository
     )
 
 
@@ -493,8 +490,6 @@ def get_reparacion_service(
 
     ReparacionService provides:
     - TOMAR/PAUSAR/COMPLETAR/CANCELAR operations for RECHAZADO spools
-    - Cycle tracking with embedded cycle counter (no dedicated column)
-    - BLOQUEADO enforcement after 3 consecutive rejections (HTTP 403)
     - Multi-worker access (no role restriction)
     - Automatic return to PENDIENTE_METROLOGIA after completion
 
@@ -510,13 +505,10 @@ def get_reparacion_service(
         reparacion_service: ReparacionService = Depends(get_reparacion_service)
 
     Note:
-        Cycle tracking embedded in Estado_Detalle (no schema changes).
         Single-user mode: No SSE event publishing needed.
     """
-    cycle_counter = CycleCounterService()
     return ReparacionService(
         validation_service=validation_service,
-        cycle_counter_service=cycle_counter,
         sheets_repository=sheets_repo,
         metadata_repository=metadata_repository
     )

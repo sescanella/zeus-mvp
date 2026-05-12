@@ -68,7 +68,7 @@ ASISTENTE is in Spanish. This repo is in English. Keep the separation.
 - TOMAR / PAUSAR / COMPLETAR (direct Sheets updates).
 - INICIAR / FINALIZAR (P5 Confirmation Workflow: writes happen only on confirmation; FINALIZAR auto-determines CANCELADO / PAUSAR / COMPLETAR based on union completion).
 - Metrología inspection (APROBADO / RECHAZADO).
-- Reparación bounded cycles (max 3 before BLOQUEADO).
+- Reparación unlimited cycles (spools can be rejected and repaired indefinitely).
 - Pulgadas-diámetro business metric (DN_UNION sums).
 
 ## CRITICAL: Python Virtual Environment

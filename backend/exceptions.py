@@ -359,25 +359,6 @@ class LockExpiredError(ZEUSException):
         )
 
 
-class SpoolBloqueadoError(ZEUSException):
-    """
-    Spool bloqueado después de 3 rechazos consecutivos (v3.0 Phase 6).
-
-    Requiere intervención manual del supervisor.
-    """
-
-    def __init__(self, tag_spool: str, mensaje: Optional[str] = None):
-        default_mensaje = (
-            f"El spool '{tag_spool}' está bloqueado después de 3 rechazos consecutivos. "
-            "Contactar supervisor para intervención manual."
-        )
-        super().__init__(
-            message=mensaje or default_mensaje,
-            error_code="SPOOL_BLOQUEADO",
-            data={"tag_spool": tag_spool}
-        )
-
-
 class OperacionNoDisponibleError(ZEUSException):
     """
     Operación no está disponible para este spool (v3.0 Phase 6).

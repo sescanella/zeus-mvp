@@ -29,12 +29,6 @@ describe('SpoolTable — rendering', () => {
     expect(screen.getByText('TAG SPOOL')).toBeInTheDocument();
   });
 
-  it('renders CICLO/ESTADO header for reparacion tipo', () => {
-    render(<SpoolTable {...defaultProps} tipo="reparacion" />);
-    expect(screen.getByText('CICLO/ESTADO')).toBeInTheDocument();
-    expect(screen.queryByText('NV')).not.toBeInTheDocument();
-  });
-
   it('renders all spool rows', () => {
     render(<SpoolTable {...defaultProps} />);
     expect(screen.getByText('TEST-01')).toBeInTheDocument();
@@ -78,101 +72,6 @@ describe('SpoolTable — selection', () => {
   it('shows Seleccionar label for unselected spools', () => {
     render(<SpoolTable {...defaultProps} />);
     expect(screen.getByRole('button', { name: /Seleccionar spool TEST-01/ })).toBeInTheDocument();
-  });
-});
-
-describe('SpoolTable — reparacion mode', () => {
-  const reparacionSpools: Spool[] = [
-    {
-      tag_spool: 'REP-01',
-      arm: 0,
-      sold: 0,
-      ...(({ bloqueado: false, cycle: 2 }) as Record<string, unknown>),
-    } as Spool,
-    {
-      tag_spool: 'REP-02',
-      arm: 0,
-      sold: 0,
-      ...(({ bloqueado: true, cycle: 3 }) as Record<string, unknown>),
-    } as Spool,
-  ];
-
-  it('shows cycle count for non-bloqueado spools', () => {
-    render(
-      <SpoolTable
-        spools={reparacionSpools}
-        selectedSpools={[]}
-        onToggleSelect={jest.fn()}
-        tipo="reparacion"
-      />
-    );
-    expect(screen.getByText('Ciclo 2/3')).toBeInTheDocument();
-  });
-
-  it('shows BLOQUEADO text for bloqueado spools', () => {
-    render(
-      <SpoolTable
-        spools={reparacionSpools}
-        selectedSpools={[]}
-        onToggleSelect={jest.fn()}
-        tipo="reparacion"
-      />
-    );
-    expect(screen.getByText('BLOQUEADO - Supervisor')).toBeInTheDocument();
-  });
-
-  it('sets tabIndex=-1 for bloqueado rows', () => {
-    render(
-      <SpoolTable
-        spools={reparacionSpools}
-        selectedSpools={[]}
-        onToggleSelect={jest.fn()}
-        tipo="reparacion"
-      />
-    );
-    const bloqueadoRow = screen.getByRole('button', { name: /bloqueado/i });
-    expect(bloqueadoRow).toHaveAttribute('tabindex', '-1');
-  });
-
-  it('sets aria-disabled for bloqueado rows', () => {
-    render(
-      <SpoolTable
-        spools={reparacionSpools}
-        selectedSpools={[]}
-        onToggleSelect={jest.fn()}
-        tipo="reparacion"
-      />
-    );
-    const bloqueadoRow = screen.getByRole('button', { name: /bloqueado/i });
-    expect(bloqueadoRow).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  it('does not call onToggleSelect when bloqueado row is clicked', () => {
-    const onToggle = jest.fn();
-    render(
-      <SpoolTable
-        spools={reparacionSpools}
-        selectedSpools={[]}
-        onToggleSelect={onToggle}
-        tipo="reparacion"
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: /bloqueado/i }));
-    expect(onToggle).not.toHaveBeenCalled();
-  });
-
-  it('does not call onToggleSelect on Enter for bloqueado row', () => {
-    const onToggle = jest.fn();
-    render(
-      <SpoolTable
-        spools={reparacionSpools}
-        selectedSpools={[]}
-        onToggleSelect={onToggle}
-        tipo="reparacion"
-      />
-    );
-    fireEvent.keyDown(screen.getByRole('button', { name: /bloqueado/i }), { key: 'Enter' });
-    expect(onToggle).not.toHaveBeenCalled();
   });
 });
 

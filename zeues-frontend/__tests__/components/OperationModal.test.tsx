@@ -37,7 +37,6 @@ function makeSpool(overrides: Partial<SpoolCardData> = {}): SpoolCardData {
     soldador_display: null,
     operacion_actual: null,
     estado_trabajo: 'LIBRE',
-    ciclo_rep: null,
     ...overrides,
   };
 }
@@ -59,14 +58,6 @@ beforeEach(() => {
 describe('OperationModal — always shows all 4 operations', () => {
   it('shows all 4 operation buttons regardless of spool state', () => {
     render(<OperationModal {...defaultProps} spool={makeSpool({ estado_trabajo: 'LIBRE' })} />);
-    expect(screen.getByRole('button', { name: /ARMADO/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /SOLDADURA/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /METROLOGIA/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /REPARACION/i })).toBeInTheDocument();
-  });
-
-  it('shows all 4 operations for BLOQUEADO spool', () => {
-    render(<OperationModal {...defaultProps} spool={makeSpool({ estado_trabajo: 'BLOQUEADO' })} />);
     expect(screen.getByRole('button', { name: /ARMADO/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /SOLDADURA/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /METROLOGIA/i })).toBeInTheDocument();

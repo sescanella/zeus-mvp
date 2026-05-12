@@ -25,7 +25,6 @@ const makeSpool = (tag: string): SpoolCardData => ({
   soldador_display: null,
   operacion_actual: null,
   estado_trabajo: 'LIBRE',
-  ciclo_rep: null,
 });
 
 const spools = [makeSpool('OT-001'), makeSpool('OT-002'), makeSpool('OT-003')];
