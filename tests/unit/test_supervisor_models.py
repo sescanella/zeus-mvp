@@ -22,13 +22,12 @@ from backend.models.supervisor import (
 def test_tracked_spool_roundtrip_preserves_fields():
     from datetime import timezone
 
-    s = TrackedSpool(tag_spool="MK-1344-GW-27133-002", priority=1)
+    s = TrackedSpool(tag_spool="MK-1344-GW-27133-002")
     row = s.to_sheets_row()
-    assert len(row) == 5
+    assert len(row) == 4
 
     parsed = TrackedSpool.from_sheets_row(row)
     assert parsed.tag_spool == s.tag_spool
-    assert parsed.priority == s.priority
     # Sheets serialization drops microseconds. Compare in UTC seconds — the
     # two datetimes may carry different pytz tzinfo objects (LMT vs -04 STD)
     # but represent the same instant.
@@ -37,34 +36,24 @@ def test_tracked_spool_roundtrip_preserves_fields():
     assert a == b
 
 
-def test_tracked_spool_priority_validation():
-    with pytest.raises(Exception):
-        TrackedSpool(tag_spool="X", priority=4)
-    with pytest.raises(Exception):
-        TrackedSpool(tag_spool="X", priority=-1)
-
-
-def test_tracked_spool_empty_priority_defaults_to_zero():
-    """Old rows with empty priority cell should parse to priority=0 not crash."""
-    row = ["MK-1", "", "08-05-2026 09:00:00", "08-05-2026 09:00:00", ""]
+def test_tracked_spool_empty_notes_parses_as_none():
+    """Rows with empty notes cell should parse to notes=None."""
+    row = ["MK-1", "08-05-2026 09:00:00", "08-05-2026 09:00:00", ""]
     parsed = TrackedSpool.from_sheets_row(row)
-    assert parsed.priority == 0
     assert parsed.notes is None
 
 
 def test_tracked_spool_from_row_with_column_map():
     """from_sheets_row should respect column_map (out-of-order headers)."""
     column_map = {
-        "tagspool": 2,
-        "priority": 0,
-        "addedat": 3,
-        "updatedat": 4,
-        "notes": 1,
+        "tagspool": 1,
+        "addedat": 2,
+        "updatedat": 3,
+        "notes": 0,
     }
-    row = ["1", "una nota", "MK-X", "08-05-2026 09:00:00", "08-05-2026 09:00:00"]
+    row = ["una nota", "MK-X", "08-05-2026 09:00:00", "08-05-2026 09:00:00"]
     parsed = TrackedSpool.from_sheets_row(row, column_map=column_map)
     assert parsed.tag_spool == "MK-X"
-    assert parsed.priority == 1
     assert parsed.notes == "una nota"
 
 

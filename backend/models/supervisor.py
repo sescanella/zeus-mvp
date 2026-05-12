@@ -64,14 +64,13 @@ class EventType(str, Enum):
     Decididos en la sesión del 2026-05-08:
     - Sesión y navegación: SESSION_START, SESSION_END, NAVIGATE.
     - Modales (visibilidad UX): MODAL_OPEN, MODAL_CLOSE.
-    - Cambios de lista (críticos): LIST_ADD, LIST_REMOVE, LIST_PRIORITY.
+    - Cambios de lista (críticos): LIST_ADD, LIST_REMOVE.
     - Migración one-shot: LIST_MIGRATE (full success), LIST_MIGRATE_PARTIAL (algún fallo).
     """
     SESSION_START = "SESSION_START"
     SESSION_END = "SESSION_END"
     LIST_ADD = "LIST_ADD"
     LIST_REMOVE = "LIST_REMOVE"
-    LIST_PRIORITY = "LIST_PRIORITY"
     LIST_MIGRATE = "LIST_MIGRATE"
     LIST_MIGRATE_PARTIAL = "LIST_MIGRATE_PARTIAL"
     MODAL_OPEN = "MODAL_OPEN"
@@ -86,11 +85,11 @@ class TrackedSpool(BaseModel):
     """
     Una fila en la tab `Lista` del spreadsheet ZEUES_App_Audit.
 
-    Mutable: `priority`, `updated_at` y `notes` cambian con el uso. La
-    invariante "una fila por TAG_SPOOL" la garantiza el SupervisorService
-    haciendo upsert (no este modelo).
+    Mutable: `updated_at` y `notes` cambian con el uso. La invariante
+    "una fila por TAG_SPOOL" la garantiza el SupervisorService haciendo
+    upsert (no este modelo).
 
-    Columnas: TAG_SPOOL | Priority | Added_At | Updated_At | Notes
+    Columnas: TAG_SPOOL | Added_At | Updated_At | Notes
     """
 
     tag_spool: str = Field(
@@ -99,20 +98,13 @@ class TrackedSpool(BaseModel):
         min_length=1,
         examples=["MK-1344-GW-27133-002"],
     )
-    priority: int = Field(
-        0,
-        description="Prioridad: 0=sin, 1=urgente, 2=alta, 3=normal",
-        ge=0,
-        le=3,
-        examples=[0, 1, 2, 3],
-    )
     added_at: datetime = Field(
         default_factory=now_chile,
         description="Cuándo Matías agregó el spool a su lista",
     )
     updated_at: datetime = Field(
         default_factory=now_chile,
-        description="Última modificación de prioridad o notas",
+        description="Última modificación de notas",
     )
     notes: Optional[str] = Field(
         None,
@@ -124,7 +116,6 @@ class TrackedSpool(BaseModel):
         json_schema_extra={
             "example": {
                 "tag_spool": "MK-1344-GW-27133-002",
-                "priority": 1,
                 "added_at": "08-05-2026 09:42:00",
                 "updated_at": "08-05-2026 09:42:00",
                 "notes": "",
@@ -133,10 +124,9 @@ class TrackedSpool(BaseModel):
     )
 
     def to_sheets_row(self) -> list[str]:
-        """Serializa a fila para la tab `Lista` (5 columnas)."""
+        """Serializa a fila para la tab `Lista` (4 columnas)."""
         return [
             self.tag_spool,
-            str(self.priority),
             format_datetime_for_sheets(self.added_at),
             format_datetime_for_sheets(self.updated_at),
             self.notes or "",
@@ -150,28 +140,20 @@ class TrackedSpool(BaseModel):
         Parsea una fila de la tab `Lista` a TrackedSpool.
 
         Args:
-            row: valores de la fila (5+ columnas).
+            row: valores de la fila (4+ columnas).
             column_map: opcional, dict {normalized_name: index} producido por
                         ColumnMapCache. Si es None, se usan índices hardcoded.
         """
         idx_tag = _resolve_idx("TAG_SPOOL", 0, column_map)
-        idx_priority = _resolve_idx("Priority", 1, column_map)
-        idx_added = _resolve_idx("Added_At", 2, column_map)
-        idx_updated = _resolve_idx("Updated_At", 3, column_map)
-        idx_notes = _resolve_idx("Notes", 4, column_map)
-
-        priority_raw = row[idx_priority] if len(row) > idx_priority else ""
-        try:
-            priority = int(priority_raw) if priority_raw else 0
-        except (ValueError, TypeError):
-            priority = 0
+        idx_added = _resolve_idx("Added_At", 1, column_map)
+        idx_updated = _resolve_idx("Updated_At", 2, column_map)
+        idx_notes = _resolve_idx("Notes", 3, column_map)
 
         notes_raw = row[idx_notes] if len(row) > idx_notes else ""
         notes = notes_raw if notes_raw else None
 
         return cls(
             tag_spool=row[idx_tag],
-            priority=priority,
             added_at=_parse_sheets_datetime(row[idx_added]),
             updated_at=_parse_sheets_datetime(row[idx_updated]),
             notes=notes,
@@ -362,7 +344,7 @@ class LegacySnapshot(BaseModel):
             "example": {
                 "snapshot_id": "550e8400-e29b-41d4-a716-446655440000",
                 "captured_at": "08-05-2026 09:42:00",
-                "raw": '[{"tag":"MK-1","priority":1}]',
+                "raw": '[{"tag":"MK-1"}]',
                 "user_agent": "Mozilla/5.0 (...)",
             }
         },

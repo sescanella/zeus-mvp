@@ -3,7 +3,6 @@
 import { PackageOpen } from 'lucide-react';
 import { SpoolCard } from '@/components/SpoolCard';
 import type { SpoolCardData, EstadoTrabajo } from '@/lib/types';
-import { useSpoolList } from '@/lib/SpoolListContext';
 import { ESTADO_LABELS } from '@/lib/constants';
 
 interface SpoolCardListProps {
@@ -20,36 +19,17 @@ interface SpoolCardListProps {
 }
 
 /**
- * Container for SpoolCard components with empty state and priority-based sorting.
+ * Container for SpoolCard components with empty state and time-based sorting.
  *
  * When spools array is empty, shows a centered empty-state message with
  * a PackageOpen icon and instructions to add a spool.
  *
- * When non-empty, sorts spools by priority (1 first, then 2, then 3, then null),
- * with ties broken by fecha_ocupacion ascending (oldest first = longest wait).
- * Renders one SpoolCard per spool in a vertical flex layout.
+ * When non-empty, sorts by fecha_ocupacion descending (newest first; nulls
+ * sort last). Renders one SpoolCard per spool in a vertical flex layout.
  *
  * onCardClick is forwarded to each card — opens the modal chain for that spool.
- * Priority state is read from and written to SpoolListContext.
- *
- * Plan: 02-01-PLAN.md Task 2
  */
 export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, onNotasClick, estadoFilter, searchText, workerFilter }: SpoolCardListProps) {
-  const { priorities, setPriority } = useSpoolList();
-
-  // setPriority is async (server-side persistence); SpoolCard expects a sync
-  // callback. Wrap it to swallow rejections — failure here just means the
-  // server didn't persist the priority change. Optimistic UI already shows
-  // the new value; on the next reload it will revert if the server didn't
-  // save it. We log to console so unexpected failures are still discoverable
-  // in DevTools without breaking the no-op contract.
-  const handlePriorityChange = (tag: string, priority: number | null) => {
-    setPriority(tag, priority).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn('setPriority failed for', tag, err);
-    });
-  };
-
   if (spools.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -92,11 +72,8 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, o
     );
   }
 
-  // Sort: priority 1 > 2 > 3 > null (99), then by fecha_ocupacion newest first (nulls last)
+  // Sort by fecha_ocupacion descending (newest first); empty strings sort last.
   const sorted = [...filtered].sort((a, b) => {
-    const pa = priorities.get(a.tag_spool) ?? 99;
-    const pb = priorities.get(b.tag_spool) ?? 99;
-    if (pa !== pb) return pa - pb;
     const fa = a.fecha_ocupacion ?? '';
     const fb = b.fecha_ocupacion ?? '';
     return fb.localeCompare(fa);
@@ -108,12 +85,10 @@ export function SpoolCardList({ spools, onCardClick, onRemove, onUnionesClick, o
         <SpoolCard
           key={spool.tag_spool}
           spool={spool}
-          priority={priorities.get(spool.tag_spool) ?? null}
           onCardClick={onCardClick}
           onRemove={onRemove}
           onUnionesClick={onUnionesClick}
           onNotasClick={onNotasClick}
-          onPriorityChange={handlePriorityChange}
         />
       ))}
     </div>

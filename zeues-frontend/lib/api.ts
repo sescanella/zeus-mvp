@@ -986,9 +986,13 @@ export const SUPERVISOR_AUDIT_CHUNK_SIZE = 100;
  */
 export async function getSupervisorList(): Promise<TrackedSpool[]> {
   try {
+    // 8s timeout: backend down / network stalled must produce a deterministic
+    // error so the UI can show the REINTENTAR state instead of hanging on
+    // "CARGANDO LISTA..." forever.
     const res = await fetch(`${API_URL}/api/supervisor/list`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(8000),
     });
     const data = await handleResponse<{ items: TrackedSpool[] }>(res);
     return data.items;
@@ -1007,13 +1011,11 @@ export async function getSupervisorList(): Promise<TrackedSpool[]> {
  *
  * @param tagSpool TAG_SPOOL a agregar.
  * @param sessionId UUID de sesión del frontend (audit-buffer.ts).
- * @param priority 0 (default, sin prioridad) | 1 urgente | 2 alta | 3 normal.
  * @throws ApiError 400 si el server rechaza la validación.
  */
 export async function addSupervisorList(
   tagSpool: string,
-  sessionId: string,
-  priority: 0 | 1 | 2 | 3 = 0
+  sessionId: string
 ): Promise<TrackedSpool> {
   try {
     const res = await fetch(`${API_URL}/api/supervisor/list/add`, {
@@ -1021,7 +1023,6 @@ export async function addSupervisorList(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tag_spool: tagSpool,
-        priority,
         session_id: sessionId,
       }),
     });
@@ -1055,37 +1056,6 @@ export async function removeSupervisorList(
     return await handleResponse<{ removed: boolean; tag_spool: string }>(res);
   } catch (error) {
     console.error('removeSupervisorList error:', error);
-    throw error;
-  }
-}
-
-/**
- * POST /api/supervisor/list/priority
- * Cambia la prioridad de un spool, preservando added_at y notes.
- *
- * Si el TAG no existía, el server lo crea (semánticamente equivalente a un
- * add con esa prioridad). El audit recibe LIST_PRIORITY con previous y nueva
- * prioridad en el payload.
- */
-export async function setSupervisorPriority(
-  tagSpool: string,
-  priority: 0 | 1 | 2 | 3,
-  sessionId: string
-): Promise<TrackedSpool> {
-  try {
-    const res = await fetch(`${API_URL}/api/supervisor/list/priority`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tag_spool: tagSpool,
-        priority,
-        session_id: sessionId,
-      }),
-    });
-    const data = await handleResponse<{ item: TrackedSpool }>(res);
-    return data.item;
-  } catch (error) {
-    console.error('setSupervisorPriority error:', error);
     throw error;
   }
 }

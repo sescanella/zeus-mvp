@@ -53,12 +53,11 @@ def client(mock_service):
     app.dependency_overrides.clear()
 
 
-def _sample_spool(tag="MK-1", priority=1, notes=None) -> TrackedSpool:
+def _sample_spool(tag="MK-1", notes=None) -> TrackedSpool:
     """Helper to build a TrackedSpool with deterministic timestamps."""
     ts = SCL.localize(datetime(2026, 5, 8, 9, 0, 0))
     return TrackedSpool(
         tag_spool=tag,
-        priority=priority,
         added_at=ts,
         updated_at=ts,
         notes=notes,
@@ -70,8 +69,8 @@ def _sample_spool(tag="MK-1", priority=1, notes=None) -> TrackedSpool:
 
 def test_get_list_returns_items_array(client, mock_service):
     mock_service.list_tracked_spools.return_value = [
-        _sample_spool("MK-A", priority=1),
-        _sample_spool("MK-B", priority=3),
+        _sample_spool("MK-A"),
+        _sample_spool("MK-B"),
     ]
 
     resp = client.get("/api/supervisor/list")
@@ -89,8 +88,8 @@ def test_get_list_returns_items_array(client, mock_service):
 
 
 def test_add_to_list_happy_path(client, mock_service):
-    """Default priority is 0 when omitted; response wraps the spool in `item`."""
-    returned = _sample_spool("MK-NEW", priority=0)
+    """Response wraps the spool in `item`."""
+    returned = _sample_spool("MK-NEW")
     mock_service.add_to_list.return_value = returned
 
     resp = client.post(
@@ -102,26 +101,7 @@ def test_add_to_list_happy_path(client, mock_service):
     body = resp.json()
     assert "item" in body
     assert body["item"]["tag_spool"] == "MK-NEW"
-    assert body["item"]["priority"] == 0
-    # Service called with default priority=0
-    mock_service.add_to_list.assert_called_once_with("MK-NEW", 0, "sess-1")
-
-
-def test_add_to_list_pydantic_rejects_priority_too_high(client, mock_service):
-    """Pydantic catches priority>3 BEFORE the service is called → 422."""
-    resp = client.post(
-        "/api/supervisor/list/add",
-        json={"tag_spool": "X", "priority": 4, "session_id": "s"},
-    )
-
-    assert resp.status_code == 422
-    body = resp.json()
-    # FastAPI's standard error envelope
-    assert "detail" in body
-    error = body["detail"][0]
-    assert error["loc"] == ["body", "priority"]
-    assert "less than or equal to 3" in error["msg"].lower()
-    mock_service.add_to_list.assert_not_called()
+    mock_service.add_to_list.assert_called_once_with("MK-NEW", "sess-1")
 
 
 def test_add_to_list_value_error_returns_400(client, mock_service):
@@ -132,7 +112,7 @@ def test_add_to_list_value_error_returns_400(client, mock_service):
 
     resp = client.post(
         "/api/supervisor/list/add",
-        json={"tag_spool": "valid", "priority": 1, "session_id": "s"},
+        json={"tag_spool": "valid", "session_id": "s"},
     )
 
     assert resp.status_code == 400
@@ -143,7 +123,7 @@ def test_add_to_list_pydantic_rejects_empty_session_id(client, mock_service):
     """session_id has min_length=1 in the request schema."""
     resp = client.post(
         "/api/supervisor/list/add",
-        json={"tag_spool": "MK-X", "priority": 1, "session_id": ""},
+        json={"tag_spool": "MK-X", "session_id": ""},
     )
 
     assert resp.status_code == 422
@@ -177,23 +157,6 @@ def test_remove_returns_200_with_removed_true_when_deleted(client, mock_service)
 
     assert resp.status_code == 200
     assert resp.json() == {"removed": True, "tag_spool": "MK-DEL"}
-
-
-# ─── POST /list/priority ─────────────────────────────────────────────────────
-
-
-def test_set_priority_happy_path(client, mock_service):
-    returned = _sample_spool("MK-P", priority=3)
-    mock_service.set_priority.return_value = returned
-
-    resp = client.post(
-        "/api/supervisor/list/priority",
-        json={"tag_spool": "MK-P", "priority": 3, "session_id": "s"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["item"]["priority"] == 3
-    mock_service.set_priority.assert_called_once_with("MK-P", 3, "s")
 
 
 # ─── POST /audit/batch ───────────────────────────────────────────────────────

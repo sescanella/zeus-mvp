@@ -299,8 +299,8 @@ export interface RegistroResponse {
  * Debe coincidir 1:1 con backend/models/supervisor.py:EventType.
  *
  * Notas:
- * - El frontend NO emite LIST_ADD/LIST_REMOVE/LIST_PRIORITY: el backend los
- *   genera server-side cuando llega la mutación correspondiente.
+ * - El frontend NO emite LIST_ADD/LIST_REMOVE: el backend los genera
+ *   server-side cuando llega la mutación correspondiente.
  * - LIST_MIGRATE / LIST_MIGRATE_PARTIAL los emite el frontend al final del
  *   flujo de migración Capa 1 (éxito o parcial).
  */
@@ -309,7 +309,6 @@ export type SupervisorEventType =
   | 'SESSION_END'
   | 'LIST_ADD'
   | 'LIST_REMOVE'
-  | 'LIST_PRIORITY'
   | 'LIST_MIGRATE'
   | 'LIST_MIGRATE_PARTIAL'
   | 'MODAL_OPEN'
@@ -320,7 +319,6 @@ export type SupervisorEventType =
  * Una fila en la tab Lista del audit Sheet.
  * Mirrors backend TrackedSpool.
  *
- * - priority: 0=sin, 1=urgente, 2=alta, 3=normal.
  * - added_at / updated_at: ISO 8601 strings (el backend serializa Pydantic
  *   datetime a ISO al enviar JSON; al guardar en Sheets convierte a
  *   DD-MM-YYYY HH:MM:SS, pero eso no nos toca al frontend).
@@ -328,7 +326,6 @@ export type SupervisorEventType =
  */
 export interface TrackedSpool {
   tag_spool: string;
-  priority: 0 | 1 | 2 | 3;
   added_at: string;
   updated_at: string;
   notes: string | null;

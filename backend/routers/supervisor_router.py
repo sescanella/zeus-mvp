@@ -5,7 +5,6 @@ Endpoints (montados con prefix /api/supervisor):
 - GET  /list              — lista los spools que Matías está siguiendo
 - POST /list/add          — agrega un TAG_SPOOL a la lista (upsert idempotente)
 - POST /list/remove       — quita un TAG_SPOOL de la lista
-- POST /list/priority     — cambia la prioridad de un spool en la lista
 - POST /audit/batch       — append batched UI events (max 100/request)
 - GET  /audit?since=ISO   — read audit events desde un timestamp (debug)
 - POST /legacy-snapshot   — Capa 0: dump verbatim de localStorage durante migración
@@ -13,8 +12,8 @@ Endpoints (montados con prefix /api/supervisor):
 Single-user (Matías). No auth — mismo threat model que el resto de ZEUES.
 
 Errores:
-- ValueError del service → HTTP 400 (validación: priority fuera de rango, tag vacío,
-  session_id vacío). Atrapado explícitamente acá; no se delega al handler global.
+- ValueError del service → HTTP 400 (validación: tag vacío, session_id vacío).
+  Atrapado explícitamente acá; no se delega al handler global.
 - SheetsConnectionError / SheetsUpdateError del service/repo → HTTP 503, mapeado
   por el handler global en main.py.
 - Pydantic validation errors → HTTP 422 (FastAPI default).
@@ -47,7 +46,6 @@ class TrackedSpoolListResponse(BaseModel):
 
 class ListAddRequest(BaseModel):
     tag_spool: str = Field(..., min_length=1)
-    priority: int = Field(0, ge=0, le=3)
     session_id: str = Field(..., min_length=1)
 
 
@@ -63,12 +61,6 @@ class ListRemoveRequest(BaseModel):
 class ListRemoveResponse(BaseModel):
     removed: bool
     tag_spool: str
-
-
-class ListPriorityRequest(BaseModel):
-    tag_spool: str = Field(..., min_length=1)
-    priority: int = Field(..., ge=0, le=3)
-    session_id: str = Field(..., min_length=1)
 
 
 class AuditBatchResponse(BaseModel):
@@ -104,15 +96,15 @@ async def add_to_list(
     """
     Agrega (o re-agrega, idempotente) un spool a la lista.
 
-    Si el TAG ya estaba, su fila se actualiza con la nueva prioridad y
-    timestamp. Emite un evento LIST_ADD al audit.
+    Si el TAG ya estaba, su fila se actualiza con timestamp fresco.
+    Emite un evento LIST_ADD al audit.
     """
     logger.info(
         f"POST /api/supervisor/list/add tag={req.tag_spool!r} "
-        f"priority={req.priority} session={req.session_id[:8]}..."
+        f"session={req.session_id[:8]}..."
     )
     try:
-        item = svc.add_to_list(req.tag_spool, req.priority, req.session_id)
+        item = svc.add_to_list(req.tag_spool, req.session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return ListMutateResponse(item=item)
@@ -138,27 +130,6 @@ async def remove_from_list(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return ListRemoveResponse(removed=removed, tag_spool=req.tag_spool)
-
-
-@router.post("/list/priority", response_model=ListMutateResponse)
-async def set_priority(
-    req: ListPriorityRequest,
-    svc: SupervisorService = Depends(get_supervisor_service),
-):
-    """
-    Cambia la prioridad de un spool, preservando added_at y notes.
-
-    Si el TAG no estaba, lo crea (semánticamente equivale a un add con esa prioridad).
-    """
-    logger.info(
-        f"POST /api/supervisor/list/priority tag={req.tag_spool!r} "
-        f"priority={req.priority} session={req.session_id[:8]}..."
-    )
-    try:
-        item = svc.set_priority(req.tag_spool, req.priority, req.session_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return ListMutateResponse(item=item)
 
 
 @router.post("/audit/batch", response_model=AuditBatchResponse)

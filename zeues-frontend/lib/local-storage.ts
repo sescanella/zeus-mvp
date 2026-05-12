@@ -1,5 +1,7 @@
 /**
- * localStorage persistence for v5.0 spool tag tracking + priority.
+ * localStorage persistence for v5.0 spool tag tracking.
+ * Tolerates legacy JSON entries with extra fields (e.g. `priority`) by
+ * ignoring them on read.
  * All functions use typeof window guard for Next.js SSR compatibility.
  */
 
@@ -7,12 +9,12 @@ export const STORAGE_KEY = 'zeues_v5_spool_tags';
 
 export interface PersistedSpool {
   tag: string;
-  priority: number | null; // 1=urgente, 2=alta, 3=normal, null=sin prioridad
 }
 
 /**
  * Loads persisted spools from localStorage.
- * Backward compatible: migrates old string[] format to PersistedSpool[].
+ * Backward compatible: tolerates the old `string[]` format and the
+ * intermediate `{tag, priority}[]` format (`priority` is silently discarded).
  */
 export function loadPersistedSpools(): PersistedSpool[] {
   if (typeof window === 'undefined') return [];
@@ -25,17 +27,16 @@ export function loadPersistedSpools(): PersistedSpool[] {
     if (!Array.isArray(parsed)) return [];
 
     return parsed.map((item: unknown): PersistedSpool | null => {
-      // New format: {tag, priority}
+      // Object format: {tag, ...extras}. Extras are ignored.
       if (typeof item === 'object' && item !== null && 'tag' in item) {
         const obj = item as Record<string, unknown>;
         if (typeof obj.tag === 'string') {
-          const p = typeof obj.priority === 'number' ? obj.priority : null;
-          return { tag: obj.tag, priority: p };
+          return { tag: obj.tag };
         }
       }
       // Old format: plain string
       if (typeof item === 'string') {
-        return { tag: item, priority: null };
+        return { tag: item };
       }
       return null;
     }).filter((x): x is PersistedSpool => x !== null);
@@ -52,7 +53,7 @@ export function loadTags(): string[] {
 }
 
 /**
- * Saves spools with priorities to localStorage.
+ * Saves spools to localStorage.
  */
 export function savePersistedSpools(spools: PersistedSpool[]): void {
   if (typeof window === 'undefined') return;
@@ -60,9 +61,9 @@ export function savePersistedSpools(spools: PersistedSpool[]): void {
 }
 
 /**
- * Legacy: saves just tags (priorities set to null).
+ * Legacy: saves just tags.
  * @deprecated Use savePersistedSpools instead.
  */
 export function saveTags(tags: string[]): void {
-  savePersistedSpools(tags.map((tag) => ({ tag, priority: null })));
+  savePersistedSpools(tags.map((tag) => ({ tag })));
 }
