@@ -175,3 +175,29 @@ def test_append_does_not_fail_user_write_if_audit_log_fails(service, mocks, capl
     mocks["sheets_repo"].update_cell_by_column_name.assert_called_once()
     # Error surfaces in logs
     assert "audit event failed" in caplog.text.lower()
+
+
+def test_append_allows_none_worker_and_records_anonimo(service, mocks):
+    """When worker_id is None the note is still saved and the audit records ANONIMO."""
+    mocks["sheets_repo"].get_cell_value.return_value = None
+
+    result = service.append_nota(
+        tag_spool="MK-1923", worker_id=None, texto="nota sin firma"
+    )
+
+    assert result == "20260421: nota sin firma"
+    # Worker lookup must NOT happen when worker_id is None
+    mocks["worker_service"].find_worker_by_id.assert_not_called()
+    # Sheet write happened with expected value
+    mocks["sheets_repo"].update_cell_by_column_name.assert_called_once()
+    # Audit event uses worker_id=0 and worker_nombre="ANONIMO"
+    audit_kwargs = mocks["metadata_repo"].log_event.call_args.kwargs
+    assert audit_kwargs["worker_id"] == 0
+    assert audit_kwargs["worker_nombre"] == "ANONIMO"
+    assert audit_kwargs["evento_tipo"] == "NOTAS_ACTUALIZADA"
+
+
+def test_append_with_none_worker_still_requires_non_empty_text(service):
+    """Even without a worker, empty text is rejected."""
+    with pytest.raises(ValueError, match="vacío"):
+        service.append_nota(tag_spool="MK-1923", worker_id=None, texto="   ")

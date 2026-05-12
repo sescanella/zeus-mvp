@@ -951,7 +951,7 @@ export async function getNotas(tagSpool: string): Promise<NotaReadResponse> {
  */
 export async function appendNota(
   tagSpool: string,
-  payload: { worker_id: number; texto: string }
+  payload: { worker_id?: number | null; texto: string }
 ): Promise<NotaAppendResponse> {
   try {
     const res = await fetch(`${API_URL}/api/spool/${encodeURIComponent(tagSpool)}/notas`, {

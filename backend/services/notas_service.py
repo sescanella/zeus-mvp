@@ -66,7 +66,7 @@ class NotasService:
     def append_nota(
         self,
         tag_spool: str,
-        worker_id: int,
+        worker_id: Optional[int],
         texto: str,
     ) -> str:
         """
@@ -78,7 +78,9 @@ class NotasService:
 
         Args:
             tag_spool: TAG del spool
-            worker_id: ID del trabajador autor de la nota
+            worker_id: ID del trabajador autor; opcional. Si es None, la
+                nota se guarda igual y el audit registra el autor como
+                ANONIMO (worker_id=0).
             texto: Texto de la nota (sin prefijo de fecha, se agrega aquí)
 
         Returns:
@@ -86,16 +88,22 @@ class NotasService:
 
         Raises:
             SpoolNoEncontradoError: si el spool no existe
-            WorkerNoEncontradoError: si el trabajador no existe en Trabajadores
+            WorkerNoEncontradoError: si worker_id viene dado pero no existe en Trabajadores
             ValueError: si texto es vacío después de trim
         """
         clean_text = (texto or "").strip()
         if not clean_text:
             raise ValueError("El texto de la nota no puede estar vacío")
 
-        worker = self.worker_service.find_worker_by_id(worker_id)
-        if not worker:
-            raise WorkerNoEncontradoError(str(worker_id))
+        if worker_id is not None:
+            worker = self.worker_service.find_worker_by_id(worker_id)
+            if not worker:
+                raise WorkerNoEncontradoError(str(worker_id))
+            audit_worker_id = worker_id
+            audit_worker_nombre = worker.nombre_completo
+        else:
+            audit_worker_id = 0
+            audit_worker_nombre = "ANONIMO"
 
         # _find_spool_row raises SpoolNoEncontradoError if the tag is not found,
         # so we don't need a separate get_spool_by_tag existence check.
@@ -125,8 +133,8 @@ class NotasService:
             self.metadata_repository.log_event(
                 evento_tipo="NOTAS_ACTUALIZADA",
                 tag_spool=tag_spool,
-                worker_id=worker_id,
-                worker_nombre=worker.nombre_completo,
+                worker_id=audit_worker_id,
+                worker_nombre=audit_worker_nombre,
                 operacion="NOTAS",
                 accion="COMPLETAR",
                 metadata_json=json.dumps({"nota": new_entry}, ensure_ascii=False),
@@ -136,12 +144,12 @@ class NotasService:
             # the note is already in the sheet. Log loudly so it can be reconciled.
             logger.error(
                 f"NOTAS_ACTUALIZADA audit event failed for {tag_spool} "
-                f"(worker {worker_id}): {exc}",
+                f"(worker {audit_worker_id}): {exc}",
                 exc_info=True,
             )
 
         logger.info(
-            f"✅ Nota agregada a {tag_spool} por {worker.nombre_completo}: "
+            f"✅ Nota agregada a {tag_spool} por {audit_worker_nombre}: "
             f"{len(clean_text)} caracteres"
         )
         return new_content

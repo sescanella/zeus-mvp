@@ -10,6 +10,7 @@ audited in the Metadata sheet as NOTAS_ACTUALIZADA event.
 """
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
@@ -31,7 +32,11 @@ class NotaReadResponse(BaseModel):
 class NotaAppendRequest(BaseModel):
     """Request body for POST notas."""
 
-    worker_id: int = Field(..., gt=0, description="ID del trabajador autor de la nota")
+    worker_id: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="ID del trabajador autor; opcional — si se omite la nota queda como ANONIMO en el audit trail",
+    )
     texto: str = Field(
         ...,
         min_length=1,
@@ -85,9 +90,13 @@ async def append_nota(
     matching the convention already used by planning team. Previous
     content is preserved — new entry is appended with a newline.
 
+    `worker_id` is optional: if omitted, the note is still saved but the
+    audit trail records the author as ANONIMO (worker_id=0). When
+    provided, it must be a valid worker in the Trabajadores sheet.
+
     Raises:
-        HTTPException 404: Spool or worker not found
-        HTTPException 422: Pydantic validation (empty text, worker_id <= 0)
+        HTTPException 404: Spool not found, or worker_id provided but unknown
+        HTTPException 422: Pydantic validation (empty text, worker_id<=0)
     """
     logger.info(
         f"POST /api/spool/{tag_spool}/notas - worker_id={request.worker_id}, "
