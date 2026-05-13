@@ -172,10 +172,23 @@ Dentro de las secciones `## Investigación` y `## Resolución`:
 - **Fechas**: ISO `YYYY-MM-DD`, no `DD/MM/YYYY` ni texto libre.
 - **Hashes de commit**: forma corta de 7 caracteres salvo que haya colisión.
 
+## Lecciones aprendidas del proceso
+
+Reglas duras destiladas de errores reales al trabajar bugs en este folder. Cada una vino de cerrar un bug y descubrir después que no estaba resuelto.
+
+- **Un bug no se cierra como `fixed` hasta que la verificación end-to-end manual contra la app corriendo esté documentada en `## Resolución`.** Frases tipo *"verificación pendiente tras deploy"* no cuentan como verificación — son promesas. Si no hay tiempo o medio de verificar, el estado correcto es `investigating` y se prioriza la verificación antes que el siguiente bug. Origen: B-001 cerrado prematuramente, reabierto el mismo día tras el test del operador.
+
+- **Confianza alta en una causa raíz requiere evidencia directa, no solo razonamiento.** Una hipótesis razonable basada en lectura de código + memoria del proyecto puede merecer confianza media. Para confianza alta hace falta repro observado (Railway logs, audit sheet, DevTools, curl, etc.). Si no hay evidencia directa, marcar `(media)` o `(baja)` y dejar siguiente paso accionable. Origen: B-001 declarado con `(alta confianza)` sobre read-after-write contra Sheets API basado solo en código; al investigar el audit sheet, el timing real (6s post-INICIAR) descartaba la hipótesis.
+
+- **Cuando un usuario reporta un síntoma sobre el listado de spools, leer el audit sheet ANTES de hipotetizar causas técnicas.** Memoria [[audit_sheet_resource]] explica el spreadsheet `ZEUES_App_Audit_PROD` con 3 tabs (`Lista`, `Audit`, `Snapshots_Legacy`). Tiene la cronología verbatim de modal opens/closes y mutaciones del tracking list — más confiable que cualquier código leído.
+
+- **Si el código parece imposible que tenga el bug, lo más probable es que el bundle ejecutado no sea el que se está leyendo.** Antes de investigar más profundo, confirmar con el usuario: hard-refresh del tablet, servicio worker invalidado, deploy realmente activo. Origen: en B-002 podría haber sido esto (el operador confirmó hard-refresh y descartó la hipótesis, pero pude haber gastado horas investigando si no preguntaba).
+
 ## Índice
 
 Bugs registrados (actualizar al crear / cerrar):
 
 | ID      | Título                                                                    | Severidad | Estado | Fecha       |
 |---------|---------------------------------------------------------------------------|-----------|--------|-------------|
-| [B-001](./B-001-batch-iniciar-spools-quedan-libres/B-001.md) | Batch INICIAR cierra el modal sin error pero los spools quedan en estado "Libre" | P0 | fixed | 2026-05-13 |
+| [B-001](./B-001-batch-iniciar-spools-quedan-libres/B-001.md) | Batch INICIAR cierra el modal sin error pero los spools quedan en estado "Libre" | P0 | investigating | 2026-05-13 |
+| [B-002](./B-002-card-no-permite-avanzar-tras-iniciar.md) | Después de INICIAR la card no permite avanzar (re-abre OperationModal en lugar de ActionModal) | P0 | investigating | 2026-05-13 |
