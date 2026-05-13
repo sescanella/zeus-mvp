@@ -86,7 +86,89 @@ Sesión `433599f3-f376-42bb-a60e-73216688f537`, TAG `MK-1346-TW-28082-010`, hora
 
 ## Investigación
 
-### 2026-05-13 — Claude (Opus 4.7)
+### 2026-05-13 (2da entrada) — Claude (Opus 4.7) — causa raíz CONFIRMADA con Railway logs
+
+Tras hacer repro con DevTools en una laptop conectada al backend de prod (asistido por Claude Chrome Extension), y luego correlacionar con `railway logs --tail` en vivo, encontré causa raíz al nivel de línea de código. Reemplaza todas las hipótesis previas — y reabre B-001 también, porque era el mismo bug.
+
+**Lo que se confirmó con evidencia directa**
+
+1. **El INICIAR del operador SÍ se ejecutó correctamente.** La fila 1665 de la sheet `Operaciones` de PROD tiene:
+
+   ```
+   col 36 Armador:         "NR(94)"
+   col 67 Ocupado_Por:     "NR(94)"
+   col 68 Fecha_Ocupacion: "13-05-2026 11:33:48"  (formateada como Fecha en Sheets)
+   col 70 Estado_Detalle:  "NR(94) trabajando ARM (ARM en progreso, SOLD pendiente)"
+   col 6  TAG_SPOOL:       "MK-1346-TW-28082-011"
+   ```
+
+   El backend escribió bien.
+
+2. **El backend lee la fila pero falla al construir el objeto `Spool`.** Railway log:
+
+   ```
+   [ERROR] [backend.repositories.sheets_repository] Error constructing Spool object for MK-1346-TW-28082-011:
+   1 validation error for Spool
+   fecha_ocupacion
+     Input should be a valid string [type=string_type, input_value=46155.48180555556, input_type=float]
+   ```
+
+   El valor `46155.48180555556` es el **serial number Excel** para `13-05-2026 11:33:48` — formato nativo cuando la celda tiene formato "Fecha" aplicado.
+
+3. **Por qué viene como float**: `read_worksheet` (`backend/repositories/sheets_repository.py:224-226`) usa `gspread.utils.ValueRenderOption.unformatted`. Esto retorna serial Excel para celdas con formato fecha. El comentario en código lo dice: *"Date-formatted real dates come back as Excel serial ints — SheetsService.parse_date() handles both."* Pero la coerción solo se aplica donde se llama `parse_date` explícito.
+
+4. **Punto exacto del bug**: `backend/repositories/sheets_repository.py:1089`:
+
+   ```python
+   fecha_ocupacion_value = get_col_value("Fecha_Ocupacion")
+   # ...
+   spool = Spool(
+       ...
+       fecha_ocupacion=fecha_ocupacion_value,  # ← line 1167, raw float pasa a Pydantic
+   )
+   ```
+
+   El modelo (`backend/models/spool.py:132`) declara `fecha_ocupacion: Optional[str]`. Pydantic rechaza un `float` cuando espera `str`. Excepción → `get_spool_by_tag` la atrapa en try/except (línea cerca de 1175) → retorna `None`. El router (`spool_status_router.py:67-73`) interpreta None como "spool no encontrado" → 404.
+
+5. **Por qué `-012/-013/-014` SÍ funcionan**: esas filas tienen `Fecha_Ocupacion = ""` (nunca fueron INICIAR'd). `get_col_value` retorna `None`, Pydantic acepta `None` como `Optional[str]`, el objeto se construye OK. Cualquier spool que se haya iniciar'd alguna vez con timestamp en la celda (formato Fecha) queda invisible.
+
+6. **Esto reabre B-001**: el síntoma original ("card sigue Libre tras INICIAR") era el mismo bug. El operador iniciaba el spool, el backend escribía, pero el siguiente `refreshSingle/refreshAll → get_spool_by_tag → SpoolStatus` retornaba 404 → el frontend asumía que el spool desaparecía o quedaba sin actualizar. Mi diagnóstico de B-001 ("read-after-write contra Sheets API") era completamente equivocado.
+
+**Lo que se descartó (ahora con evidencia)**
+
+- No es column map drift. `POST /api/admin/invalidate-column-cache` retorna `critical_ok: true, drifts: []`.
+- No es cache stale en `worksheet:Operaciones`. Logs muestran `Cache hit: 'Operaciones' (1870 filas)` con la fila correcta presente.
+- No es read-after-write inconsistency. Los logs muestran la fila siendo leída exitosamente; falla DESPUÉS, en la construcción del objeto.
+- No es bug del frontend. El frontend actúa correctamente sobre la response del backend; la response simplemente está mal.
+
+**Causa raíz** — `(alta confianza, con Railway log stack trace en mano)`
+
+`backend/repositories/sheets_repository.py:1089` lee `Fecha_Ocupacion` con `get_col_value` y la pasa raw a `Spool(fecha_ocupacion=...)`. Cuando la celda tiene un timestamp y está formateada como Fecha en Sheets, gspread retorna el serial Excel como float, no como string. Pydantic rechaza por type mismatch. La excepción es atrapada por el try/except más arriba y retorna `None` — silenciando el error operacional pero generando un 404 falso.
+
+**Siguiente paso (sesión de fix dedicada)**
+
+Plan de fix de 1 línea + ampliación defensiva:
+
+1. Coerce a string al leer:
+
+   ```python
+   fecha_ocupacion_raw = get_col_value("Fecha_Ocupacion")
+   fecha_ocupacion_value = (
+       format_datetime_for_sheets(parse_datetime_from_excel_serial(fecha_ocupacion_raw))
+       if isinstance(fecha_ocupacion_raw, (int, float))
+       else fecha_ocupacion_raw
+   )
+   ```
+
+   O más simple: `fecha_ocupacion_value = str(fecha_ocupacion_raw) if fecha_ocupacion_raw is not None else None` y dejar que el frontend lo muestre como serial si Pydantic no se queja (lo cual no es ideal pero al menos restaura funcionalidad mientras pulimos el formateo).
+
+2. **Auditar TODOS los campos `Optional[str]` del modelo `Spool` que se leen con `get_col_value`**: si alguno tiene formato de fecha aplicado en Sheets, sufre el mismo bug. Candidatos: `fecha_armado`, `fecha_soldadura`, `fecha_materiales`, `fecha_qc_metrologia`, `fecha_ocupacion`. El bug se manifestó AHORA para `fecha_ocupacion` porque el operador iniciar'd un spool reciente, pero podría manifestarse para otros campos también.
+
+3. Considerar reportar pydantic ValidationError al log con WARNING level (no ERROR genérico) y al endpoint con 500 explícito en vez de 404. El 404 silenció el error operacional por semanas potencialmente.
+
+4. Verificar end-to-end después del fix: el spool reportado por el operador (`MK-1346-TW-28082-011`) ya está INICIAR'd en la sheet. Al hacer hard-refresh la card debe aparecer como "ARMADO en proceso por NR(94)" y al tap-card debe abrir `ActionModal` con FINALIZAR/PAUSAR — NO `OperationModal`.
+
+Plan de fix se planificará en sesión dedicada. **El bug NO se cierra ahora** — primero el fix, después la verificación, después se cierra.
 
 **Lo que se descartó**
 
