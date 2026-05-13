@@ -85,6 +85,7 @@ function HomePage() {
     removeSpool,
     refreshAll,
     refreshSingle,
+    applyIniciarOptimistic,
   } = useSpoolList();
   const modalStack = useModalStack();
   const { toasts, enqueue, dismiss } = useNotificationToast();
@@ -327,13 +328,15 @@ function HomePage() {
         }
       });
 
-      // Step 3: refresh successfully-started spools in parallel so
-      // occupied badges update without waiting for the 30s poller.
-      // Failures here are silent — the card will eventually refresh via
-      // the poller. Parallel, not sequential, because no write pressure.
-      await Promise.allSettled(
-        successes.map((tag) => refreshSingle(tag))
-      );
+      // Step 3: B-001 — apply optimistic UI for each success instead of
+      // re-reading Sheets. Google Sheets has a read-after-write
+      // inconsistency window of ~200-800ms that would leave cards stuck on
+      // "Libre" until the 30s poller. We derive the post-INICIAR card
+      // locally (ocupado_por + estado_trabajo=EN_PROGRESO) — the poller
+      // reconciles if anything diverges from the true server state.
+      for (const tag of successes) {
+        applyIniciarOptimistic(tag, worker, 'ARM');
+      }
 
       // Step 4: user feedback. On a factory floor the operator needs to
       // know exactly which tags failed so they can address each one.
@@ -595,15 +598,28 @@ function HomePage() {
     }
   };
 
-  const handleWorkerComplete = async () => {
+  const handleWorkerComplete = async (worker: Worker) => {
     if (!selectedSpool) return;
     const tag = selectedSpool.tag_spool;
+    const action = selectedAction;
+    const operation = selectedOperation;
     modalStack.clear();
 
-    try {
-      await refreshSingle(tag);
-    } catch {
-      // Spool may have been removed — ignore refresh errors
+    // B-001: INICIAR is the only single-spool flow that hits the Sheets
+    // read-after-write race. FINALIZAR/PAUSAR write enough fields that
+    // refreshSingle is still the correct path (they need server-derived
+    // estado_detalle, completion history, etc.).
+    if (
+      action === 'INICIAR' &&
+      (operation === 'ARM' || operation === 'SOLD')
+    ) {
+      applyIniciarOptimistic(tag, worker, operation);
+    } else {
+      try {
+        await refreshSingle(tag);
+      } catch {
+        // Spool may have been removed — ignore refresh errors
+      }
     }
 
     enqueue('Operacion completada', 'success');

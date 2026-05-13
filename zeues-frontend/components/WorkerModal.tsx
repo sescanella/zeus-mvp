@@ -29,7 +29,7 @@ interface WorkerModalProps {
   spool: SpoolCardData;
   operation: Operation;
   action: Action;
-  onComplete: () => void;
+  onComplete: (worker: Worker) => void;
   onClose: () => void;
   isTopOfStack?: boolean;
 }
@@ -152,7 +152,7 @@ export function WorkerModal({
 
     try {
       await executeForSpool(worker.id);
-      onComplete();
+      onComplete(worker);
     } catch (err: unknown) {
       setApiError(classifyApiError(err).userMessage);
     } finally {

@@ -30,7 +30,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import type { SpoolCardData } from './types';
+import type { SpoolCardData, Worker } from './types';
 import {
   getSpoolStatus,
   batchGetStatus,
@@ -165,6 +165,29 @@ interface SpoolListContextValue {
   removeSpool: (tag: string) => Promise<void>;
   refreshAll: () => Promise<void>;
   refreshSingle: (tag: string) => Promise<void>;
+  applyIniciarOptimistic: (
+    tag: string,
+    worker: Worker,
+    operacion: 'ARM' | 'SOLD',
+  ) => void;
+}
+
+// Format a Date as "DD-MM-YYYY HH:MM:SS" in America/Santiago — the same format
+// the backend writes to Sheets. Used only for display until the 30s poller
+// supersedes it with the server-side timestamp.
+function formatChileDateTime(d: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
+  return `${get('day')}-${get('month')}-${get('year')} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
 const SpoolListContext = createContext<SpoolListContextValue | undefined>(
@@ -332,6 +355,35 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'UPDATE_SPOOL', spool });
   }, []);
 
+  // Optimistic UI for INICIAR success (B-001). The Google Sheets API has a
+  // 200-800ms read-after-write inconsistency window: refreshSingle right
+  // after a successful write reads back the pre-write row, leaving the card
+  // stuck on "Libre" until the 30s poller fires. We derive the new card
+  // locally from inputs the caller already has — backend's _derive_estado
+  // rule #5 says ocupado_por set → estado_trabajo = EN_PROGRESO. The poller
+  // reconciles any divergence within 30 s.
+  const applyIniciarOptimistic = useCallback(
+    (tag: string, worker: Worker, operacion: 'ARM' | 'SOLD') => {
+      const prev = spoolsRef.current.find((s) => s.tag_spool === tag);
+      if (!prev) return;
+
+      const nombre = worker.apellido
+        ? `${worker.nombre} ${worker.apellido}`
+        : worker.nombre;
+
+      const next: SpoolCardData = {
+        ...prev,
+        ocupado_por: worker.nombre_completo,
+        ocupado_por_display: nombre,
+        fecha_ocupacion: formatChileDateTime(new Date()),
+        operacion_actual: operacion,
+        estado_trabajo: 'EN_PROGRESO',
+      };
+      dispatch({ type: 'UPDATE_SPOOL', spool: next });
+    },
+    [],
+  );
+
   const value: SpoolListContextValue = {
     spools: state.spools,
     hydrated,
@@ -341,6 +393,7 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
     removeSpool,
     refreshAll,
     refreshSingle,
+    applyIniciarOptimistic,
   };
 
   return (
