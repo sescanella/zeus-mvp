@@ -38,6 +38,34 @@ class SpoolNoEncontradoError(ZEUSException):
         )
 
 
+class SpoolDataCorruptError(ZEUSException):
+    """
+    Spool existe en la sheet pero algún campo no parsea correctamente.
+
+    Distinta de SpoolNoEncontradoError: la fila SÍ está en la sheet, pero
+    al construir el objeto Spool falla la validación Pydantic (ej. una
+    columna fecha viene como serial Excel sin coerción a string).
+
+    Antes del fix de B-001/B-002, este error se silenciaba en un except
+    genérico y la función retornaba None, lo que se interpretaba como
+    "spool no existe" (404 falso). Ahora se propaga para que el router
+    responda 500 con detalle accionable.
+    """
+
+    def __init__(self, tag_spool: str, validation_detail: str):
+        super().__init__(
+            message=(
+                f"Spool '{tag_spool}' tiene datos malformados en la sheet. "
+                f"Contacta soporte."
+            ),
+            error_code="SPOOL_DATA_CORRUPT",
+            data={
+                "tag_spool": tag_spool,
+                "validation_detail": validation_detail,
+            },
+        )
+
+
 class WorkerNoEncontradoError(ZEUSException):
     """Trabajador no existe o está inactivo en la hoja Trabajadores."""
 

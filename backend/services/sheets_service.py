@@ -283,6 +283,67 @@ class SheetsService:
         logger.warning(f"Formato de fecha no reconocido: '{value_str}'")
         return None
 
+    @staticmethod
+    def parse_datetime(value) -> Optional[datetime]:
+        """
+        Parsea datetimes (fecha + hora) en múltiples formatos comunes.
+
+        Hermano de parse_date pero retorna datetime (no date).
+
+        Acepta:
+        - Strings: "DD-MM-YYYY HH:MM:SS" (formato canónico — usado para
+          Fecha_Ocupacion), "DD/MM/YYYY HH:MM:SS", "YYYY-MM-DD HH:MM:SS",
+          y también solo-fecha como fallback ("DD-MM-YYYY", "YYYY-MM-DD").
+        - Excel/Google Sheets serial datetime como float (resultado
+          UNFORMATTED_VALUE en celda con formato "Fecha y hora"). La parte
+          entera son días desde epoch 1899-12-30, la fraccional es hora
+          del día (0.5 = mediodía). Compensa el bug año bisiesto 1900 de
+          Excel igual que parse_date.
+
+        Returns:
+            datetime object o None si vacío/inválido.
+
+        Examples:
+            >>> SheetsService.parse_datetime("13-05-2026 11:33:48")
+            datetime(2026, 5, 13, 11, 33, 48)
+            >>> SheetsService.parse_datetime(46155.48180555556)
+            datetime(2026, 5, 13, 11, 33, 48)  # approx
+            >>> SheetsService.parse_datetime("")
+            None
+        """
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            try:
+                return datetime(1899, 12, 30) + timedelta(days=float(value))
+            except (ValueError, OverflowError) as e:
+                logger.warning(
+                    f"Serial datetime inválido: {value!r}. Error: {e}"
+                )
+                return None
+
+        value_str = str(value).strip()
+        if value_str == "":
+            return None
+
+        formats = [
+            "%d-%m-%Y %H:%M:%S",  # canónico (cómo lo escribe el backend)
+            "%d/%m/%Y %H:%M:%S",  # legacy
+            "%Y-%m-%d %H:%M:%S",  # ISO
+            "%d-%m-%Y",            # fallback: solo fecha
+            "%Y-%m-%d",            # fallback ISO
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(value_str, fmt)
+            except ValueError:
+                continue
+
+        logger.warning(f"Formato de datetime no reconocido: '{value_str}'")
+        return None
+
     @classmethod
     def parse_worker_row(cls, row: list) -> Worker:
         """

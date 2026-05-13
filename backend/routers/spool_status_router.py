@@ -25,8 +25,9 @@ from backend.models.spool_status import (
     SpoolStatus,
     BatchStatusRequest,
     BatchStatusResponse,
+    BatchStatusError,
 )
-from backend.exceptions import SheetsConnectionError
+from backend.exceptions import SheetsConnectionError, SpoolDataCorruptError
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,24 @@ async def get_spool_status(
 
     except HTTPException:
         raise
+    except SpoolDataCorruptError as e:
+        # B-001/B-002: the spool exists in the sheet but a field doesn't
+        # parse (Pydantic validation error in the repository). Surface as
+        # 500 with actionable detail — never silently 404.
+        logger.error(
+            f"SPOOL_DATA_CORRUPT for tag={tag!r}: {e.data.get('validation_detail')}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "SPOOL_DATA_CORRUPT",
+                "message": (
+                    f"El spool '{tag}' existe pero sus datos están malformados. "
+                    f"Contacta soporte y reporta el TAG."
+                ),
+                "tag_spool": tag,
+            },
+        )
     except SheetsConnectionError:
         logger.error(f"Sheets connection error fetching spool status: tag={tag!r}", exc_info=True)
         raise HTTPException(
@@ -127,15 +146,40 @@ async def batch_spool_status(
         workers_map = {w.id: f"{w.nombre} {w.apellido}" for w in all_workers}
 
         results: list[SpoolStatus] = []
+        errors: list[BatchStatusError] = []
         for tag in request.tags:
-            spool = sheets_repo.get_spool_by_tag(tag)
+            try:
+                spool = sheets_repo.get_spool_by_tag(tag)
+            except SpoolDataCorruptError as e:
+                # B-001/B-002: surface per-tag corruption so the frontend
+                # can show a toast instead of silently dropping the card
+                # from the list (which used to look like "el spool
+                # desapareció").
+                logger.warning(
+                    f"batch-status: SPOOL_DATA_CORRUPT for {tag!r}: "
+                    f"{e.data.get('validation_detail')}"
+                )
+                errors.append(
+                    BatchStatusError(
+                        tag_spool=tag,
+                        error_code="SPOOL_DATA_CORRUPT",
+                        message=(
+                            f"El spool '{tag}' tiene datos malformados. "
+                            f"Contacta soporte."
+                        ),
+                    )
+                )
+                continue
             if spool is not None:
                 results.append(SpoolStatus.from_spool(spool, workers=workers_map))
 
         logger.debug(
-            f"batch-status: requested={len(request.tags)} found={len(results)}"
+            f"batch-status: requested={len(request.tags)} "
+            f"found={len(results)} errors={len(errors)}"
         )
-        return BatchStatusResponse(spools=results, total=len(results))
+        return BatchStatusResponse(
+            spools=results, total=len(results), errors=errors
+        )
 
     except SheetsConnectionError:
         logger.error("Sheets connection error in batch_spool_status", exc_info=True)

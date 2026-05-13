@@ -364,13 +364,40 @@ class BatchStatusRequest(BaseModel):
     )
 
 
+class BatchStatusError(BaseModel):
+    """
+    Per-tag error in a batch-status response.
+
+    Added with B-001/B-002 fix to surface tags that exist in the sheet but
+    failed to parse (SPOOL_DATA_CORRUPT). Previously these were silently
+    omitted, which made cards "disappear" from the frontend without
+    explanation. Tags genuinely not in the sheet remain silently omitted
+    (no error entry — they're just absent from `spools`).
+    """
+
+    tag_spool: str = Field(..., description="TAG que falló")
+    error_code: str = Field(
+        ...,
+        description="Código del error (ej. 'SPOOL_DATA_CORRUPT')",
+    )
+    message: str = Field(..., description="Mensaje accionable para el operador")
+
+
 class BatchStatusResponse(BaseModel):
     """
     Response for POST /api/spools/batch-status.
 
-    Returns only the spools that were found. Tags not found in Sheets are
-    silently omitted. Use the total field to detect missing spools.
+    Returns spools that were found in `spools` and per-tag errors in
+    `errors`. Tags that don't exist in the sheet are silently omitted
+    from both lists. Tags that exist but fail to parse appear in `errors`.
     """
 
     spools: list[SpoolStatus] = Field(..., description="Lista de SpoolStatus encontrados")
     total: int = Field(..., description="Cantidad de spools encontrados", ge=0)
+    errors: list[BatchStatusError] = Field(
+        default_factory=list,
+        description=(
+            "Errores por tag (datos malformados, etc.). Vacío en caso normal. "
+            "El frontend puede mostrar un toast por cada entrada."
+        ),
+    )

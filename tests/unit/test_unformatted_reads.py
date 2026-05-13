@@ -227,3 +227,96 @@ def test_parse_spool_row_unformatted_empty_numeric_fields():
     assert spool.total_uniones is None
     assert spool.fecha_armado is None
     assert spool.fecha_materiales is None
+
+
+# --------------------------------------------------------- parse_datetime
+#
+# Added with B-001/B-002 fix. Fecha_Ocupacion is the only Spool field that's
+# typed Optional[str] AND has a Fecha format applied in Sheets, so it's the
+# only field where UNFORMATTED_VALUE leaks a float into Pydantic (which
+# rejects float→str). parse_datetime is the canonical helper that absorbs
+# both Excel serial floats and string representations and normalizes to a
+# datetime, which the caller then formats via format_datetime_for_sheets to
+# get a canonical "DD-MM-YYYY HH:MM:SS" string.
+
+
+def test_parse_datetime_accepts_excel_serial_float():
+    """The exact float we saw in Railway logs for MK-1346-TW-28082-011.
+
+    Serial 46155.48180555556 ≈ 2026-05-13 11:33:48. Floating-point math on
+    the fractional day can drift the seconds by 1, so we accept that.
+    """
+    result = SheetsService.parse_datetime(46155.48180555556)
+    assert result is not None
+    assert result.year == 2026
+    assert result.month == 5
+    assert result.day == 13
+    assert result.hour == 11
+    assert result.minute == 33
+    assert abs(result.second - 48) <= 1
+
+
+def test_parse_datetime_accepts_canonical_string():
+    """The format the backend writes ('DD-MM-YYYY HH:MM:SS')."""
+    assert SheetsService.parse_datetime("13-05-2026 11:33:48") == datetime(
+        2026, 5, 13, 11, 33, 48
+    )
+
+
+def test_parse_datetime_accepts_iso_string():
+    """ISO 'YYYY-MM-DD HH:MM:SS' fallback."""
+    assert SheetsService.parse_datetime("2026-05-13 11:33:48") == datetime(
+        2026, 5, 13, 11, 33, 48
+    )
+
+
+def test_parse_datetime_accepts_date_only_fallback():
+    """A cell that's a Date (not Datetime) returns midnight."""
+    assert SheetsService.parse_datetime("13-05-2026") == datetime(
+        2026, 5, 13, 0, 0, 0
+    )
+
+
+def test_parse_datetime_returns_none_on_empty():
+    assert SheetsService.parse_datetime("") is None
+    assert SheetsService.parse_datetime(None) is None
+
+
+def test_parse_datetime_returns_none_on_unparseable_string():
+    """Garbage in → None out (with WARNING log, not exception)."""
+    assert SheetsService.parse_datetime("not a date") is None
+
+
+def test_parse_datetime_rejects_bool():
+    """Booleans subclass int in Python — must NOT be parsed as serials."""
+    assert SheetsService.parse_datetime(True) is None
+    assert SheetsService.parse_datetime(False) is None
+
+
+# ---------- B-001/B-002 regression: SpoolDataCorruptError, no silent None
+#
+# Before the fix, `SheetsRepository.get_spool_by_tag` caught Pydantic
+# ValidationError in a bare `except Exception` and returned None. The
+# router interpreted None as "spool no encontrado" → 404 falso, and the
+# frontend dropped the card silently. Now it must raise
+# SpoolDataCorruptError so the router responds 500 with an actionable
+# detail and the operator sees a toast.
+#
+# We assert here on the exception class shape only (the integration path
+# through SheetsRepository.get_spool_by_tag requires gspread auth so it's
+# verified at the API layer, not in unit tests).
+
+
+def test_spool_data_corrupt_error_carries_actionable_data():
+    """The exception that's now raised must carry tag + detail so the
+    router and the frontend can show a useful message."""
+    from backend.exceptions import SpoolDataCorruptError
+
+    exc = SpoolDataCorruptError(
+        tag_spool="MK-1346-TW-28082-011",
+        validation_detail="1 validation error for Spool ...",
+    )
+    assert exc.error_code == "SPOOL_DATA_CORRUPT"
+    assert exc.data["tag_spool"] == "MK-1346-TW-28082-011"
+    assert exc.data["validation_detail"].startswith("1 validation error")
+    assert "MK-1346-TW-28082-011" in exc.message

@@ -6,6 +6,7 @@ incluyendo autenticación, lectura y escritura de datos.
 """
 import gspread
 from google.oauth2.service_account import Credentials
+from pydantic import ValidationError
 from typing import Optional
 from datetime import datetime, date
 import logging
@@ -13,10 +14,12 @@ from functools import wraps
 import time
 
 from backend.config import config
+from backend.utils.date_formatter import format_datetime_for_sheets
 from backend.exceptions import (
     SheetsConnectionError,
     SheetsUpdateError,
     CriticalColumnDriftError,
+    SpoolDataCorruptError,
 )
 from backend.utils.cache import get_cache
 from backend.utils.normalize import normalize_column_name
@@ -1086,7 +1089,20 @@ class SheetsRepository:
             # v3.0 fields: only read and parse if in v3.0 mode
             if self._compatibility_mode == "v3.0":
                 ocupado_por_value = get_col_value("Ocupado_Por")
-                fecha_ocupacion_value = get_col_value("Fecha_Ocupacion")
+                # B-001/B-002: cells with Fecha format applied come back from
+                # UNFORMATTED_VALUE reads as Excel serial floats (e.g.
+                # 46155.4818). The model declares fecha_ocupacion as
+                # Optional[str], so without coercion Pydantic raises
+                # ValidationError → spool unreadable → 404 falso.
+                # Normalize to canonical string "DD-MM-YYYY HH:MM:SS" — the
+                # same format the write path uses (occupation_service.py).
+                fecha_ocupacion_raw = get_col_value("Fecha_Ocupacion")
+                fecha_ocupacion_dt = _SS.parse_datetime(fecha_ocupacion_raw)
+                fecha_ocupacion_value = (
+                    format_datetime_for_sheets(fecha_ocupacion_dt)
+                    if fecha_ocupacion_dt is not None
+                    else None
+                )
                 estado_detalle_value = get_col_value("Estado_Detalle")
             else:
                 ocupado_por_value = None
@@ -1168,12 +1184,20 @@ class SheetsRepository:
                 estado_detalle=estado_detalle_value,
             )
             return spool
-        except Exception as e:
-            self.logger.error(
-                f"Error constructing Spool object for {tag_spool}: {e}",
-                exc_info=True
+        except ValidationError as e:
+            # B-001/B-002: the row exists in the sheet but a field doesn't
+            # parse (e.g. a date column with an unexpected format that the
+            # normalization helpers missed). Previously this was caught by a
+            # bare `except Exception` and silently returned None, which the
+            # router treated as 404 "no encontrado" — operator saw cards
+            # disappear with no explanation. Now we raise a specific
+            # exception so the router responds 500 with an actionable
+            # detail and the bug surfaces.
+            self.logger.warning(
+                f"Spool {tag_spool} encontrado en sheet pero falla "
+                f"validación Pydantic: {e}. Datos malformados."
             )
-            return None
+            raise SpoolDataCorruptError(tag_spool, str(e)) from e
 
     def get_spools_for_metrologia(self) -> list['Spool']:
         """
