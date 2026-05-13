@@ -150,21 +150,33 @@ function HomePage() {
     refreshAllRef.current = refreshAll;
   }, [refreshAll]);
 
+  // B-002: tags we've already shown a SPOOL_DATA_CORRUPT toast for. The
+  // poller fires every 30s and the error usually persists across polls
+  // (data corruption is sticky until backend or sheet is fixed) — without
+  // this we'd spam the operator with the same toast every 30s. Reset is
+  // implicit: on page reload the set is empty.
+  const corruptToastedRef = useRef<Set<string>>(new Set());
+
   // ── 30s Polling ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    const intervalId = setInterval(() => {
+    const intervalId = setInterval(async () => {
       if (
         document.visibilityState === 'visible' &&
         modalStack.stack.length === 0
       ) {
-        refreshAllRef.current();
+        const errors = await refreshAllRef.current();
+        for (const err of errors) {
+          if (corruptToastedRef.current.has(err.tag_spool)) continue;
+          corruptToastedRef.current.add(err.tag_spool);
+          enqueue(err.message, 'error');
+        }
       }
     }, 30_000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [modalStack.stack.length]);
+  }, [modalStack.stack.length, enqueue]);
 
   // ── Audit instrumentation: MODAL_OPEN / MODAL_CLOSE ─────────────────────────
   // Single observer pattern. Avoids instrumenting 30+ modalStack.push/pop/clear

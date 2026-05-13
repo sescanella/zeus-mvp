@@ -83,6 +83,20 @@ export function classifyApiError(error: unknown): ClassifiedError {
         };
 
       case 500:
+        // B-001/B-002: SPOOL_DATA_CORRUPT means the spool exists but a
+        // field can't be parsed. Retry won't help — only sheet/backend
+        // fix will. Show actionable message, suppress generic retry.
+        if (apiError.errorCode === 'SPOOL_DATA_CORRUPT') {
+          return {
+            type: 'server',
+            userMessage:
+              apiError.detail ||
+              'Este spool tiene un problema de datos. Contacta soporte y reporta el TAG.',
+            technicalMessage: apiError.message,
+            shouldRetry: false,
+          };
+        }
+        // fall through to generic 5xx
       case 502:
       case 503:
       case 504:

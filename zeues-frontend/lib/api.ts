@@ -30,12 +30,19 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export class ApiError extends Error {
   status: number;
   detail?: string;
+  /**
+   * Application-level error code from the backend response
+   * (e.g. "SPOOL_DATA_CORRUPT", "ARM_PREREQUISITE_REQUIRED"). Lets the
+   * frontend distinguish between flavors of 4xx/5xx that share status code.
+   */
+  errorCode?: string;
 
-  constructor(status: number, message: string, detail?: string) {
+  constructor(status: number, message: string, detail?: string, errorCode?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.detail = detail;
+    this.errorCode = errorCode;
   }
 }
 
@@ -50,7 +57,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const errorData = await response.json().catch(() => ({}));
     const message = errorData.message || errorData.detail || `Error ${response.status}: ${response.statusText}`;
     const detail = typeof errorData.detail === 'string' ? errorData.detail : errorData.detail?.message;
-    throw new ApiError(response.status, message, detail);
+    // The backend uses {detail: {error: "CODE", message: "...", ...}} for
+    // typed errors. Pull the code so callers can distinguish flavors.
+    const errorCode = typeof errorData.detail === 'object' ? errorData.detail?.error : undefined;
+    throw new ApiError(response.status, message, detail, errorCode);
   }
   return response.json();
 }
@@ -510,12 +520,28 @@ export const BATCH_STATUS_CHUNK_SIZE = 100;
  * caller passes more than that, this function splits into chunks and runs
  * them in parallel with Promise.all, then merges the results in input order.
  *
+ * B-001/B-002: returns `errors` alongside `spools`. Tags that exist in the
+ * sheet but fail to parse (e.g. SPOOL_DATA_CORRUPT) used to be silently
+ * omitted, which made cards "disappear" from the UI without explanation.
+ * Now the caller can surface per-tag errors as toasts.
+ *
  * @param tags - Array of TAG_SPOOL identifiers (any length)
- * @returns Promise<SpoolCardData[]> array of spool statuses (omits not-found)
- * @throws ApiError if backend unavailable
+ * @returns Promise with `spools` (parsed) and `errors` (per-tag failures)
+ * @throws ApiError only if the entire request fails (network / 5xx)
  */
-export async function batchGetStatus(tags: string[]): Promise<SpoolCardData[]> {
-  if (tags.length === 0) return [];
+export interface BatchStatusError {
+  tag_spool: string;
+  error_code: string;
+  message: string;
+}
+
+export interface BatchGetStatusResult {
+  spools: SpoolCardData[];
+  errors: BatchStatusError[];
+}
+
+export async function batchGetStatus(tags: string[]): Promise<BatchGetStatusResult> {
+  if (tags.length === 0) return { spools: [], errors: [] };
 
   const chunks: string[][] = [];
   for (let i = 0; i < tags.length; i += BATCH_STATUS_CHUNK_SIZE) {
@@ -529,12 +555,22 @@ export async function batchGetStatus(tags: string[]): Promise<SpoolCardData[]> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tags: chunk }),
       });
-      const data = await handleResponse<{ spools: SpoolCardData[]; total: number }>(res);
-      return data.spools;
+      const data = await handleResponse<{
+        spools: SpoolCardData[];
+        total: number;
+        errors?: BatchStatusError[];
+      }>(res);
+      return {
+        spools: data.spools,
+        errors: data.errors ?? [],
+      };
     })
   );
 
-  return responses.flat();
+  return {
+    spools: responses.flatMap((r) => r.spools),
+    errors: responses.flatMap((r) => r.errors),
+  };
 }
 
 // ==========================================

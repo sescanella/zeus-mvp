@@ -66,9 +66,9 @@ describe('batchGetStatus chunking', () => {
     global.fetch = originalFetch;
   });
 
-  it('returns empty array for empty input without hitting the network', async () => {
+  it('returns empty result for empty input without hitting the network', async () => {
     const result = await batchGetStatus([]);
-    expect(result).toEqual([]);
+    expect(result).toEqual({ spools: [], errors: [] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -76,25 +76,26 @@ describe('batchGetStatus chunking', () => {
     const tags = Array.from({ length: BATCH_STATUS_CHUNK_SIZE }, (_, i) => `T-${i}`);
     const result = await batchGetStatus(tags);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result).toHaveLength(BATCH_STATUS_CHUNK_SIZE);
-    expect(result[0].tag_spool).toBe('T-0');
-    expect(result[BATCH_STATUS_CHUNK_SIZE - 1].tag_spool).toBe(
+    expect(result.spools).toHaveLength(BATCH_STATUS_CHUNK_SIZE);
+    expect(result.spools[0].tag_spool).toBe('T-0');
+    expect(result.spools[BATCH_STATUS_CHUNK_SIZE - 1].tag_spool).toBe(
       `T-${BATCH_STATUS_CHUNK_SIZE - 1}`
     );
+    expect(result.errors).toEqual([]);
   });
 
   it('splits inputs above the chunk size into multiple requests', async () => {
     const tags = Array.from({ length: 200 }, (_, i) => `T-${i}`);
     const result = await batchGetStatus(tags);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(result).toHaveLength(200);
+    expect(result.spools).toHaveLength(200);
   });
 
   it('preserves input order across chunks', async () => {
     const tags = Array.from({ length: 250 }, (_, i) => `T-${i}`);
     const result = await batchGetStatus(tags);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(result.map((r) => r.tag_spool)).toEqual(tags);
+    expect(result.spools.map((r) => r.tag_spool)).toEqual(tags);
   });
 
   it('does not send any chunk that exceeds BATCH_STATUS_CHUNK_SIZE', async () => {

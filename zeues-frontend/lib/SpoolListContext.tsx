@@ -38,6 +38,7 @@ import {
   addSupervisorList,
   removeSupervisorList,
   postSupervisorLegacySnapshot,
+  type BatchStatusError,
 } from './api';
 import { loadPersistedSpools, STORAGE_KEY } from './local-storage';
 import { getSessionId, pushAuditEvent } from './audit-buffer';
@@ -163,7 +164,11 @@ interface SpoolListContextValue {
   retryHydration: () => Promise<void>;
   addSpool: (tag: string) => Promise<void>;
   removeSpool: (tag: string) => Promise<void>;
-  refreshAll: () => Promise<void>;
+  /**
+   * Re-fetch all tracked spools. Returns per-tag errors (e.g. SPOOL_DATA_CORRUPT)
+   * so the caller can surface them as toasts. Empty array if all OK.
+   */
+  refreshAll: () => Promise<BatchStatusError[]>;
   refreshSingle: (tag: string) => Promise<void>;
   applyIniciarOptimistic: (
     tag: string,
@@ -227,7 +232,21 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
       if (cancelledRef.current) return true;
 
       const tags = finalList.map((s) => s.tag_spool);
-      const fullCards = tags.length > 0 ? await batchGetStatus(tags) : [];
+      // B-002: batchGetStatus now returns { spools, errors }. At hydration
+      // we only need the spools — errors (if any) are logged below and
+      // will re-surface to the operator on the next poller tick.
+      const batchResult = tags.length > 0
+        ? await batchGetStatus(tags)
+        : { spools: [], errors: [] };
+      const fullCards = batchResult.spools;
+      if (batchResult.errors.length > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `SpoolListContext.hydrate: ${batchResult.errors.length} spool(s) ` +
+          `failed to parse on first load — will retry on next 30s poll`,
+          batchResult.errors
+        );
+      }
       if (cancelledRef.current) return true;
 
       dispatch({ type: 'SET_SPOOLS', spools: fullCards });
@@ -343,11 +362,15 @@ export function SpoolListProvider({ children }: { children: React.ReactNode }) {
 
   // refreshAll: re-fetch full card data for all currently-tracked tags.
   // Does NOT re-fetch the supervisor Lista — relies on optimistic state for that.
-  const refreshAll = useCallback(async () => {
+  //
+  // B-002: returns the per-tag errors from batch-status so the poller in
+  // page.tsx can surface them as toasts. Empty array on success / no errors.
+  const refreshAll = useCallback(async (): Promise<BatchStatusError[]> => {
     const tags = spoolsRef.current.map((s) => s.tag_spool);
-    if (tags.length === 0) return;
-    const fresh = await batchGetStatus(tags);
+    if (tags.length === 0) return [];
+    const { spools: fresh, errors } = await batchGetStatus(tags);
     dispatch({ type: 'SET_SPOOLS', spools: fresh });
+    return errors;
   }, []);
 
   const refreshSingle = useCallback(async (tag: string) => {
