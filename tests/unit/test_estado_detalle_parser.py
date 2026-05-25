@@ -1,14 +1,14 @@
 """
 Unit tests for parse_estado_detalle() - Estado_Detalle string parser.
 
-Tests validate all known Estado_Detalle formats produced by EstadoDetalleBuilder.
+Tests validate all Estado_Detalle formats the backend produces today plus the
+two legacy formats from the removed 3-cycle limit (`"RECHAZADO (Ciclo N/3)"`
+and `"BLOQUEADO - Contactar supervisor"`), which must be tolerated without
+a Sheet migration and mapped to plain RECHAZADO.
 
 Reference:
 - Service: backend/services/estado_detalle_parser.py
-- Plan: 00-01-PLAN.md (API-01)
 """
-import pytest
-
 from backend.services.estado_detalle_parser import parse_estado_detalle
 
 
@@ -20,7 +20,6 @@ def test_parse_none_returns_defaults():
     result = parse_estado_detalle(None)
     assert result["operacion_actual"] is None
     assert result["estado_trabajo"] == "LIBRE"
-    assert result["ciclo_rep"] is None
     assert result["worker"] is None
 
 
@@ -29,7 +28,6 @@ def test_parse_empty_string_returns_defaults():
     result = parse_estado_detalle("")
     assert result["operacion_actual"] is None
     assert result["estado_trabajo"] == "LIBRE"
-    assert result["ciclo_rep"] is None
     assert result["worker"] is None
 
 
@@ -38,7 +36,6 @@ def test_parse_whitespace_only_returns_defaults():
     result = parse_estado_detalle("   ")
     assert result["operacion_actual"] is None
     assert result["estado_trabajo"] == "LIBRE"
-    assert result["ciclo_rep"] is None
     assert result["worker"] is None
 
 
@@ -51,7 +48,6 @@ def test_parse_arm_en_progreso():
     assert result["operacion_actual"] == "ARM"
     assert result["estado_trabajo"] == "EN_PROGRESO"
     assert result["worker"] == "MR(93)"
-    assert result["ciclo_rep"] is None
 
 
 def test_parse_sold_en_progreso():
@@ -60,7 +56,6 @@ def test_parse_sold_en_progreso():
     assert result["operacion_actual"] == "SOLD"
     assert result["estado_trabajo"] == "EN_PROGRESO"
     assert result["worker"] == "MR(93)"
-    assert result["ciclo_rep"] is None
 
 
 def test_parse_different_worker_format():
@@ -79,7 +74,6 @@ def test_parse_disponible_arm_completado_sold_pendiente():
     result = parse_estado_detalle("Disponible - ARM completado, SOLD pendiente")
     assert result["operacion_actual"] == "ARM"
     assert result["estado_trabajo"] == "PAUSADO"
-    assert result["ciclo_rep"] is None
     assert result["worker"] is None
 
 
@@ -89,7 +83,7 @@ def test_parse_disponible_arm_completado_sold_pendiente():
 def test_parse_metrologia_aprobado():
     """METROLOGIA APROBADO — COMPLETADO state."""
     result = parse_estado_detalle(
-        "Disponible - ARM completado, SOLD completado, METROLOGIA APROBADO \u2713"
+        "Disponible - ARM completado, SOLD completado, METROLOGIA APROBADO ✓"
     )
     assert result["estado_trabajo"] == "COMPLETADO"
 
@@ -103,42 +97,26 @@ def test_parse_arm_y_sold_completados():
 # ==================== RECHAZADO STATES ====================
 
 
-def test_parse_rechazado_ciclo_2():
-    """RECHAZADO with ciclo 2/3 — extracts ciclo_rep correctly."""
+def test_parse_rechazado_plain():
+    """Current format written by the state machine after rejection."""
+    result = parse_estado_detalle("RECHAZADO - Pendiente reparación")
+    assert result["estado_trabajo"] == "RECHAZADO"
+
+
+def test_parse_rechazado_legacy_with_cycle():
+    """Legacy 'RECHAZADO (Ciclo N/3)' from the removed 3-cycle limit must
+    still parse as plain RECHAZADO — old sheet rows keep flowing."""
     result = parse_estado_detalle(
-        "Disponible - ARM completado, SOLD completado, RECHAZADO (Ciclo 2/3) - Pendiente reparacion"
+        "Disponible - RECHAZADO (Ciclo 2/3) - Pendiente reparacion"
     )
     assert result["estado_trabajo"] == "RECHAZADO"
-    assert result["ciclo_rep"] == 2
 
 
-def test_parse_rechazado_ciclo_1():
-    """RECHAZADO with ciclo 1/3 — extracts ciclo_rep correctly."""
-    result = parse_estado_detalle(
-        "Disponible - RECHAZADO (Ciclo 1/3) - Pendiente reparacion"
-    )
-    assert result["estado_trabajo"] == "RECHAZADO"
-    assert result["ciclo_rep"] == 1
-
-
-def test_parse_rechazado_ciclo_3():
-    """RECHAZADO with ciclo 3/3 — extracts ciclo_rep correctly."""
-    result = parse_estado_detalle(
-        "Disponible - RECHAZADO (Ciclo 3/3) - Pendiente reparacion"
-    )
-    assert result["estado_trabajo"] == "RECHAZADO"
-    assert result["ciclo_rep"] == 3
-
-
-# ==================== BLOQUEADO STATES ====================
-
-
-def test_parse_bloqueado():
-    """BLOQUEADO — returns BLOQUEADO estado_trabajo."""
+def test_parse_bloqueado_legacy_maps_to_rechazado():
+    """Legacy 'BLOQUEADO - Contactar supervisor' (3-cycle limit, removed)
+    must be tolerated and mapped to RECHAZADO so the spool can be repaired."""
     result = parse_estado_detalle("BLOQUEADO - Contactar supervisor")
-    assert result["estado_trabajo"] == "BLOQUEADO"
-    assert result["operacion_actual"] is None
-    assert result["ciclo_rep"] is None
+    assert result["estado_trabajo"] == "RECHAZADO"
 
 
 # ==================== PENDIENTE_METROLOGIA STATES ====================
@@ -149,7 +127,6 @@ def test_parse_reparacion_completado_pendiente_metrologia():
     result = parse_estado_detalle("REPARACION completado - PENDIENTE_METROLOGIA")
     assert result["estado_trabajo"] == "PENDIENTE_METROLOGIA"
     assert result["operacion_actual"] is None
-    assert result["ciclo_rep"] is None
 
 
 def test_parse_pendiente_metrologia_explicit():
@@ -161,20 +138,18 @@ def test_parse_pendiente_metrologia_explicit():
 # ==================== REPARACION EN_PROGRESO ====================
 
 
-def test_parse_en_reparacion_ciclo_1():
-    """EN_REPARACION ciclo 1 — REPARACION operacion_actual EN_PROGRESO."""
-    result = parse_estado_detalle("EN_REPARACION (Ciclo 1/3) - Ocupado: MR(93)")
+def test_parse_en_reparacion_plain():
+    """Current format written by the state machine when repair starts."""
+    result = parse_estado_detalle("EN_REPARACION - Ocupado: MR(93)")
     assert result["operacion_actual"] == "REPARACION"
     assert result["estado_trabajo"] == "EN_PROGRESO"
-    assert result["ciclo_rep"] == 1
 
 
-def test_parse_en_reparacion_ciclo_2():
-    """EN_REPARACION ciclo 2 — extracts ciclo_rep."""
+def test_parse_en_reparacion_legacy_with_cycle():
+    """Legacy 'EN_REPARACION (Ciclo N/3) - Ocupado: ...' still parses."""
     result = parse_estado_detalle("EN_REPARACION (Ciclo 2/3) - Ocupado: JP(94)")
     assert result["operacion_actual"] == "REPARACION"
     assert result["estado_trabajo"] == "EN_PROGRESO"
-    assert result["ciclo_rep"] == 2
 
 
 # ==================== RETURN STRUCTURE ====================
@@ -185,11 +160,4 @@ def test_parse_returns_all_keys():
     result = parse_estado_detalle(None)
     assert "operacion_actual" in result
     assert "estado_trabajo" in result
-    assert "ciclo_rep" in result
     assert "worker" in result
-
-
-def test_parse_en_progreso_has_no_ciclo_rep():
-    """EN_PROGRESO ARM state has no ciclo_rep."""
-    result = parse_estado_detalle("MR(93) trabajando ARM (ARM en progreso, SOLD pendiente)")
-    assert result["ciclo_rep"] is None

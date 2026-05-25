@@ -1,24 +1,28 @@
 """
-ReparacionService - Orchestrator for reparación workflow with bounded cycles.
+ReparacionService - Orchestrator for reparación workflow.
 
-Manages RECHAZADO spool repair with TOMAR/PAUSAR/COMPLETAR actions.
-Enforces 3-cycle limit via CycleCounterService and BLOQUEADO escalation.
+Manages RECHAZADO spool repair with TOMAR/PAUSAR/COMPLETAR/CANCELAR actions.
 
-v3.0 Phase 6 feature:
+Features:
 - Multi-worker access (no role restriction)
 - TOMAR/PAUSAR/COMPLETAR pattern (occupation-based workflow)
-- Cycle tracking in Estado_Detalle
 - Automatic return to PENDIENTE_METROLOGIA after completion
-- BLOQUEADO enforcement after 3 consecutive rejections
+- No rejection-cycle limit: a spool can be rejected and repaired as many
+  times as needed; there is no automatic BLOQUEADO state.
 """
 
 import logging
 from datetime import date, datetime
 
 from backend.utils.date_formatter import format_datetime_for_sheets, format_date_for_sheets, now_chile, today_chile
-from backend.services.state_machines.reparacion_state_machine import REPARACIONStateMachine
+from backend.services.state_machines.reparacion_state_machine import (
+    REPARACIONStateMachine,
+    ESTADO_DETALLE_RECHAZADO,
+    ESTADO_DETALLE_REPARACION_PAUSADA,
+    ESTADO_DETALLE_PENDIENTE_METROLOGIA,
+    _build_en_reparacion_estado,
+)
 from backend.services.validation_service import ValidationService
-from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.repositories.metadata_repository import MetadataRepository
 from backend.exceptions import SpoolNoEncontradoError
@@ -29,10 +33,9 @@ logger = logging.getLogger(__name__)
 
 class ReparacionService:
     """
-    Service for reparación workflow with occupation management and cycle tracking.
+    Service for reparación workflow with occupation management.
 
-    Simplified for single-user mode:
-    - Cycle validation (max 3 consecutive rejections)
+    Single-user mode:
     - State machine transitions (tomar/pausar/completar/cancelar)
     - Ocupado_Por, Fecha_Ocupacion, Estado_Detalle column updates
     - Metadata event logging
@@ -41,7 +44,6 @@ class ReparacionService:
     def __init__(
         self,
         validation_service: ValidationService,
-        cycle_counter_service: CycleCounterService,
         sheets_repository: SheetsRepository,
         metadata_repository: MetadataRepository
     ):
@@ -50,15 +52,13 @@ class ReparacionService:
 
         Args:
             validation_service: Service for prerequisite validation
-            cycle_counter_service: Service for cycle counting and BLOQUEADO enforcement
             sheets_repository: Repository for Sheets reads/writes
             metadata_repository: Repository for audit logging
         """
         self.validation_service = validation_service
-        self.cycle_counter = cycle_counter_service
         self.sheets_repo = sheets_repository
         self.metadata_repo = metadata_repository
-        logger.info("ReparacionService initialized with cycle tracking (single-user mode)")
+        logger.info("ReparacionService initialized (single-user mode, no cycle limit)")
 
     async def tomar_reparacion(
         self,
@@ -70,13 +70,11 @@ class ReparacionService:
         Worker takes RECHAZADO spool for repair.
 
         Flow:
-        1. Fetch spool and validate can TOMAR (RECHAZADO, not BLOQUEADO, not occupied)
-        2. Extract cycle count from Estado_Detalle
-        3. Check not BLOQUEADO (cycle < 3)
-        4. Instantiate state machine and trigger TOMAR transition
-        5. Update Ocupado_Por, Fecha_Ocupacion, Estado_Detalle via state machine callback
-        6. Log metadata event
-        7. Publish SSE event for dashboard
+        1. Fetch spool and validate can TOMAR (RECHAZADO/REPARACION_PAUSADA, not occupied)
+        2. Instantiate state machine hydrated to current state
+        3. Trigger TOMAR transition (state machine writes Ocupado_Por,
+           Fecha_Ocupacion, Estado_Detalle)
+        4. Log metadata event
 
         Args:
             tag_spool: Spool identifier
@@ -89,7 +87,6 @@ class ReparacionService:
         Raises:
             SpoolNoEncontradoError: If spool doesn't exist
             OperacionNoDisponibleError: If spool not in RECHAZADO state
-            SpoolBloqueadoError: If spool blocked after 3 rejections (HTTP 403)
             SpoolOccupiedError: If spool currently occupied
         """
         logger.info(f"ReparacionService.tomar_reparacion: {tag_spool} by {worker_nombre}")
@@ -101,16 +98,7 @@ class ReparacionService:
 
         self.validation_service.validar_puede_tomar_reparacion(spool, worker_id)
 
-        # Step 2: Extract cycle count from Estado_Detalle
-        current_cycle = self.cycle_counter.extract_cycle_count(spool.estado_detalle or "")
-
-        # Step 3: Check not BLOQUEADO (validation already checked, but double-check)
-        if self.cycle_counter.should_block(current_cycle):
-            logger.error(f"❌ Cannot TOMAR BLOQUEADO spool {tag_spool} (cycle={current_cycle})")
-            from backend.exceptions import SpoolBloqueadoError
-            raise SpoolBloqueadoError(tag_spool)
-
-        # Step 4: Instantiate state machine hydrated to current state
+        # Step 2: Instantiate state machine hydrated to current state
         # (python-statemachine 2.5.0 async engine ignores direct assignment
         # to .current_state — must pass start_value to the constructor and
         # call activate_initial_state() before triggering transitions).
@@ -123,7 +111,6 @@ class ReparacionService:
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter,
             start_value=start_state,
         )
         await reparacion_machine.activate_initial_state()
@@ -132,15 +119,13 @@ class ReparacionService:
         await reparacion_machine.tomar(worker_id=worker_id, worker_nombre=worker_nombre)
         logger.info(f"REPARACION TOMAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
-        # Step 5: Log metadata event (Ocupado_Por/Fecha_Ocupacion/Estado_Detalle already updated by state machine)
+        # Step 3: Log metadata event (Ocupado_Por/Fecha_Ocupacion/Estado_Detalle already updated by state machine)
         try:
             event = (
                 MetadataEventBuilder()
                 .for_tomar(tag_spool, worker_id, worker_nombre)
                 .with_operacion("REPARACION")
                 .with_metadata({
-                    "cycle": current_cycle,
-                    "max_cycles": self.cycle_counter.MAX_CYCLES,
                     "state": reparacion_machine.get_state_id()
                 })
                 .build()
@@ -152,12 +137,7 @@ class ReparacionService:
                 exc_info=True
             )
 
-        # Step 6: Build estado_detalle for SSE event
-        estado_detalle = self.cycle_counter.build_reparacion_estado(
-            "en_reparacion",
-            current_cycle,
-            worker_nombre
-        )
+        estado_detalle = _build_en_reparacion_estado(worker_nombre)
 
         logger.info(f"✅ ReparacionService.tomar_reparacion: {tag_spool}")
         return {
@@ -165,8 +145,7 @@ class ReparacionService:
             "message": f"Reparación tomada para spool {tag_spool}",
             "tag_spool": tag_spool,
             "worker_nombre": worker_nombre,
-            "estado_detalle": estado_detalle,
-            "cycle": current_cycle
+            "estado_detalle": estado_detalle
         }
 
     async def pausar_reparacion(
@@ -182,7 +161,6 @@ class ReparacionService:
         2. Instantiate state machine and trigger PAUSAR transition
         3. Clear Ocupado_Por, Fecha_Ocupacion, update Estado_Detalle via state machine callback
         4. Log metadata event
-        5. Publish SSE event for dashboard
 
         Args:
             tag_spool: Spool identifier
@@ -215,7 +193,6 @@ class ReparacionService:
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter,
             start_value="en_reparacion",
         )
         await reparacion_machine.activate_initial_state()
@@ -224,18 +201,13 @@ class ReparacionService:
         await reparacion_machine.pausar()
         logger.info(f"REPARACION PAUSAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
-        # Step 3: Extract cycle count for metadata
-        current_cycle = self.cycle_counter.extract_cycle_count(spool.estado_detalle or "")
-
-        # Step 4: Log metadata event
+        # Step 3: Log metadata event
         try:
             event = (
                 MetadataEventBuilder()
                 .for_pausar(tag_spool, worker_id, spool.ocupado_por)  # Use current worker name
                 .with_operacion("REPARACION")
                 .with_metadata({
-                    "cycle": current_cycle,
-                    "max_cycles": self.cycle_counter.MAX_CYCLES,
                     "state": reparacion_machine.get_state_id()
                 })
                 .build()
@@ -247,18 +219,12 @@ class ReparacionService:
                 exc_info=True
             )
 
-        # Step 5: Build estado_detalle for SSE event
-        estado_detalle = self.cycle_counter.build_reparacion_estado(
-            "reparacion_pausada",
-            current_cycle
-        )
-
         logger.info(f"✅ ReparacionService.pausar_reparacion: {tag_spool}")
         return {
             "success": True,
             "message": f"Reparación pausada para spool {tag_spool}",
             "tag_spool": tag_spool,
-            "estado_detalle": estado_detalle
+            "estado_detalle": ESTADO_DETALLE_REPARACION_PAUSADA
         }
 
     async def completar_reparacion(
@@ -275,7 +241,6 @@ class ReparacionService:
         2. Instantiate state machine and trigger COMPLETAR transition
         3. Clear Ocupado_Por, Fecha_Ocupacion, set Estado_Detalle=PENDIENTE_METROLOGIA via state machine
         4. Log metadata event
-        5. Publish SSE event for dashboard
 
         Args:
             tag_spool: Spool identifier
@@ -313,7 +278,6 @@ class ReparacionService:
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter,
             start_value="en_reparacion",
         )
         await reparacion_machine.activate_initial_state()
@@ -322,18 +286,13 @@ class ReparacionService:
         await reparacion_machine.completar()
         logger.info(f"REPARACION COMPLETAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
-        # Step 3: Extract cycle count for metadata
-        current_cycle = self.cycle_counter.extract_cycle_count(spool.estado_detalle or "")
-
-        # Step 4: Log metadata event
+        # Step 3: Log metadata event
         try:
             event = (
                 MetadataEventBuilder()
                 .for_completar(tag_spool, worker_id, worker_nombre, today_chile())
                 .with_operacion("REPARACION")
                 .with_metadata({
-                    "cycle": current_cycle,
-                    "max_cycles": self.cycle_counter.MAX_CYCLES,
                     "state": reparacion_machine.get_state_id(),
                     "next_state": "PENDIENTE_METROLOGIA"
                 })
@@ -346,16 +305,12 @@ class ReparacionService:
                 exc_info=True
             )
 
-        # Step 5: Build estado_detalle for SSE event
-        estado_detalle = "PENDIENTE_METROLOGIA"
-
         logger.info(f"✅ ReparacionService.completar_reparacion: {tag_spool} -> PENDIENTE_METROLOGIA")
         return {
             "success": True,
             "message": f"Reparación completada para spool {tag_spool} - devuelto a metrología",
             "tag_spool": tag_spool,
-            "estado_detalle": estado_detalle,
-            "cycle": current_cycle
+            "estado_detalle": ESTADO_DETALLE_PENDIENTE_METROLOGIA
         }
 
     async def cancelar_reparacion(
@@ -371,7 +326,6 @@ class ReparacionService:
         2. Instantiate state machine and trigger CANCELAR transition
         3. Clear Ocupado_Por, Fecha_Ocupacion, restore RECHAZADO estado via state machine callback
         4. Log metadata event
-        5. Publish SSE event for dashboard
 
         Args:
             tag_spool: Spool identifier
@@ -404,7 +358,6 @@ class ReparacionService:
             tag_spool=tag_spool,
             sheets_repo=self.sheets_repo,
             metadata_repo=self.metadata_repo,
-            cycle_counter=self.cycle_counter,
             start_value=start_state,
         )
         await reparacion_machine.activate_initial_state()
@@ -413,18 +366,13 @@ class ReparacionService:
         await reparacion_machine.cancelar()
         logger.info(f"REPARACION CANCELAR: {tag_spool} -> {reparacion_machine.current_state.id}")
 
-        # Step 3: Extract cycle count for metadata
-        current_cycle = self.cycle_counter.extract_cycle_count(spool.estado_detalle or "")
-
-        # Step 4: Log metadata event
+        # Step 3: Log metadata event
         try:
             event = (
                 MetadataEventBuilder()
                 .for_cancelar(tag_spool, worker_id, spool.ocupado_por or "Unknown")
                 .with_operacion("REPARACION")
                 .with_metadata({
-                    "cycle": current_cycle,
-                    "max_cycles": self.cycle_counter.MAX_CYCLES,
                     "state": reparacion_machine.get_state_id()
                 })
                 .build()
@@ -436,13 +384,10 @@ class ReparacionService:
                 exc_info=True
             )
 
-        # Step 5: Build estado_detalle for SSE event
-        estado_detalle = self.cycle_counter.build_rechazado_estado(current_cycle)
-
         logger.info(f"✅ ReparacionService.cancelar_reparacion: {tag_spool} -> RECHAZADO")
         return {
             "success": True,
             "message": f"Reparación cancelada para spool {tag_spool}",
             "tag_spool": tag_spool,
-            "estado_detalle": estado_detalle
+            "estado_detalle": ESTADO_DETALLE_RECHAZADO
         }

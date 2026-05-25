@@ -4,7 +4,7 @@ Unit tests for spool_status_router — GET /api/spool/{tag}/status endpoint.
 Tests validate:
 - 200 response with SpoolStatus fields for valid tag
 - 404 response for non-existent tag
-- Computed fields (operacion_actual, estado_trabajo, ciclo_rep) present in response
+- Computed fields (operacion_actual, estado_trabajo) present in response
 - Endpoint registered at /api/spool/{tag}/status
 
 Uses FastAPI TestClient with dependency_overrides to mock SheetsRepository.
@@ -124,14 +124,6 @@ def test_get_spool_status_contains_estado_trabajo(client_with_spool):
     assert data["estado_trabajo"] == "EN_PROGRESO"
 
 
-def test_get_spool_status_contains_ciclo_rep(client_with_spool):
-    """Response contains ciclo_rep computed field (None for EN_PROGRESO)."""
-    response = client_with_spool.get("/api/spool/MK-TEST-001/status")
-    data = response.json()
-    assert "ciclo_rep" in data
-    assert data["ciclo_rep"] is None
-
-
 def test_get_spool_status_contains_ocupado_por(client_with_spool):
     """Response contains ocupado_por pass-through field."""
     response = client_with_spool.get("/api/spool/MK-TEST-001/status")
@@ -179,7 +171,6 @@ def test_get_spool_status_libre_spool():
         data = response.json()
         assert data["estado_trabajo"] == "LIBRE"
         assert data["operacion_actual"] is None
-        assert data["ciclo_rep"] is None
     finally:
         app.dependency_overrides.clear()
 

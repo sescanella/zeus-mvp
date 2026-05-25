@@ -134,11 +134,11 @@ class Spool(BaseModel):
         description="Fecha cuando el spool fue ocupado en formato YYYY-MM-DD (columna 65)",
         examples=["2026-01-26"]
     )
-    # v3.0: Estado detallado
+    # Estado detallado (human-readable summary of current state)
     estado_detalle: Optional[str] = Field(
         None,
-        description="Estado detallado del spool con información de ciclos y progreso (columna 67 'Estado_Detalle')",
-        examples=["RECHAZADO (Ciclo 2/3) - Pendiente reparación", "BLOQUEADO - Contactar supervisor", "EN_REPARACION (Ciclo 1/3) - Ocupado: MR(93)"]
+        description="Estado detallado del spool (columna 'Estado_Detalle')",
+        examples=["RECHAZADO - Pendiente reparación", "EN_REPARACION - Ocupado: MR(93)", "PENDIENTE_METROLOGIA"]
     )
 
     model_config = ConfigDict(

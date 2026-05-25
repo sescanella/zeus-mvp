@@ -1,7 +1,11 @@
 """
-Unit tests for reparación validation logic (Phase 6).
+Unit tests for reparación validation logic.
 
 Tests validar_puede_tomar_reparacion() and validar_puede_cancelar_reparacion().
+
+The 3-cycle limit (and its companion `BLOQUEADO` state and `SpoolBloqueadoError`)
+were removed: there is no automatic block, and legacy `BLOQUEADO` rows in
+existing sheets are treated as plain RECHAZADO so they can still be repaired.
 """
 
 import pytest
@@ -9,10 +13,9 @@ from unittest.mock import Mock
 from backend.services.validation_service import ValidationService
 from backend.models.spool import Spool
 from backend.exceptions import (
-    SpoolBloqueadoError,
     OperacionNoDisponibleError,
     SpoolOccupiedError,
-    OperacionNoIniciadaError
+    OperacionNoIniciadaError,
 )
 
 
@@ -34,64 +37,52 @@ def mock_spool():
     spool.soldador = "JP(94)"
     spool.fecha_soldadura = "02-01-2026"
     spool.fecha_qc_metrologia = "03-01-2026"
-    spool.estado_detalle = "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
+    spool.estado_detalle = "RECHAZADO - Pendiente reparación"
     return spool
 
 
-# ==================== TOMAR REPARACION - BLOQUEADO VALIDATION ====================
+# ==================== TOMAR REPARACION - LEGACY BLOQUEADO TOLERANCE ====================
 
-def test_cannot_tomar_bloqueado_spool(validation_service, mock_spool):
-    """Should raise SpoolBloqueadoError when trying to TOMAR BLOQUEADO spool."""
+
+def test_can_tomar_legacy_bloqueado_spool(validation_service, mock_spool):
+    """Legacy 'BLOQUEADO' rows (from the removed 3-cycle limit) are accepted
+    for TOMAR — treated the same as RECHAZADO. The next state write replaces
+    the legacy text."""
     mock_spool.estado_detalle = "BLOQUEADO - Contactar supervisor"
+    mock_spool.ocupado_por = None
 
-    with pytest.raises(SpoolBloqueadoError) as exc_info:
-        validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93)
-
-    assert exc_info.value.data["tag_spool"] == "SPOOL-001"
-    assert "bloqueado" in exc_info.value.message.lower()
+    assert validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93) is None
 
 
-def test_cannot_tomar_bloqueado_with_cycle_info(validation_service, mock_spool):
-    """Should raise SpoolBloqueadoError even with cycle info in estado."""
-    mock_spool.estado_detalle = "BLOQUEADO (Ciclo 3/3) - Contactar supervisor"
+def test_can_tomar_legacy_rechazado_with_cycle(validation_service, mock_spool):
+    """Legacy 'RECHAZADO (Ciclo N/3)' text still allows TOMAR."""
+    mock_spool.estado_detalle = "RECHAZADO (Ciclo 2/3) - Pendiente reparación"
+    mock_spool.ocupado_por = None
 
-    with pytest.raises(SpoolBloqueadoError):
-        validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93)
+    assert validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93) is None
 
 
 # ==================== TOMAR REPARACION - RECHAZADO VALIDATION ====================
 
+
 def test_can_tomar_rechazado_spool(validation_service, mock_spool):
     """Should allow TOMAR when spool is RECHAZADO and not occupied."""
-    mock_spool.estado_detalle = "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
+    mock_spool.estado_detalle = "RECHAZADO - Pendiente reparación"
     mock_spool.ocupado_por = None
 
-    # Should not raise exception; returns None on success
-    result = validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93)
-    assert result is None
-
-
-def test_can_tomar_rechazado_cycle_two(validation_service, mock_spool):
-    """Should allow TOMAR when spool is RECHAZADO at cycle 2."""
-    mock_spool.estado_detalle = "RECHAZADO (Ciclo 2/3) - Pendiente reparación"
-    mock_spool.ocupado_por = None
-
-    # Should not raise exception; returns None on success
-    result = validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=94)
-    assert result is None
+    assert validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93) is None
 
 
 def test_can_tomar_rechazado_without_cycle_info(validation_service, mock_spool):
-    """Should allow TOMAR when spool is RECHAZADO without cycle info (first rejection)."""
+    """Variant Estado_Detalle 'METROLOGIA RECHAZADO ...' also allows TOMAR."""
     mock_spool.estado_detalle = "METROLOGIA RECHAZADO - Pendiente reparación"
     mock_spool.ocupado_por = None
 
-    # Should not raise exception; returns None on success
-    result = validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93)
-    assert result is None
+    assert validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93) is None
 
 
 # ==================== TOMAR REPARACION - ESTADO VALIDATION ====================
+
 
 def test_cannot_repair_aprobado_spool(validation_service, mock_spool):
     """Should raise OperacionNoDisponibleError when spool is APROBADO."""
@@ -130,9 +121,10 @@ def test_cannot_repair_null_estado(validation_service, mock_spool):
 
 # ==================== TOMAR REPARACION - OCCUPATION VALIDATION ====================
 
+
 def test_cannot_tomar_occupied_spool(validation_service, mock_spool):
     """Should raise SpoolOccupiedError when spool is occupied."""
-    mock_spool.estado_detalle = "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
+    mock_spool.estado_detalle = "RECHAZADO - Pendiente reparación"
     mock_spool.ocupado_por = "JP(94)"
 
     with pytest.raises(SpoolOccupiedError) as exc_info:
@@ -144,7 +136,7 @@ def test_cannot_tomar_occupied_spool(validation_service, mock_spool):
 
 def test_cannot_tomar_en_reparacion_occupied(validation_service, mock_spool):
     """Should raise OperacionNoDisponibleError when spool is EN_REPARACION (not RECHAZADO)."""
-    mock_spool.estado_detalle = "EN_REPARACION (Ciclo 2/3) - Ocupado: MR(93)"
+    mock_spool.estado_detalle = "EN_REPARACION - Ocupado: MR(93)"
     mock_spool.ocupado_por = "MR(93)"
 
     # EN_REPARACION doesn't contain "RECHAZADO" so should raise OperacionNoDisponibleError
@@ -153,57 +145,40 @@ def test_cannot_tomar_en_reparacion_occupied(validation_service, mock_spool):
 
 
 def test_can_tomar_after_reparacion_pausada(validation_service, mock_spool):
-    """Should allow TOMAR after PAUSAR (occupation released).
-
-    The validation now accepts REPARACION_PAUSADA in addition to RECHAZADO,
-    so paused repair spools can be resumed by any worker.
-    """
-    mock_spool.estado_detalle = "REPARACION_PAUSADA (Ciclo 2/3)"
+    """Paused repair spools can be resumed by any worker."""
+    mock_spool.estado_detalle = "REPARACION_PAUSADA"
     mock_spool.ocupado_por = None
 
-    # Should not raise exception; REPARACION_PAUSADA is now accepted
-    result = validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93)
-    assert result is None
+    assert validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=93) is None
 
 
 # ==================== CANCELAR REPARACION VALIDATION ====================
 
+
 def test_can_cancelar_en_reparacion(validation_service, mock_spool):
     """Should allow CANCELAR when spool is EN_REPARACION."""
-    mock_spool.estado_detalle = "EN_REPARACION (Ciclo 2/3) - Ocupado: MR(93)"
+    mock_spool.estado_detalle = "EN_REPARACION - Ocupado: MR(93)"
     mock_spool.ocupado_por = "MR(93)"
 
-    # Should not raise exception; returns None on success
-    result = validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93)
-    assert result is None
+    assert validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93) is None
 
 
 def test_can_cancelar_reparacion_pausada(validation_service, mock_spool):
     """Should allow CANCELAR when spool is REPARACION_PAUSADA."""
-    mock_spool.estado_detalle = "REPARACION_PAUSADA (Ciclo 1/3)"
+    mock_spool.estado_detalle = "REPARACION_PAUSADA"
     mock_spool.ocupado_por = None
 
-    # Should not raise exception; returns None on success
-    result = validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93)
-    assert result is None
+    assert validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93) is None
 
 
 def test_cannot_cancelar_rechazado(validation_service, mock_spool):
     """Should raise OperacionNoIniciadaError when trying to CANCELAR RECHAZADO spool."""
-    mock_spool.estado_detalle = "RECHAZADO (Ciclo 2/3) - Pendiente reparación"
+    mock_spool.estado_detalle = "RECHAZADO - Pendiente reparación"
 
     with pytest.raises(OperacionNoIniciadaError) as exc_info:
         validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93)
 
     assert exc_info.value.data["operacion"] == "REPARACION"
-
-
-def test_cannot_cancelar_bloqueado(validation_service, mock_spool):
-    """Should raise OperacionNoIniciadaError when trying to CANCELAR BLOQUEADO spool."""
-    mock_spool.estado_detalle = "BLOQUEADO - Contactar supervisor"
-
-    with pytest.raises(OperacionNoIniciadaError):
-        validation_service.validar_puede_cancelar_reparacion(mock_spool, "MR(93)", worker_id=93)
 
 
 def test_cannot_cancelar_aprobado(validation_service, mock_spool):
@@ -216,9 +191,10 @@ def test_cannot_cancelar_aprobado(validation_service, mock_spool):
 
 # ==================== EDGE CASES ====================
 
+
 def test_tomar_handles_malformed_ocupado_por(validation_service, mock_spool):
     """Should handle malformed ocupado_por format gracefully."""
-    mock_spool.estado_detalle = "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
+    mock_spool.estado_detalle = "RECHAZADO - Pendiente reparación"
     mock_spool.ocupado_por = "InvalidFormat"
 
     with pytest.raises(SpoolOccupiedError) as exc_info:
@@ -247,12 +223,12 @@ def test_cancelar_with_null_estado(validation_service, mock_spool):
 
 # ==================== ROLE VALIDATION (NO RESTRICTION) ====================
 
+
 def test_any_worker_can_tomar_reparacion(validation_service, mock_spool):
-    """Should allow any worker to TOMAR reparación (no role restriction per user decision)."""
-    mock_spool.estado_detalle = "RECHAZADO (Ciclo 1/3) - Pendiente reparación"
+    """Any worker can TOMAR reparación (no role restriction)."""
+    mock_spool.estado_detalle = "RECHAZADO - Pendiente reparación"
     mock_spool.ocupado_por = None
 
-    # Multiple workers should all pass validation without raising
     for wid in [93, 94, 95]:
         result = validation_service.validar_puede_tomar_reparacion(mock_spool, worker_id=wid)
         assert result is None, f"Worker {wid} should be allowed to TOMAR reparación"

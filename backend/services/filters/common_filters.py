@@ -333,31 +333,43 @@ class MetrologiaNotCompletedFilter(SpoolFilter):
 
 class EstadoDetalleContainsFilter(SpoolFilter):
     """
-    Filtra spools basándose en si Estado_Detalle contiene una palabra específica.
+    Filtra spools basándose en si Estado_Detalle contiene alguna de las palabras
+    clave dadas (OR lógico).
 
-    Uso principal: REPARACION (buscar "RECHAZADO" en Estado_Detalle).
+    Uso principal: REPARACION (acepta "RECHAZADO" y también el legacy
+    "BLOQUEADO" — restos del límite de 3 ciclos ya removido).
     """
 
-    def __init__(self, keyword: str, display_name: Optional[str] = None):
+    def __init__(self, keyword=None, display_name: Optional[str] = None, keywords=None):
         """
         Args:
-            keyword: Palabra clave a buscar en Estado_Detalle (ej: "RECHAZADO")
-            display_name: Nombre legible para logs (default: keyword)
+            keyword: Palabra clave única a buscar en Estado_Detalle (compat).
+            keywords: Lista de palabras clave; basta con que coincida una.
+            display_name: Nombre legible para logs (default: primera keyword).
         """
-        self._keyword = keyword
-        self._display_name = display_name or keyword
+        if keywords is None:
+            if keyword is None:
+                raise ValueError("Debe proveerse 'keyword' o 'keywords'.")
+            self._keywords = [keyword]
+        else:
+            self._keywords = list(keywords)
+        self._display_name = display_name or self._keywords[0]
 
     def apply(self, spool: Spool) -> FilterResult:
         estado = spool.estado_detalle or ""
 
-        if self._keyword in estado:
+        matched = next((k for k in self._keywords if k in estado), None)
+        if matched is not None:
             return FilterResult(
                 passed=True,
-                reason=f"Estado_Detalle contiene '{self._keyword}' (estado={estado})"
+                reason=f"Estado_Detalle contiene '{matched}' (estado={estado})"
             )
         return FilterResult(
             passed=False,
-            reason=f"Estado_Detalle NO contiene '{self._keyword}' (estado={estado})"
+            reason=(
+                f"Estado_Detalle NO contiene ninguna de {self._keywords} "
+                f"(estado={estado})"
+            ),
         )
 
     @property
@@ -366,4 +378,4 @@ class EstadoDetalleContainsFilter(SpoolFilter):
 
     @property
     def description(self) -> str:
-        return f"Verifica que Estado_Detalle contenga la palabra '{self._keyword}'"
+        return f"Verifica que Estado_Detalle contenga alguna de {self._keywords}"

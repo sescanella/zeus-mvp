@@ -15,43 +15,44 @@ interface SpoolTableProps {
 }
 
 export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disabledSpools = [], maxHeight = 'max-h-96' }: SpoolTableProps) {
+  // The reparación list (ReparacionSpool) has no `nv` field. For all other
+  // flows the second column carries NV. Reparación rows show TAG_SPOOL only.
+  const showNvColumn = tipo !== 'reparacion';
+
   return (
     <div className={`border-4 border-white overflow-hidden ${maxHeight} overflow-y-auto custom-scrollbar`}>
       <table className="w-full">
         <thead className="sticky top-0 bg-zeues-navy border-b-4 border-white">
           <tr>
             <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">SEL</th>
-            <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">{tipo === 'reparacion' ? 'CICLO/ESTADO' : 'NV'}</th>
+            {showNvColumn && (
+              <th className="p-3 text-left text-xs font-black text-white/70 font-mono border-r-2 border-white/30">NV</th>
+            )}
             <th className="p-3 text-left text-xs font-black text-white/70 font-mono">TAG SPOOL</th>
           </tr>
         </thead>
         <tbody>
           {spools.map((spool, index) => {
             const isSelected = selectedSpools.includes(spool.tag_spool);
-            const isBloqueado = tipo === 'reparacion' && 'bloqueado' in spool && spool.bloqueado;
             const isDisabled = disabledSpools.includes(spool.tag_spool);
-            const isInert = isDisabled || isBloqueado;
-            const cycle = tipo === 'reparacion' && 'cycle' in spool ? spool.cycle : null;
 
             return (
               <tr
                 key={`${spool.tag_spool}-${index}`}
                 role="button"
-                tabIndex={isInert ? -1 : 0}
-                aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isBloqueado ? ' (bloqueado)' : ''}${isDisabled ? ' (ya agregado)' : ''}`}
-                aria-disabled={isInert ? true : undefined}
-                onClick={() => !isInert && onToggleSelect(spool.tag_spool)}
+                tabIndex={isDisabled ? -1 : 0}
+                aria-label={`${isSelected ? 'Deseleccionar' : 'Seleccionar'} spool ${spool.tag_spool}${isDisabled ? ' (ya agregado)' : ''}`}
+                aria-disabled={isDisabled ? true : undefined}
+                onClick={() => !isDisabled && onToggleSelect(spool.tag_spool)}
                 onKeyDown={(e) => {
-                  if (isInert) return;
+                  if (isDisabled) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onToggleSelect(spool.tag_spool);
                   }
                 }}
                 className={`border-t-2 border-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-zeues-orange focus:ring-inset ${
-                  isBloqueado
-                    ? 'bg-red-500/20 border-red-500 cursor-not-allowed'
-                    : isDisabled
+                  isDisabled
                     ? 'bg-white/10 opacity-50 cursor-not-allowed'
                     : isSelected
                     ? 'bg-zeues-orange/20 cursor-pointer'
@@ -59,9 +60,7 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
                 }`}
               >
                 <td className="p-3 border-r-2 border-white/30">
-                  {isBloqueado ? (
-                    <Lock size={24} className="text-red-500" strokeWidth={3} />
-                  ) : isDisabled ? (
+                  {isDisabled ? (
                     <Lock size={24} className="text-white/40" strokeWidth={3} />
                   ) : isSelected ? (
                     <CheckSquare size={24} className="text-zeues-orange" strokeWidth={3} />
@@ -69,25 +68,13 @@ export function SpoolTable({ spools, selectedSpools, onToggleSelect, tipo, disab
                     <Square size={24} className="text-white/70" strokeWidth={3} />
                   )}
                 </td>
-                <td className="p-3 border-r-2 border-white/30">
-                  {tipo === 'reparacion' ? (
-                    <div className="flex items-center gap-2">
-                      {isBloqueado ? (
-                        <span className="text-sm font-black text-red-500 font-mono">
-                          BLOQUEADO - Supervisor
-                        </span>
-                      ) : (
-                        <span className="text-sm font-black text-yellow-500 font-mono">
-                          Ciclo {cycle}/3
-                        </span>
-                      )}
-                    </div>
-                  ) : (
+                {showNvColumn && (
+                  <td className="p-3 border-r-2 border-white/30">
                     <span className="text-sm font-black text-white/70 font-mono">{'nv' in spool ? spool.nv : ''}</span>
-                  )}
-                </td>
+                  </td>
+                )}
                 <td className="p-3">
-                  <span className={`text-lg font-black font-mono ${isBloqueado ? 'text-red-500' : 'text-white'}`}>
+                  <span className="text-lg font-black font-mono text-white">
                     {spool.tag_spool}
                   </span>
                 </td>

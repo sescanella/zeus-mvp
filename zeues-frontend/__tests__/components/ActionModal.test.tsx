@@ -44,7 +44,6 @@ function makeSpool(overrides: Partial<SpoolCardData> = {}): SpoolCardData {
     soldador_display: null,
     operacion_actual: null,
     estado_trabajo: 'LIBRE',
-    ciclo_rep: null,
     ...overrides,
   };
 }

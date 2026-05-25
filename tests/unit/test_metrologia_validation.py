@@ -139,8 +139,10 @@ def test_validar_puede_completar_metrologia_rechazado(validation_service):
     assert "METROLOGIA" in str(exc.value)
 
 
-def test_validar_puede_completar_metrologia_bloqueado(validation_service):
-    """Test validation fails if spool is BLOQUEADO (needs supervisor intervention)."""
+def test_validar_puede_completar_metrologia_legacy_bloqueado(validation_service):
+    """Legacy 'BLOQUEADO' rows (from the removed 3-cycle limit) are treated
+    as plain RECHAZADO: metrología cannot re-inspect, must go through
+    reparación first."""
     spool = Spool(
         tag_spool="UNIT-013",
         fecha_materiales=date(2026, 1, 20),
@@ -150,7 +152,7 @@ def test_validar_puede_completar_metrologia_bloqueado(validation_service):
         armador="MR(93)",
         soldador="JP(94)",
         ocupado_por=None,
-        estado_detalle="BLOQUEADO (3/3 rechazos)"
+        estado_detalle="BLOQUEADO - Contactar supervisor"
     )
 
     with pytest.raises(OperacionYaCompletadaError) as exc:

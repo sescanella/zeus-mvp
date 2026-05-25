@@ -48,7 +48,6 @@ function makeSpoolCard(
     soldador_display: null,
     operacion_actual: null,
     estado_trabajo: 'LIBRE',
-    ciclo_rep: null,
     ...overrides,
   };
 }

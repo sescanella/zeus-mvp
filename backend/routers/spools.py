@@ -7,14 +7,13 @@ Aplica filtros de elegibilidad según reglas de negocio (estado, dependencias, o
 Endpoints:
 - GET /api/spools/iniciar?operacion=ARM|SOLD|METROLOGIA|REPARACION - Spools elegibles para iniciar
 - GET /api/spools/ocupados?operacion=ARM|SOLD|REPARACION&worker_id=... - Spools ocupados por worker
-- GET /api/spools/reparacion - Spools RECHAZADO/BLOQUEADO para reparación
+- GET /api/spools/reparacion - Spools RECHAZADO para reparación
 """
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 
 from backend.core.dependency import get_spool_service_v2, get_sheets_repository
 from backend.services.spool_service_v2 import SpoolServiceV2
-from backend.services.cycle_counter_service import CycleCounterService
 from backend.repositories.sheets_repository import SheetsRepository
 from backend.models.spool import SpoolListResponse
 from backend.models.enums import ActionType
@@ -24,11 +23,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def get_cycle_counter_service() -> CycleCounterService:
-    """Factory for CycleCounterService (stateless)."""
-    return CycleCounterService()
 
 
 @router.get("/spools/iniciar", response_model=SpoolListResponse, status_code=status.HTTP_200_OK)
@@ -243,27 +237,23 @@ async def get_spools_ocupados(
 @router.get("/spools/reparacion", response_model=dict, status_code=status.HTTP_200_OK)
 async def get_spools_reparacion(
     sheets_repo: SheetsRepository = Depends(get_sheets_repository),
-    cycle_counter: CycleCounterService = Depends(get_cycle_counter_service)
 ):
     """
     Lista spools RECHAZADO disponibles para reparación.
 
-    Filtra spools donde estado_detalle contains "RECHAZADO" or "BLOQUEADO".
-    Skip occupied spools (ocupado_por != None).
-    For each spool:
-    - Parse cycle count from Estado_Detalle
-    - Check if blocked (cycle >= 3)
-    - Include fecha_rechazo (from Fecha_QC_Metrologia)
+    Filtra spools cuyo `Estado_Detalle` contiene "RECHAZADO" (o el legacy
+    "BLOQUEADO", restos de la era del límite de 3 ciclos que ya no existe).
+    Omite los spools ocupados.
 
     Returns:
-        dict with:
-        - spools: List of RECHAZADO/BLOQUEADO spools with cycle info
-        - total: Total spools found
-        - bloqueados: Count of BLOQUEADO spools
-        - filtro_aplicado: Description of filter applied
+        dict con:
+        - spools: lista de spools elegibles (`tag_spool`, `estado_detalle`,
+          `fecha_rechazo`)
+        - total: cantidad encontrada
+        - filtro_aplicado: descripción del filtro
 
     Raises:
-        HTTPException 503: If Google Sheets connection fails
+        HTTPException 503: si falla la conexión a Google Sheets
 
     Example response (200 OK):
         ```json
@@ -271,22 +261,12 @@ async def get_spools_reparacion(
             "spools": [
                 {
                     "tag_spool": "MK-123",
-                    "estado_detalle": "RECHAZADO (Ciclo 2/3) - Pendiente reparación",
-                    "fecha_rechazo": "28-01-2026",
-                    "cycle": 2,
-                    "bloqueado": false
-                },
-                {
-                    "tag_spool": "MK-456",
-                    "estado_detalle": "BLOQUEADO - Contactar supervisor",
-                    "fecha_rechazo": "25-01-2026",
-                    "cycle": 3,
-                    "bloqueado": true
+                    "estado_detalle": "RECHAZADO - Pendiente reparación",
+                    "fecha_rechazo": "28-01-2026"
                 }
             ],
-            "total": 2,
-            "bloqueados": 1,
-            "filtro_aplicado": "RECHAZADO + BLOQUEADO visibles (no ocupados)"
+            "total": 1,
+            "filtro_aplicado": "RECHAZADO visibles (no ocupados)"
         }
         ```
     """
@@ -308,47 +288,29 @@ async def get_spools_reparacion(
             detail={"error": "SERVICE_ERROR", "message": "Error al cargar spools de reparación. Intenta nuevamente."},
         )
 
-    # Filter: RECHAZADO or BLOQUEADO, not occupied
+    # Filter: RECHAZADO (incl. legacy "BLOQUEADO" rows), not occupied
     reparacion_spools = []
-    bloqueados_count = 0
 
     for spool in all_spools:
-        # Skip if occupied
         if spool.ocupado_por:
             continue
 
-        # Check if RECHAZADO or BLOQUEADO in estado_detalle
         if not spool.estado_detalle:
             continue
 
         if "RECHAZADO" not in spool.estado_detalle and "BLOQUEADO" not in spool.estado_detalle:
             continue
 
-        # Extract cycle count
-        current_cycle = cycle_counter.extract_cycle_count(spool.estado_detalle)
-
-        # Check if blocked
-        is_blocked = cycle_counter.should_block(current_cycle)
-
-        if is_blocked:
-            bloqueados_count += 1
-
-        # Build spool data
-        spool_data = {
+        reparacion_spools.append({
             "tag_spool": spool.tag_spool,
             "estado_detalle": spool.estado_detalle,
             "fecha_rechazo": spool.fecha_qc_metrologia,  # From Fecha_QC_Metrologia column
-            "cycle": current_cycle,
-            "bloqueado": is_blocked
-        }
+        })
 
-        reparacion_spools.append(spool_data)
-
-    logger.info(f"Found {len(reparacion_spools)} reparacion spools ({bloqueados_count} bloqueados)")
+    logger.info(f"Found {len(reparacion_spools)} reparacion spools")
 
     return {
         "spools": reparacion_spools,
         "total": len(reparacion_spools),
-        "bloqueados": bloqueados_count,
-        "filtro_aplicado": "RECHAZADO + BLOQUEADO visibles (no ocupados)"
+        "filtro_aplicado": "RECHAZADO visibles (no ocupados)",
     }
