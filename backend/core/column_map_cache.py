@@ -180,6 +180,13 @@ class ColumnMapCache:
 
         column_map = SheetsService.build_column_map(header_row)
 
+        # Resolve schema aliases: if a canonical critical column is absent but
+        # one of its accepted aliases is present in the header, map the
+        # canonical normalized key to the alias's index. This keeps every
+        # `column_map[normalize("TAG_SPOOL")]` lookup working when the live
+        # header uses "TAG" instead — no per-read-site changes needed.
+        cls._apply_aliases(sheet_name, column_map)
+
         # Round-trip validation against the schema registry (if any).
         # On critical drift we keep the OLD cache entry (do not store the new
         # one) and raise — the system serves 503 rather than data with a wrong
@@ -240,13 +247,63 @@ class ColumnMapCache:
                     expected_column=required,
                     actual_header_at_index=None,
                 )
+            # Round-trip: the header at idx must normalize back to the
+            # canonical name OR to one of its accepted aliases (the canonical
+            # entry may have been injected by _apply_aliases pointing at an
+            # alias header like "TAG" for "TAG_SPOOL").
+            accepted = {normalized}
+            accepted.update(
+                _norm(a) for a in schema.column_aliases.get(required, ())
+            )
             actual_header = header_row[idx] if 0 <= idx < len(header_row) else None
-            if actual_header is None or _norm(actual_header) != normalized:
+            if actual_header is None or _norm(actual_header) not in accepted:
                 raise CriticalColumnDriftError(
                     sheet_name=sheet_name,
                     expected_column=required,
                     actual_header_at_index=actual_header,
                 )
+
+    @classmethod
+    def _apply_aliases(
+        cls,
+        sheet_name: str,
+        column_map: dict[str, int],
+    ) -> None:
+        """
+        For each canonical column with declared aliases, if the canonical
+        normalized key is absent from `column_map` but an alias is present,
+        inject `column_map[normalize(canonical)] = column_map[normalize(alias)]`.
+
+        Mutates `column_map` in place. No-op when the canonical column is
+        already present (the live header uses the canonical name). Aliases are
+        tried in declared order; the first present wins.
+        """
+        try:
+            from backend.core.sheet_schema import ALL_SCHEMAS
+        except ImportError:
+            return
+
+        schema = ALL_SCHEMAS.get(sheet_name)
+        if schema is None or not schema.column_aliases:
+            return
+
+        from backend.utils.normalize import normalize_column_name as _norm
+
+        for canonical, aliases in schema.column_aliases.items():
+            canonical_key = _norm(canonical)
+            if canonical_key in column_map:
+                continue  # live header uses the canonical name; nothing to do
+            for alias in aliases:
+                alias_key = _norm(alias)
+                if alias_key in column_map:
+                    column_map[canonical_key] = column_map[alias_key]
+                    logger.warning(
+                        f"Column alias resolved for '{sheet_name}': canonical "
+                        f"'{canonical}' not in header; mapped to alias "
+                        f"'{alias}' at index {column_map[alias_key]}. "
+                        f"Engineering renamed the column — reads continue."
+                    )
+                    break
 
     @classmethod
     def validate_critical_columns(
@@ -308,6 +365,15 @@ class ColumnMapCache:
 
         from backend.utils.normalize import normalize_column_name as _norm
 
+        # Alias-aware: a required column satisfied by an accepted alias header
+        # (e.g. "TAG" for "TAG_SPOOL") is NOT drift.
+        try:
+            from backend.core.sheet_schema import ALL_SCHEMAS
+            schema = ALL_SCHEMAS.get(sheet_name)
+            aliases_for = schema.column_aliases if schema is not None else {}
+        except ImportError:
+            aliases_for = {}
+
         header_row = entry.header_row
         column_map = entry.column_map
         drifts: list[dict] = []
@@ -318,8 +384,10 @@ class ColumnMapCache:
             if idx is None:
                 drifts.append({"expected": required, "actual_header": None, "index": None})
                 continue
+            accepted = {normalized}
+            accepted.update(_norm(a) for a in aliases_for.get(required, ()))
             actual = header_row[idx] if 0 <= idx < len(header_row) else None
-            if actual is None or _norm(actual) != normalized:
+            if actual is None or _norm(actual) not in accepted:
                 drifts.append({
                     "expected": required,
                     "actual_header": actual,

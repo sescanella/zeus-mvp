@@ -38,6 +38,12 @@ def normalize_column_name(name: str) -> str:
     """
     if not name:
         return ""
+    # UNFORMATTED_VALUE reads can return a non-string header cell (e.g. a
+    # numeric or date-formatted cell in the header row). Coerce before
+    # unicodedata.normalize, which only accepts str — otherwise a single
+    # malformed header cell raises TypeError mid-rebuild.
+    if not isinstance(name, str):
+        name = str(name)
     nfkd = unicodedata.normalize("NFKD", name)
     ascii_name = "".join(c for c in nfkd if not unicodedata.combining(c))
     return ascii_name.lower().replace(" ", "").replace("_", "").replace("/", "")

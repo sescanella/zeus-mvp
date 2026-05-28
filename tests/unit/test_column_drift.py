@@ -265,3 +265,64 @@ def test_all_schemas_have_critical_columns():
     assert ALL_SCHEMAS, "ALL_SCHEMAS registry must not be empty"
     for name, schema in ALL_SCHEMAS.items():
         assert schema.critical_columns, f"{name} schema must declare critical_columns"
+
+
+# --------------------------------------------------------- alias resolution
+#
+# Regression for the 2026-05-28 PROD incident: Engineering renamed the
+# `TAG_SPOOL` header to `TAG` in the Operaciones sheet. Without alias support
+# every Operaciones read raised CriticalColumnDriftError → 503 → the frontend
+# showed "NO SE PUDO CARGAR TU LISTA". OPERACIONES_SCHEMA now declares
+# TAG_SPOOL aliases ("TAG", "SPLIT", "tag_spool").
+
+
+def test_tag_alias_resolves_without_drift():
+    """Header using 'TAG' instead of 'TAG_SPOOL' must NOT raise; canonical lookup resolves."""
+    header = _operaciones_header_pre_matsys()
+    header[6] = "TAG"  # Engineering renamed TAG_SPOOL → TAG
+
+    column_map = ColumnMapCache.get_or_rebuild_if_changed("Operaciones", header)
+
+    from backend.utils.normalize import normalize_column_name as _norm
+    # Canonical key must resolve to the alias's index (6) so every existing
+    # `column_map[normalize("TAG_SPOOL")]` lookup keeps working.
+    assert column_map[_norm("TAG_SPOOL")] == 6
+
+
+def test_tag_alias_does_not_break_when_canonical_present():
+    """When the header uses the canonical 'TAG_SPOOL', aliasing is a no-op."""
+    header = _operaciones_header_pre_matsys()  # idx 6 == "TAG_SPOOL"
+
+    column_map = ColumnMapCache.get_or_rebuild_if_changed("Operaciones", header)
+
+    from backend.utils.normalize import normalize_column_name as _norm
+    assert column_map[_norm("TAG_SPOOL")] == 6
+    # No spurious alias key for "TAG" was needed (canonical was present).
+    assert _norm("TAG") not in column_map or column_map[_norm("TAG")] == 6
+
+
+def test_tag_and_canonical_both_missing_raises():
+    """If neither 'TAG_SPOOL' nor any alias is present, drift still raises."""
+    header = _operaciones_header_pre_matsys()
+    header[5] = ""   # remove SPLIT (an alias)
+    header[6] = ""   # remove TAG_SPOOL/TAG
+
+    with pytest.raises(CriticalColumnDriftError) as exc:
+        ColumnMapCache.get_or_rebuild_if_changed("Operaciones", header)
+
+    assert exc.value.data["expected_column"] in ("TAG_SPOOL", "SPLIT")
+
+
+def test_non_string_header_cell_does_not_crash_normalize():
+    """A numeric header cell (UNFORMATTED_VALUE) must not raise TypeError in normalize."""
+    from backend.utils.normalize import normalize_column_name as _norm
+
+    # Must coerce, not raise.
+    assert _norm(123) == "123"
+    assert _norm(1.5) == "1.5"  # '.' is not stripped by normalize
+
+    # And a full rebuild with a numeric cell somewhere harmless must not crash.
+    header = _operaciones_header_pre_matsys()
+    header[3] = 0  # a stray numeric in a non-critical position
+    # Should not raise (0 is falsy → skipped by build_column_map anyway).
+    ColumnMapCache.get_or_rebuild_if_changed("Operaciones", header)

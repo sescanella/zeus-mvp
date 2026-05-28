@@ -17,7 +17,9 @@ Header names use the EXACT casing/punctuation as they appear in the live
 sheet. ColumnMapCache normalizes via backend.utils.normalize.normalize_column_name
 when looking up, so case/accents/underscores are tolerated at lookup time.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,16 @@ class SheetSchema:
     sheet_name: str
     critical_columns: frozenset[str]
     expected_columns: frozenset[str]
+    # Accepted alternate header names for a canonical column. Maps a canonical
+    # name (one that appears in `critical_columns`) to alternate header names
+    # the live sheet may legitimately use instead. ColumnMapCache resolves any
+    # alias to the canonical column so reads keep working and drift detection
+    # does not 503. Example: Engineering renamed "TAG_SPOOL" → "TAG" in PROD;
+    # listing "TAG" as an alias keeps the whole Operaciones read path alive
+    # without a data fix. Lookup is normalization-insensitive.
+    column_aliases: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
 
 OPERACIONES_SCHEMA = SheetSchema(
@@ -58,6 +70,13 @@ OPERACIONES_SCHEMA = SheetSchema(
         "Pulgadas_SOLD",
         # v5.1 free-text
         "Notas",
+    }),
+    column_aliases=MappingProxyType({
+        # Engineering renamed the spool-tag header in PROD. Accept the
+        # alternates so a header rename never tears down the Operaciones
+        # read path. Canonical lookups for "TAG_SPOOL" resolve to whichever
+        # of these the live header actually uses.
+        "TAG_SPOOL": ("TAG", "SPLIT", "tag_spool"),
     }),
 )
 
