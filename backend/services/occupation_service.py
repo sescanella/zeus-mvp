@@ -1518,9 +1518,25 @@ class OccupationService:
                     ya_completadas = 0
                     if spool.total_uniones and spool.total_uniones > 0:
                         if operacion == "ARM":
-                            # All unions need ARM regardless of type
-                            total_uniones_spool = spool.total_uniones
-                            ya_completadas = spool.uniones_arm_completadas or 0
+                            # Derive BOTH counts from Uniones reality (authoritative),
+                            # NOT from the Operaciones counters, which can drift/corrupt:
+                            # a stale Uniones_ARM_Completadas (e.g. =3 while no union has
+                            # ARM_FECHA_FIN) makes the T-021 guard in _determine_action
+                            # raise a false RaceConditionError → HTTP 409 on FINALIZAR.
+                            # Mirrors the SOLD branch below. ARM applies to all union
+                            # types, so count the whole OT.
+                            all_unions_arm = self.union_repository.get_by_ot(spool.ot)
+                            total_uniones_spool = len(all_unions_arm)
+                            ya_completadas = sum(
+                                1 for u in all_unions_arm if u.arm_fecha_fin is not None
+                            )
+                            logger.debug(
+                                f"ARM completion math for {tag_spool}: "
+                                f"total={total_uniones_spool}, ya_completadas={ya_completadas}, "
+                                f"selected={selected_count}, available={total_available} "
+                                f"(Operaciones counter said "
+                                f"uniones_arm_completadas={spool.uniones_arm_completadas})"
+                            )
                         elif operacion == "SOLD":
                             # Only SOLD_REQUIRED_TYPES count toward SOLD completion
                             all_unions = self.union_repository.get_by_spool(tag_spool)

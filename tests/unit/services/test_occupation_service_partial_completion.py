@@ -31,6 +31,19 @@ from backend.exceptions import RaceConditionError
 # Fixtures (minimal — focused on partial-completion scenarios)
 # ============================================================================
 
+@pytest.fixture(autouse=True)
+def _clear_column_map_cache():
+    """
+    ColumnMapCache is a global singleton; without a reset the first test to
+    build the 'Operaciones' map poisons the rest (CriticalColumnDriftError or
+    a stale map). Clear before AND after each test for deterministic runs.
+    """
+    from backend.core.column_map_cache import ColumnMapCache
+    ColumnMapCache.clear_all()
+    yield
+    ColumnMapCache.clear_all()
+
+
 @pytest.fixture
 def mock_sheets_repository():
     repo = MagicMock()
@@ -54,10 +67,11 @@ def mock_sheets_repository():
     repo._index_to_column_letter = MagicMock(return_value="G")
     repo.find_row_by_column_value = MagicMock(return_value=5)
     repo.read_worksheet = MagicMock(return_value=[[
-        "TAG_SPOOL", "OT", "NV", "Fecha_Materiales", "Fecha_Armado", "Armador",
-        "Fecha_Soldadura", "Soldador", "Ocupado_Por", "Fecha_Ocupacion",
-        "Estado_Detalle", "Total_Uniones", "Uniones_ARM_Completadas",
-        "Pulgadas_ARM", "Uniones_SOLD_Completadas", "Pulgadas_SOLD"
+        "SPLIT", "TAG_SPOOL", "OT", "NV", "Fecha_Materiales", "Fecha_Armado",
+        "Armador", "Fecha_Soldadura", "Soldador", "Fecha_QC_Metrologia",
+        "Ocupado_Por", "Fecha_Ocupacion", "Estado_Detalle", "Total_Uniones",
+        "Uniones_ARM_Completadas", "Pulgadas_ARM", "Uniones_SOLD_Completadas",
+        "Pulgadas_SOLD"
     ]])
     return repo
 
@@ -534,3 +548,154 @@ class TestT240T241Reconciliation:
             spool=mock_spool, operacion="SOLD", fallback_worker="FF(129)",
         )
         assert result == {}
+
+
+# ============================================================================
+# Corrupt ARM counter — FINALIZAR must derive ya_completadas from Uniones
+# ============================================================================
+#
+# Production bug (SPOOL 2610-SP-32361-E, OT SP-10487-NV0661):
+#   Operaciones.Uniones_ARM_Completadas = 3  (stale/corrupt)
+#   Uniones reality: 0 unions have ARM_FECHA_FIN
+# Worker selects 3 of 5 → the ARM branch trusted the stale counter, so
+# _determine_action saw ya_completadas=3 + selected=3 = 6 > total=5 and the
+# T-021 guard raised RaceConditionError → HTTP 409. After the fix, the ARM
+# branch derives ya_completadas from get_by_ot (Uniones), so the false 409
+# is gone and the action is correctly PAUSAR (3 of 5).
+#
+# These drive finalizar_spool() end-to-end (not _determine_action directly)
+# so they exercise the corrected branch.
+
+class TestArmCorruptCounterRegression:
+    """FINALIZAR ARM must ignore the Operaciones counter, count Uniones."""
+
+    @pytest.mark.asyncio
+    async def test_select_3_of_5_with_corrupt_counter_pausar_not_409(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        The exact reported bug: counter=3, real=0, select 3 of 5 → PAUSAR,
+        no RaceConditionError. Pre-fix this raised 409.
+        """
+        five_unions = [_make_union(i, arm_done=False) for i in range(1, 6)]
+        mock_union_repository.get_by_ot = MagicMock(return_value=five_unions)
+        # get_by_spool drives the v3.0/v4.0 detection (line ~1174): must see
+        # the unions so the spool is treated as v4.0 (union-tracked).
+        mock_union_repository.get_by_spool = MagicMock(return_value=five_unions)
+        # All 5 ARM-available (none completed in Uniones).
+        mock_union_repository.get_disponibles_arm_by_ot = MagicMock(return_value=five_unions)
+        mock_union_repository.batch_update_arm_full = MagicMock(return_value=3)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.total_uniones = 5
+        mock_spool.uniones_arm_completadas = 3  # STALE / corrupt
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM",
+            selected_unions=["OT-999+1", "OT-999+2", "OT-999+4"],
+        )
+        result = await service.finalizar_spool(request)
+
+        assert result.action_taken == "PAUSAR"
+
+    @pytest.mark.asyncio
+    async def test_select_all_5_with_corrupt_counter_completar(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """Counter=3 (corrupt), real=0, select all 5 → COMPLETAR (0+5==5)."""
+        five_unions = [_make_union(i, arm_done=False) for i in range(1, 6)]
+        mock_union_repository.get_by_ot = MagicMock(return_value=five_unions)
+        mock_union_repository.get_by_spool = MagicMock(return_value=five_unions)
+        mock_union_repository.get_disponibles_arm_by_ot = MagicMock(return_value=five_unions)
+        mock_union_repository.batch_update_arm_full = MagicMock(return_value=5)
+        # Post-write reality: the defensive guard at Step 7 re-reads metrics
+        # after batch_update_arm_full; simulate all 5 now ARM-complete.
+        mock_union_repository.calculate_metrics = MagicMock(return_value={
+            "arm_completadas": 5, "sold_completadas": 0,
+            "pulgadas_arm": 10.0, "pulgadas_sold": 0.0,
+        })
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.total_uniones = 5
+        mock_spool.uniones_arm_completadas = 3  # corrupt
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM",
+            selected_unions=[f"OT-999+{i}" for i in range(1, 6)],
+        )
+        result = await service.finalizar_spool(request)
+
+        assert result.action_taken == "COMPLETAR"
+
+    @pytest.mark.asyncio
+    async def test_counter_value_is_ignored_entirely(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        Lock in that the ARM counter is no longer read for the decision:
+        an absurd counter (99) yields the same PAUSAR outcome as the bug case.
+        """
+        five_unions = [_make_union(i, arm_done=False) for i in range(1, 6)]
+        mock_union_repository.get_by_ot = MagicMock(return_value=five_unions)
+        mock_union_repository.get_by_spool = MagicMock(return_value=five_unions)
+        mock_union_repository.get_disponibles_arm_by_ot = MagicMock(return_value=five_unions)
+        mock_union_repository.batch_update_arm_full = MagicMock(return_value=3)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.total_uniones = 5
+        mock_spool.uniones_arm_completadas = 99  # absurd — must be ignored
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM",
+            selected_unions=["OT-999+1", "OT-999+2", "OT-999+4"],
+        )
+        result = await service.finalizar_spool(request)
+
+        assert result.action_taken == "PAUSAR"
+
+    @pytest.mark.asyncio
+    async def test_real_prior_arm_work_completes_correctly(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        Genuine prior work: 2 of 5 unions already ARM-complete in Uniones.
+        Selecting the final 3 → COMPLETAR (2 real + 3 == 5), regardless of
+        what the Operaciones counter says.
+        """
+        unions = [
+            _make_union(1, arm_done=True),
+            _make_union(2, arm_done=True),
+            _make_union(3, arm_done=False),
+            _make_union(4, arm_done=False),
+            _make_union(5, arm_done=False),
+        ]
+        available = [u for u in unions if u.arm_fecha_fin is None]
+        mock_union_repository.get_by_ot = MagicMock(return_value=unions)
+        mock_union_repository.get_by_spool = MagicMock(return_value=unions)
+        mock_union_repository.get_disponibles_arm_by_ot = MagicMock(return_value=available)
+        mock_union_repository.batch_update_arm_full = MagicMock(return_value=3)
+        # Post-write reality for the Step 7 guard: 2 prior + 3 now = 5 done.
+        mock_union_repository.calculate_metrics = MagicMock(return_value={
+            "arm_completadas": 5, "sold_completadas": 0,
+            "pulgadas_arm": 10.0, "pulgadas_sold": 0.0,
+        })
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.total_uniones = 5
+        mock_spool.uniones_arm_completadas = 0  # counter disagrees with reality
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM",
+            selected_unions=["OT-999+3", "OT-999+4", "OT-999+5"],
+        )
+        result = await service.finalizar_spool(request)
+
+        assert result.action_taken == "COMPLETAR"

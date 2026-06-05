@@ -33,6 +33,20 @@ from backend.exceptions import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _clear_column_map_cache():
+    """
+    ColumnMapCache is a global singleton; clear it around each test so a fresh
+    'Operaciones' map is built from this file's headers (and not poisoned by, or
+    poisoning, other test modules). Without this, these tests only passed by
+    piggybacking on a cache built elsewhere in the full suite.
+    """
+    from backend.core.column_map_cache import ColumnMapCache
+    ColumnMapCache.clear_all()
+    yield
+    ColumnMapCache.clear_all()
+
+
 @pytest.fixture
 def mock_sheets_repository():
     """Mock SheetsRepository."""
@@ -61,12 +75,15 @@ def mock_sheets_repository():
     repo._index_to_column_letter = MagicMock(return_value="G")
     repo.find_row_by_column_value = MagicMock(return_value=5)
 
-    # Mock read_worksheet to return headers (needed for ColumnMapCache)
+    # Mock read_worksheet to return headers (needed for ColumnMapCache).
+    # Must include ALL critical Operaciones columns (SPLIT, Fecha_QC_Metrologia,
+    # ...) or ColumnMapCache raises CriticalColumnDriftError on a fresh build.
     mock_headers = [
-        "TAG_SPOOL", "OT", "NV", "Fecha_Materiales", "Fecha_Armado", "Armador",
-        "Fecha_Soldadura", "Soldador", "Ocupado_Por", "Fecha_Ocupacion",
-        "version", "Estado_Detalle", "Total_Uniones", "Uniones_ARM_Completadas",
-        "Pulgadas_ARM", "Uniones_SOLD_Completadas", "Pulgadas_SOLD"
+        "SPLIT", "TAG_SPOOL", "OT", "NV", "Fecha_Materiales", "Fecha_Armado",
+        "Armador", "Fecha_Soldadura", "Soldador", "Fecha_QC_Metrologia",
+        "Ocupado_Por", "Fecha_Ocupacion", "version", "Estado_Detalle",
+        "Total_Uniones", "Uniones_ARM_Completadas", "Pulgadas_ARM",
+        "Uniones_SOLD_Completadas", "Pulgadas_SOLD"
     ]
     repo.read_worksheet = MagicMock(return_value=[mock_headers])
 
