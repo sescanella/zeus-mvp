@@ -46,6 +46,7 @@ from backend.models.occupation import (
 from backend.models.spool import Spool
 from backend.models.union import Union
 from backend.models.enums import ActionType, EventoTipo
+from tests.fixtures.mock_uniones_data import alias_by_spool_to_by_ot
 from backend.exceptions import (
     SpoolNoEncontradoError,
     ArmPrerequisiteError,
@@ -176,6 +177,8 @@ def mock_union_repository():
         create_union(3, dn=2.5)
     ])
 
+    # FINALIZAR/INICIAR now resolve unions by TAG_SPOOL; mirror the OT mocks.
+    alias_by_spool_to_by_ot(repo)
     return repo
 
 
@@ -940,9 +943,8 @@ async def test_finalizar_sold_partial_does_not_write_fecha_soldadura_when_union_
         return [u for u in union_rows if u.tag_spool == tag_spool]
 
     union_repo.get_by_spool = MagicMock(side_effect=get_by_spool)
-    # The v4.0 branch relies on get_disponibles_sold_by_ot to surface pending
-    # SOLD unions. It queries by OT too, but in production it returned results
-    # for these spools (the stale OT column is only the get_total_uniones issue).
+    # The v4.0 branch relies on get_disponibles_sold_by_spool to surface pending
+    # SOLD unions (alias_by_spool_to_by_ot below bridges it to this OT mock).
     # We return the pending unions directly so the flow can decide PAUSAR.
     union_repo.get_disponibles_sold_by_ot = MagicMock(return_value=pending_sold)
     union_repo.get_disponibles_arm_by_ot = MagicMock(return_value=[])
@@ -957,6 +959,10 @@ async def test_finalizar_sold_partial_does_not_write_fecha_soldadura_when_union_
     union_repo.batch_update_sold_full = MagicMock(return_value=1)
     union_repo.batch_update_arm_full = MagicMock(return_value=0)
     union_repo.get_by_ids = MagicMock(return_value=[pending_sold[0]])
+
+    # get_by_spool is configured above with a real side_effect; alias the rest
+    # of the *_by_spool methods to their OT-keyed mocks.
+    alias_by_spool_to_by_ot(union_repo)
 
     service = OccupationService(
         sheets_repository=mock_sheets_repository,
@@ -1216,6 +1222,8 @@ async def test_finalizar_sold_full_completion_stamps_fecha_soldadura(
     union_repo.batch_update_sold_full = MagicMock(return_value=2)
     union_repo.batch_update_arm_full = MagicMock(return_value=0)
     union_repo.get_by_ids = MagicMock(return_value=pending_to_solder)
+
+    alias_by_spool_to_by_ot(union_repo)
 
     service = OccupationService(
         sheets_repository=mock_sheets_repository,

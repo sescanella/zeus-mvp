@@ -27,6 +27,7 @@ from backend.models.spool import Spool
 from backend.models.worker import Worker
 from backend.models.union import Union
 from backend.exceptions import SpoolNoEncontradoError
+from tests.fixtures.mock_uniones_data import alias_by_spool_to_by_ot
 
 
 # ============================================================================
@@ -103,6 +104,7 @@ def mock_union_repo():
     repo.get_disponibles_arm_by_ot = MagicMock(return_value=unions)
     repo.batch_update_arm_full = MagicMock(return_value=2)
     repo.get_by_ids = MagicMock(return_value=unions[:2])
+    alias_by_spool_to_by_ot(repo)
     return repo
 
 

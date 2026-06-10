@@ -281,11 +281,30 @@ class UnionRepository:
             self.logger.error(f"Failed to query unions by IDs: {e}", exc_info=True)
             raise SheetsConnectionError(f"Failed to read Uniones sheet: {e}")
 
+    @staticmethod
+    def _filter_disponibles_arm(all_unions: list[Union]) -> list[Union]:
+        """Unions with ARM not yet completed (ARM_FECHA_FIN is NULL)."""
+        return [u for u in all_unions if u.arm_fecha_fin is None]
+
+    @staticmethod
+    def _filter_disponibles_sold(all_unions: list[Union]) -> list[Union]:
+        """Unions ARM-complete but SOLD-pending (ARM_FECHA_FIN set, SOL_FECHA_FIN NULL)."""
+        return [
+            u for u in all_unions
+            if u.arm_fecha_fin is not None and u.sol_fecha_fin is None
+        ]
+
     def get_disponibles_arm_by_ot(self, ot: str) -> list[Union]:
         """
         Get disponibles unions for ARM operation for a given work order.
 
         Convenience method that filters unions where ARM_FECHA_FIN is NULL.
+
+        WARNING (cross-sheet OT mismatch): keys on Uniones.OT. When the OT
+        in Operaciones differs from the OT in Uniones for the same spool,
+        this returns the wrong (often empty) set. The FINALIZAR flow uses
+        the TAG_SPOOL variant `get_disponibles_arm_by_spool` instead — see
+        the audit at docs/audits/2026-06-05-tag-ot-consistency-prod.md.
 
         Args:
             ot: Work order number to filter by (e.g., "001", "123")
@@ -296,13 +315,30 @@ class UnionRepository:
         Raises:
             SheetsConnectionError: If Google Sheets read fails
         """
-        # Fetch all unions for the OT
-        all_unions = self.get_by_ot(ot)
-
-        # Filter to disponibles (ARM not yet completed)
-        disponibles = [u for u in all_unions if u.arm_fecha_fin is None]
-
+        disponibles = self._filter_disponibles_arm(self.get_by_ot(ot))
         self.logger.debug(f"Found {len(disponibles)} ARM disponibles for OT {ot}")
+        return disponibles
+
+    def get_disponibles_arm_by_spool(self, tag_spool: str) -> list[Union]:
+        """
+        TAG_SPOOL-keyed counterpart of get_disponibles_arm_by_ot.
+
+        Resolves unions by TAG_SPOOL (reliable) instead of OT (drifts between
+        the Operaciones and Uniones sheets), so the FINALIZAR flow never sees
+        a false-empty disponibles set. Mirrors the proven pattern already used
+        by should_trigger_metrologia and _reconcile_completion_columns.
+
+        Args:
+            tag_spool: TAG_SPOOL value to filter by
+
+        Returns:
+            list[Union]: Unions of THIS spool available for ARM work
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        disponibles = self._filter_disponibles_arm(self.get_by_spool(tag_spool))
+        self.logger.debug(f"Found {len(disponibles)} ARM disponibles for spool {tag_spool}")
         return disponibles
 
     def get_disponibles_sold_by_ot(self, ot: str) -> list[Union]:
@@ -313,6 +349,10 @@ class UnionRepository:
         - ARM_FECHA_FIN is NOT NULL (ARM must be completed first)
         - SOL_FECHA_FIN is NULL (SOLD not yet completed)
 
+        WARNING (cross-sheet OT mismatch): keys on Uniones.OT — see
+        get_disponibles_arm_by_ot. FINALIZAR uses the TAG_SPOOL variant
+        `get_disponibles_sold_by_spool`.
+
         Args:
             ot: Work order number to filter by (e.g., "001", "123")
 
@@ -322,16 +362,27 @@ class UnionRepository:
         Raises:
             SheetsConnectionError: If Google Sheets read fails
         """
-        # Fetch all unions for the OT
-        all_unions = self.get_by_ot(ot)
-
-        # Filter to disponibles (ARM complete, SOLD not yet complete)
-        disponibles = [
-            u for u in all_unions
-            if u.arm_fecha_fin is not None and u.sol_fecha_fin is None
-        ]
-
+        disponibles = self._filter_disponibles_sold(self.get_by_ot(ot))
         self.logger.debug(f"Found {len(disponibles)} SOLD disponibles for OT {ot}")
+        return disponibles
+
+    def get_disponibles_sold_by_spool(self, tag_spool: str) -> list[Union]:
+        """
+        TAG_SPOOL-keyed counterpart of get_disponibles_sold_by_ot.
+
+        Resolves unions by TAG_SPOOL instead of OT for OT-mismatch resilience.
+
+        Args:
+            tag_spool: TAG_SPOOL value to filter by
+
+        Returns:
+            list[Union]: Unions of THIS spool available for SOLD work
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        disponibles = self._filter_disponibles_sold(self.get_by_spool(tag_spool))
+        self.logger.debug(f"Found {len(disponibles)} SOLD disponibles for spool {tag_spool}")
         return disponibles
 
     def get_disponibles(
@@ -450,14 +501,28 @@ class UnionRepository:
         Raises:
             SheetsConnectionError: If Google Sheets read fails
         """
-        unions = self.get_by_ot(ot)
+        return sum(1 for u in self.get_by_ot(ot) if u.arm_fecha_fin is not None)
 
-        count = 0
-        for union in unions:
-            if union.arm_fecha_fin is not None:
-                count += 1
+    def count_completed_arm_by_spool(self, tag_spool: str) -> int:
+        """
+        TAG_SPOOL-keyed counterpart of count_completed_arm.
 
-        return count
+        Used by the SOLD INICIAR prerequisite check. Resolving by TAG_SPOOL
+        (not OT) keeps the check correct when the Operaciones OT drifts from
+        the Uniones OT (audit 2026-06-05) — otherwise count_completed_arm
+        returned 0 and raised a false ArmPrerequisiteError, blocking SOLD on
+        a spool whose ARM was actually finished at the union level.
+
+        Args:
+            tag_spool: TAG_SPOOL value to count ARM-complete unions for
+
+        Returns:
+            int: unions of this spool with arm_fecha_fin set, 0 if none
+
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        return sum(1 for u in self.get_by_spool(tag_spool) if u.arm_fecha_fin is not None)
 
     def count_completed_sold(self, ot: str) -> int:
         """
@@ -612,12 +677,78 @@ class UnionRepository:
             self.logger.error(f"Failed to count total uniones for OT {ot}: {e}", exc_info=True)
             return 0
 
+    def get_total_uniones_by_spool(self, tag_spool: str) -> int:
+        """
+        TAG_SPOOL-keyed counterpart of get_total_uniones.
+
+        Counts union rows for a single spool by TAG_SPOOL, sidestepping the
+        cross-sheet OT mismatch. Uses get_by_spool, which (unlike the raw
+        OT scan in get_total_uniones) skips rows that fail to parse.
+
+        Args:
+            tag_spool: TAG_SPOOL value to count rows for
+
+        Returns:
+            int: Number of union rows for the spool, 0 on error
+        """
+        try:
+            return len(self.get_by_spool(tag_spool))
+        except Exception as e:
+            self.logger.error(
+                f"Failed to count total uniones for spool {tag_spool}: {e}",
+                exc_info=True,
+            )
+            return 0
+
+    def _compute_metrics(self, unions: list[Union]) -> dict:
+        """
+        Aggregate union metrics from an already-fetched list.
+
+        Shared by calculate_metrics (OT-keyed) and calculate_metrics_by_spool
+        (TAG_SPOOL-keyed) so the aggregation lives in one place.
+        """
+        total_uniones = len(unions)
+        arm_completadas = 0
+        sold_completadas = 0
+        pulgadas_arm = 0.0
+        pulgadas_sold = 0.0
+
+        for union in unions:
+            try:
+                dn_value = float(union.dn_union)
+            except (ValueError, TypeError):
+                self.logger.warning(
+                    f"Invalid DN_UNION value for union {union.id}: {union.dn_union}, skipping"
+                )
+                continue
+
+            if union.arm_fecha_fin is not None:
+                arm_completadas += 1
+                pulgadas_arm += dn_value
+
+            if union.sol_fecha_fin is not None:
+                sold_completadas += 1
+                pulgadas_sold += dn_value
+
+        return {
+            "total_uniones": total_uniones,
+            "arm_completadas": arm_completadas,
+            "sold_completadas": sold_completadas,
+            "pulgadas_arm": round(pulgadas_arm, 2),
+            "pulgadas_sold": round(pulgadas_sold, 2),
+        }
+
     def calculate_metrics(self, ot: str) -> dict:
         """
         Calculate all union metrics for a given work order in a single call.
 
         More efficient than calling 5 separate methods - fetches unions once
         and calculates all metrics. Supports Operaciones columns 68-72.
+
+        WARNING (cross-sheet OT mismatch + many-to-one OT→spools): aggregates
+        across every union sharing the OT. When several spools share an OT, the
+        result is the OT total, not a single spool's. Per-spool callers (the
+        FINALIZAR metrics write-back) must use `calculate_metrics_by_spool`.
 
         Args:
             ot: Work order number (e.g., "001", "123")
@@ -633,43 +764,26 @@ class UnionRepository:
         Raises:
             SheetsConnectionError: If Google Sheets read fails
         """
-        unions = self.get_by_ot(ot)
+        return self._compute_metrics(self.get_by_ot(ot))
 
-        # Initialize metrics
-        total_uniones = len(unions)
-        arm_completadas = 0
-        sold_completadas = 0
-        pulgadas_arm = 0.0
-        pulgadas_sold = 0.0
+    def calculate_metrics_by_spool(self, tag_spool: str) -> dict:
+        """
+        TAG_SPOOL-keyed counterpart of calculate_metrics.
 
-        # Single pass calculation
-        for union in unions:
-            # Handle invalid DN_UNION values
-            try:
-                dn_value = float(union.dn_union)
-            except (ValueError, TypeError):
-                self.logger.warning(
-                    f"Invalid DN_UNION value for union {union.id}: {union.dn_union}, skipping"
-                )
-                continue
+        Aggregates metrics for exactly ONE spool, resolved by TAG_SPOOL. This
+        is the correct lens when writing per-spool counters back to that spool's
+        Operaciones row, and it is immune to the OT drift between sheets.
 
-            # Count and sum ARM completions
-            if union.arm_fecha_fin is not None:
-                arm_completadas += 1
-                pulgadas_arm += dn_value
+        Args:
+            tag_spool: TAG_SPOOL value to aggregate metrics for
 
-            # Count and sum SOLD completions
-            if union.sol_fecha_fin is not None:
-                sold_completadas += 1
-                pulgadas_sold += dn_value
+        Returns:
+            dict: same shape as calculate_metrics, scoped to this spool
 
-        return {
-            "total_uniones": total_uniones,
-            "arm_completadas": arm_completadas,
-            "sold_completadas": sold_completadas,
-            "pulgadas_arm": round(pulgadas_arm, 2),
-            "pulgadas_sold": round(pulgadas_sold, 2),
-        }
+        Raises:
+            SheetsConnectionError: If Google Sheets read fails
+        """
+        return self._compute_metrics(self.get_by_spool(tag_spool))
 
 
     def batch_update_arm(

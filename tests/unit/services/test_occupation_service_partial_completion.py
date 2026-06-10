@@ -25,6 +25,7 @@ from backend.models.spool import Spool
 from backend.models.union import Union
 from backend.models.enums import ActionType
 from backend.exceptions import RaceConditionError
+from tests.fixtures.mock_uniones_data import alias_by_spool_to_by_ot
 
 
 # ============================================================================
@@ -131,6 +132,7 @@ def mock_union_repository():
         "pulgadas_sold": 0.0,
     })
     repo._find_spool_row = MagicMock(return_value=5)
+    alias_by_spool_to_by_ot(repo)
     return repo
 
 
@@ -696,6 +698,94 @@ class TestArmCorruptCounterRegression:
             operacion="ARM",
             selected_unions=["OT-999+3", "OT-999+4", "OT-999+5"],
         )
+        result = await service.finalizar_spool(request)
+
+        assert result.action_taken == "COMPLETAR"
+
+
+class TestCrossSheetOtMismatch:
+    """
+    Regression for the cross-sheet OT mismatch (audit 2026-06-05, spool
+    2610-SP-32301): the Operaciones OT differs from the Uniones OT, so the
+    OT-keyed lookups (get_by_ot / get_disponibles_*_by_ot / calculate_metrics)
+    return EMPTY for spool.ot. The fix routes FINALIZAR through the TAG_SPOOL
+    lookups instead, which still find the unions.
+
+    These tests deliberately do NOT use alias_by_spool_to_by_ot: the *_by_ot
+    mocks return [] (the mismatch), and only the *_by_spool mocks are populated.
+    A correct implementation must read exclusively from the *_by_spool side.
+    """
+
+    @pytest.mark.asyncio
+    async def test_arm_partial_does_not_raise_false_409(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """
+        Operaciones OT mismatches Uniones OT → get_by_ot(spool.ot)==[]. Worker
+        selects 3 of 5 ARM unions. Pre-fix this raised RaceConditionError (409,
+        selected 3 > available 0). Post-fix it resolves by TAG → PAUSAR.
+        """
+        five_unions = [_make_union(i, arm_done=False) for i in range(1, 6)]
+
+        # OT-keyed lookups see nothing (the mismatch). TAG-keyed see reality.
+        mock_union_repository.get_by_ot = MagicMock(return_value=[])
+        mock_union_repository.get_disponibles_arm_by_ot = MagicMock(return_value=[])
+        mock_union_repository.get_by_spool = MagicMock(return_value=five_unions)
+        mock_union_repository.get_disponibles_arm_by_spool = MagicMock(return_value=five_unions)
+        mock_union_repository.get_total_uniones_by_spool = MagicMock(return_value=5)
+        mock_union_repository.calculate_metrics_by_spool = MagicMock(return_value={
+            "arm_completadas": 3, "sold_completadas": 0,
+            "pulgadas_arm": 6.0, "pulgadas_sold": 0.0,
+        })
+        mock_union_repository.batch_update_arm_full = MagicMock(return_value=3)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.ot = "SP-10571-NV0661"   # Operaciones OT (≠ Uniones OT)
+        mock_spool.total_uniones = 5
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM",
+            selected_unions=["OT-999+1", "OT-999+2", "OT-999+4"],
+        )
+
+        result = await service.finalizar_spool(request)
+
+        assert result.action_taken == "PAUSAR"
+        # The OT-keyed disponibles must never have been consulted for the decision.
+        mock_union_repository.get_disponibles_arm_by_spool.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_arm_full_completes_via_tag_lookup(
+        self, service, mock_sheets_repository, mock_union_repository
+    ):
+        """All 5 selected under OT mismatch → COMPLETAR, resolved by TAG."""
+        five_unions = [_make_union(i, arm_done=False) for i in range(1, 6)]
+
+        mock_union_repository.get_by_ot = MagicMock(return_value=[])
+        mock_union_repository.get_disponibles_arm_by_ot = MagicMock(return_value=[])
+        mock_union_repository.get_by_spool = MagicMock(return_value=five_unions)
+        mock_union_repository.get_disponibles_arm_by_spool = MagicMock(return_value=five_unions)
+        mock_union_repository.get_total_uniones_by_spool = MagicMock(return_value=5)
+        # Post-write reality for the Step 7 guard: all 5 ARM-complete.
+        mock_union_repository.calculate_metrics_by_spool = MagicMock(return_value={
+            "arm_completadas": 5, "sold_completadas": 0,
+            "pulgadas_arm": 10.0, "pulgadas_sold": 0.0,
+        })
+        mock_union_repository.batch_update_arm_full = MagicMock(return_value=5)
+
+        mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+        mock_spool.ot = "SP-10571-NV0661"
+        mock_spool.total_uniones = 5
+        mock_spool.fecha_armado = None
+
+        request = FinalizarRequest(
+            tag_spool="OT-999", worker_id=93, worker_nombre="MR(93)",
+            operacion="ARM",
+            selected_unions=[f"OT-999+{i}" for i in range(1, 6)],
+        )
+
         result = await service.finalizar_spool(request)
 
         assert result.action_taken == "COMPLETAR"

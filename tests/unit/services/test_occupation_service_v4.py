@@ -23,6 +23,7 @@ from backend.models.occupation import (
 from backend.models.spool import Spool
 from backend.models.union import Union
 from backend.models.enums import ActionType
+from tests.fixtures.mock_uniones_data import alias_by_spool_to_by_ot
 from backend.exceptions import (
     SpoolNoEncontradoError,
     SpoolOccupiedError,
@@ -167,6 +168,8 @@ def mock_union_repository():
     })
     repo._find_spool_row = MagicMock(return_value=5)
 
+    # FINALIZAR/INICIAR now resolve unions by TAG_SPOOL; mirror the OT mocks.
+    alias_by_spool_to_by_ot(repo)
     return repo
 
 
@@ -247,6 +250,45 @@ async def test_iniciar_spool_already_occupied(occupation_service_v4, mock_sheets
     assert response.success is True
     # Sheets write overwrites previous occupation (LWW)
     mock_sheets_repository.batch_update_by_column_name.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_iniciar_sold_prerequisite_uses_tag_not_ot(
+    occupation_service_v4, mock_sheets_repository, mock_union_repository
+):
+    """
+    Regression (cross-sheet OT mismatch, audit 2026-06-05): the SOLD INICIAR
+    ARM-prerequisite check must count ARM-complete unions by TAG_SPOOL. With
+    the OT-keyed count, a spool whose Operaciones OT differs from its Uniones
+    OT reads 0 ARM-complete and raises a false ArmPrerequisiteError.
+    """
+    mock_spool = mock_sheets_repository.get_spool_by_tag.return_value
+    mock_spool.ot = "SP-10571-NV0661"   # Operaciones OT (≠ Uniones OT)
+    mock_spool.total_uniones = 10        # v4.0 spool
+    mock_spool.fecha_armado = None       # no legacy fallback — must use unions
+    mock_spool.ocupado_por = None
+
+    # OT-keyed reads see nothing (the mismatch); TAG-keyed see ARM done.
+    mock_union_repository.count_completed_arm = MagicMock(return_value=0)
+    mock_union_repository.count_completed_arm_by_spool = MagicMock(return_value=5)
+
+    request = IniciarRequest(
+        tag_spool="OT-123",
+        worker_id=93,
+        worker_nombre="MR(93)",
+        operacion=ActionType.SOLD,
+    )
+
+    with patch('backend.services.estado_detalle_builder.EstadoDetalleBuilder') as mock_builder_class:
+        mock_builder = MagicMock()
+        mock_builder.build.return_value = "MR(93) trabajando SOLD"
+        mock_builder_class.return_value = mock_builder
+
+        response = await occupation_service_v4.iniciar_spool(request)
+
+    # Prerequisite passes via TAG count → INICIAR succeeds (no ArmPrerequisiteError).
+    assert response.success is True
+    mock_union_repository.count_completed_arm_by_spool.assert_called_once()
 
 
 # ============================================================================

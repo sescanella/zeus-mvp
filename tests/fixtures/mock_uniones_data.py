@@ -234,3 +234,43 @@ def get_standard_data() -> list[list]:
     Fast access - pre-generated and cached.
     """
     return STANDARD_MOCK_DATA
+
+
+def alias_by_spool_to_by_ot(repo) -> None:
+    """
+    Make a MagicMock UnionRepository's TAG_SPOOL-keyed methods mirror the
+    OT-keyed ones the tests already configure.
+
+    The FINALIZAR/INICIAR flows now resolve unions by TAG_SPOOL (to survive
+    the cross-sheet OT mismatch, audit 2026-06-05), but the existing test
+    suite mocks the legacy `*_by_ot` / `calculate_metrics` / `get_total_uniones`
+    methods. This binds the new `*_by_spool` methods as side_effects that defer
+    to those mocks at call time, so any `.return_value` a test sets afterwards
+    on the OT-keyed mock is reflected automatically — no per-test duplication.
+
+    Call this AFTER the OT-keyed mocks are assigned on `repo`.
+    """
+    repo.get_disponibles_arm_by_spool.side_effect = (
+        lambda _tag: repo.get_disponibles_arm_by_ot.return_value
+    )
+    repo.get_disponibles_sold_by_spool.side_effect = (
+        lambda _tag: repo.get_disponibles_sold_by_ot.return_value
+    )
+    repo.get_total_uniones_by_spool.side_effect = (
+        lambda _tag: repo.get_total_uniones.return_value
+    )
+    repo.calculate_metrics_by_spool.side_effect = (
+        lambda _tag: repo.calculate_metrics.return_value
+    )
+    repo.count_completed_arm_by_spool.side_effect = (
+        lambda _tag: repo.count_completed_arm.return_value
+    )
+    # get_by_spool mirrors get_by_ot ONLY when the test left it unconfigured.
+    # A test that set an explicit return_value (list) or its own side_effect has
+    # configured get_by_spool deliberately — don't clobber it.
+    already_configured = (
+        repo.get_by_spool.side_effect is not None
+        or isinstance(repo.get_by_spool.return_value, (list, tuple))
+    )
+    if not already_configured:
+        repo.get_by_spool.side_effect = lambda _tag: repo.get_by_ot.return_value

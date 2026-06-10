@@ -23,6 +23,7 @@ from backend.models.occupation import (
 from backend.models.spool import Spool
 from backend.models.union import Union
 from backend.models.enums import ActionType
+from tests.fixtures.mock_uniones_data import alias_by_spool_to_by_ot
 
 
 # ============================================================================
@@ -95,6 +96,7 @@ def mock_union_repo():
     repo.batch_update_sold_full = MagicMock(return_value=5)
     repo.get_by_ids = MagicMock(return_value=disponibles)
 
+    alias_by_spool_to_by_ot(repo)
     return repo
 
 

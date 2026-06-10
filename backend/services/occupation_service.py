@@ -613,9 +613,13 @@ class OccupationService:
             # v4.0: total_uniones >= 1 (has registered unions in Uniones sheet)
             # Detect v3.0/v4.0 from actual Uniones sheet (not Operaciones column
             # which may be stale, null, or corrupted by USER_ENTERED date bug)
+            # Count by TAG_SPOOL, not OT: the Uniones OT drifts from the
+            # Operaciones OT for some spools (audit 2026-06-05), so an OT count
+            # could read 0 and mis-detect a real v4.0 spool as v3.0 — routing it
+            # through the v3.0 path that writes Fecha_* unconditionally (T-096).
             actual_union_count = 0
-            if self.union_repository and spool.ot:
-                actual_union_count = self.union_repository.get_total_uniones(spool.ot)
+            if self.union_repository:
+                actual_union_count = self.union_repository.get_total_uniones_by_spool(tag_spool)
             is_v21 = actual_union_count == 0
             version_str = "v3.0" if is_v21 else "v4.0"
             logger.info(f"Spool {tag_spool} detected as {version_str} (total_uniones={spool.total_uniones})")
@@ -640,8 +644,11 @@ class OccupationService:
 
                 else:  # v4.0 spool - check actual ARM completion from Uniones sheet
                     # Use real data from Uniones sheet, not Operaciones columns
-                    # (which may be stale or corrupted)
-                    unions_completed = self.union_repository.count_completed_arm(spool.ot) if self.union_repository else 0
+                    # (which may be stale or corrupted). Count by TAG_SPOOL, not
+                    # OT: the Uniones OT drifts from the Operaciones OT for some
+                    # spools, which made count_completed_arm(spool.ot) return 0
+                    # and raise a false ArmPrerequisiteError on SOLD INICIAR.
+                    unions_completed = self.union_repository.count_completed_arm_by_spool(tag_spool) if self.union_repository else 0
                     total = actual_union_count
 
                     # Legacy fallback: if spool has fecha_armado but no union-level ARM,
@@ -1306,19 +1313,23 @@ class OccupationService:
                 raise ValueError("UnionRepository not configured for v4.0 operations")
 
             # Get available unions for this operation
+            # NOTE: resolve unions by TAG_SPOOL, not OT. The Operaciones OT and
+            # the Uniones OT drift apart for some spools (audit 2026-06-05),
+            # which made get_*_by_ot(spool.ot) return an empty set and triggered
+            # a false RaceConditionError (HTTP 409) on FINALIZAR.
             legacy_sold_mode = False
             if operacion == "ARM":
-                disponibles = self.union_repository.get_disponibles_arm_by_ot(spool.ot)
+                disponibles = self.union_repository.get_disponibles_arm_by_spool(tag_spool)
             elif operacion == "SOLD":
                 # Get all ARM-completed unions
-                all_disponibles = self.union_repository.get_disponibles_sold_by_ot(spool.ot)
+                all_disponibles = self.union_repository.get_disponibles_sold_by_spool(tag_spool)
 
                 # Legacy fallback: if spool has fecha_armado (ARM done at spool level)
                 # but no unions have arm_fecha_fin (ARM not tracked at union level),
                 # treat all unions without SOLD as disponibles
                 legacy_sold_mode = False
                 if len(all_disponibles) == 0 and spool.fecha_armado:
-                    all_unions = self.union_repository.get_by_ot(spool.ot)
+                    all_unions = self.union_repository.get_by_spool(tag_spool)
                     all_disponibles = [u for u in all_unions if u.sol_fecha_fin is None]
                     legacy_sold_mode = True
                     logger.info(
@@ -1523,9 +1534,10 @@ class OccupationService:
                             # a stale Uniones_ARM_Completadas (e.g. =3 while no union has
                             # ARM_FECHA_FIN) makes the T-021 guard in _determine_action
                             # raise a false RaceConditionError → HTTP 409 on FINALIZAR.
-                            # Mirrors the SOLD branch below. ARM applies to all union
-                            # types, so count the whole OT.
-                            all_unions_arm = self.union_repository.get_by_ot(spool.ot)
+                            # Mirrors the SOLD branch below. ARM applies to all
+                            # union types, so count the whole spool by TAG_SPOOL
+                            # (OT drifts between sheets and is many-to-one).
+                            all_unions_arm = self.union_repository.get_by_spool(tag_spool)
                             total_uniones_spool = len(all_unions_arm)
                             ya_completadas = sum(
                                 1 for u in all_unions_arm if u.arm_fecha_fin is not None
@@ -1706,8 +1718,10 @@ class OccupationService:
             # Step 6.5: Update v4.0 metrics in Operaciones (counters + pulgadas)
             # These columns may not have formulas, so we write them explicitly
             try:
-                if self.union_repository and spool.ot:
-                    metrics = self.union_repository.calculate_metrics(spool.ot)
+                if self.union_repository:
+                    # By TAG_SPOOL: write THIS spool's counters, not the OT
+                    # aggregate (OT is many-to-one and drifts between sheets).
+                    metrics = self.union_repository.calculate_metrics_by_spool(tag_spool)
                     metrics_updates = {
                         "Uniones_ARM_Completadas": metrics.get("arm_completadas", 0),
                         "Uniones_SOLD_Completadas": metrics.get("sold_completadas", 0),
@@ -1749,7 +1763,7 @@ class OccupationService:
 
             # Step 6.7: T-240/T-241 — Reconcile Fecha_Armado/Soldadura
             # against Uniones reality. Defense-in-depth for the case where
-            # the T-021 guard below uses calculate_metrics() (cache-backed)
+            # the T-021 guard below uses calculate_metrics_by_spool() (cache-backed)
             # and the cache invalidation after batch_update_arm_full
             # silently failed or raced. This re-fetches the spool and reads
             # Uniones authoritatively to backfill v2.1 columns when all
@@ -1791,7 +1805,7 @@ class OccupationService:
                 # from frontend), re-check here against fresh metrics. If mismatch,
                 # force PAUSAR to prevent corrupt data.
                 if action_taken == "COMPLETAR" and spool.total_uniones and spool.total_uniones > 0:
-                    fresh_metrics = self.union_repository.calculate_metrics(spool.ot) if self.union_repository else {}
+                    fresh_metrics = self.union_repository.calculate_metrics_by_spool(tag_spool) if self.union_repository else {}
                     if operacion == "ARM":
                         real_done = fresh_metrics.get("arm_completadas", 0)
                     else:  # SOLD
@@ -1847,7 +1861,7 @@ class OccupationService:
                 else:  # PAUSAR
                     # T-021: include X/Y progress in Estado_Detalle for better visibility
                     try:
-                        progress_metrics = self.union_repository.calculate_metrics(spool.ot) if self.union_repository else {}
+                        progress_metrics = self.union_repository.calculate_metrics_by_spool(tag_spool) if self.union_repository else {}
                         if operacion == "ARM":
                             done = progress_metrics.get("arm_completadas", 0)
                             total = spool.total_uniones or 0

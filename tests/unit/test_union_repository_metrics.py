@@ -439,3 +439,80 @@ def test_metrics_no_caching_fresh_calculation_each_time(union_repo, monkeypatch)
 
     # Should call get_by_ot twice (no caching)
     assert call_count == 2
+
+
+# --- TAG_SPOOL-keyed variants (cross-sheet OT mismatch resilience) ----------
+
+def test_calculate_metrics_by_spool_resolves_by_tag(union_repo, sample_unions, monkeypatch):
+    """calculate_metrics_by_spool reads via get_by_spool, not get_by_ot."""
+    def fail_by_ot(_ot):
+        raise AssertionError("calculate_metrics_by_spool must not call get_by_ot")
+
+    monkeypatch.setattr(union_repo, "get_by_ot", fail_by_ot)
+    monkeypatch.setattr(union_repo, "get_by_spool", lambda tag: sample_unions)
+
+    metrics = union_repo.calculate_metrics_by_spool("TEST-01")
+
+    # Same aggregation as calculate_metrics, scoped by TAG_SPOOL.
+    assert metrics["total_uniones"] == len(sample_unions)
+    assert metrics["arm_completadas"] >= 1
+    assert isinstance(metrics["pulgadas_arm"], float)
+
+
+def test_calculate_metrics_by_spool_matches_by_ot_on_same_data(
+    union_repo, sample_unions, monkeypatch
+):
+    """By-spool and by-ot agree when both see the same union list."""
+    monkeypatch.setattr(union_repo, "get_by_ot", lambda ot: sample_unions)
+    monkeypatch.setattr(union_repo, "get_by_spool", lambda tag: sample_unions)
+
+    assert union_repo.calculate_metrics_by_spool("TEST-01") == union_repo.calculate_metrics("001")
+
+
+def test_get_total_uniones_by_spool_counts_via_tag(union_repo, sample_unions, monkeypatch):
+    """get_total_uniones_by_spool counts rows resolved by TAG_SPOOL."""
+    monkeypatch.setattr(union_repo, "get_by_spool", lambda tag: sample_unions)
+    assert union_repo.get_total_uniones_by_spool("TEST-01") == len(sample_unions)
+
+
+def test_get_total_uniones_by_spool_zero_on_error(union_repo, monkeypatch):
+    """Errors degrade to 0, matching get_total_uniones behaviour."""
+    def boom(_tag):
+        raise RuntimeError("sheets down")
+
+    monkeypatch.setattr(union_repo, "get_by_spool", boom)
+    assert union_repo.get_total_uniones_by_spool("TEST-01") == 0
+
+
+def test_get_disponibles_arm_by_spool_filters_incomplete_arm(
+    union_repo, sample_unions, monkeypatch
+):
+    """ARM disponibles by spool = unions with ARM not yet done."""
+    monkeypatch.setattr(union_repo, "get_by_spool", lambda tag: sample_unions)
+    disponibles = union_repo.get_disponibles_arm_by_spool("TEST-01")
+    assert all(u.arm_fecha_fin is None for u in disponibles)
+
+
+def test_get_disponibles_sold_by_spool_requires_arm_done(
+    union_repo, sample_unions, monkeypatch
+):
+    """SOLD disponibles by spool = ARM done AND SOLD not done."""
+    monkeypatch.setattr(union_repo, "get_by_spool", lambda tag: sample_unions)
+    disponibles = union_repo.get_disponibles_sold_by_spool("TEST-01")
+    assert all(
+        u.arm_fecha_fin is not None and u.sol_fecha_fin is None
+        for u in disponibles
+    )
+
+
+def test_count_completed_arm_by_spool_counts_via_tag(union_repo, sample_unions, monkeypatch):
+    """count_completed_arm_by_spool resolves by TAG and counts ARM-complete unions."""
+    def fail_by_ot(_ot):
+        raise AssertionError("count_completed_arm_by_spool must not call get_by_ot")
+
+    monkeypatch.setattr(union_repo, "get_by_ot", fail_by_ot)
+    monkeypatch.setattr(union_repo, "get_by_spool", lambda tag: sample_unions)
+
+    expected = sum(1 for u in sample_unions if u.arm_fecha_fin is not None)
+    assert union_repo.count_completed_arm_by_spool("TEST-01") == expected
+    assert expected >= 1  # guards against an empty sample silently passing
