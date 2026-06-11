@@ -2,7 +2,7 @@
 
 **Sistema:** ZEUES (Sistema de Trazabilidad)
 **Cliente:** Kronos Mining
-**Fecha:** 7 de noviembre de 2025
+**Fecha:** 22 de mayo de 2026
 
 ---
 
@@ -20,51 +20,86 @@ Esta carpeta contiene todos los archivos relacionados con el sistema ZEUES para 
 
 ### Archivos en la Carpeta
 
-1. **`_Kronos_Registro_Piping R04`** - Google Sheets de PRODUCCIÓN (cliente Kronos)
-2. **`_Kronos_Registro_Piping TESTS`** - Google Sheets de TESTING (para desarrollo de ZEUES)
+ZEUES usa **4 Google Sheets distintos**: dos para operaciones (prod / testing) y dos para
+el log de auditoría de la lista del supervisor (prod / dev).
+
+| Spreadsheet | Propósito | Variable de entorno |
+|---|---|---|
+| `_Kronos_Registro_Piping R04` | Operaciones **PRODUCCIÓN** (datos reales del cliente) | `GOOGLE_SHEET_ID` |
+| Operaciones de testing | Operaciones **TESTING** (desarrollo y pruebas) | `GOOGLE_SHEET_ID` |
+| `ZEUES_App_Audit_PROD` | Log de auditoría de la lista del supervisor — **PRODUCCIÓN** | `GOOGLE_AUDIT_SHEET_ID` |
+| `ZEUES_App_Audit_DEV` | Log de auditoría de la lista del supervisor — **DEV** | `GOOGLE_AUDIT_SHEET_ID` |
 
 ---
 
 ## Google Sheets
 
-### Sheets de TESTING (Desarrollo/MVP)
+### Sheets de Operaciones — TESTING
 
-**Nombre del archivo:** `_Kronos_Registro_Piping TESTS`
+**URL:** https://docs.google.com/spreadsheets/d/14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo/edit
 
-**URL:** https://docs.google.com/spreadsheets/d/11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM/edit?gid=1994081358#gid=1994081358
+**ID:** `14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo`
 
 **Uso:**
-- Utilizar EXCLUSIVAMENTE durante el desarrollo del MVP
-- Todas las pruebas de integración con Google Sheets API
-- Datos de prueba y validaciones
-- Entrenamiento y demos
+- Spreadsheet de operaciones que usa el desarrollo local y las pruebas.
+- Todas las pruebas de integración con Google Sheets API.
+- Datos de prueba y validaciones.
+- Entrenamiento y demos.
 
 **Configuración:**
-- Debe tener la estructura definida en `ADMIN-configuracion-sheets.md`
-- Compartir con Service Account para testing
-- Datos de trabajadores y spools de prueba
+- Misma estructura de columnas que producción (ver modelo de datos en `CLAUDE.md`).
+- Compartido con el Service Account (Editor).
 
 ---
 
-### Sheets de PRODUCCIÓN (Oficial)
+### Sheets de Operaciones — PRODUCCIÓN (Oficial)
 
 **Nombre del archivo:** `_Kronos_Registro_Piping R04`
 
-**URL:** https://docs.google.com/spreadsheets/d/17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ/edit?gid=1994081358#gid=1994081358
+**URL:** https://docs.google.com/spreadsheets/d/17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ/edit
 
-⚠️ **IMPORTANTE - NO UTILIZAR HASTA QUE EL MVP ESTÉ 100% FUNCIONAL**
+**ID:** `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ`
+
+⚠️ **DATOS REALES DEL CLIENTE.** Nunca apuntar el desarrollo local aquí. Este ID está en la
+blocklist de `scripts/dump_staging_tags.py`, que se niega a correr contra producción.
 
 **Uso:**
-- SOLO cuando el sistema esté completamente probado y validado
-- Datos reales de producción
-- Cambio se realizará mediante actualización de variable de entorno
+- Datos reales de producción del cliente Kronos.
+- El backend en Railway apunta aquí vía `GOOGLE_SHEET_ID`.
 
-**Criterios para migrar a producción:**
-- ✅ Todas las pruebas end-to-end pasadas exitosamente
-- ✅ Validación completa con usuarios finales en Sheets de testing
-- ✅ Sin errores durante 2 días consecutivos de uso en testing
-- ✅ Aprobación del equipo de administración
-- ✅ Backup del Sheets de producción realizado
+---
+
+### Sheets de Auditoría — DEV
+
+**Nombre del archivo:** `ZEUES_App_Audit_DEV`
+
+**URL:** https://docs.google.com/spreadsheets/d/1SZSM1wPndC8tm91WAooaZ74PZnAJ-0_0xTQsRX5jxa4/edit
+
+**ID:** `1SZSM1wPndC8tm91WAooaZ74PZnAJ-0_0xTQsRX5jxa4`
+
+**Uso:**
+- Versión de desarrollo del log de auditoría de la lista del supervisor.
+- Apuntada por `GOOGLE_AUDIT_SHEET_ID` en `.env.local`.
+
+---
+
+### Sheets de Auditoría — PRODUCCIÓN
+
+**Nombre del archivo:** `ZEUES_App_Audit_PROD`
+
+**URL:** https://docs.google.com/spreadsheets/d/1CF_SNO8k6zkIEXukQ3etoFWUnD_3uWCHj0AxdENST7k/edit
+
+**ID:** `1CF_SNO8k6zkIEXukQ3etoFWUnD_3uWCHj0AxdENST7k`
+
+**Uso:**
+- Fuente de verdad server-side de la lista del supervisor (reemplazó al `localStorage`).
+- Registra eventos `LIST_ADD` / `LIST_REMOVE` / `SESSION_*` / `LIST_MIGRATE`.
+- Tres pestañas: `Lista`, `Audit`, `Snapshots_Legacy`.
+- Apuntada por `GOOGLE_AUDIT_SHEET_ID` en Railway.
+- Contexto y verificación: `docs/RUNBOOK-supervisor-feature.md`.
+
+> `config.py` valida al arrancar que `GOOGLE_AUDIT_SHEET_ID` ≠ `GOOGLE_SHEET_ID`, para que
+> los datos de auditoría nunca se escriban en el spreadsheet de operaciones.
 
 ---
 
@@ -96,46 +131,28 @@ Esta carpeta contiene todos los archivos relacionados con el sistema ZEUES para 
 
 ### Para Desarrollo (.env.local)
 ```env
-# Google Cloud Project
-GOOGLE_CLOUD_PROJECT_ID=zeus-mvp
+# Google Sheets - TESTING (operaciones)
+GOOGLE_SHEET_ID=14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo
 
-# Google Sheets - TESTING
-GOOGLE_SHEET_ID=11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM
+# Google Sheets - DEV (auditoría de la lista del supervisor)
+GOOGLE_AUDIT_SHEET_ID=1SZSM1wPndC8tm91WAooaZ74PZnAJ-0_0xTQsRX5jxa4
 
 # Service Account (copiar del archivo JSON descargado)
 GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-
-# Configuración de Hojas
-HOJA_OPERACIONES_NOMBRE=Operaciones
-HOJA_TRABAJADORES_NOMBRE=Trabajadores
-
-# Aplicación
-NODE_ENV=development
-NEXT_PUBLIC_API_URL=http://localhost:3000
-CACHE_TTL_SECONDS=300
 ```
 
-### Para Producción (.env.production)
+### Para Producción (Railway)
 ```env
-# Google Cloud Project
-GOOGLE_CLOUD_PROJECT_ID=zeus-mvp
-
-# Google Sheets - PRODUCCIÓN (cambiar solo cuando MVP esté 100% validado)
+# Google Sheets - PRODUCCIÓN (operaciones — datos reales del cliente)
 GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
+
+# Google Sheets - PRODUCCIÓN (auditoría de la lista del supervisor)
+GOOGLE_AUDIT_SHEET_ID=1CF_SNO8k6zkIEXukQ3etoFWUnD_3uWCHj0AxdENST7k
 
 # Service Account (mismo que desarrollo)
 GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-
-# Configuración de Hojas
-HOJA_OPERACIONES_NOMBRE=Operaciones
-HOJA_TRABAJADORES_NOMBRE=Trabajadores
-
-# Aplicación
-NODE_ENV=production
-NEXT_PUBLIC_API_URL=https://zeues-mvp.vercel.app
-CACHE_TTL_SECONDS=300
 ```
 
 **Instrucciones para obtener GOOGLE_PRIVATE_KEY:**
@@ -174,8 +191,12 @@ https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit...
                                         ^^^^^^^^^^^^^^^^
 ```
 
-**Sheets Testing ID:** `11v8fD5Shn0RSzDceZRvXhE9z4RIOBmPA9lpH5_zF-wM`
-**Sheets Producción ID:** `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ`
+| Spreadsheet | ID |
+|---|---|
+| Operaciones TESTING | `14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo` |
+| Operaciones PRODUCCIÓN | `17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ` |
+| Auditoría DEV | `1SZSM1wPndC8tm91WAooaZ74PZnAJ-0_0xTQsRX5jxa4` |
+| Auditoría PRODUCCIÓN | `1CF_SNO8k6zkIEXukQ3etoFWUnD_3uWCHj0AxdENST7k` |
 
 ---
 
@@ -192,6 +213,13 @@ https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit...
 ---
 
 ## Changelog
+
+### 22 de mayo de 2026 - v2.0
+- ✅ Documentadas las 4 spreadsheets reales: operaciones (prod/testing) + auditoría (prod/dev)
+- ✅ Corregido el ID de operaciones de testing: `14Rcrmc...` (el viejo `11v8fD5...` ya no se usa)
+- ✅ Agregados `ZEUES_App_Audit_PROD` (`1CF_SNO8k...`) y `ZEUES_App_Audit_DEV` (`1SZSM1w...`)
+- ✅ Agregada variable `GOOGLE_AUDIT_SHEET_ID` a las secciones de entorno
+- ✅ Variables de entorno alineadas con `.env.local` y Railway reales
 
 ### 7 de noviembre de 2025 - v1.2
 - ✅ Agregada información del proyecto Google Cloud: `zeus-mvp`
@@ -215,4 +243,4 @@ https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit...
 
 ---
 
-**Última actualización:** 7 de noviembre de 2025 - 16:30
+**Última actualización:** 22 de mayo de 2026
