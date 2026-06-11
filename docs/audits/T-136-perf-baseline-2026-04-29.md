@@ -250,7 +250,7 @@ Y por qué **flow 1 (cold load 200 spools) tarda 2.6s**: 2 chunks `batch-status`
 | **D2** | **Render frontend 200 cards** | flow 1: DCL 62-90ms, load 315ms, **network_idle dominado por backend (1.9s API)**. Search/filter <150ms con 200 cards visibles. | (Pendiente confirmación) si tras D1 fix el cold load baja a ~1.2s, el render no es el cuello. Si baja menos, virtualizar (`react-window`). | Medio (1-2h) si requiere virtualización; trivial (re-medir) si D1 lo destrabó. | **Medio**. Solo después de medir post-D1. |
 | **D3** | **Re-fetch completo tras cada acción** (refreshAll polling 30s) | C2 del baseline. Cada 30s = 2 chunks × 480ms = ~1s API del operador, gratis. | Optimistic update local + invalidación selectiva. Polling general menos frecuente (90s). | Mediano (2-3h) — toca state management del frontend (`SpoolListContext`). | Medio. Se vuelve más rentable post-D1 — sin D1, optimistic update igual gasta los 480ms al `refreshSingle`. |
 | D4 | AddSpoolModal: 60KB para listar 136 ARM-eligibles | flow 4: 568ms backend. | Endpoint dedicado que devuelva solo `{tag, nv}`. | Bajo (1h) | Bajo. Modal se usa una vez por sesión típicamente. |
-| D5 | Bug 8 redux (flow 6 bloqueado) | Click "ASIGNAR ARMADOR (5)" no avanza en headless. | Bugfix (no perf). Reproducir manualmente y diagnosticar. | Mediano-alto (1-3h) — investigación primero. | Crítico para UX pero **fuera de scope T-136**. Reportar al ASISTENTE como tarea separada. |
+| D5 | Bug 8 redux (flow 6 bloqueado) | Click "ASIGNAR ARMADOR (5)" no avanza en headless. | Bugfix (no perf). Reproducir manualmente y diagnosticar. | Mediano-alto (1-3h) — investigación primero. | Crítico para UX pero **fuera de scope T-136**. Abrir como tarea separada. |
 | D6 | (descartado) Virtualización del listado pre-D1 | Apuesta a priori. Profiling muestra DCL+load <320ms, network_idle dominado por backend. | — | — | — |
 
 ## Foco recomendado para Fase 3
@@ -264,7 +264,7 @@ Y por qué **flow 1 (cold load 200 spools) tarda 2.6s**: 2 chunks `batch-status`
 
 Después de D1, **re-medir**. Si cold load baja a <1.5s y assign-1 baja a <2s, **terminamos T-136 en Fase 3 sin tocar D2/D3**. Si todavía hay grasa, evaluar D2/D3 para una segunda iteración.
 
-D5 (Bug 8 redux) **se reporta al ASISTENTE como tarea separada** (no atacar en T-136).
+D5 (Bug 8 redux) **se abre como tarea separada** (no atacar en T-136).
 
 ## Hallazgo meta sobre la auditoría 28-abr (refuerza lección global #3)
 
@@ -367,7 +367,7 @@ Re-evaluando los cuellos restantes de la tabla diagnóstica:
 | D2 | Render frontend 200 cards | (no era cuello) | (no es cuello) | Confirmado: DCL <150 ms, scroll suave. **No requiere virtualización**. |
 | D3 | 30s polling refresh | 2× 480 ms cada 30s = 1 s/min de "carga gratuita" | 2× 30 ms cada 30s = 60 ms/min | **Cerrado de facto**. El fix de D1 cubre también este caso porque los polling refreshes ahora también son cache hits. |
 | D4 | AddSpoolModal payload 60KB | 568 ms | 58 ms | **Cerrado de facto** por D1 (el cuello era worker parse, no payload size). |
-| D5 | Bug 8 redux (flow 6) | bloqueado | bloqueado | Sin cambio — bug no relacionado con D1. **Reportar al ASISTENTE como tarea separada**. |
+| D5 | Bug 8 redux (flow 6) | bloqueado | bloqueado | Sin cambio — bug no relacionado con D1. **Abrir como tarea separada**. |
 
 **Conclusión: con UN cambio quirúrgico (D1) se atacaron simultáneamente los 4 cuellos de performance**. Los 3 que quedaban (D2, D3, D4) eran sub-cuellos del mismo problema raíz, y D1 los disolvió.
 
@@ -431,7 +431,7 @@ cd zeues-frontend && npm run dev &
 #    h. Verificar 5 cards aparecen ocupadas en home con toast verde
 ```
 
-Si este flujo manual falla en una sesión, **D5 está confirmado y debe abrirse como tarea separada al ASISTENTE**. Si funciona pero el headless sigue fallando, es un quirk de Playwright + React event delegation y se puede dejar como `test.skip` con justificación.
+Si este flujo manual falla en una sesión, **D5 está confirmado y debe abrirse como tarea separada**. Si funciona pero el headless sigue fallando, es un quirk de Playwright + React event delegation y se puede dejar como `test.skip` con justificación.
 
 ## Entregables Fase 4
 
@@ -440,9 +440,8 @@ Si este flujo manual falla en una sesión, **D5 está confirmado y debe abrirse 
 3. **Frontend fix (B0)**: `zeues-frontend/lib/api.ts` + `zeues-frontend/__tests__/lib/api-batch-chunking.test.ts`.
 4. **Setup scripts**: `scripts/seed_load_test.py` + `scripts/dump_staging_tags.py`.
 5. **Playwright suite**: 8 specs en `zeues-frontend/e2e/perf-flow-NN-*.spec.ts` + helper `e2e/helpers/perf-instrument.ts` + fixture `e2e/fixtures/staging-tags.json`.
-6. **Handoff de vuelta al ASISTENTE**: `ASISTENTE/planning/proyectos/zeus-by-km/HANDOFF-FROM-ZEUS-T136-perf-audit.md`.
 
-## Tareas pendientes a abrir en ASISTENTE
+## Tareas pendientes
 
 1. **T-137 (sugerido)** — Investigar Bug 8 redux (D5). Reproducir manualmente con Matías si es posible, confirmar si afecta producción real (tablet, navegador real) o solo automation. Si afecta prod: bug crítico de UX que bloquea batch-INICIAR. Si solo automation: documentar como test-skip + workaround.
 2. **T-138 (sugerido, low priority)** — UX state confusion: spools en `ARM_PEND`/`SOLD_PEND`/`ARM_TERM` derivan a `LIBRE` en `_derive_estado` por falta de ocupante. Considerar nuevo estado `PARCIAL` o badge visible para que el operador pueda distinguir "libre virgen" de "libre con uniones parciales pausadas". Out of scope T-136, captado para v5.1.

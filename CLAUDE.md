@@ -2,59 +2,6 @@
 
 Guidance for Claude Code working in this repository.
 
-## External Orchestrator — ASISTENTE
-
-This repository is the codebase. Strategic coordination, task tracking, and cross-project context live in a separate orchestrator at:
-
-```
-/Users/sescanella/Documents/Obsidian Vault/Proyectos/ASISTENTE
-```
-
-Relevant subtree for Zeus:
-
-```
-ASISTENTE/planning/proyectos/zeus-by-km/
-├── pointer.md                       Map of this repo (paths, layers, shortcuts per task)
-├── bugs-pendientes.md               Active bugs reported in production by Matías
-├── v5.1-scope.md                    UX/feature backlog for next milestone
-├── auditoria-YYYY-MM-DD-*.md        Technical audits done from ASISTENTE
-├── HANDOFF-TO-ZEUS.md               Handoff note for starting a Zeus session
-└── notas.md                         Tech debt, decisions
-
-ASISTENTE/planning/tareas.md         All open tasks (IDs like T-095, T-096...)
-ASISTENTE/planning/clientes/kronos/  Client-level context (Matías, Pablo, etc.)
-```
-
-### When to read ASISTENTE files
-
-Read the orchestrator **at session start** if the operator mentions any of these signals:
-
-- A task ID with prefix `T-NNN` (e.g., "trabajemos T-096").
-- A bug ID with prefix `B-N` (e.g., "Bug 6").
-- Phrases like "la auditoría", "el handoff", "lo que venimos trabajando".
-- The operator opened this chat right after a session in ASISTENTE.
-
-**What to read** (in this order):
-
-1. `ASISTENTE/planning/proyectos/zeus-by-km/HANDOFF-TO-ZEUS.md` — single entry point. Lists hot tasks, recent audits, and what to do first.
-2. The specific audit file referenced in the handoff.
-3. `bugs-pendientes.md` or `v5.1-scope.md` as the handoff directs.
-
-If there is no signal from the operator, do not proactively read the orchestrator — work from repo context as usual.
-
-### What to write back to ASISTENTE
-
-**By default, do not write to ASISTENTE from this chat.** Leave feedback via:
-
-- Git commit messages referencing the task ID: `fix(T-096): metrologia auto-trigger respects total_uniones`.
-- Branch names carrying the ID: `fix/T-096-metrologia-partial-sold`.
-
-**Exception**: if the operator explicitly asks to update the orchestrator from here, edit under `ASISTENTE/planning/proyectos/zeus-by-km/` only. Never touch `ASISTENTE/planning/tareas.md` or client dashboards.
-
-### Language
-
-ASISTENTE is in Spanish. This repo is in English. Keep the separation.
-
 ## Project Overview
 
 **ZEUES** — Location tracking system for pipe spools in manufacturing.
@@ -131,13 +78,16 @@ railway status      # deployment status
 ### Backend (Clean Architecture)
 
 ```
-main.py
-├── routers/          API endpoints (occupation_v4, union_router, metrologia, history, health, ...)
-├── services/         Business logic (occupation_service, union_service, state_service, ...)
-├── repositories/     Data access (sheets_repository, union_repository, metadata_repository)
-├── state_machines/   ARM, SOLD, Metrologia, Reparacion (hierarchical)
-├── models/           Pydantic schemas
-└── exceptions.py     Custom exceptions
+backend/main.py            (run: cd backend && uvicorn main:app --reload --port 8000)
+├── routers/               API endpoints (occupation_v4, union_router, metrologia, history, health, ...)
+├── services/              Business logic (occupation_service, union_service, state_service, ...)
+│   └── state_machines/    ARM, SOLD, Reparacion (hierarchical)
+├── domain/
+│   └── state_machines/    Metrologia
+├── repositories/          Data access (sheets_repository, union_repository, metadata_repository)
+├── core/                  sheet_schema (column source of truth), column_map_cache, ...
+├── models/                Pydantic schemas
+└── exceptions.py          Custom exceptions
 ```
 
 **Patterns:** Service Layer + Repository Pattern, hierarchical state machines, direct Sheets validation (`Ocupado_Por` column check), event sourcing via the Metadata sheet.
@@ -166,16 +116,20 @@ zeues-frontend/lib/
 
 ## Google Sheets Data Model
 
-**Operaciones Sheet (71 columns):**
-- v2.1 columns (1–63): TAG_SPOOL, Armador, Soldador, Fecha_Armado, Fecha_Soldadura, etc.
-- Occupation columns (64–66): `Ocupado_Por` (e.g. `"MR(93)"` or empty), `Fecha_Ocupacion` (DD-MM-YYYY HH:MM:SS), `Estado_Detalle`.
-- v4.0 counters (67–71): `Total_Uniones`, `Uniones_ARM_Completadas`, `Uniones_SOLD_Completadas`, `Pulgadas_ARM`, `Pulgadas_SOLD`.
+The sheet has many physical columns, but the backend depends only on the **named
+columns below** — never on positions or a total count. Engineering may add or remove
+other columns without backend coordination. Source of truth: `backend/core/sheet_schema.py`.
 
-**Uniones Sheet (17 columns):**
+**Operaciones Sheet:**
+- Critical (must exist, else HTTP 503): `SPLIT`, `TAG_SPOOL`, `OT`, `NV`, `Fecha_Materiales`, `Fecha_Armado`, `Armador`, `Fecha_Soldadura`, `Soldador`, `Fecha_QC_Metrologia`, `Ocupado_Por` (e.g. `"MR(93)"` or empty), `Fecha_Ocupacion` (DD-MM-YYYY HH:MM:SS), `Estado_Detalle`.
+- Expected (warn if absent): v4.0 counters `Total_Uniones`, `Uniones_ARM_Completadas`, `Uniones_SOLD_Completadas`, `Pulgadas_ARM`, `Pulgadas_SOLD`; v5.1 free-text `Notas`.
+
+**Uniones Sheet (17 columns, all critical):**
 - Core: `ID`, `OT`, `N_UNION`, `TAG_SPOOL`, `DN_UNION`, `TIPO_UNION`
 - ARM: `ARM_FECHA_INICIO`, `ARM_FECHA_FIN`, `ARM_WORKER`
 - SOLD: `SOL_FECHA_INICIO`, `SOL_FECHA_FIN`, `SOL_WORKER`
 - NDT: `NDT_UNION`, `R_NDT_UNION`, `NDT_FECHA`, `NDT_STATUS`
+- Versioning: `version`
 
 **Other sheets:**
 - Trabajadores (4 cols): `Id`, `Nombre`, `Apellido`, `Activo`
@@ -230,13 +184,18 @@ Certain topics are enforced rules, but kept in their own files to keep this one 
 
 ## Environment Variables
 
-**Backend (`.env`):**
+**Backend (`.env.local` — local dev MUST point at the testing sheets, never PROD):**
 ```
-GOOGLE_SHEET_ID=17iOaq2sv4mSOuJY4B8dGQIsWTTUKPspCtb7gk6u-MaQ
+GOOGLE_CLOUD_PROJECT_ID=zeus-mvp
+GOOGLE_SHEET_ID=14Rcrmc6c2RTkJG_fRgtSFDYWgP6Qt6zfciUtnl-9AMo       # operaciones TESTING. PROD 17iOaq2sv4... → solo Railway
+GOOGLE_AUDIT_SHEET_ID=1SZSM1wPndC8tm91WAooaZ74PZnAJ-0_0xTQsRX5jxa4 # audit DEV. PROD 1CF_SNO8k... → solo Railway
 HOJA_METADATA_NOMBRE=Metadata
 GOOGLE_SERVICE_ACCOUNT_EMAIL=zeus-mvp@zeus-mvp.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
+
+`config.py` requires `GOOGLE_AUDIT_SHEET_ID` and refuses to start if it equals
+`GOOGLE_SHEET_ID`. Full map of the 4 spreadsheets: `docs/GOOGLE-RESOURCES.md`.
 
 **Frontend (`.env.local`):**
 ```
@@ -276,4 +235,4 @@ Startup validation runs automatically in `main.py` after cache warming. Deployme
 
 ---
 
-**Last updated:** 2026-04-22 · **Document version:** 4.0
+**Last updated:** 2026-06-10 · **Document version:** 4.2

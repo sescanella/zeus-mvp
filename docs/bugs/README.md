@@ -11,8 +11,7 @@ Bitácora forense de bugs encontrados en ZEUES. Cada bug es un archivo Markdown 
 ## Para qué NO sirve
 
 - **NO reemplaza GitHub Issues**: si quieres tracking de PR, asignaciones, milestones, abre un issue.
-- **NO reemplaza tareas del ASISTENTE** (`ASISTENTE/planning/tareas.md`): los IDs `T-NNN` se asignan allá. Si un bug genera tarea, se enlaza con `tarea_relacionada: T-NNN` en el frontmatter — pero el bug aquí queda como evidencia, la tarea allá queda como acción.
-- **NO es un backlog**: no se priorizan ni se asignan bugs aquí. Solo se registran, investigan, resuelven y archivan.
+- **NO es un backlog de tareas**: el bug aquí queda como evidencia, no como acción priorizada ni asignada. Solo se registran, investigan, resuelven y archivan.
 
 ## Cómo registrar un bug nuevo
 
@@ -162,7 +161,6 @@ Dentro de las secciones `## Investigación` y `## Resolución`:
 - **No borrar el archivo.** El historial es el activo.
 - Actualizar el `estado:` en el frontmatter.
 - Llenar `## Resolución` con commit + fecha + causa raíz + verificación.
-- Si el bug generó tarea en ASISTENTE, dejar `tarea_relacionada: T-NNN` apuntando.
 - Commit con mensaje `docs(bugs): close B-NNN — <causa raíz en una frase>`.
 
 ## Convenciones que se mantienen
