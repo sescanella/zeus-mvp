@@ -32,14 +32,14 @@ async def tomar_reparacion(
     Worker takes RECHAZADO spool for repair (v3.0 Phase 6).
 
     Validates:
-    - Spool exists and is RECHAZADO (not BLOQUEADO)
+    - Spool exists and is RECHAZADO or REPARACION_PAUSADA
     - Spool not currently occupied
     - Worker exists and is active
 
     Updates:
     - Ocupado_Por = worker_nombre
     - Fecha_Ocupacion = current datetime
-    - Estado_Detalle = "EN_REPARACION (Ciclo X/3) - Ocupado: {worker}"
+    - Estado_Detalle = "EN_REPARACION - Ocupado: {worker}"
 
     Args:
         request: ReparacionRequest (worker_id, tag_spool)
@@ -51,7 +51,6 @@ async def tomar_reparacion(
     Raises:
         HTTPException 404: Spool or worker not found
         HTTPException 400: Spool not RECHAZADO
-        HTTPException 403: Spool is BLOQUEADO (HTTP 403)
         HTTPException 409: Spool occupied by another worker
 
     Example request:
@@ -69,8 +68,7 @@ async def tomar_reparacion(
             "message": "Reparacion tomada para spool MK-1335-CW-25238-011",
             "tag_spool": "MK-1335-CW-25238-011",
             "worker_nombre": "MR(93)",
-            "estado_detalle": "EN_REPARACION (Ciclo 2/3) - Ocupado: MR(93)",
-            "cycle": 2
+            "estado_detalle": "EN_REPARACION - Ocupado: MR(93)"
         }
         ```
     """
@@ -105,7 +103,7 @@ async def pausar_reparacion(
     Updates:
     - Ocupado_Por = None
     - Fecha_Ocupacion = None
-    - Estado_Detalle = "REPARACION_PAUSADA (Ciclo X/3)"
+    - Estado_Detalle = "REPARACION_PAUSADA"
 
     Args:
         request: ReparacionRequest (worker_id, tag_spool)
@@ -125,7 +123,7 @@ async def pausar_reparacion(
             "success": true,
             "message": "Reparacion pausada para spool MK-1335-CW-25238-011",
             "tag_spool": "MK-1335-CW-25238-011",
-            "estado_detalle": "REPARACION_PAUSADA (Ciclo 2/3)"
+            "estado_detalle": "REPARACION_PAUSADA"
         }
         ```
     """
@@ -176,8 +174,7 @@ async def completar_reparacion(
             "success": true,
             "message": "Reparacion completada para spool MK-1335-CW-25238-011 - devuelto a metrologia",
             "tag_spool": "MK-1335-CW-25238-011",
-            "estado_detalle": "PENDIENTE_METROLOGIA",
-            "cycle": 2
+            "estado_detalle": "PENDIENTE_METROLOGIA"
         }
         ```
     """
@@ -211,7 +208,7 @@ async def cancelar_reparacion(
     Updates:
     - Ocupado_Por = None
     - Fecha_Ocupacion = None
-    - Estado_Detalle = "RECHAZADO (Ciclo X/3) - Pendiente reparacion"
+    - Estado_Detalle = "RECHAZADO - Pendiente reparacion"
 
     Args:
         request: ReparacionRequest (worker_id, tag_spool)
@@ -230,7 +227,7 @@ async def cancelar_reparacion(
             "success": true,
             "message": "Reparacion cancelada para spool MK-1335-CW-25238-011",
             "tag_spool": "MK-1335-CW-25238-011",
-            "estado_detalle": "RECHAZADO (Ciclo 2/3) - Pendiente reparacion"
+            "estado_detalle": "RECHAZADO - Pendiente reparacion"
         }
         ```
     """

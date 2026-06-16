@@ -140,7 +140,7 @@ class FilterRegistry:
     # LÓGICA (2026-02-09):
     # CONDICIÓN 1: Metrología no completada ni rechazada:
     #   - fecha_qc_metrologia vacía (no APROBADO)
-    #   - Estado_Detalle NO contiene "RECHAZADO" ni "BLOQUEADO"
+    #   - Estado_Detalle NO contiene "RECHAZADO"
     # CONDICIÓN 2: SOLD completada (v3.0 O v4.0):
     #   - v3.0 (Total_Uniones = 0): Fecha_Soldadura CON dato
     #   - v4.0 (Total_Uniones >= 1): Uniones_SOLD_Completadas = Total_Uniones
@@ -148,7 +148,7 @@ class FilterRegistry:
     # CAMBIO (2026-02-09):
     # Reemplazado CompletionFilter("fecha_qc_metrologia") por MetrologiaNotCompletedFilter.
     # Motivo: RECHAZADO ya no escribe Fecha_QC_Metrología (esa fecha = fecha de aprobación).
-    # El nuevo filtro excluye por Estado_Detalle (RECHAZADO/BLOQUEADO) además de fecha.
+    # El nuevo filtro excluye por Estado_Detalle (RECHAZADO) además de fecha.
     #
     # DECISIÓN DEL USUARIO (2026-02-05):
     # ✅ NO filtrar por Ocupado_Por (permite ver spools ocupados por ARM/SOLD)
@@ -173,13 +173,8 @@ class FilterRegistry:
     # ============================================================================
     # LÓGICA:
     # - Estado_Detalle debe contener "RECHAZADO"
-    # - Incluye todos los ciclos: "RECHAZADO (Ciclo 1/3)", "RECHAZADO (Ciclo 2/3)", etc.
     # - Incluye "REPARACION_PAUSADA" (estado pausado también contiene "RECHAZADO" internamente)
-    # - EXCLUYE "BLOQUEADO" (ya no contiene "RECHAZADO" en el string)
     # - EXCLUYE spools ocupados (Ocupado_Por != None)
-    #
-    # NOTA: No se filtra por ciclo aquí - el backend mostrará todos (1/3, 2/3, 3/3)
-    # y el validador rechazará BLOQUEADO en el momento de TOMAR.
     # ============================================================================
     _REPARACION_INICIAR_FILTERS: List[SpoolFilter] = [
         # 1. Estado_Detalle contiene "RECHAZADO"

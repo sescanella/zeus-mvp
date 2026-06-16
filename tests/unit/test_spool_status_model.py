@@ -94,12 +94,11 @@ def test_from_spool_extracts_pulgadas():
 
 
 def test_from_spool_none_estado_detalle_gives_libre():
-    """None estado_detalle → estado_trabajo=LIBRE, computed fields None."""
+    """None estado_detalle → estado_trabajo=LIBRE."""
     spool = make_spool(estado_detalle=None)
     status = SpoolStatus.from_spool(spool)
     assert status.estado_trabajo == "LIBRE"
     assert status.operacion_actual is None
-    assert status.ciclo_rep is None
 
 
 def test_from_spool_arm_en_progreso():
@@ -111,7 +110,6 @@ def test_from_spool_arm_en_progreso():
     status = SpoolStatus.from_spool(spool)
     assert status.operacion_actual == "ARM"
     assert status.estado_trabajo == "EN_PROGRESO"
-    assert status.ciclo_rep is None
 
 
 def test_from_spool_sold_en_progreso():
@@ -123,37 +121,26 @@ def test_from_spool_sold_en_progreso():
     status = SpoolStatus.from_spool(spool)
     assert status.operacion_actual == "SOLD"
     assert status.estado_trabajo == "EN_PROGRESO"
-    assert status.ciclo_rep is None
 
 
-def test_from_spool_rechazado_ciclo_2():
-    """RECHAZADO ciclo 2 → ciclo_rep=2 computed correctly."""
+def test_from_spool_rechazado():
+    """RECHAZADO estado_detalle → RECHAZADO estado_trabajo."""
     spool = make_spool(
-        estado_detalle="Disponible - ARM completado, SOLD completado, RECHAZADO (Ciclo 2/3) - Pendiente reparacion"
+        estado_detalle="Disponible - ARM completado, SOLD completado, RECHAZADO - Pendiente reparación"
     )
     status = SpoolStatus.from_spool(spool)
     assert status.estado_trabajo == "RECHAZADO"
-    assert status.ciclo_rep == 2
-
-
-def test_from_spool_bloqueado():
-    """BLOQUEADO estado_detalle → BLOQUEADO estado_trabajo."""
-    spool = make_spool(estado_detalle="BLOQUEADO - Contactar supervisor")
-    status = SpoolStatus.from_spool(spool)
-    assert status.estado_trabajo == "BLOQUEADO"
-    assert status.operacion_actual is None
 
 
 def test_from_spool_en_reparacion():
-    """EN_REPARACION ciclo 1 → REPARACION operacion_actual, ciclo_rep=1."""
+    """EN_REPARACION → REPARACION operacion_actual, EN_PROGRESO estado."""
     spool = make_spool(
         ocupado_por="MR(93)",
-        estado_detalle="EN_REPARACION (Ciclo 1/3) - Ocupado: MR(93)"
+        estado_detalle="EN_REPARACION - Ocupado: MR(93)"
     )
     status = SpoolStatus.from_spool(spool)
     assert status.operacion_actual == "REPARACION"
     assert status.estado_trabajo == "EN_PROGRESO"
-    assert status.ciclo_rep == 1
 
 
 
