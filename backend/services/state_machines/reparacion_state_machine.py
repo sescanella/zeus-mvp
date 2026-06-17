@@ -8,14 +8,26 @@ Manages repair workflow for rejected spools with 4 states:
 - EN_REPARACION → PENDIENTE_METROLOGIA (completar)
 - EN_REPARACION/REPARACION_PAUSADA → RECHAZADO (cancelar)
 
-Callbacks update Operaciones sheet columns (Ocupado_Por, Fecha_Ocupacion, Estado_Detalle) automatically.
-Integrates with CycleCounterService to maintain cycle count across state transitions.
+Callbacks update Operaciones sheet columns (Ocupado_Por, Fecha_Ocupacion,
+Estado_Detalle) automatically. There is no cycle counter and no BLOQUEADO
+escalation — a spool can move through this cycle as many times as needed.
 """
 
 from statemachine import State
 from backend.services.state_machines.base_state_machine import BaseOperationStateMachine
 from backend.config import config
 from datetime import date
+
+
+# Estado_Detalle constants written by this state machine.
+ESTADO_DETALLE_RECHAZADO = "RECHAZADO - Pendiente reparación"
+ESTADO_DETALLE_REPARACION_PAUSADA = "REPARACION_PAUSADA"
+ESTADO_DETALLE_PENDIENTE_METROLOGIA = "PENDIENTE_METROLOGIA"
+
+
+def _build_en_reparacion_estado(worker_nombre: str) -> str:
+    """Format the EN_REPARACION Estado_Detalle for a given worker name."""
+    return f"EN_REPARACION - Ocupado: {worker_nombre}"
 
 
 class REPARACIONStateMachine(BaseOperationStateMachine):
@@ -53,7 +65,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         reparacion_pausada.to(rechazado)
     )
 
-    def __init__(self, tag_spool: str, sheets_repo, metadata_repo, cycle_counter=None, *, start_value: str = None):
+    def __init__(self, tag_spool: str, sheets_repo, metadata_repo, *, start_value: str = None):
         """
         Initialize REPARACION state machine for a specific spool.
 
@@ -61,13 +73,11 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
             tag_spool: Spool identifier
             sheets_repo: SheetsRepository for column updates
             metadata_repo: MetadataRepository for event logging
-            cycle_counter: CycleCounterService for cycle tracking
             start_value: State ID to hydrate to ("rechazado", "en_reparacion",
                 "reparacion_pausada"). Pass when resuming a spool already past
                 the initial state.
         """
         super().__init__(tag_spool, sheets_repo, metadata_repo, start_value=start_value)
-        self.cycle_counter = cycle_counter
 
     async def on_enter_en_reparacion(self, worker_id=None, worker_nombre=None, **kwargs):
         """
@@ -76,7 +86,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         Updates:
         - Ocupado_Por: Worker name
         - Fecha_Ocupacion: Current date
-        - Estado_Detalle: EN_REPARACION (Ciclo X/3) - Ocupado: Worker
+        - Estado_Detalle: EN_REPARACION - Ocupado: <worker>
 
         Args:
             worker_id: Worker ID
@@ -97,20 +107,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         if not row_num:
             return
 
-        # Get current cycle count from Estado_Detalle
-        current_estado = self.sheets_repo.get_cell_value(
-            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-            row=row_num,
-            column_name="Estado_Detalle"
-        )
-
-        # Extract cycle count (0 if not found)
-        cycle = 0
-        if self.cycle_counter:
-            cycle = self.cycle_counter.extract_cycle_count(current_estado or "")
-
-        # Build estado with cycle info
-        estado_detalle = f"EN_REPARACION (Ciclo {cycle}/{self.cycle_counter.MAX_CYCLES}) - Ocupado: {worker_nombre}" if self.cycle_counter else f"EN_REPARACION - Ocupado: {worker_nombre}"
+        estado_detalle = _build_en_reparacion_estado(worker_nombre)
 
         # Format date as DD-MM-YYYY
         fecha_str = date.today().strftime("%d-%m-%Y")
@@ -132,7 +129,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         Updates:
         - Ocupado_Por: Cleared (empty string)
         - Fecha_Ocupacion: Cleared (empty string)
-        - Estado_Detalle: REPARACION_PAUSADA (Ciclo X/3)
+        - Estado_Detalle: REPARACION_PAUSADA
 
         Args:
             **kwargs: Event data (unused)
@@ -151,28 +148,13 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         if not row_num:
             return
 
-        # Get current cycle count from Estado_Detalle
-        current_estado = self.sheets_repo.get_cell_value(
-            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-            row=row_num,
-            column_name="Estado_Detalle"
-        )
-
-        # Extract cycle count
-        cycle = 0
-        if self.cycle_counter:
-            cycle = self.cycle_counter.extract_cycle_count(current_estado or "")
-
-        # Build estado with cycle info
-        estado_detalle = f"REPARACION_PAUSADA (Ciclo {cycle}/{self.cycle_counter.MAX_CYCLES})" if self.cycle_counter else "REPARACION_PAUSADA"
-
         # Clear occupation fields and update estado
         self.sheets_repo.batch_update_by_column_name(
             sheet_name=config.HOJA_OPERACIONES_NOMBRE,
             updates=[
                 {"row": row_num, "column_name": "Ocupado_Por", "value": ""},
                 {"row": row_num, "column_name": "Fecha_Ocupacion", "value": ""},
-                {"row": row_num, "column_name": "Estado_Detalle", "value": estado_detalle}
+                {"row": row_num, "column_name": "Estado_Detalle", "value": ESTADO_DETALLE_REPARACION_PAUSADA}
             ]
         )
 
@@ -186,7 +168,6 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         - Estado_Detalle: PENDIENTE_METROLOGIA
 
         Note: Spool automatically returns to metrología queue for re-inspection.
-        Cycle counter is preserved until next metrología decision (APROBADO resets, RECHAZADO increments).
 
         Args:
             **kwargs: Event data (unused)
@@ -211,7 +192,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
             updates=[
                 {"row": row_num, "column_name": "Ocupado_Por", "value": ""},
                 {"row": row_num, "column_name": "Fecha_Ocupacion", "value": ""},
-                {"row": row_num, "column_name": "Estado_Detalle", "value": "PENDIENTE_METROLOGIA"}
+                {"row": row_num, "column_name": "Estado_Detalle", "value": ESTADO_DETALLE_PENDIENTE_METROLOGIA}
             ]
         )
 
@@ -222,7 +203,7 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         Updates:
         - Ocupado_Por: Cleared (empty string)
         - Fecha_Ocupacion: Cleared (empty string)
-        - Estado_Detalle: RECHAZADO (Ciclo X/3) - restores previous cycle info
+        - Estado_Detalle: RECHAZADO - Pendiente reparación
 
         Args:
             event: Transition event (optional)
@@ -251,27 +232,12 @@ class REPARACIONStateMachine(BaseOperationStateMachine):
         if not row_num:
             return
 
-        # Get current cycle count from Estado_Detalle
-        current_estado = self.sheets_repo.get_cell_value(
-            sheet_name=config.HOJA_OPERACIONES_NOMBRE,
-            row=row_num,
-            column_name="Estado_Detalle"
-        )
-
-        # Extract cycle count
-        cycle = 0
-        if self.cycle_counter:
-            cycle = self.cycle_counter.extract_cycle_count(current_estado or "")
-
-        # Build RECHAZADO estado with preserved cycle
-        estado_detalle = self.cycle_counter.build_rechazado_estado(cycle) if self.cycle_counter else "RECHAZADO - Pendiente reparación"
-
         # Clear occupation fields and restore RECHAZADO estado
         self.sheets_repo.batch_update_by_column_name(
             sheet_name=config.HOJA_OPERACIONES_NOMBRE,
             updates=[
                 {"row": row_num, "column_name": "Ocupado_Por", "value": ""},
                 {"row": row_num, "column_name": "Fecha_Ocupacion", "value": ""},
-                {"row": row_num, "column_name": "Estado_Detalle", "value": estado_detalle}
+                {"row": row_num, "column_name": "Estado_Detalle", "value": ESTADO_DETALLE_RECHAZADO}
             ]
         )

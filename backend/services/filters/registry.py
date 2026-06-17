@@ -169,23 +169,23 @@ class FilterRegistry:
     _METROLOGIA_FINALIZAR_FILTERS: List[SpoolFilter] = []
 
     # ============================================================================
-    # REPARACION - INICIAR (v3.0 Phase 6)
+    # REPARACION - INICIAR
     # ============================================================================
     # LÓGICA:
-    # - Estado_Detalle debe contener "RECHAZADO"
-    # - Incluye todos los ciclos: "RECHAZADO (Ciclo 1/3)", "RECHAZADO (Ciclo 2/3)", etc.
-    # - Incluye "REPARACION_PAUSADA" (estado pausado también contiene "RECHAZADO" internamente)
-    # - EXCLUYE "BLOQUEADO" (ya no contiene "RECHAZADO" en el string)
-    # - EXCLUYE spools ocupados (Ocupado_Por != None)
-    #
-    # NOTA: No se filtra por ciclo aquí - el backend mostrará todos (1/3, 2/3, 3/3)
-    # y el validador rechazará BLOQUEADO en el momento de TOMAR.
+    # - Estado_Detalle debe contener "RECHAZADO" o "BLOQUEADO".
+    #   - "RECHAZADO" es el marker actual (también cubre los legacy
+    #     "RECHAZADO (Ciclo N/3)" y "REPARACION_PAUSADA ..." cuando contienen
+    #     RECHAZADO internamente).
+    #   - "BLOQUEADO" es un marker legacy de la era del límite de 3 ciclos
+    #     (ya removido); se acepta para que esos spools puedan repararse y
+    #     reescribirse en formato limpio en la próxima transición.
+    # - EXCLUYE spools ocupados (Ocupado_Por != None) vía OcupacionFilter.
     # ============================================================================
     _REPARACION_INICIAR_FILTERS: List[SpoolFilter] = [
-        # 1. Estado_Detalle contiene "RECHAZADO"
+        # 1. Estado_Detalle contiene "RECHAZADO" o legacy "BLOQUEADO"
         EstadoDetalleContainsFilter(
-            keyword="RECHAZADO",
-            display_name="Rechazado"
+            keywords=["RECHAZADO", "BLOQUEADO"],
+            display_name="Rechazado",
         ),
         # 2. No ocupado por otro trabajador
         OcupacionFilter(),

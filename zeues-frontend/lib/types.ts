@@ -14,7 +14,6 @@ export type EstadoTrabajo =
   | 'PAUSADO'
   | 'COMPLETADO'
   | 'RECHAZADO'
-  | 'BLOQUEADO'
   | 'PENDIENTE_METROLOGIA';
 
 /**
@@ -55,7 +54,6 @@ export interface SpoolCardData {
   soldador_display: string | null;
   operacion_actual: OperacionActual;
   estado_trabajo: EstadoTrabajo | null;
-  ciclo_rep: number | null;
 }
 
 export interface Worker {
@@ -91,8 +89,6 @@ export interface ReparacionSpool {
   tag_spool: string;
   estado_detalle: string;
   fecha_rechazo: string;
-  cycle: number;
-  bloqueado: boolean;
 }
 
 // ==========================================

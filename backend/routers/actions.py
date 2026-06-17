@@ -1,9 +1,9 @@
 """
-Actions Router - Reparacion endpoints (v3.0 Phase 6).
+Actions Router - Reparacion endpoints.
 
 Contains TOMAR/PAUSAR/COMPLETAR/CANCELAR operations for RECHAZADO spools.
-v2.1 endpoints (iniciar-accion, completar-accion, cancelar-accion) have been removed.
-v4.0 uses /api/v4/occupation/iniciar and /api/v4/occupation/finalizar instead.
+No rejection-cycle limit: a spool can be repaired and re-inspected as many
+times as needed.
 """
 
 from fastapi import APIRouter, Depends, status
@@ -29,17 +29,18 @@ async def tomar_reparacion(
     worker_service: WorkerService = Depends(get_worker_service),
 ):
     """
-    Worker takes RECHAZADO spool for repair (v3.0 Phase 6).
+    Worker takes RECHAZADO spool for repair.
 
     Validates:
-    - Spool exists and is RECHAZADO (not BLOQUEADO)
+    - Spool exists and is RECHAZADO or REPARACION_PAUSADA (legacy "BLOQUEADO"
+      rows are accepted and treated as RECHAZADO)
     - Spool not currently occupied
     - Worker exists and is active
 
     Updates:
     - Ocupado_Por = worker_nombre
     - Fecha_Ocupacion = current datetime
-    - Estado_Detalle = "EN_REPARACION (Ciclo X/3) - Ocupado: {worker}"
+    - Estado_Detalle = "EN_REPARACION - Ocupado: {worker}"
 
     Args:
         request: ReparacionRequest (worker_id, tag_spool)
@@ -50,8 +51,7 @@ async def tomar_reparacion(
 
     Raises:
         HTTPException 404: Spool or worker not found
-        HTTPException 400: Spool not RECHAZADO
-        HTTPException 403: Spool is BLOQUEADO (HTTP 403)
+        HTTPException 400: Spool not in a repair-eligible state
         HTTPException 409: Spool occupied by another worker
 
     Example request:
@@ -69,8 +69,7 @@ async def tomar_reparacion(
             "message": "Reparacion tomada para spool MK-1335-CW-25238-011",
             "tag_spool": "MK-1335-CW-25238-011",
             "worker_nombre": "MR(93)",
-            "estado_detalle": "EN_REPARACION (Ciclo 2/3) - Ocupado: MR(93)",
-            "cycle": 2
+            "estado_detalle": "EN_REPARACION - Ocupado: MR(93)"
         }
         ```
     """
@@ -96,7 +95,7 @@ async def pausar_reparacion(
     reparacion_service: ReparacionService = Depends(get_reparacion_service)
 ):
     """
-    Worker pauses repair work and releases occupation (v3.0 Phase 6).
+    Worker pauses repair work and releases occupation.
 
     Validates:
     - Spool exists and is EN_REPARACION
@@ -105,7 +104,7 @@ async def pausar_reparacion(
     Updates:
     - Ocupado_Por = None
     - Fecha_Ocupacion = None
-    - Estado_Detalle = "REPARACION_PAUSADA (Ciclo X/3)"
+    - Estado_Detalle = "REPARACION_PAUSADA"
 
     Args:
         request: ReparacionRequest (worker_id, tag_spool)
@@ -125,7 +124,7 @@ async def pausar_reparacion(
             "success": true,
             "message": "Reparacion pausada para spool MK-1335-CW-25238-011",
             "tag_spool": "MK-1335-CW-25238-011",
-            "estado_detalle": "REPARACION_PAUSADA (Ciclo 2/3)"
+            "estado_detalle": "REPARACION_PAUSADA"
         }
         ```
     """
@@ -147,7 +146,7 @@ async def completar_reparacion(
     worker_service: WorkerService = Depends(get_worker_service),
 ):
     """
-    Worker completes repair and returns spool to metrologia queue (v3.0 Phase 6).
+    Worker completes repair and returns spool to metrologia queue.
 
     Validates:
     - Spool exists and is EN_REPARACION
@@ -176,8 +175,7 @@ async def completar_reparacion(
             "success": true,
             "message": "Reparacion completada para spool MK-1335-CW-25238-011 - devuelto a metrologia",
             "tag_spool": "MK-1335-CW-25238-011",
-            "estado_detalle": "PENDIENTE_METROLOGIA",
-            "cycle": 2
+            "estado_detalle": "PENDIENTE_METROLOGIA"
         }
         ```
     """
@@ -203,7 +201,7 @@ async def cancelar_reparacion(
     reparacion_service: ReparacionService = Depends(get_reparacion_service)
 ):
     """
-    Worker cancels repair work and returns spool to RECHAZADO (v3.0 Phase 6).
+    Worker cancels repair work and returns spool to RECHAZADO.
 
     Validates:
     - Spool exists and is EN_REPARACION or REPARACION_PAUSADA
@@ -211,7 +209,7 @@ async def cancelar_reparacion(
     Updates:
     - Ocupado_Por = None
     - Fecha_Ocupacion = None
-    - Estado_Detalle = "RECHAZADO (Ciclo X/3) - Pendiente reparacion"
+    - Estado_Detalle = "RECHAZADO - Pendiente reparación"
 
     Args:
         request: ReparacionRequest (worker_id, tag_spool)
@@ -230,7 +228,7 @@ async def cancelar_reparacion(
             "success": true,
             "message": "Reparacion cancelada para spool MK-1335-CW-25238-011",
             "tag_spool": "MK-1335-CW-25238-011",
-            "estado_detalle": "RECHAZADO (Ciclo 2/3) - Pendiente reparacion"
+            "estado_detalle": "RECHAZADO - Pendiente reparación"
         }
         ```
     """

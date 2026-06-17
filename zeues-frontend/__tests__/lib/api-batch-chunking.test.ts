@@ -29,7 +29,6 @@ const minimalCard = (tag: string): SpoolCardData =>
     soldador_display: null,
     operacion_actual: null,
     estado_trabajo: 'LIBRE',
-    ciclo_rep: null,
   } as unknown as SpoolCardData);
 
 describe('batchGetStatus chunking', () => {

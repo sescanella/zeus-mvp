@@ -5,7 +5,7 @@ Provides:
   - GET  /api/spool/{tag}/status   — SpoolStatus for an individual spool
   - POST /api/spools/batch-status  — SpoolStatus for a list of spool tags
 
-Both endpoints compute operacion_actual, estado_trabajo, ciclo_rep from the
+Both endpoints compute operacion_actual, estado_trabajo from the
 Estado_Detalle string via parse_estado_detalle(). Reads use the cached
 SheetsRepository (60 s TTL) so batch calls are efficient.
 
@@ -40,7 +40,7 @@ router = APIRouter()
     summary="Get spool status with computed fields",
     description=(
         "Returns SpoolStatus for a single spool. "
-        "Computed fields (operacion_actual, estado_trabajo, ciclo_rep) are "
+        "Computed fields (operacion_actual, estado_trabajo) are "
         "derived from Estado_Detalle. Returns 404 if spool tag not found."
     ),
     tags=["spool-status"],

@@ -24,7 +24,6 @@ const baseOccupied: SpoolCardData = {
   soldador_display: null,
   operacion_actual: 'ARM',
   estado_trabajo: 'EN_PROGRESO',
-  ciclo_rep: null,
 };
 
 const baseFree: SpoolCardData = {
@@ -45,7 +44,6 @@ const baseFree: SpoolCardData = {
   soldador_display: null,
   operacion_actual: null,
   estado_trabajo: 'LIBRE',
-  ciclo_rep: null,
 };
 
 const pausadoSpool: SpoolCardData = {
@@ -125,7 +123,6 @@ describe('SpoolCard — estado_trabajo badge', () => {
     { estado: 'COMPLETADO', label: 'Completado', colorClass: 'text-green-400' },
     { estado: 'RECHAZADO', label: 'Rechazado', colorClass: 'text-red-400' },
     { estado: 'PENDIENTE_METROLOGIA', label: 'Pend. Metrología', colorClass: 'text-blue-300' },
-    { estado: 'BLOQUEADO', label: 'Bloqueado', colorClass: 'text-red-500' },
   ];
 
   estadoTestCases.forEach(({ estado, label, colorClass }) => {
