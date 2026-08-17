@@ -77,6 +77,13 @@ OPERACIONES_SCHEMA = SheetSchema(
         # read path. Canonical lookups for "TAG_SPOOL" resolve to whichever
         # of these the live header actually uses.
         "TAG_SPOOL": ("TAG", "SPLIT", "tag_spool"),
+        # "SPLIT" is not a distinct field: it is the legacy header name for
+        # the very same spool-tag column, and code still asks for it by that
+        # name (e.g. sheets_service.parse_spool_row). PROD dropped the
+        # "SPLIT" header in favour of "TAG", which left this critical column
+        # unresolvable and 503'd every Operaciones read. Same alias list as
+        # TAG_SPOOL so both canonical names resolve to the live header.
+        "SPLIT": ("TAG", "TAG_SPOOL", "tag_spool"),
     }),
 )
 
