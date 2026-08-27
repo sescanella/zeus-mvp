@@ -345,16 +345,20 @@ class SheetsService:
         return None
 
     @classmethod
-    def parse_worker_row(cls, row: list) -> Worker:
+    def parse_worker_row(cls, row: list, headers: Optional[list] = None) -> Worker:
         """
         Parsea una fila de la hoja 'Trabajadores' a un objeto Worker.
 
-        Soporta dos formatos (backward compatibility):
+        Si se pasa `headers`, los índices se resuelven por nombre de columna
+        (Id/Nombre/Apellido/Activo obligatorios, Rol opcional) — columnas
+        extra en la hoja no afectan el parseo. Sin headers, cae al
+        heurístico posicional legacy:
         - v1.0 (4 cols): A=Nombre | B=Apellido | C=Rol | D=Activo
         - v2.0 (5 cols): A=Id | B=Nombre | C=Apellido | D=Rol | E=Activo
 
         Args:
             row: Lista con valores de la fila (mínimo 4 columnas)
+            headers: Fila de encabezados de la hoja (opcional)
 
         Returns:
             Worker: Objeto Worker parseado
@@ -386,15 +390,48 @@ class SheetsService:
                 return "TRUE" if v else "FALSE"
             return str(v).strip()
 
-        # Detectar formato basándose en si la primera columna es un Id numérico
-        first_col_is_id = False
-        if isinstance(row[0], (int, float)) and not isinstance(row[0], bool):
-            first_col_is_id = True
-        elif row[0] and _as_text(row[0]).isdigit():
-            first_col_is_id = True
+        def _cell(idx):
+            return row[idx] if idx is not None and idx < len(row) else ""
 
-        # Determinar estructura del sheet
-        if len(row) >= 5 and first_col_is_id:
+        # Resolución por headers (preferida): inmune a columnas extra
+        header_map = None
+        if headers:
+            # Primera aparición gana: una tabla auxiliar pegada a la derecha
+            # puede repetir headers como "Nombre"/"Apellido"
+            normalized = {}
+            for i, h in enumerate(headers):
+                key = _as_text(h).lower()
+                if key and key not in normalized:
+                    normalized[key] = i
+            if all(k in normalized for k in ("nombre", "apellido", "activo")):
+                header_map = normalized
+
+        if header_map is not None:
+            idx_nombre = header_map["nombre"]
+            idx_apellido = header_map["apellido"]
+            idx_activo = header_map["activo"]
+            idx_rol = header_map.get("rol")
+            has_rol = idx_rol is not None and bool(_as_text(_cell(idx_rol)))
+            idx_id = header_map.get("id")
+            worker_id = None
+            if idx_id is not None and _as_text(_cell(idx_id)):
+                worker_id = int(_as_text(_cell(idx_id)))
+            # Rellenar la fila para que los accesos row[idx] no fallen en filas cortas
+            max_idx = max(idx_nombre, idx_apellido, idx_activo, idx_rol or 0, idx_id or 0)
+            row = list(row) + [""] * (max_idx + 1 - len(row))
+        else:
+            # Heurístico posicional legacy (sin headers)
+            # Detectar formato basándose en si la primera columna es un Id numérico
+            first_col_is_id = False
+            if isinstance(row[0], (int, float)) and not isinstance(row[0], bool):
+                first_col_is_id = True
+            elif row[0] and _as_text(row[0]).isdigit():
+                first_col_is_id = True
+
+        # Determinar estructura del sheet (solo ruta legacy, si no hubo headers)
+        if header_map is not None:
+            pass
+        elif len(row) >= 5 and first_col_is_id:
             # Formato v2.0 completo: A=Id | B=Nombre | C=Apellido | D=Rol | E=Activo
             worker_id = int(_as_text(row[0]))
             idx_nombre = 1

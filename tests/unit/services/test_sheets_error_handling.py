@@ -137,6 +137,33 @@ class TestSheetsServiceMalformedData:
         with pytest.raises(ValueError, match="Nombre.*vacío"):
             SheetsService.parse_worker_row(["93", "", "Rodriguez", "Armador", "TRUE"])
 
+    def test_parse_worker_row_headers_with_extra_columns(self):
+        """Incidente 2026-08-27: tabla auxiliar pegada en G-M no debe romper el parseo."""
+        headers = ["Id", "Nombre", "Apellido", "Activo", "", "",
+                   "Etiqueta", "Nombre", "Apellido", "Nombre completo",
+                   "Código interno", "Roles", "Estado"]
+        row = ["93", "Mauricio", "Rodriguez", "TRUE", "", "",
+               "MR(93)", "Mauricio", "Rodríguez", "Mauricio Rodríguez",
+               "93", "supervisor", "Activo"]
+        worker = SheetsService.parse_worker_row(row, headers=headers)
+        assert worker.id == 93
+        assert worker.nombre == "Mauricio"
+        assert worker.apellido == "Rodriguez"
+        assert worker.activo is True
+
+    def test_parse_worker_row_headers_4col(self):
+        """Headers estándar Id|Nombre|Apellido|Activo sin columna Rol."""
+        headers = ["Id", "Nombre", "Apellido", "Activo"]
+        worker = SheetsService.parse_worker_row(["10", "Nahuel", "Huiriqueo", "TRUE"], headers=headers)
+        assert worker.id == 10
+        assert worker.activo is True
+
+    def test_parse_worker_row_headers_with_rol(self):
+        """Headers con columna Rol resuelven el rol por nombre de columna."""
+        headers = ["Id", "Nombre", "Apellido", "Rol", "Activo"]
+        worker = SheetsService.parse_worker_row(["93", "Mauricio", "Rodriguez", "Armador", "TRUE"], headers=headers)
+        assert worker.rol.value == "Armador"
+
 
 # ==================== SheetsService: CONSTRUCTOR VALIDATION ====================
 

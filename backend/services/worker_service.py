@@ -111,10 +111,11 @@ class WorkerService:
             roles_by_worker = {}
 
         # Parsear filas a objetos Worker (skip header)
+        header_row = all_rows[0] if all_rows else None
         workers = []
         for row_index, row in enumerate(all_rows[1:], start=2):  # Skip header
             try:
-                worker = SheetsService.parse_worker_row(row)
+                worker = SheetsService.parse_worker_row(row, headers=header_row)
 
                 # v2.0: Obtener roles desde diccionario en memoria (O(1))
                 roles_str = roles_by_worker.get(worker.id, [])
